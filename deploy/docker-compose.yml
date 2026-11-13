@@ -1,0 +1,31 @@
+# Siehe docs/SERVER-SETUP.md, Abschnitt 8.
+services:
+  aiopatcher:
+    image: ghcr.io/OWNER/aiopatcher-server:latest
+    container_name: aiopatcher
+    restart: unless-stopped
+    network_mode: host # damit ufw-Regeln greifen (Docker-Port-Mappings würden ufw umgehen)
+    volumes:
+      - /opt/aiopatcher/data:/data
+    environment:
+      AIOPatcher__PublicHostname: patch.example.com
+      AIOPatcher__DataDirectory: /data
+      AIOPatcher__DashboardPort: "9443"
+      AIOPatcher__AgentPort: "8443"
+      TZ: Europe/Berlin
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
+
+  # Meldet neue Images nur (Monitor-Only), aktualisiert nichts selbst.
+  watchtower:
+    image: nickfedor/watchtower:latest # für Produktion feste Version eintragen
+    container_name: watchtower
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      WATCHTOWER_MONITOR_ONLY: "true"
+      WATCHTOWER_LABEL_ENABLE: "true"
+      WATCHTOWER_SCHEDULE: "0 0 7 * * *"
+      WATCHTOWER_NOTIFICATION_URL: "ntfy://ntfy.sh/DEIN-GEHEIMES-TOPIC"
+      TZ: Europe/Berlin

@@ -1,0 +1,15 @@
+bin/
+obj/
+.vs/
+.vscode/
+.idea/
+*.user
+node_modules/
+src/web/dist/
+src/AIOPatcher.Server/wwwroot/
+src/AIOPatcher.Server/runtime-data/
+*.db
+*.db-shm
+*.db-wal
+TestResults/
+agent-dev/

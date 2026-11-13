@@ -1,0 +1,141 @@
+using System.Net;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
+using AIOPatcher.Agent.Inventory;
+using AIOPatcher.Contracts;
+
+namespace AIOPatcher.Agent.Commands;
+
+/// <summary>
+/// Einmalige Registrierung:
+/// 1. CA vom Server holen und gegen den Fingerprint aus dem Installationsbefehl prüfen (Pinning).
+/// 2. Erst dann über die gepinnte Verbindung Token + CSR schicken.
+/// 3. Zertifikat, Schlüssel und CA lokal ablegen.
+/// </summary>
+public static class EnrollCommand
+{
+    public static async Task<int> RunAsync(CommandLine args, CancellationToken ct)
+    {
+        var server = args.Get("server");
+        var token = args.Get("token");
+        var fingerprint = args.Get("fingerprint");
+        var stateDir = args.Get("state-dir") ?? AgentState.DefaultDirectory;
+
+        if (server is null || token is null || fingerprint is null)
+        {
+            await Console.Error.WriteLineAsync("Aufruf: aiopatcher-agent enroll --server https://<host>:8443 --token <token> --fingerprint <sha256> [--state-dir <pfad>] [--force]");
+            return 2;
+        }
+
+        if (AgentState.Exists(stateDir) && !args.Has("force"))
+        {
+            await Console.Error.WriteLineAsync($"Agent ist bereits registriert ({stateDir}). Mit --force neu registrieren.");
+            return 1;
+        }
+
+        if (!Uri.TryCreate(server, UriKind.Absolute, out var serverUri) || serverUri.Scheme != Uri.UriSchemeHttps)
+        {
+            await Console.Error.WriteLineAsync("--server muss eine https://-URL sein.");
+            return 2;
+        }
+
+        // 1. CA holen und pinnen
+        X509Certificate2 ca;
+        try
+        {
+            ca = await FetchAndVerifyCaAsync(serverUri, CertificateHelper.NormalizeFingerprint(fingerprint), ct);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or CryptographicException or InvalidDataException)
+        {
+            await Console.Error.WriteLineAsync($"CA-Prüfung fehlgeschlagen: {ex.Message}");
+            return 1;
+        }
+
+        Console.WriteLine($"CA bestätigt: {CertificateHelper.Sha256Fingerprint(ca)}");
+
+        // 2. Schlüssel + CSR, Enrollment über die gepinnte Verbindung
+        using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        var hostname = Dns.GetHostName();
+        var csr = new CertificateRequest($"CN={hostname}", key, HashAlgorithmName.SHA256).CreateSigningRequestPem();
+
+        EnrollResponse response;
+        using (var client = new ServerClient(serverUri, ca, clientCertificate: null))
+        {
+            try
+            {
+                response = await client.EnrollAsync(
+                    new EnrollRequest(token.Trim(), csr, hostname, PlatformInfo.OsFamily, AgentState.AgentVersion), ct);
+            }
+            catch (Exception ex) when (ex is HttpRequestException or ServerRejectedException)
+            {
+                await Console.Error.WriteLineAsync($"Registrierung fehlgeschlagen: {ex.Message}");
+                return 1;
+            }
+        }
+
+        // 3. Antwort prüfen und speichern
+        using var issued = X509Certificate2.CreateFromPem(response.ClientCertificatePem);
+        using var issuedKey = issued.GetECDsaPublicKey();
+        if (issuedKey is null || !issuedKey.ExportSubjectPublicKeyInfo().AsSpan().SequenceEqual(key.ExportSubjectPublicKeyInfo()))
+        {
+            await Console.Error.WriteLineAsync("Server hat ein Zertifikat für einen fremden Schlüssel ausgestellt. Abbruch.");
+            return 1;
+        }
+
+        using var returnedCa = X509Certificate2.CreateFromPem(response.CaCertificatePem);
+        if (!returnedCa.RawDataMemory.Span.SequenceEqual(ca.RawDataMemory.Span))
+        {
+            await Console.Error.WriteLineAsync("Server hat eine andere CA geliefert als die gepinnte. Abbruch.");
+            return 1;
+        }
+
+        AgentState.Save(stateDir, new AgentConfig(serverUri.GetLeftPart(UriPartial.Authority), response.HostId, response.SiteId),
+            ca.ExportCertificatePem(), response.ClientCertificatePem, key);
+
+        AgentPolicy.WriteDefaultIfMissing(stateDir);
+        Console.WriteLine($"Registriert. Host-ID {response.HostId}, Daten in {stateDir}");
+        Console.WriteLine($"Lokale Policy: {Path.Combine(stateDir, AgentPolicy.FileName)} (Patchen und Neustarts hier einschränkbar).");
+        return 0;
+    }
+
+    private static async Task<X509Certificate2> FetchAndVerifyCaAsync(Uri server, string expectedFingerprint, CancellationToken ct)
+    {
+        X509Certificate2? presentedLeaf = null;
+        var nameMismatch = false;
+
+        // Hier kennen wir die CA noch nicht: Server-Zertifikat merken, Prüfung danach gegen die gepinnte CA.
+        using var handler = new SocketsHttpHandler();
+        handler.SslOptions.RemoteCertificateValidationCallback = (_, cert, _, errors) =>
+        {
+            if (cert is not null)
+            {
+                presentedLeaf = X509CertificateLoader.LoadCertificate(cert.GetRawCertData());
+            }
+
+            nameMismatch = errors.HasFlag(System.Net.Security.SslPolicyErrors.RemoteCertificateNameMismatch);
+            return true;
+        };
+
+        using var http = new HttpClient(handler) { BaseAddress = server, Timeout = TimeSpan.FromSeconds(30) };
+        var pem = await http.GetStringAsync("/agent/ca", ct);
+        var ca = X509Certificate2.CreateFromPem(pem);
+
+        var actual = CertificateHelper.Sha256Fingerprint(ca);
+        if (!string.Equals(actual, expectedFingerprint, StringComparison.Ordinal))
+        {
+            throw new CryptographicException($"Fingerprint stimmt nicht. Erwartet {expectedFingerprint}, Server liefert {actual}.");
+        }
+
+        if (nameMismatch)
+        {
+            throw new CryptographicException($"Server-Zertifikat passt nicht zum Hostnamen '{server.Host}'.");
+        }
+
+        if (presentedLeaf is null || !CertificateHelper.ValidateServer(ca, presentedLeaf, System.Net.Security.SslPolicyErrors.None))
+        {
+            throw new CryptographicException("Server-Zertifikat wurde nicht von der gepinnten CA ausgestellt.");
+        }
+
+        return ca;
+    }
+}

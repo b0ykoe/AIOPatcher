@@ -1,0 +1,9 @@
+**/bin/
+**/obj/
+**/node_modules/
+src/AIOPatcher.Server/wwwroot/
+src/AIOPatcher.Server/runtime-data/
+tests/
+docs/
+.git/
+.claude/
