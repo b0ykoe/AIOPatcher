@@ -9,7 +9,7 @@ namespace AIOPatcher.Server.Security;
 /// </summary>
 public static class PortIsolation
 {
-    private static readonly string[] AnonymousAgentPaths = ["/agent/enroll", "/agent/ping", "/agent/ca", "/agent/install.sh"];
+    private static readonly string[] AnonymousAgentPaths = ["/agent/enroll", "/agent/ping", "/agent/ca", "/agent/install.sh", "/agent/install.ps1"];
 
     public static IApplicationBuilder UsePortIsolation(this IApplicationBuilder app, AIOPatcherOptions options) =>
         app.Use(async (ctx, next) =>

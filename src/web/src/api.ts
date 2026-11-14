@@ -125,6 +125,7 @@ export interface EnrollmentTokenCreated {
   expiresAt: string;
   serverUrl: string;
   caFingerprintSha256: string;
+  windowsInstallScriptSha256: string | null;
 }
 
 export interface EnrollmentToken {

@@ -10,18 +10,22 @@ public static class AgentDownloadEndpoints
 {
     public const string DownloadPrefix = "/agent/download/";
     public const string InstallScriptPath = "/agent/install.sh";
+    public const string WindowsInstallScriptPath = "/agent/install.ps1";
 
     public sealed record AgentDownloadDto(string RuntimeId, bool Available, long? SizeBytes, string? Sha256);
 
     public static void MapAgentDownloadEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapGet(InstallScriptPath, () =>
-        {
-            var path = Path.Combine(AppContext.BaseDirectory, "AgentAssets", "install.sh");
-            return File.Exists(path)
-                ? Results.File(path, "text/x-shellscript; charset=utf-8")
-                : Results.NotFound();
-        });
+            AgentDownloads.FindScript("install.sh") is { } file
+                ? Results.File(file.FullName, "text/x-shellscript; charset=utf-8")
+                : Results.NotFound());
+
+        // Windows: Der Dashboard-Befehl prüft die SHA-256 dieser Datei, bevor er sie ausführt.
+        app.MapGet(WindowsInstallScriptPath, () =>
+            AgentDownloads.FindScript("install.ps1") is { } file
+                ? Results.File(file.FullName, "text/plain; charset=utf-8")
+                : Results.NotFound());
 
         app.MapGet(DownloadPrefix + "{rid}", (string rid, AgentDownloads downloads) =>
             downloads.Find(rid) is { } file

@@ -67,7 +67,8 @@ public static class HostEndpoints
         string Token,
         DateTime ExpiresAt,
         string ServerUrl,
-        string CaFingerprintSha256);
+        string CaFingerprintSha256,
+        string? WindowsInstallScriptSha256);
 
     public sealed record EnrollmentTokenDto(Guid Id, Guid SiteId, string? Label, DateTime CreatedAt, DateTime ExpiresAt);
 
@@ -204,6 +205,7 @@ public static class HostEndpoints
         AppDbContext db,
         AIOPatcherOptions options,
         CertificateAuthority ca,
+        AgentDownloads downloads,
         AuditLog audit,
         CancellationToken ct)
     {
@@ -226,7 +228,10 @@ public static class HostEndpoints
         audit.Add("enrollment-token.created", entity.Label, siteId: site.Id);
         await db.SaveChangesAsync(ct);
 
-        return Results.Ok(new EnrollmentTokenCreatedDto(entity.Id, token, entity.ExpiresAt, options.AgentApiUrl, ca.RootFingerprintSha256));
+        var windowsScript = AgentDownloads.FindScript("install.ps1");
+        return Results.Ok(new EnrollmentTokenCreatedDto(
+            entity.Id, token, entity.ExpiresAt, options.AgentApiUrl, ca.RootFingerprintSha256,
+            windowsScript is null ? null : downloads.Sha256(windowsScript).ToUpperInvariant()));
     }
 
     private static async Task<IResult> DeleteEnrollmentToken(Guid id, AppDbContext db, AuditLog audit, CancellationToken ct)

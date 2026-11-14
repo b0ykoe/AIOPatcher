@@ -75,7 +75,33 @@ public sealed class AgentState
         if (!OperatingSystem.IsWindows())
         {
             File.SetUnixFileMode(directory, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            return;
         }
+
+        // Unter ProgramData dürfen normale Benutzer sonst mitlesen (privater Schlüssel!).
+        // Nur bei erhöhten Rechten anpassen: ein nicht erhöhter Testlauf würde sich sonst selbst aussperren.
+        if (Environment.IsPrivilegedProcess)
+        {
+            RestrictToSystemAndAdministrators(directory);
+        }
+    }
+
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+    private static void RestrictToSystemAndAdministrators(string directory)
+    {
+        var security = new System.Security.AccessControl.DirectorySecurity();
+        security.SetAccessRuleProtection(isProtected: true, preserveInheritance: false); // Vererbung kappen
+        foreach (var sid in new[] { System.Security.Principal.WellKnownSidType.LocalSystemSid, System.Security.Principal.WellKnownSidType.BuiltinAdministratorsSid })
+        {
+            security.AddAccessRule(new System.Security.AccessControl.FileSystemAccessRule(
+                new System.Security.Principal.SecurityIdentifier(sid, null),
+                System.Security.AccessControl.FileSystemRights.FullControl,
+                System.Security.AccessControl.InheritanceFlags.ContainerInherit | System.Security.AccessControl.InheritanceFlags.ObjectInherit,
+                System.Security.AccessControl.PropagationFlags.None,
+                System.Security.AccessControl.AccessControlType.Allow));
+        }
+
+        new DirectoryInfo(directory).SetAccessControl(security);
     }
 }
 

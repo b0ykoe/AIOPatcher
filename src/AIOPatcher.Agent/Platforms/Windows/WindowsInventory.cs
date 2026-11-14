@@ -5,7 +5,7 @@ using Microsoft.Win32;
 
 namespace AIOPatcher.Agent.Platforms.Windows;
 
-/// <summary>Windows Server 2019/2022/2025. Der Update-Scan über die Windows-Update-API folgt in Roadmap-Schritt 6.</summary>
+/// <summary>Windows Server 2019/2022/2025 (und Windows 10/11). Updates über die Windows-Update-API.</summary>
 [SupportedOSPlatform("windows")]
 public sealed class WindowsInventory : IPlatformInventory
 {
@@ -27,8 +27,18 @@ public sealed class WindowsInventory : IPlatformInventory
         return Task.FromResult(new SystemInfo(product, version, KernelVersion: null, IsRebootPending(), AreNativeAutoUpdatesEnabled()));
     }
 
-    public Task<IReadOnlyList<AvailableUpdate>?> ScanUpdatesAsync(CancellationToken ct) =>
-        Task.FromResult<IReadOnlyList<AvailableUpdate>?>(null);
+    public async Task<IReadOnlyList<AvailableUpdate>?> ScanUpdatesAsync(CancellationToken ct)
+    {
+        var updates = await WindowsUpdateApi.SearchAsync().WaitAsync(ct);
+        return updates
+            .Select(u => new AvailableUpdate(
+                Name: u.Title,
+                CurrentVersion: null,
+                AvailableVersion: u.KbArticle,
+                IsSecurity: u.IsSecurity,
+                Classification: u.Severity is null ? u.Classification : $"{u.Classification} ({u.Severity})"))
+            .ToList();
+    }
 
     private static bool IsRebootPending()
     {

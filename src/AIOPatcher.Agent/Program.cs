@@ -46,13 +46,18 @@ switch (commandLine.Command)
 
         var builder = Host.CreateApplicationBuilder(args);
         builder.Services.AddSystemd();
-        builder.Services.AddWindowsService(o => o.ServiceName = "AIOPatcher Agent");
+        builder.Services.AddWindowsService(o => o.ServiceName = "AIOPatcherAgent");
         builder.Logging.ClearProviders();
         builder.Logging.AddSimpleConsole(o =>
         {
             o.SingleLine = true;
             o.TimestampFormat = "yyyy-MM-dd HH:mm:ss ";
         });
+        if (OperatingSystem.IsWindows() && Microsoft.Extensions.Hosting.WindowsServices.WindowsServiceHelpers.IsWindowsService())
+        {
+            // Als Dienst gibt es keine Konsole: Ereignisanzeige > Windows-Protokolle > Anwendung, Quelle "AIOPatcherAgent".
+            AddWindowsEventLog(builder.Logging);
+        }
 
         builder.Services.AddSingleton(AgentState.Load(stateDir));
         builder.Services.AddSingleton(sp => CreateInventory(sp.GetRequiredService<ILoggerFactory>()));
@@ -68,6 +73,10 @@ switch (commandLine.Command)
         await Console.Error.WriteLineAsync("Befehle: run (Standard), enroll, scan, version");
         return 2;
 }
+
+[System.Runtime.Versioning.SupportedOSPlatform("windows")]
+static void AddWindowsEventLog(ILoggingBuilder logging) =>
+    logging.AddEventLog(new Microsoft.Extensions.Logging.EventLog.EventLogSettings { SourceName = "AIOPatcherAgent" });
 
 static IPlatformInventory CreateInventory(ILoggerFactory loggerFactory) =>
     OperatingSystem.IsWindows()

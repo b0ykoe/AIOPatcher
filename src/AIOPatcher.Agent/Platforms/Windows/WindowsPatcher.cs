@@ -8,11 +8,10 @@ namespace AIOPatcher.Agent.Platforms.Windows;
 [SupportedOSPlatform("windows")]
 public sealed class WindowsPatcher : IPatchPlatform
 {
-    // Installation über die Windows-Update-API folgt in Roadmap-Schritt 6.
-    public Task<PatchOutcome> PatchAsync(PatchScope scope, Action<string> log, CancellationToken ct)
+    public async Task<PatchOutcome> PatchAsync(PatchScope scope, Action<string> log, CancellationToken ct)
     {
-        log("[agent] Windows-Updates installieren ist noch nicht implementiert (Roadmap Schritt 6).");
-        return Task.FromResult(new PatchOutcome(false, "Windows-Patching folgt in einer späteren Version."));
+        var result = await WindowsUpdateApi.InstallAsync(scope, log).WaitAsync(ct);
+        return new PatchOutcome(result.Success, result.Summary);
     }
 
     public async Task<bool> RequestRebootAsync(Action<string> log, CancellationToken ct)

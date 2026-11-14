@@ -35,6 +35,14 @@ public sealed class AgentDownloads(AIOPatcherOptions options)
         return null;
     }
 
+    /// <summary>Installationsskripte aus AgentAssets (feste Namen, keine Pfade aus der URL).</summary>
+    public static readonly string[] ScriptNames = ["install.sh", "install.ps1"];
+
+    public static FileInfo? FindScript(string name) =>
+        ScriptNames.Contains(name) && new FileInfo(Path.Combine(AppContext.BaseDirectory, "AgentAssets", name)) is { Exists: true } file
+            ? file
+            : null;
+
     public string Sha256(FileInfo file)
     {
         var key = file.FullName;

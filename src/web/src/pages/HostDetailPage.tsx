@@ -143,7 +143,7 @@ export function HostDetailPage() {
         </label>
       </div>
       {!h.lastScanAt ? (
-        <p className="muted">Noch kein Scan gemeldet{h.osFamily === "Windows" ? " (Windows-Update-Scan folgt in einem späteren Schritt)" : ""}.</p>
+        <p className="muted">Noch kein Scan gemeldet. Der erste Scan läuft beim Start des Agents (unter Windows kann das einige Minuten dauern).</p>
       ) : (
         <div className="table-wrap">
           <table>

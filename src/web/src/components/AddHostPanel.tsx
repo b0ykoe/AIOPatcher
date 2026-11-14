@@ -20,6 +20,22 @@ function linuxInstallCommand(c: EnrollmentTokenCreated): string {
   ].join("\n");
 }
 
+/**
+ * Windows PowerShell 5.1 kann der CA vor dem Download noch nicht vertrauen. Darum: install.ps1 einmal ungeprüft
+ * laden, aber nur ausführen, wenn die SHA-256 zu dem Wert passt, den das Dashboard hier mitgibt.
+ * install.ps1 pinnt dann die CA für alles Weitere.
+ */
+function windowsInstallCommand(c: EnrollmentTokenCreated, scriptSha256: string): string {
+  return [
+    `$S='${c.serverUrl}'; $F='${c.caFingerprintSha256}'; $T='${c.token}'; $H='${scriptSha256}'`,
+    `[Net.ServicePointManager]::SecurityProtocol = 'Tls12'; $P = Join-Path $env:TEMP 'aiopatcher-install.ps1'`,
+    `[Net.ServicePointManager]::ServerCertificateValidationCallback = { $true }`,
+    `try { (New-Object Net.WebClient).DownloadFile("$S/agent/install.ps1", $P) } finally { [Net.ServicePointManager]::ServerCertificateValidationCallback = $null }`,
+    `if ((Get-FileHash $P -Algorithm SHA256).Hash -eq $H) { powershell.exe -NoProfile -ExecutionPolicy Bypass -File $P -Server $S -Token $T -Fingerprint $F } else { Write-Host 'Abbruch: Pruefsumme von install.ps1 stimmt nicht.' -ForegroundColor Red }`,
+    `Remove-Item $P -ErrorAction SilentlyContinue`,
+  ].join("\n");
+}
+
 export function AddHostPanel({ sites, onClose }: { sites: Site[]; onClose: () => void }) {
   const [siteId, setSiteId] = useState(sites[0]?.id ?? "");
   const [label, setLabel] = useState("");
@@ -32,6 +48,7 @@ export function AddHostPanel({ sites, onClose }: { sites: Site[]; onClose: () =>
   }, []);
 
   const missingLinux = downloads?.filter((d) => d.runtimeId.startsWith("linux") && !d.available).map((d) => d.runtimeId) ?? [];
+  const missingWindows = downloads?.some((d) => d.runtimeId === "win-x64" && !d.available) ?? false;
 
   const create = async (e: FormEvent) => {
     e.preventDefault();
@@ -43,7 +60,6 @@ export function AddHostPanel({ sites, onClose }: { sites: Site[]; onClose: () =>
     }
   };
 
-  const args = created ? `enroll --server ${created.serverUrl} --token ${created.token} --fingerprint ${created.caFingerprintSha256}` : "";
 
   return (
     <div className="card panel">
@@ -95,12 +111,24 @@ export function AddHostPanel({ sites, onClose }: { sites: Site[]; onClose: () =>
             Zum Aktualisieren des Agents denselben Befehl später einfach erneut ausführen: Ist der Host schon registriert, wird nur das Programm ersetzt.
           </p>
 
-          <CopyBlock title="Windows (PowerShell als Administrator, Agent vorher manuell kopieren)" text={`& "C:\\Program Files\\AIOPatcher\\aiopatcher-agent.exe" ${args}`} />
+          {created.windowsInstallScriptSha256 ? (
+            <CopyBlock
+              title="Windows Server 2019/2022/2025, Windows 10/11 (Windows PowerShell als Administrator)"
+              text={windowsInstallCommand(created, created.windowsInstallScriptSha256)}
+            />
+          ) : (
+            <p className="error small">install.ps1 fehlt auf dem Server.</p>
+          )}
+          {missingWindows && (
+            <p className="error small">Auf dem Server fehlt der Agent-Build für win-x64.</p>
+          )}
+          <p className="muted small">
+            Prüft die Prüfsumme von install.ps1, dann die CA, lädt den Agent und richtet den Dienst <code>AIOPatcherAgent</code> ein.
+            Logs stehen in der Ereignisanzeige (Anwendung, Quelle AIOPatcherAgent).
+          </p>
 
           <p className="muted small">
             CA-Fingerprint (SHA-256): <code className="break">{created.caFingerprintSha256}</code>
-            <br />
-            Ein Windows-Installationsskript folgt mit den Windows-Updates.
           </p>
           <button className="ghost" onClick={() => setCreated(null)}>
             Weiteren Token erzeugen

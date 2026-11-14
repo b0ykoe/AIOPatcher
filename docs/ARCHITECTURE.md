@@ -55,7 +55,7 @@ Ein Admin, mehrere Sites, Linux- und Windows-Server, IPAM light.
 | Proxmox VE / PBS | **Immer `apt-get dist-upgrade`**, nie nur `upgrade` |
 | Ubuntu | `unattended-upgrades` erkennen und anzeigen, damit nicht doppelt gepatcht wird |
 | Debian/Ubuntu | Security-Updates erkennt der Agent am `-security`-Repo, Neustartbedarf an `/var/run/reboot-required` |
-| Windows Server | Windows-Update-COM-API. Neustartbedarf aus den Registry-Schlüsseln `RebootPending`, `RebootRequired`, `PendingFileRenameOperations`. `AUOptions` auslesen und anzeigen |
+| Windows Server | Windows-Update-COM-API (über IDispatch, eigener STA-Thread; der Windows-Agent wird daher nicht getrimmt). Ausgeschlossen per Kategorie-ID: Defender-Signaturen, Treiber, OS-Upgrades, optionale Vorschauen. Agent-Verzeichnis nur für SYSTEM und Administratoren. Neustartbedarf aus den Registry-Schlüsseln `RebootPending`, `RebootRequired`, `PendingFileRenameOperations`. `AUOptions` auslesen und anzeigen |
 | OPNsense | Kein Agent (FreeBSD), später über die REST-API |
 
 ## Projektstruktur
@@ -80,10 +80,10 @@ docs/
 3. ✅ Linux-Agent: Check-in mit Inventar und Updates
 4. ✅ Dashboard: Übersicht, Hosts, Host-Detail
 5. ✅ Jobs: Patch und Neustart mit Log
-6. Windows-Agent
+6. ✅ Windows-Agent (Scan, Installation, Dienst, install.ps1)
 7. Auto-Patch-Scheduler mit Wartungsfenstern
 8. IPAM light
-9. Installationsskripte (✅ Linux), CI und Release
+9. Installationsskripte (✅ Linux, ✅ Windows), CI und Release
 
 **v0.2:** Snapshots vor dem Patch (Hetzner-Cloud-API, `qm`/`pct snapshot` über den Agent), CVE-Zuordnung (OSV.dev, MSRC, CISA KEV, EPSS), Benachrichtigungen (ntfy, Mail)
 

@@ -15,10 +15,11 @@ v0.1 in Arbeit (Roadmap-Schritte 1–5 fertig):
 - Enrollment: Einmal-Token, CA-Pinning per Fingerprint, Client-Zertifikat, Sperren/Löschen von Hosts
 - Agent-Check-in (jede Minute): System, IPs, Neustartbedarf, eigene Auto-Updates; Linux zusätzlich apt-Scan
 - Jobs: Scan, Patch (Security/alle, optional mit Neustart), Neustart. Live-Log im Dashboard, Ergebnis
-  wird auch nach einem Neustart gemeldet. Linux über apt (Proxmox: dist-upgrade), Windows bisher nur Neustart.
+  wird auch nach einem Neustart gemeldet. Linux über apt (Proxmox: dist-upgrade), Windows über die
+  Windows-Update-API (Microsoft Update oder WSUS; ohne Defender-Signaturen, Treiber, OS-Upgrades und optionale Vorschauen).
 - Dashboard: Übersicht, Hosts, Host-Detail mit Job-Knöpfen, Jobs, Live-Log, „Host hinzufügen“
 
-Als Nächstes: Windows-Updates (Scan + Installation), dann Auto-Patch mit Wartungsfenstern.
+Als Nächstes: Auto-Patch mit Wartungsfenstern, dann IPAM light.
 
 ## Agent auf Linux installieren
 
@@ -41,6 +42,24 @@ journalctl -u aiopatcher-agent -f
 
 **Update:** denselben Befehl erneut ausführen. Ist der Host registriert, wird nur das Programm ersetzt.
 **Entfernen:** `install.sh --uninstall` (mit `--purge` auch Zertifikate und Policy löschen); den Host danach im Dashboard löschen.
+
+## Agent auf Windows installieren
+
+Windows Server 2019/2022/2025 und Windows 10/11 (64 Bit). Im Dashboard unter *Host hinzufügen* den Windows-Block
+kopieren und in **Windows PowerShell als Administrator** einfügen. Er
+
+1. lädt `install.ps1` und führt es nur aus, wenn dessen SHA-256 zu dem Wert im Befehl passt,
+2. prüft die CA gegen den Fingerprint und lädt den Agent nur noch über diese CA (Prüfung pro Verbindung),
+3. installiert nach `C:\Program Files\AIOPatcher\`, registriert den Host (Daten in `C:\ProgramData\AIOPatcher\Agent\`,
+   nur für SYSTEM und Administratoren lesbar) und richtet den Dienst `AIOPatcherAgent` ein (verzögerter Autostart,
+   Neustart bei Fehlern).
+
+Logs: Ereignisanzeige → Windows-Protokolle → Anwendung, Quelle `AIOPatcherAgent`.
+Update: denselben Befehl erneut ausführen. Entfernen: `install.ps1 -Uninstall` (mit `-Purge` inkl. Registrierung).
+
+Windows installiert Updates standardmäßig auch selbst. Für Hosts, die AIOPatcher patchen soll, per GPO
+„Automatische Updates konfigurieren“ auf „Herunterladen und benachrichtigen“ stellen; das Dashboard zeigt einen Hinweis,
+solange das nicht der Fall ist.
 
 ## Lokale Policy auf dem Host
 
