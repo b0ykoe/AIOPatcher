@@ -74,17 +74,12 @@ docs/
 
 ## Roadmap
 
-**v0.1**
-1. ✅ Grundgerüst, SQLite, Setup-Assistent, Login mit TOTP
-2. ✅ CA, Enrollment, mTLS
-3. ✅ Linux-Agent: Check-in mit Inventar und Updates
-4. ✅ Dashboard: Übersicht, Hosts, Host-Detail
-5. ✅ Jobs: Patch und Neustart mit Log
-6. ✅ Windows-Agent (Scan, Installation, Dienst, install.ps1)
-7. Auto-Patch-Scheduler mit Wartungsfenstern
-8. IPAM light
-9. Installationsskripte (✅ Linux, ✅ Windows), CI und Release
+**v0.1** ✅ Grundgerüst, CA/mTLS, Linux- und Windows-Agent, Jobs, Auto-Patch, Installationsskripte
 
-**v0.2:** Snapshots vor dem Patch (Hetzner-Cloud-API, `qm`/`pct snapshot` über den Agent), CVE-Zuordnung (OSV.dev, MSRC, CISA KEV, EPSS), Benachrichtigungen (ntfy, Mail)
+**v0.2** ✅ Abläufe (Wellen, Prüfung, Freigabe, Zeitplan, Snapshots über Proxmox/Hetzner, Backup-Vorbedingung),
+Benutzer und Rollen, Deutsch/Englisch, Benachrichtigungen, Patchpausen, zurückgehaltene Updates, Tags,
+CVE (OSV, MSRC, KEV, EPSS), Container-Updates, Berichte, API-Tokens, signiertes Agent-Self-Update,
+Zertifikatserneuerung, IPAM light, OPNsense, CI/Release
 
-**v0.3:** OPNsense über die API, Passkeys, Agent-Self-Update mit signierten Binaries, Patch-Reports pro Site
+**Offen / Ideen:** Passkeys, Rollen pro Site (Kunden-Logins), Patch-Fenster pro Tag-Gruppe, Snapshot-Rollback per Klick,
+Container-Updates ausführen, Debian-/Ubuntu-Changelogs im Dashboard, Code-Splitting im Frontend

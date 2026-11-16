@@ -4,6 +4,9 @@
     <Project Path="src/AIOPatcher.Contracts/AIOPatcher.Contracts.csproj" />
     <Project Path="src/AIOPatcher.Server/AIOPatcher.Server.csproj" />
   </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/AIOPatcher.Signer/AIOPatcher.Signer.csproj" />
+  </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/AIOPatcher.Tests/AIOPatcher.Tests.csproj" />
   </Folder>

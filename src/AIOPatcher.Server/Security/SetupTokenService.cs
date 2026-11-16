@@ -18,7 +18,7 @@ public sealed class SetupTokenService
 
     public async Task InitializeAsync(AppDbContext db, ILogger logger, CancellationToken ct)
     {
-        var complete = await db.AdminUsers.AnyAsync(u => u.IsSetupComplete, ct);
+        var complete = await db.Users.AnyAsync(u => u.IsSetupComplete, ct);
         lock (_lock)
         {
             IsSetupRequired = !complete;
@@ -32,7 +32,7 @@ public sealed class SetupTokenService
         }
 
         logger.LogWarning("==============================================================");
-        logger.LogWarning("Ersteinrichtung erforderlich. Setup token: {SetupToken}", _token);
+        logger.LogWarning("Initial setup required. Setup token: {SetupToken}", _token);
         logger.LogWarning("==============================================================");
     }
 

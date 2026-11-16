@@ -16,6 +16,24 @@ public static partial class AptOutputParser
     [GeneratedRegex(@"^Inst\s+(?<name>\S+)\s+(?:\[(?<current>[^\]]+)\]\s+)?\((?<new>\S+)\s+(?<origin>[^\[\)]*?)\s*(?:\[[^\]]*\])?\)")]
     private static partial Regex InstLine();
 
+    /// <summary>
+    /// Ausgabe von <c>dpkg-query -W -f='${Package}\t${source:Package}\n' …</c> → Paket → Quellpaket.
+    /// </summary>
+    public static Dictionary<string, string> ParseSourceMap(string output)
+    {
+        var map = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var rawLine in output.Split('\n'))
+        {
+            var parts = rawLine.TrimEnd('\r').Split('\t');
+            if (parts.Length == 2 && parts[0].Length > 0 && parts[1].Length > 0)
+            {
+                map[parts[0]] = parts[1];
+            }
+        }
+
+        return map;
+    }
+
     public static IReadOnlyList<AvailableUpdate> Parse(string simulationOutput)
     {
         var updates = new List<AvailableUpdate>();

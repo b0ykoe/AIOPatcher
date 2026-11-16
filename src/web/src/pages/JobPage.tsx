@@ -1,16 +1,21 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router";
-import { api, describeJob, formatDateTime, isActiveJob, type Job, type JobDetail, type JobLogLine } from "../api";
-import { JobStatusBadge } from "../components/JobStatusBadge";
+import { Alert, Anchor, Button, Card, Group, Loader, SimpleGrid, Text } from "@mantine/core";
+import { IconArrowLeft, IconClockPause, IconInfoCircle, IconX } from "@tabler/icons-react";
+import { useTranslation } from "react-i18next";
+import { api, describeJob, describeRequester, formatDateTime, isActiveJob, type Job, type JobDetail, type JobLogLine } from "../api";
+import { useCan } from "../App";
+import { Console } from "../components/Console";
+import { confirmAction, errorText, JobStatusBadge, notifySuccess } from "../components/ui";
 
 export function JobPage() {
+  const { t } = useTranslation();
+  const can = useCan();
   const { id } = useParams();
   const [job, setJob] = useState<Job | null>(null);
   const [lines, setLines] = useState<JobLogLine[]>([]);
-  const [follow, setFollow] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const lastId = useRef(0);
-  const logEnd = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -30,7 +35,7 @@ export function JobPage() {
         }
         if (isActiveJob(detail.job.status)) timer = setTimeout(poll, 2000);
       } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : String(e));
+        if (!cancelled) setError(errorText(e));
       }
     };
     void poll();
@@ -40,72 +45,83 @@ export function JobPage() {
     };
   }, [id]);
 
-  useEffect(() => {
-    if (follow) logEnd.current?.scrollIntoView({ block: "end" });
-  }, [lines, follow]);
+  if (error) return <Alert color="red">{error}</Alert>;
+  if (!job) return <Loader />;
 
-  if (error) return <p className="error">{error}</p>;
-  if (!job) return <p className="muted">Lade …</p>;
+  const cancel = () =>
+    confirmAction({
+      title: t("jobPage.cancelTitle"),
+      message: t("jobPage.cancelText"),
+      confirmLabel: t("jobPage.cancelConfirm"),
+      danger: true,
+      onConfirm: async () => {
+        await api.post(`/api/jobs/${job.id}/cancel`);
+        setJob({ ...job, status: "Cancelled" });
+        notifySuccess(t("jobPage.cancelled"));
+      },
+    });
 
-  const cancel = async () => {
-    await api.post(`/api/jobs/${job.id}/cancel`);
-    setJob({ ...job, status: "Cancelled" });
-  };
+  const auto = job.requestedBy === "scheduler";
 
   return (
     <>
-      <p className="small">
-        <Link to={`/hosts/${job.hostId}`}>← {job.hostName}</Link>
-      </p>
-      <div className="page-head">
-        <h1>{describeJob(job)}</h1>
-        <JobStatusBadge status={job.status} />
-        <span className="spacer" />
-        {job.status === "Queued" && (
-          <button className="ghost danger" onClick={() => void cancel()}>
-            Abbrechen
-          </button>
+      <Anchor component={Link} to={`/hosts/${job.hostId}`} size="sm" c="dimmed">
+        <Group gap={4}>
+          <IconArrowLeft size={14} /> {job.hostName}
+        </Group>
+      </Anchor>
+
+      <Group justify="space-between" mt="xs" mb="lg" wrap="wrap">
+        <Group gap="sm">
+          <Text fz={28} fw={800}>
+            {describeJob(job)}
+          </Text>
+          <JobStatusBadge status={job.status} />
+        </Group>
+        {job.status === "Queued" && can.operate && (
+          <Button variant="light" color="red" leftSection={<IconX size={16} />} onClick={cancel}>
+            {t("common.cancel")}
+          </Button>
         )}
-      </div>
+      </Group>
 
-      {job.status === "Queued" && <div className="notice info">Wartet auf den nächsten Check-in des Agents (normalerweise unter einer Minute).</div>}
-      {job.summary && <div className={`notice ${job.status === "Succeeded" ? "info" : "warn"}`}>{job.summary}</div>}
+      {job.status === "Queued" && (
+        <Alert mb="md" color="blue" variant="light" icon={<IconClockPause size={18} />}>
+          {t("jobPage.waiting")}
+        </Alert>
+      )}
+      {job.summary && (
+        <Alert mb="md" variant="light" color={job.status === "Succeeded" ? "teal" : job.status === "Cancelled" ? "gray" : "orange"} icon={<IconInfoCircle size={18} />}>
+          {job.summary}
+        </Alert>
+      )}
 
-      <div className="facts">
-        <Fact label="Host" value={`${job.hostName} (${job.siteName})`} />
-        <Fact label="Angefordert von" value={job.requestedBy} />
-        <Fact label="Erstellt" value={formatDateTime(job.createdAt)} />
-        <Fact label="Gestartet" value={formatDateTime(job.startedAt)} />
-        <Fact label="Beendet" value={formatDateTime(job.finishedAt)} />
-        <Fact label="Neustart" value={job.rebootPerformed ? "durchgeführt" : job.allowReboot ? "erlaubt, nicht nötig/erfolgt" : "nicht erlaubt"} />
-      </div>
+      <SimpleGrid cols={{ base: 2, md: 4 }} spacing="md" mb="lg">
+        <Fact label={t("jobs.colHost")} value={job.hostName} sub={job.siteName} />
+        <Fact label={t("jobPage.requestedBy")} value={auto ? "Auto-Patch" : describeRequester(job.requestedBy)} sub={auto && job.notAfter ? t("jobPage.startLatest", { date: formatDateTime(job.notAfter) }) : formatDateTime(job.createdAt)} />
+        <Fact label={t("jobPage.runtime")} value={job.startedAt ? formatDateTime(job.startedAt) : t("jobPage.notStarted")} sub={job.finishedAt ? t("jobPage.until", { date: formatDateTime(job.finishedAt) }) : undefined} />
+        <Fact label={t("jobType.reboot")} value={job.rebootPerformed ? t("jobPage.rebootDone") : job.allowReboot ? t("jobPage.rebootAllowed") : t("jobPage.rebootNotAllowed")} />
+      </SimpleGrid>
 
-      <div className="page-head">
-        <h2>Log</h2>
-        <span className="spacer" />
-        <label className="check">
-          <input type="checkbox" checked={follow} onChange={(e) => setFollow(e.target.checked)} /> mitlaufen
-        </label>
-      </div>
-      <div className="log">
-        {lines.length === 0 && <span className="muted">Noch keine Ausgabe.</span>}
-        {lines.map((l) => (
-          <div key={l.id} className={l.text.startsWith("[agent]") ? "log-agent" : l.text.startsWith("$ ") ? "log-cmd" : undefined}>
-            <span className="log-time">{new Date(l.timestamp).toLocaleTimeString("de-DE")}</span>
-            {l.text}
-          </div>
-        ))}
-        <div ref={logEnd} />
-      </div>
+      <Console title={`${job.hostName} · ${describeJob(job)}`} lines={lines} live={isActiveJob(job.status)} />
     </>
   );
 }
 
-function Fact({ label, value }: { label: string; value: string }) {
+function Fact({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
-    <div className="fact">
-      <div className="fact-label">{label}</div>
-      <div>{value}</div>
-    </div>
+    <Card padding="md">
+      <Text size="xs" c="dimmed" tt="uppercase" fw={700} style={{ letterSpacing: 0.5 }}>
+        {label}
+      </Text>
+      <Text fw={700} mt={4} lineClamp={1}>
+        {value}
+      </Text>
+      {sub && (
+        <Text size="xs" c="dimmed">
+          {sub}
+        </Text>
+      )}
+    </Card>
   );
 }

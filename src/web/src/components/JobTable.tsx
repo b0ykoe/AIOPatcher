@@ -1,49 +1,95 @@
+import { Anchor, Group, Stack, Table, Text } from "@mantine/core";
+import { IconListCheck } from "@tabler/icons-react";
 import { Link } from "react-router";
-import { describeJob, formatRelative, type Job } from "../api";
-import { JobStatusBadge } from "./JobStatusBadge";
+import { describeJob, describeRequester, formatRelative, type Job } from "../api";
+import { t } from "../i18n";
+import { EmptyState, JobStatusBadge } from "./ui";
+
+/** Kompakte Liste für schmale Karten (z. B. Übersicht). */
+export function JobList({ jobs }: { jobs: Job[] }) {
+  if (jobs.length === 0) {
+    return <Text size="sm" c="dimmed">{t("jobs.noneShort")}</Text>;
+  }
+
+  return (
+    <Stack gap="xs">
+      {jobs.map((j) => (
+        <Group key={j.id} justify="space-between" wrap="nowrap" gap="sm">
+          <div style={{ minWidth: 0 }}>
+            <Anchor component={Link} to={`/jobs/${j.id}`} fw={600} size="sm">
+              {describeJob(j)}
+            </Anchor>
+            <Text size="xs" c="dimmed" lineClamp={1}>
+              {j.hostName} · {j.requestedBy === "scheduler" ? "Auto-Patch" : describeRequester(j.requestedBy)} · {formatRelative(j.createdAt)}
+            </Text>
+          </div>
+          <div style={{ flexShrink: 0 }}>
+            <JobStatusBadge status={j.status} />
+          </div>
+        </Group>
+      ))}
+    </Stack>
+  );
+}
 
 export function JobTable({ jobs, showHost }: { jobs: Job[]; showHost?: boolean }) {
+  if (jobs.length === 0) {
+    return <EmptyState icon={<IconListCheck size={28} />} title={t("jobs.noneTitle")} text={t("jobs.noneText")} />;
+  }
+
   return (
-    <div className="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>Job</th>
-            {showHost && <th>Host</th>}
-            <th>Status</th>
-            <th>Ergebnis</th>
-            <th>Erstellt</th>
-            <th>Von</th>
-          </tr>
-        </thead>
-        <tbody>
+    <Table.ScrollContainer minWidth={640}>
+      <Table>
+        <Table.Thead>
+          <Table.Tr>
+            <Table.Th>{t("jobs.colJob")}</Table.Th>
+            {showHost && <Table.Th>{t("jobs.colHost")}</Table.Th>}
+            <Table.Th>{t("jobs.colStatus")}</Table.Th>
+            <Table.Th>{t("jobs.colResult")}</Table.Th>
+            <Table.Th>{t("jobs.colCreated")}</Table.Th>
+            <Table.Th>{t("jobs.colBy")}</Table.Th>
+          </Table.Tr>
+        </Table.Thead>
+        <Table.Tbody>
           {jobs.map((j) => (
-            <tr key={j.id}>
-              <td>
-                <Link to={`/jobs/${j.id}`}>{describeJob(j)}</Link>
-              </td>
+            <Table.Tr key={j.id}>
+              <Table.Td>
+                <Anchor component={Link} to={`/jobs/${j.id}`} fw={600} size="sm">
+                  {describeJob(j)}
+                </Anchor>
+              </Table.Td>
               {showHost && (
-                <td>
-                  <Link to={`/hosts/${j.hostId}`}>{j.hostName}</Link> <span className="muted small">{j.siteName}</span>
-                </td>
+                <Table.Td>
+                  <Anchor component={Link} to={`/hosts/${j.hostId}`} size="sm">
+                    {j.hostName}
+                  </Anchor>{" "}
+                  <Text span size="xs" c="dimmed">
+                    {j.siteName}
+                  </Text>
+                </Table.Td>
               )}
-              <td>
+              <Table.Td style={{ whiteSpace: "nowrap" }}>
                 <JobStatusBadge status={j.status} />
-              </td>
-              <td className="small">{j.summary}</td>
-              <td className="muted small">{formatRelative(j.createdAt)}</td>
-              <td className="muted small">{j.requestedBy}</td>
-            </tr>
+              </Table.Td>
+              <Table.Td>
+                <Text size="sm" lineClamp={2}>
+                  {j.summary}
+                </Text>
+              </Table.Td>
+              <Table.Td>
+                <Text size="sm" c="dimmed">
+                  {formatRelative(j.createdAt)}
+                </Text>
+              </Table.Td>
+              <Table.Td>
+                <Text size="sm" c="dimmed">
+                  {j.requestedBy === "scheduler" ? "Auto-Patch" : describeRequester(j.requestedBy)}
+                </Text>
+              </Table.Td>
+            </Table.Tr>
           ))}
-          {jobs.length === 0 && (
-            <tr>
-              <td colSpan={showHost ? 6 : 5} className="muted">
-                Noch keine Jobs.
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
-    </div>
+        </Table.Tbody>
+      </Table>
+    </Table.ScrollContainer>
   );
 }

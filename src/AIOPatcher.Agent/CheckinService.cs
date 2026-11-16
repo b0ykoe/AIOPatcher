@@ -1,3 +1,5 @@
+using AIOPatcher.Agent.Maintenance;
+using AIOPatcher.Agent.Platforms.Docker;
 using System.Net;
 using AIOPatcher.Agent.Inventory;
 using AIOPatcher.Agent.Jobs;
@@ -18,6 +20,7 @@ public sealed class CheckinService(
     IPlatformInventory inventory,
     IPatchPlatform patcher,
     JobExecutor executor,
+    SelfMaintenance maintenance,
     ILogger<CheckinService> logger) : BackgroundService
 {
     private static readonly TimeSpan ScanInterval = TimeSpan.FromHours(6);
@@ -29,9 +32,10 @@ public sealed class CheckinService(
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        logger.LogInformation("AIOPatcher-Agent {Version} gestartet. Server {Server}, Host {HostId}",
+        logger.LogInformation("AIOPatcher agent {Version} started. Server {Server}, host {HostId}",
             AgentState.AgentVersion, state.Config.ServerUrl, state.Config.HostId);
 
+        SelfMaintenance.CleanupAfterUpdate();
         using var client = ServerClient.FromState(state);
         var interval = TimeSpan.FromMinutes(1);
 
@@ -50,17 +54,30 @@ public sealed class CheckinService(
                     await RunJobAsync(client, response.Job, stoppingToken);
                     wait = TimeSpan.FromSeconds(1); // sofort neuen Stand melden
                 }
+                else if (waitingForRebootJob is null)
+                {
+                    // Nur im Leerlauf: Zertifikat erneuern bzw. Update einspielen (beides startet den Agent neu).
+                    if (response.RenewCertificate && await maintenance.RenewCertificateAsync(client, stoppingToken))
+                    {
+                        return;
+                    }
+
+                    if (response.Update is { } update && await maintenance.TryUpdateAsync(client, update, stoppingToken))
+                    {
+                        return;
+                    }
+                }
             }
             catch (ServerRejectedException ex) when (ex.Status is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
             {
-                logger.LogError("Server lehnt diesen Agent ab ({Status}). Gesperrt oder gelöscht? Neu registrieren mit 'aiopatcher-agent enroll --force'.", ex.Status);
+                logger.LogError("Server rejects this agent ({Status}). Revoked or deleted? Re-enroll with 'aiopatcher-agent enroll --force'.", ex.Status);
                 wait = TimeSpan.FromMinutes(15);
             }
             catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
             {
                 // Netzwerk, Server oder ein fehlgeschlagener Scan: weiterlaufen, der Dienst darf nicht sterben.
                 logger.LogWarning(ex is HttpRequestException or ServerRejectedException or TaskCanceledException ? null : ex,
-                    "Check-in fehlgeschlagen: {Message}", ex.Message);
+                    "Check-in failed: {Message}", ex.Message);
                 wait = RetryInterval < interval ? RetryInterval : interval;
             }
 
@@ -71,28 +88,30 @@ public sealed class CheckinService(
     private async Task<CheckinResponse> CheckinOnceAsync(ServerClient client, Guid? runningJobId, CancellationToken ct)
     {
         var updates = _freshUpdates;
+        IReadOnlyList<ContainerReport>? containers = null;
         if (updates is null && DateTime.UtcNow >= _nextScan)
         {
-            logger.LogInformation("Suche nach Updates …");
+            containers = await DockerInventory.CollectAsync(ct);
+            logger.LogInformation("Scanning for updates …");
             updates = await inventory.ScanUpdatesAsync(ct);
             if (updates is not null)
             {
-                logger.LogInformation("{Count} Updates verfügbar, davon {Security} Security", updates.Count, updates.Count(u => u.IsSecurity));
+                logger.LogInformation("{Count} updates available, {Security} of them security", updates.Count, updates.Count(u => u.IsSecurity));
             }
 
             _nextScan = DateTime.UtcNow + ScanInterval;
         }
 
-        var request = await BuildRequestAsync(inventory, updates, ct) with { RunningJobId = runningJobId };
+        var request = await BuildRequestAsync(inventory, updates, ct) with { RunningJobId = runningJobId, Containers = containers };
         var response = await client.CheckinAsync(request, ct);
         _freshUpdates = null;
-        logger.LogDebug("Check-in ok, nächster in {Seconds}s", response.CheckinIntervalSeconds);
+        logger.LogDebug("Check-in ok, next in {Seconds}s", response.CheckinIntervalSeconds);
         return response;
     }
 
     private async Task RunJobAsync(ServerClient client, AgentJob job, CancellationToken ct)
     {
-        logger.LogInformation("Job {JobId} erhalten: {Type} ({Scope}, Neustart erlaubt: {AllowReboot})", job.JobId, job.Type, job.Scope, job.AllowReboot);
+        logger.LogInformation("Job {JobId} received: {Type} ({Scope}, reboot allowed: {AllowReboot})", job.JobId, job.Type, job.Scope, job.AllowReboot);
 
         // Policy bei jedem Job neu lesen: Änderungen gelten ohne Agent-Neustart.
         var policy = AgentPolicy.Load(state.Directory);
@@ -108,16 +127,16 @@ public sealed class CheckinService(
 
             if (result.RebootRequested && await TryScheduleRebootAsync(job, result, log, ct))
             {
-                logger.LogInformation("Neustart eingeplant, Ergebnis von Job {JobId} wird nach dem Neustart gemeldet", job.JobId);
+                logger.LogInformation("Reboot scheduled, result of job {JobId} will be reported after the reboot", job.JobId);
                 return;
             }
 
             if (result.RebootRequested)
             {
-                result = result with { Outcome = JobOutcome.Failed, Summary = $"{result.Summary} Neustart konnte nicht ausgelöst werden." };
+                result = result with { Outcome = JobOutcome.Failed, Summary = $"{result.Summary} Reboot could not be triggered." };
             }
 
-            log.Write($"[agent] Ergebnis: {result.Outcome}. {result.Summary}");
+            log.Write($"[agent] Result: {result.Outcome}. {result.Summary}");
         }
 
         try
@@ -141,7 +160,7 @@ public sealed class CheckinService(
         var pending = new PendingResult(job.JobId, result.Outcome, result.Summary, DateTime.UtcNow);
         pending.Save(state.Directory);
 
-        log.Write("[agent] Löse Neustart aus. Das Ergebnis wird nach dem Neustart gemeldet.");
+        log.Write("[agent] Triggering reboot. The result will be reported after the reboot.");
         await log.FlushAsync(ct);
 
         if (await patcher.RequestRebootAsync(log.Write, ct))
@@ -173,7 +192,7 @@ public sealed class CheckinService(
         }
         else if (pending.HasRebooted(bootTime))
         {
-            request = new JobResultRequest(pending.Outcome, $"{pending.Summary} Neustart durchgeführt, wieder online seit {bootTime.ToLocalTime():dd.MM.yyyy HH:mm}.", RebootPerformed: true);
+            request = new JobResultRequest(pending.Outcome, $"{pending.Summary} Rebooted, back online since {bootTime.ToLocalTime():yyyy-MM-dd HH:mm}.", RebootPerformed: true);
         }
         else if (DateTime.UtcNow - pending.RebootRequestedAtUtc < PendingResult.RebootGracePeriod)
         {
@@ -181,17 +200,17 @@ public sealed class CheckinService(
         }
         else
         {
-            request = new JobResultRequest(JobOutcome.Failed, $"{pending.Summary} Neustart wurde ausgelöst, hat aber nicht stattgefunden.", RebootPerformed: false);
+            request = new JobResultRequest(JobOutcome.Failed, $"{pending.Summary} Reboot was triggered but did not happen.", RebootPerformed: false);
         }
 
         try
         {
             await client.SendJobResultAsync(pending.JobId, request, ct);
-            logger.LogInformation("Ergebnis von Job {JobId} nach Neustart gemeldet: {Outcome}", pending.JobId, request.Outcome);
+            logger.LogInformation("Result of job {JobId} reported after reboot: {Outcome}", pending.JobId, request.Outcome);
         }
         catch (ServerRejectedException ex) when (ex.Status is HttpStatusCode.NotFound or HttpStatusCode.Conflict)
         {
-            logger.LogWarning("Server kennt Job {JobId} nicht mehr ({Status}), Ergebnis verworfen", pending.JobId, ex.Status);
+            logger.LogWarning("Server no longer knows job {JobId} ({Status}), result discarded", pending.JobId, ex.Status);
         }
 
         PendingResult.Delete(state.Directory);
@@ -214,6 +233,7 @@ public sealed class CheckinService(
             NativeAutoUpdatesEnabled: info.NativeAutoUpdatesEnabled,
             Addresses: NetworkInventory.Collect(),
             Updates: updates,
-            RunningJobId: null);
+            RunningJobId: null,
+            Architecture: SelfMaintenance.Architecture);
     }
 }

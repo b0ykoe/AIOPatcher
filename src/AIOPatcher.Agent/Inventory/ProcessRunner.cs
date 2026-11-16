@@ -59,7 +59,7 @@ public static class ProcessRunner
 
         if (!process.Start())
         {
-            throw new InvalidOperationException($"{fileName} konnte nicht gestartet werden.");
+            throw new InvalidOperationException($"{fileName} could not be started.");
         }
 
         process.StandardInput.Close();
@@ -92,7 +92,7 @@ public static class ProcessRunner
                 throw;
             }
 
-            throw new TimeoutException($"{fileName} lief länger als {timeout.TotalMinutes:0} Minuten und wurde abgebrochen.");
+            throw new TimeoutException($"{fileName} ran longer than {timeout.TotalMinutes:0} minutes and was aborted.");
         }
     }
 }

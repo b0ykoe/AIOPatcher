@@ -43,6 +43,43 @@ public sealed class AgentDownloads(AIOPatcherOptions options)
             ? file
             : null;
 
+    /// <summary>Version der ausgelieferten Agents: dieselbe wie der Server (gemeinsamer Build).</summary>
+    public static string AgentVersion { get; } = (typeof(AgentDownloads).Assembly
+        .GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
+        .OfType<System.Reflection.AssemblyInformationalVersionAttribute>()
+        .FirstOrDefault()?.InformationalVersion ?? "0.0.0").Split('+')[0];
+
+    public static string? RuntimeId(AIOPatcher.Contracts.OsFamily os, string? architecture) => (os, architecture) switch
+    {
+        (AIOPatcher.Contracts.OsFamily.Linux, "x64") => "linux-x64",
+        (AIOPatcher.Contracts.OsFamily.Linux, "arm64") => "linux-arm64",
+        (AIOPatcher.Contracts.OsFamily.Windows, "x64") => "win-x64",
+        _ => null,
+    };
+
+    /// <summary>
+    /// Update-Angebot, wenn der Host eine ältere Version hat und für sein Binary eine Signatur
+    /// (Datei "&lt;binary&gt;.sig", Base64) vorliegt. Unsignierte Builds werden nie angeboten.
+    /// </summary>
+    public AIOPatcher.Contracts.AgentUpdateOffer? OfferFor(AIOPatcher.Contracts.OsFamily os, string? architecture, string? hostVersion)
+    {
+        if (RuntimeId(os, architecture) is not { } rid || !IsNewer(AgentVersion, hostVersion) || Find(rid) is not { } file)
+        {
+            return null;
+        }
+
+        var signature = new FileInfo(file.FullName + ".sig");
+        if (!signature.Exists)
+        {
+            return null;
+        }
+
+        return new AIOPatcher.Contracts.AgentUpdateOffer(AgentVersion, $"/agent/download/{rid}", Sha256(file), File.ReadAllText(signature.FullName).Trim());
+    }
+
+    public static bool IsNewer(string available, string? installed) =>
+        Version.TryParse(available.Split('-')[0], out var a) && (installed is null || !Version.TryParse(installed.Split('+')[0].Split('-')[0], out var i) || a > i);
+
     public string Sha256(FileInfo file)
     {
         var key = file.FullName;

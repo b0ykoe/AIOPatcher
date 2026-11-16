@@ -53,23 +53,35 @@ public static class WindowsUpdateApi
     public static IReadOnlyList<WindowsUpdateInfo> Describe(object updateCollection) =>
         Relevant(updateCollection).Select(x => x.Info).ToList();
 
-    public static Task<WindowsInstallResult> InstallAsync(PatchScope scope, Action<string> log) =>
-        RunOnStaThread(() => Install(scope, log)).WaitAsync(InstallTimeout);
+    public static Task<WindowsInstallResult> InstallAsync(PatchScope scope, IReadOnlyList<string> holds, Action<string> log) =>
+        RunOnStaThread(() => Install(scope, holds, log)).WaitAsync(InstallTimeout);
 
-    private static WindowsInstallResult Install(PatchScope scope, Action<string> log)
+    private static WindowsInstallResult Install(PatchScope scope, IReadOnlyList<string> holds, Action<string> log)
     {
         var session = CreateComObject("Microsoft.Update.Session");
         session.ClientApplicationID = "AIOPatcher";
 
-        log("[agent] Suche Updates bei Windows Update / WSUS ...");
+        log("[agent] Searching for updates via Windows Update / WSUS ...");
         var searchResult = Search(session);
-        var selected = Relevant((object)searchResult.Updates)
+        var candidates = Relevant((object)searchResult.Updates)
             .Where(x => scope == PatchScope.All || x.Info.IsSecurity)
             .ToList();
+        var selected = new List<(dynamic Update, WindowsUpdateInfo Info)>();
+        foreach (var candidate in candidates)
+        {
+            if (HoldPatterns.IsHeld(holds, candidate.Info.Title, candidate.Info.KbArticle))
+            {
+                log($"[agent] Held back: {candidate.Info.Title}");
+            }
+            else
+            {
+                selected.Add(candidate);
+            }
+        }
 
         if (selected.Count == 0)
         {
-            var none = scope == PatchScope.Security ? "Keine Security-Updates offen." : "Keine Updates offen.";
+            var none = scope == PatchScope.Security ? "No pending security updates." : "No pending updates.";
             log($"[agent] {none}");
             return new WindowsInstallResult(true, false, none);
         }
@@ -77,7 +89,7 @@ public static class WindowsUpdateApi
         var collection = CreateComObject("Microsoft.Update.UpdateColl");
         foreach (var (update, info) in selected)
         {
-            log($"[agent] Ausgewählt: {info.Title}{(info.IsSecurity ? " [Security]" : "")}");
+            log($"[agent] Selected: {info.Title}{(info.IsSecurity ? " [Security]" : "")}");
             if (!(bool)update.EulaAccepted)
             {
                 update.AcceptEula();
@@ -86,7 +98,7 @@ public static class WindowsUpdateApi
             collection.Add(update);
         }
 
-        log($"[agent] Lade {selected.Count} Update(s) herunter ...");
+        log($"[agent] Downloading {selected.Count} update(s) ...");
         var downloader = session.CreateUpdateDownloader();
         downloader.Updates = collection;
         var downloadResult = downloader.Download();
@@ -102,16 +114,16 @@ public static class WindowsUpdateApi
             }
             else
             {
-                log($"[agent] Nicht heruntergeladen, wird übersprungen: {update.Title}");
+                log($"[agent] Not downloaded, skipping: {update.Title}");
             }
         }
 
         if ((int)toInstall.Count == 0)
         {
-            return new WindowsInstallResult(false, false, "Kein Update konnte heruntergeladen werden.");
+            return new WindowsInstallResult(false, false, "No update could be downloaded.");
         }
 
-        log($"[agent] Installiere {(int)toInstall.Count} Update(s) ...");
+        log($"[agent] Installing {(int)toInstall.Count} update(s) ...");
         var installer = session.CreateUpdateInstaller();
         installer.AllowSourcePrompts = false;
         installer.Updates = toInstall;
@@ -131,13 +143,13 @@ public static class WindowsUpdateApi
             else
             {
                 failed++;
-                log($"[agent] FEHLER ({ResultText(code)}, 0x{hresult:X8}): {title}");
+                log($"[agent] ERROR ({ResultText(code)}, 0x{hresult:X8}): {title}");
             }
         }
 
         var reboot = (bool)installResult.RebootRequired;
-        var summary = $"{succeeded} von {(int)toInstall.Count} Update(s) installiert" + (failed > 0 ? $", {failed} fehlgeschlagen" : "");
-        log($"[agent] {summary}. Neustart nötig: {(reboot ? "ja" : "nein")}.");
+        var summary = $"{succeeded} of {(int)toInstall.Count} update(s) installed" + (failed > 0 ? $", {failed} failed" : "");
+        log($"[agent] {summary}. Reboot required: {(reboot ? "yes" : "no")}.");
         return new WindowsInstallResult(failed == 0, reboot, summary);
     }
 
@@ -191,12 +203,12 @@ public static class WindowsUpdateApi
 
     private static string ResultText(int code) => code switch
     {
-        0 => "nicht gestartet",
-        1 => "läuft",
-        2 => "erfolgreich",
-        3 => "erfolgreich mit Fehlern",
-        4 => "fehlgeschlagen",
-        5 => "abgebrochen",
+        0 => "not started",
+        1 => "in progress",
+        2 => "succeeded",
+        3 => "succeeded with errors",
+        4 => "failed",
+        5 => "aborted",
         _ => $"Code {code}",
     };
 
@@ -214,7 +226,7 @@ public static class WindowsUpdateApi
             }
             catch (COMException ex)
             {
-                tcs.SetException(new InvalidOperationException($"Windows Update meldet 0x{ex.HResult:X8}: {Describe(ex.HResult)}", ex));
+                tcs.SetException(new InvalidOperationException($"Windows Update reports 0x{ex.HResult:X8}: {Describe(ex.HResult)}", ex));
             }
             catch (Exception ex)
             {
@@ -233,13 +245,13 @@ public static class WindowsUpdateApi
     /// <summary>Die häufigsten Fehlercodes in Klartext.</summary>
     public static string Describe(int hresult) => unchecked((uint)hresult) switch
     {
-        0x8024402C or 0x8024401C or 0x80244022 => "Update-Server nicht erreichbar (Proxy/Firewall/WSUS prüfen)",
-        0x80240438 => "Keine Verbindung zum Update-Dienst",
-        0x8024A000 or 0x80070422 => "Windows-Update-Dienst ist deaktiviert oder läuft nicht",
-        0x80240022 => "Alle Updates fehlgeschlagen",
-        0x80070005 => "Zugriff verweigert (Agent muss als SYSTEM/Administrator laufen)",
-        0x8024001E => "Vorgang abgebrochen (Dienst wird beendet)",
-        0x80240016 => "Eine andere Installation läuft gerade",
-        _ => "unbekannter Fehler",
+        0x8024402C or 0x8024401C or 0x80244022 => "Update server unreachable (check proxy/firewall/WSUS)",
+        0x80240438 => "No connection to the update service",
+        0x8024A000 or 0x80070422 => "Windows Update service is disabled or not running",
+        0x80240022 => "All updates failed",
+        0x80070005 => "Access denied (agent must run as SYSTEM/Administrator)",
+        0x8024001E => "Operation aborted (service is shutting down)",
+        0x80240016 => "Another installation is in progress",
+        _ => "unknown error",
     };
 }

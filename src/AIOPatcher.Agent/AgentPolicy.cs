@@ -15,7 +15,8 @@ public enum PatchPermission
 /// Lokale Policy auf dem Host (policy.json im Agent-Verzeichnis). Der Server kann sie nicht ändern:
 /// Selbst ein kompromittierter Server kann nicht mehr anstoßen, als hier erlaubt ist.
 /// </summary>
-public sealed record AgentPolicy(PatchPermission AllowPatch = PatchPermission.All, bool AllowReboot = true)
+/// <param name="AllowSelfUpdate">Signierte Agent-Updates vom Server automatisch installieren.</param>
+public sealed record AgentPolicy(PatchPermission AllowPatch = PatchPermission.All, bool AllowReboot = true, bool AllowSelfUpdate = true)
 {
     public const string FileName = "policy.json";
 
@@ -28,7 +29,7 @@ public sealed record AgentPolicy(PatchPermission AllowPatch = PatchPermission.Al
         }
 
         return JsonSerializer.Deserialize(File.ReadAllText(path), AgentPolicyJsonContext.Default.AgentPolicy)
-               ?? throw new InvalidDataException($"{FileName} ist leer.");
+               ?? throw new InvalidDataException($"{FileName} is empty.");
     }
 
     public static void WriteDefaultIfMissing(string directory)

@@ -11,6 +11,7 @@ public static class AgentProtocol
 
     public const string EnrollPath = "/agent/enroll";
     public const string CheckinPath = "/agent/checkin";
+    public const string RenewPath = "/agent/renew";
     public static string JobLogPath(Guid jobId) => $"/agent/jobs/{jobId}/log";
     public static string JobResultPath(Guid jobId) => $"/agent/jobs/{jobId}/result";
 }
@@ -61,12 +62,14 @@ public sealed record EnrollResponse(
 
 public sealed record NetworkAddress(string InterfaceName, string Address, int PrefixLength);
 
+/// <param name="SourcePackage">Debian/Ubuntu: Quellpaket (z. B. "openssl" für libssl3). Für die CVE-Zuordnung.</param>
 public sealed record AvailableUpdate(
     string Name,
     string? CurrentVersion,
     string? AvailableVersion,
     bool IsSecurity,
-    string? Classification);
+    string? Classification,
+    string? SourcePackage = null);
 
 public sealed record CheckinRequest(
     int ProtocolVersion,
@@ -81,11 +84,26 @@ public sealed record CheckinRequest(
     bool NativeAutoUpdatesEnabled,
     IReadOnlyList<NetworkAddress> Addresses,
     IReadOnlyList<AvailableUpdate>? Updates, // null = in diesem Check-in nicht gescannt
-    Guid? RunningJobId);
+    Guid? RunningJobId,
+    IReadOnlyList<ContainerReport>? Containers = null, // null = nicht erfasst (kein Docker oder kein Scan)
+    string? Architecture = null); // "x64" oder "arm64", für das passende Update-Binary
 
-public sealed record AgentJob(Guid JobId, JobType Type, PatchScope Scope, bool AllowReboot);
+/// <summary>Laufender Docker-Container. RepoDigests: "repo@sha256:…" des lokalen Images (leer bei selbst gebauten Images).</summary>
+public sealed record ContainerReport(string Name, string Image, string? ImageId, IReadOnlyList<string>? RepoDigests, string? State);
 
-public sealed record CheckinResponse(int CheckinIntervalSeconds, AgentJob? Job);
+/// <param name="Holds">Muster zurückgehaltener Updates (siehe <see cref="HoldPatterns"/>). Ältere Server senden nichts.</param>
+public sealed record AgentJob(Guid JobId, JobType Type, PatchScope Scope, bool AllowReboot, IReadOnlyList<string>? Holds = null);
+
+/// <param name="Update">Neuere, signierte Agent-Version verfügbar.</param>
+/// <param name="RenewCertificate">Client-Zertifikat läuft bald ab: neues per /agent/renew anfordern.</param>
+public sealed record CheckinResponse(int CheckinIntervalSeconds, AgentJob? Job, AgentUpdateOffer? Update = null, bool RenewCertificate = false);
+
+/// <summary>Signatur: ECDSA P-256 über SHA-256 des Binaries (DER, Base64), geprüft gegen den im Agent eingebauten Release-Schlüssel.</summary>
+public sealed record AgentUpdateOffer(string Version, string DownloadPath, string Sha256, string Signature);
+
+public sealed record RenewRequest(string CertificateSigningRequestPem);
+
+public sealed record RenewResponse(string ClientCertificatePem);
 
 public sealed record JobLogRequest(IReadOnlyList<JobLogLine> Lines);
 
@@ -102,4 +120,6 @@ public sealed record JobResultRequest(JobOutcome Outcome, string? Summary, bool 
 [JsonSerializable(typeof(CheckinResponse))]
 [JsonSerializable(typeof(JobLogRequest))]
 [JsonSerializable(typeof(JobResultRequest))]
+[JsonSerializable(typeof(RenewRequest))]
+[JsonSerializable(typeof(RenewResponse))]
 public sealed partial class AgentJsonContext : JsonSerializerContext;

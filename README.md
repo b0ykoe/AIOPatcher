@@ -8,18 +8,41 @@ Linux- (Ubuntu/Debian/Proxmox VE/PBS) und Windows-Server patchen, mehrere Sites,
 
 ## Stand
 
-v0.1 in Arbeit (Roadmap-Schritte 1–5 fertig):
+v0.2 (alles lauffähig und getestet; Linux-Agent, Docker-Image und echte Proxmox/Hetzner/OPNsense-APIs sind noch nicht
+gegen echte Systeme getestet, sondern gegen nachgebaute APIs und Unit-Tests):
 
-- Grundgerüst, SQLite + Migrationen, eigene CA, getrennte Listener (Dashboard / Agent-API mit mTLS)
-- Ersteinrichtung mit Setup-Token, Login mit Passwort + TOTP, Audit-Log, Sites
-- Enrollment: Einmal-Token, CA-Pinning per Fingerprint, Client-Zertifikat, Sperren/Löschen von Hosts
-- Agent-Check-in (jede Minute): System, IPs, Neustartbedarf, eigene Auto-Updates; Linux zusätzlich apt-Scan
-- Jobs: Scan, Patch (Security/alle, optional mit Neustart), Neustart. Live-Log im Dashboard, Ergebnis
-  wird auch nach einem Neustart gemeldet. Linux über apt (Proxmox: dist-upgrade), Windows über die
-  Windows-Update-API (Microsoft Update oder WSUS; ohne Defender-Signaturen, Treiber, OS-Upgrades und optionale Vorschauen).
-- Dashboard: Übersicht, Hosts, Host-Detail mit Job-Knöpfen, Jobs, Live-Log, „Host hinzufügen“
+**Grundlagen**
+- Eigene CA, getrennte Listener (Dashboard / Agent-API mit mTLS), SQLite mit Migrationen und Backup vor jeder Migration
+- Agents für Debian/Ubuntu/Proxmox VE/PBS (apt) und Windows Server/10/11 (Windows-Update-API, WSUS-fähig)
+- Jobs (Scan, Patch, Neustart) mit Live-Log, Ergebnis auch nach Neustart; lokale `policy.json` hat Vorrang
 
-Als Nächstes: Auto-Patch mit Wartungsfenstern, dann IPAM light.
+**Bedienung**
+- Dashboard (Mantine, dunkel/hell), Deutsch und Englisch (Browsersprache, umstellbar pro Benutzer)
+- Mehrfachauswahl, Tags mit Filter, Befehlspalette (Strg+K), geführte Ersteinrichtung
+
+**Benutzer**
+- Mehrere Benutzer mit Rollen (Admin, Operator, Betrachter), Einladung per Link, Passwort + TOTP für jeden,
+  Sitzungen enden sofort bei Rollen-/Passwortwechsel, Notfallzugang per CLI
+
+**Automatisch patchen**
+- Auto-Patch pro Host im Wartungsfenster
+- Abläufe: Wellen nacheinander, Prüfung nach jedem Host, Freigabe, Zeitplan, Fehlerstrategie;
+  **Snapshot vor dem Patch** (Proxmox-API bzw. Hetzner Cloud) und **Vorbedingung „Backup jünger als X Std.“**
+- **Patchpausen** (z. B. Jahreswechsel) und **zurückgehaltene Updates** (Paket/KB, global, pro Site oder Host)
+
+**Sicherheit & Überblick**
+- **CVE-Zuordnung** für offene Updates (OSV.dev für Debian/Ubuntu, Microsoft MSRC für Windows-KBs),
+  Bewertung mit **CISA KEV** (aktiv ausgenutzt) und **EPSS**
+- **Docker-Container**: erkennt neuere Images in der Registry (nur Anzeige/Meldung, aktualisiert nichts)
+- **Benachrichtigungen**: ntfy, E-Mail, Discord, Slack, Telegram, Webhook (HMAC-signiert)
+- **Berichte**: Konformität pro Site und Zeitraum, CSV und Druck/PDF
+- **IPAM light**: Subnetze, Belegung, nächste freie Adresse, Konflikte; Adressen aus Agents, OPNsense-ARP und manuell
+- **OPNsense**: Firmware-Stand, Update-Hinweis, Update per Klick
+
+**Betrieb**
+- **API-Tokens** (Betrachter/Operator) für Skripte, z. B. `curl -H "Authorization: Bearer aiop_…" …/api/overview`
+- **Agent-Self-Update** mit signierten Binaries (Release-Schlüssel), **automatische Erneuerung** der Agent-Zertifikate
+- CI (Build, Tests) und Release-Workflow (Docker-Image nach ghcr.io, signierte Agents am GitHub-Release)
 
 ## Agent auf Linux installieren
 
@@ -61,6 +84,18 @@ Windows installiert Updates standardmäßig auch selbst. Für Hosts, die AIOPatc
 „Automatische Updates konfigurieren“ auf „Herunterladen und benachrichtigen“ stellen; das Dashboard zeigt einen Hinweis,
 solange das nicht der Fall ist.
 
+## Auto-Patch
+
+Auf der Host-Seite unter *Auto-Patch → Einstellen*: Wochentage, Startzeit, Dauer, Umfang (nur Security / alle) und ob ein
+Neustart im Fenster erlaubt ist. Zeiten gelten in der Zeitzone des Servers (`TZ` im Container bzw. `AIOPatcher__TimeZone`).
+
+- Pro Fenster entscheidet der Planer genau einmal: Job anlegen oder überspringen (nichts offen laut Scan der letzten
+  24 Stunden, oder ein anderer Job läuft). Das Ergebnis steht auf der Host-Seite unter „Letztes Fenster“.
+- Ist der Host im Fenster offline, wird der Job am Fensterende verworfen. Außerhalb des Fensters startet nie ein Auto-Job.
+- Ein ausstehender Neustart wird im Fenster nachgeholt, wenn Neustarts erlaubt sind.
+- Fenster dürfen über Mitternacht gehen und gehören zum Tag, an dem sie beginnen. Sommerzeit wird berücksichtigt.
+- Die lokale `policy.json` hat weiterhin Vorrang.
+
 ## Lokale Policy auf dem Host
 
 Beim Registrieren legt der Agent `policy.json` neben seinen Zertifikaten an
@@ -75,7 +110,8 @@ Der Server kann sie nicht ändern; sie wird bei jedem Job neu gelesen.
 ```
 
 `allowPatch`: `None`, `Security` oder `All`. `allowReboot: false` verhindert jeden Neustart durch AIOPatcher,
-z. B. auf dem Proxmox-Host selbst oder der OPNsense-VM.
+z. B. auf dem Proxmox-Host selbst oder der OPNsense-VM. `"allowSelfUpdate": false` verhindert, dass der Agent
+signierte Updates selbst installiert.
 
 ## Agent (Entwicklung)
 

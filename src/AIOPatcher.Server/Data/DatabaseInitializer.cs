@@ -18,7 +18,7 @@ public static class DatabaseInitializer
         {
             Directory.CreateDirectory(options.BackupDirectory);
             var backupPath = Path.Combine(options.BackupDirectory, $"aiopatcher-{DateTime.UtcNow:yyyyMMdd-HHmmss}-pre-{pending[0]}.db");
-            logger.LogInformation("Sichere Datenbank vor {Count} Migration(en) nach {BackupPath}", pending.Count, backupPath);
+            logger.LogInformation("Backing up database before {Count} migration(s) to {BackupPath}", pending.Count, backupPath);
 
             await using var connection = new SqliteConnection($"Data Source={options.DatabasePath}");
             await connection.OpenAsync(ct);
@@ -33,7 +33,7 @@ public static class DatabaseInitializer
 
         if (pending.Count > 0)
         {
-            logger.LogInformation("Migrationen eingespielt: {Migrations}", string.Join(", ", pending));
+            logger.LogInformation("Migrations applied: {Migrations}", string.Join(", ", pending));
         }
     }
 }

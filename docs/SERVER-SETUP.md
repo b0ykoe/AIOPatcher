@@ -190,6 +190,7 @@ services:
       AIOPatcher__DataDirectory: /data
       AIOPatcher__DashboardPort: "9443"
       AIOPatcher__AgentPort: "8443"
+      AIOPatcher__Language: de
       TZ: Europe/Berlin
     labels:
       - com.centurylinklabs.watchtower.enable=true
@@ -241,6 +242,108 @@ sudo docker compose logs aiopatcher | grep -i "setup token"
 
 Dashboard aufrufen (über VPN): `https://patch.example.com:9443`
 Das Zertifikat stammt von der AIOPatcher-eigenen CA. Das Root-Zertifikat liegt unter `/opt/aiopatcher/data/ca/ca.crt` und kann im Browser bzw. im Betriebssystem als vertrauenswürdig importiert werden.
+
+### Weitere Benutzer
+
+Unter *Benutzer* (nur Admins) lädst du dein Team ein. Jeder bekommt einen Link (24 Stunden gültig) und richtet
+Passwort und Authenticator selbst ein. Rollen:
+
+| Rolle | Darf |
+|---|---|
+| Admin | alles, inklusive Benutzer, Sites und Hosts löschen |
+| Operator | Jobs, Abläufe, Auto-Patch, Hosts hinzufügen und sperren |
+| Betrachter | nur lesen |
+
+Rollenwechsel, Deaktivieren und Passwortänderungen beenden alle anderen Sitzungen des Kontos sofort.
+Der letzte aktive Admin kann nicht herabgestuft, deaktiviert oder gelöscht werden.
+
+### Notfallzugang
+
+Smartphone verloren und kein anderer Admin da? Auf dem Server einen neuen Einladungslink erzeugen.
+Das setzt Passwort und Authenticator des Kontos zurück:
+
+```bash
+sudo docker exec aiopatcher dotnet AIOPatcher.Server.dll admin invite admin
+```
+
+Weitere Befehle: `admin list`, `admin disable <name>`, `admin enable <name>`,
+`admin invite <name> --role Operator` (legt einen neuen Benutzer an, falls es ihn noch nicht gibt).
+
+### Weitere Einstellungen
+
+Alle als Umgebungsvariable in `docker-compose.yml` (Standardwerte in Klammern):
+
+| Variable | Bedeutung |
+|---|---|
+| `AIOPatcher__CveLookupEnabled` (`true`) | CVE-Zuordnung und -Bewertung. Der Server fragt dafür **Paketnamen/Versionen bzw. KB-Nummern** (keine Hostnamen, keine IPs) bei `api.osv.dev`, `api.msrc.microsoft.com`, `www.cisa.gov` und `api.first.org` ab. |
+| `AIOPatcher__ContainerUpdateCheckEnabled` (`true`) | Image-Tags laufender Container gegen ihre Registry prüfen (anonym, nur öffentliche Images). |
+| `AIOPatcher__AgentAutoUpdate` (`true`) | Signierte Agent-Updates an ältere Agents anbieten. |
+| `AIOPatcher__Language` (`en`) | Sprache für Texte, die ohne Anfrage entstehen (siehe unten). |
+
+Die VM braucht dafür ausgehend HTTPS (443) ins Internet. Wer das nicht möchte, schaltet die ersten beiden ab.
+
+### Integrationen (Proxmox, Hetzner Cloud, OPNsense)
+
+Unter *Einstellungen → Integrationen*. Selbstsignierte Zertifikate (Proxmox, OPNsense) werden per Fingerprint
+angepinnt: Verbindung testen, angezeigten Fingerprint übernehmen.
+
+**Proxmox VE** (Snapshots vor dem Patch, Backup-Prüfung). Eigenen Benutzer mit minimalen Rechten anlegen
+(auf dem Proxmox-Host als root):
+
+```bash
+pveum role add AIOPatcher -privs "VM.Audit VM.Snapshot Datastore.Audit Sys.Audit"
+```
+
+```bash
+pveum user add aiopatcher@pve
+```
+
+```bash
+pveum aclmod / -user aiopatcher@pve -role AIOPatcher
+```
+
+```bash
+pveum user token add aiopatcher@pve dashboard --privsep 0
+```
+
+Im Dashboard als Token `aiopatcher@pve!dashboard=<secret>` eintragen, URL `https://<proxmox>:8006`.
+Danach „Automatisch zuordnen“: Hosts werden über den Namen (Hostname = VM-Name) mit ihren VMs verbunden.
+
+**Hetzner Cloud** (Snapshots, Backup-Prüfung): In der Cloud Console pro Projekt einen API-Token mit Lese- und
+Schreibrecht erzeugen. Snapshots kosten Speicher; „Snapshots behalten“ begrenzt die Anzahl.
+
+**OPNsense** (Firmware-Status, ARP fürs IPAM): *System → Zugang → Benutzer*, Benutzer mit den Rechten
+„System: Firmware“ und „Diagnostics: ARP Table“, dort einen API-Schlüssel erzeugen und als `key:secret` eintragen.
+Mit einer Site verknüpft, landen die ARP-Einträge im IPAM dieser Site.
+
+### Agent-Updates signieren (eigene Builds)
+
+Agents installieren Updates nur, wenn sie mit dem Release-Schlüssel signiert sind, der beim Bau eingebaut wurde.
+Ohne Schlüssel funktioniert alles, nur Updates erfolgen dann per erneutem Installationsbefehl.
+
+```bash
+dotnet run --project tools/AIOPatcher.Signer -- keygen ./keys
+```
+
+```bash
+DOCKER_BUILDKIT=1 docker build --build-arg AGENT_RELEASE_KEY="$(cat keys/release-signing.pub)" --secret id=agent_signing_key,src=keys/release-signing.key -t aiopatcher-server:local .
+```
+
+Den privaten Schlüssel danach offline sichern. Im GitHub-Workflow: Variable `AGENT_RELEASE_KEY`, Secret `AGENT_SIGNING_KEY`.
+
+### API-Tokens
+
+*Einstellungen → API-Tokens*: Tokens mit Betrachter- oder Operator-Rechten für Skripte. Beispiel:
+
+```bash
+curl -H "Authorization: Bearer aiop_…" https://patch.example.com:9443/api/reports/patch.csv?days=30 -o report.csv
+```
+
+### Sprache
+
+Das Dashboard folgt der Browsersprache (Deutsch oder Englisch), umstellbar unter *Mein Konto*.
+Texte, die ohne Anfrage entstehen (Notizen des Auto-Patch-Planers, Meldungen von Abläufen), schreibt der Server
+in `AIOPatcher__Language` (`de` oder `en`, Standard `en`). Agent-Logs sind immer Englisch.
 
 ## 9. OPNsense
 

@@ -1,0 +1,74 @@
+# Release bei einem Tag "v1.2.3":
+#  1. Docker-Image bauen (Server, Web, Agents) und nach ghcr.io pushen
+#  2. Agent-Binaries (+ .sig, falls signiert) und SHA256SUMS an den GitHub-Release hängen
+#
+# Einrichtung (einmalig):
+#  - Release-Schlüssel erzeugen:  dotnet run --project tools/AIOPatcher.Signer -- keygen ./keys
+#  - Repository-Variable AGENT_RELEASE_KEY = Inhalt von keys/release-signing.pub
+#  - Repository-Secret   AGENT_SIGNING_KEY = Inhalt von keys/release-signing.key (danach lokal löschen/offline sichern)
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  image:
+    runs-on: ubuntu-latest # x64: Native AOT für linux-x64 braucht einen x64-Builder
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Version aus dem Tag
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Image-Name (Kleinbuchstaben)
+        id: image
+        run: echo "name=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/aiopatcher-server" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          platforms: linux/amd64
+          build-args: |
+            VERSION=${{ steps.version.outputs.version }}
+            AGENT_RELEASE_KEY=${{ vars.AGENT_RELEASE_KEY }}
+          secrets: |
+            agent_signing_key=${{ secrets.AGENT_SIGNING_KEY }}
+          tags: |
+            ${{ steps.image.outputs.name }}:${{ steps.version.outputs.version }}
+            ${{ steps.image.outputs.name }}:latest
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+
+      - name: Agents aus dem Image holen
+        run: |
+          id=$(docker create ${{ steps.image.outputs.name }}:${{ steps.version.outputs.version }})
+          docker cp "$id:/app/agents" ./agents
+          docker rm "$id"
+          mkdir dist
+          for rid in linux-x64 linux-arm64 win-x64; do
+            for f in agents/$rid/*; do
+              name=$(basename "$f")
+              cp "$f" "dist/${name/aiopatcher-agent/aiopatcher-agent-$rid}"
+            done
+          done
+          (cd dist && sha256sum * > SHA256SUMS)
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true

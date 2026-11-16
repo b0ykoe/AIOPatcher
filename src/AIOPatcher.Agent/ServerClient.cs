@@ -36,7 +36,29 @@ public sealed class ServerClient : IDisposable
         using var response = await _http.PostAsJsonAsync(AgentProtocol.EnrollPath, request, AgentJsonContext.Default.EnrollRequest, ct);
         await EnsureSuccessAsync(response, ct);
         return await response.Content.ReadFromJsonAsync(AgentJsonContext.Default.EnrollResponse, ct)
-               ?? throw new InvalidDataException("Leere Antwort vom Server.");
+               ?? throw new InvalidDataException("Empty response from server.");
+    }
+
+    public async Task<RenewResponse> RenewAsync(RenewRequest request, CancellationToken ct)
+    {
+        using var response = await _http.PostAsJsonAsync(AgentProtocol.RenewPath, request, AgentJsonContext.Default.RenewRequest, ct);
+        await EnsureSuccessAsync(response, ct);
+        return await response.Content.ReadFromJsonAsync(AgentJsonContext.Default.RenewResponse, ct)
+               ?? throw new InvalidDataException("Empty response from server.");
+    }
+
+    /// <summary>Lädt eine Datei vom Server (nur relative Pfade unter /agent/).</summary>
+    public async Task DownloadAsync(string path, string target, CancellationToken ct)
+    {
+        if (!path.StartsWith("/agent/", StringComparison.Ordinal) || path.Contains("..", StringComparison.Ordinal))
+        {
+            throw new InvalidDataException("Unexpected download path.");
+        }
+
+        using var response = await _http.GetAsync(path, HttpCompletionOption.ResponseHeadersRead, ct);
+        await EnsureSuccessAsync(response, ct);
+        await using var file = File.Create(target);
+        await response.Content.CopyToAsync(file, ct);
     }
 
     public async Task<CheckinResponse> CheckinAsync(CheckinRequest request, CancellationToken ct)
@@ -44,7 +66,7 @@ public sealed class ServerClient : IDisposable
         using var response = await _http.PostAsJsonAsync(AgentProtocol.CheckinPath, request, AgentJsonContext.Default.CheckinRequest, ct);
         await EnsureSuccessAsync(response, ct);
         return await response.Content.ReadFromJsonAsync(AgentJsonContext.Default.CheckinResponse, ct)
-               ?? throw new InvalidDataException("Leere Antwort vom Server.");
+               ?? throw new InvalidDataException("Empty response from server.");
     }
 
     public async Task AppendJobLogAsync(Guid jobId, JobLogRequest request, CancellationToken ct)
@@ -74,7 +96,7 @@ public sealed class ServerClient : IDisposable
 }
 
 public sealed class ServerRejectedException(HttpStatusCode status, string body)
-    : Exception($"Server antwortet mit {(int)status} {status}: {body}")
+    : Exception($"Server responded with {(int)status} {status}: {body}")
 {
     public HttpStatusCode Status { get; } = status;
 }

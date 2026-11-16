@@ -1,0 +1,65 @@
+namespace AIOPatcher.Server.Data;
+
+/// <summary>Bewertung einer CVE: EPSS (Wahrscheinlichkeit einer Ausnutzung) und Eintrag im CISA-KEV-Katalog.</summary>
+public sealed class CveInfo
+{
+    /// <summary>z. B. "CVE-2024-3094".</summary>
+    public required string Id { get; set; }
+
+    /// <summary>0..1, Wahrscheinlichkeit einer Ausnutzung in den nächsten 30 Tagen (FIRST EPSS).</summary>
+    public double? Epss { get; set; }
+    public double? EpssPercentile { get; set; }
+
+    /// <summary>Wird laut CISA aktiv ausgenutzt.</summary>
+    public bool IsKev { get; set; }
+    public DateTime? KevDateAdded { get; set; }
+    public string? KevName { get; set; }
+    public bool KevRansomware { get; set; }
+
+    public DateTime? EpssUpdatedAt { get; set; }
+}
+
+/// <summary>Zwischenspeicher für Abfragen bei OSV.dev und MSRC (Schlüssel z. B. "osv|Debian:12|openssl|3.0.13-1|3.0.15-1").</summary>
+public sealed class VulnLookup
+{
+    public required string Key { get; set; }
+
+    /// <summary>Kommagetrennte CVE-IDs, leer = keine bekannt.</summary>
+    public string Cves { get; set; } = "";
+    public DateTime FetchedAt { get; set; }
+}
+
+/// <summary>Docker-Container auf einem Host, wie zuletzt vom Agent gemeldet.</summary>
+public sealed class ContainerInfo
+{
+    public long Id { get; set; }
+    public Guid HostId { get; set; }
+    public ManagedHost? Host { get; set; }
+
+    public required string Name { get; set; }
+
+    /// <summary>Konfiguriertes Image, z. B. "nginx:1.27" oder "ghcr.io/org/app:latest".</summary>
+    public required string Image { get; set; }
+
+    /// <summary>Normalisierte Referenz für den Registry-Abgleich ("docker.io/library/nginx:1.27"), null bei Digest-gepinnten Images.</summary>
+    public string? Reference { get; set; }
+    public string? ImageId { get; set; }
+
+    /// <summary>Digest des lokalen Images aus RepoDigests ("sha256:…"), null bei lokal gebauten Images.</summary>
+    public string? LocalDigest { get; set; }
+    public string? State { get; set; }
+    public DateTime SeenAt { get; set; }
+}
+
+/// <summary>Letzter bekannter Digest eines Image-Tags in der Registry (gecacht, gilt für alle Hosts).</summary>
+public sealed class ImageCheck
+{
+    /// <summary>Normalisierte Referenz, z. B. "docker.io/library/nginx:1.27".</summary>
+    public required string Reference { get; set; }
+    public string? RemoteDigest { get; set; }
+    public DateTime CheckedAt { get; set; }
+    public string? Error { get; set; }
+
+    /// <summary>Für diesen Remote-Digest wurde schon benachrichtigt.</summary>
+    public string? NotifiedDigest { get; set; }
+}

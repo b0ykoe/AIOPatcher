@@ -37,18 +37,41 @@ public sealed class LinuxInventory(ILogger<LinuxInventory> logger) : IPlatformIn
         var update = await RunPrivilegedAsync("apt-get", ["update", "-qq"], AptUpdateTimeout, ct);
         if (!update.Success)
         {
-            logger.LogWarning("apt-get update fehlgeschlagen (Exit {Code}): {Error}", update.ExitCode, Trim(update.StandardError));
+            logger.LogWarning("apt-get update failed (exit {Code}): {Error}", update.ExitCode, Trim(update.StandardError));
         }
 
         // Simulation braucht keine Rechte. Proxmox verlangt dist-upgrade, daher immer dist-upgrade simulieren.
         var simulation = await ProcessRunner.RunAsync("apt-get", ["-s", "-o", "Debug::NoLocking=1", "dist-upgrade"], AptUpdateTimeout, ct);
         if (!simulation.Success)
         {
-            logger.LogError("apt-get -s dist-upgrade fehlgeschlagen (Exit {Code}): {Error}", simulation.ExitCode, Trim(simulation.StandardError));
+            logger.LogError("apt-get -s dist-upgrade failed (exit {Code}): {Error}", simulation.ExitCode, Trim(simulation.StandardError));
             return null;
         }
 
-        return AptOutputParser.Parse(simulation.StandardOutput);
+        var updates = AptOutputParser.Parse(simulation.StandardOutput);
+        return await AddSourcePackagesAsync(updates, ct);
+    }
+
+    /// <summary>Quellpaket je Update (für die CVE-Zuordnung auf dem Server). Fehler sind egal: dann ohne.</summary>
+    private static async Task<IReadOnlyList<AvailableUpdate>> AddSourcePackagesAsync(IReadOnlyList<AvailableUpdate> updates, CancellationToken ct)
+    {
+        var installed = updates.Where(u => u.CurrentVersion is not null).Select(u => u.Name).Distinct().ToArray();
+        if (installed.Length == 0)
+        {
+            return updates;
+        }
+
+        try
+        {
+            // dpkg-query liefert Exit 1, wenn ein Paket fehlt, gibt die übrigen aber trotzdem aus.
+            var result = await ProcessRunner.RunAsync("dpkg-query", ["-W", "-f=${Package}\t${source:Package}\n", .. installed], ShortTimeout, ct);
+            var map = AptOutputParser.ParseSourceMap(result.StandardOutput);
+            return updates.Select(u => map.TryGetValue(u.Name, out var source) ? u with { SourcePackage = source } : u).ToList();
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return updates;
+        }
     }
 
     private static async Task<ProcessResult> RunPrivilegedAsync(string command, string[] args, TimeSpan timeout, CancellationToken ct) =>

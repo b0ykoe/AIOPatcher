@@ -1,6 +1,7 @@
 using System.Net;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
+using AIOPatcher.Server.Services;
 
 namespace AIOPatcher.Server.Security;
 
@@ -50,7 +51,7 @@ public sealed class CertificateAuthority
         var ca = LoadPair(directory, CaCertFile, CaKeyFile);
         if (ca is null)
         {
-            logger.LogWarning("Keine CA gefunden, erzeuge neue AIOPatcher-CA in {Directory}. Bitte den CA-Schlüssel offline sichern!", directory);
+            logger.LogWarning("No CA found, creating a new AIOPatcher CA in {Directory}. Back up the CA key offline!", directory);
             ca = CreateCa(directory);
         }
 
@@ -61,7 +62,7 @@ public sealed class CertificateAuthority
             authority.RenewServerCertificate(logger);
         }
 
-        logger.LogInformation("CA-Fingerprint (SHA-256): {Fingerprint}", authority.RootFingerprintSha256);
+        logger.LogInformation("CA fingerprint (SHA-256): {Fingerprint}", authority.RootFingerprintSha256);
         return authority;
     }
 
@@ -130,7 +131,7 @@ public sealed class CertificateAuthority
                 return;
             }
 
-            throw new CryptographicException("Nur ECDSA P-256/P-384 oder RSA ab 2048 Bit erlaubt.");
+            throw new CryptographicException(L.T("Nur ECDSA P-256/P-384 oder RSA ab 2048 Bit erlaubt.", "Only ECDSA P-256/P-384 or RSA with at least 2048 bits is allowed."));
         }
 
         using var rsa = key.GetRSAPublicKey();
@@ -139,7 +140,7 @@ public sealed class CertificateAuthority
             return;
         }
 
-        throw new CryptographicException("Nur ECDSA P-256/P-384 oder RSA ab 2048 Bit erlaubt.");
+        throw new CryptographicException(L.T("Nur ECDSA P-256/P-384 oder RSA ab 2048 Bit erlaubt.", "Only ECDSA P-256/P-384 or RSA with at least 2048 bits is allowed."));
     }
 
     /// <summary>Prüft, ob ein Zertifikat von dieser CA ausgestellt wurde und gültig ist.</summary>
@@ -202,7 +203,7 @@ public sealed class CertificateAuthority
         SavePair(_directory, ServerCertFile, ServerKeyFile, issued, key);
         using var withKey = issued.CopyWithPrivateKey(key);
         _serverCertificate = ToPersistable(withKey);
-        logger?.LogInformation("Server-Zertifikat für {Hostname} ausgestellt, gültig bis {NotAfter:u}", _hostname, _serverCertificate.NotAfter.ToUniversalTime());
+        logger?.LogInformation("Server certificate issued for {Hostname}, valid until {NotAfter:u}", _hostname, _serverCertificate.NotAfter.ToUniversalTime());
     }
 
     private static X509Certificate2 CreateCa(string directory)

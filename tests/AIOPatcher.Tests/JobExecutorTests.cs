@@ -20,12 +20,14 @@ public class JobExecutorTests
     {
         public int PatchCalls { get; private set; }
         public PatchScope? LastScope { get; private set; }
+        public IReadOnlyList<string>? LastHolds { get; private set; }
 
-        public Task<PatchOutcome> PatchAsync(PatchScope scope, Action<string> log, CancellationToken ct)
+        public Task<PatchOutcome> PatchAsync(PatchScope scope, IReadOnlyList<string> holds, Action<string> log, CancellationToken ct)
         {
             PatchCalls++;
             LastScope = scope;
-            return Task.FromResult(new PatchOutcome(success, success ? "3 upgraded, 0 newly installed, 0 to remove" : "apt-get beendet mit Exit 100."));
+            LastHolds = holds;
+            return Task.FromResult(new PatchOutcome(success, success ? "3 upgraded, 0 newly installed, 0 to remove" : "apt-get exited with code 100."));
         }
 
         public Task<bool> RequestRebootAsync(Action<string> log, CancellationToken ct) => Task.FromResult(true);
@@ -46,7 +48,7 @@ public class JobExecutorTests
         Assert.Equal(JobOutcome.Succeeded, result.Outcome);
         Assert.True(result.RebootRequested);
         Assert.Equal(PatchScope.Security, patcher.LastScope);
-        Assert.Contains("Danach noch offen: 1 (1 Security)", result.Summary);
+        Assert.Contains("Still pending afterwards: 1 (1 security)", result.Summary);
         Assert.Same(Remaining, result.ScannedUpdates);
     }
 
@@ -57,7 +59,7 @@ public class JobExecutorTests
 
         Assert.Equal(JobOutcome.Succeeded, result.Outcome);
         Assert.False(result.RebootRequested);
-        Assert.Contains("lokale Policy verbietet Neustarts", result.Summary);
+        Assert.Contains("local policy forbids reboots", result.Summary);
     }
 
     [Fact]
@@ -66,7 +68,7 @@ public class JobExecutorTests
         var result = await Run(new AgentJob(Guid.NewGuid(), JobType.Patch, PatchScope.All, AllowReboot: false), new AgentPolicy(), new FakePatcher(), rebootRequired: true);
 
         Assert.False(result.RebootRequested);
-        Assert.Contains("nicht angefordert", result.Summary);
+        Assert.Contains("not requested", result.Summary);
     }
 
     [Fact]
@@ -115,7 +117,7 @@ public class JobExecutorTests
         var result = await Run(new AgentJob(Guid.NewGuid(), JobType.Scan, PatchScope.Security, false), new AgentPolicy(), new FakePatcher(), updates: Remaining);
 
         Assert.Equal(JobOutcome.Succeeded, result.Outcome);
-        Assert.Equal("1 Updates verfügbar, davon 1 Security.", result.Summary);
+        Assert.Equal("1 updates available, 1 of them security.", result.Summary);
     }
 
     [Fact]

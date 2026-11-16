@@ -33,7 +33,7 @@ public sealed class AgentState
     public static AgentState Load(string directory)
     {
         var config = JsonSerializer.Deserialize(File.ReadAllText(Path.Combine(directory, ConfigFile)), AgentStateJsonContext.Default.AgentConfig)
-                     ?? throw new InvalidDataException($"{ConfigFile} ist leer.");
+                     ?? throw new InvalidDataException($"{ConfigFile} is empty.");
 
         var ca = X509CertificateLoader.LoadCertificate(File.ReadAllBytes(Path.Combine(directory, CaFile)));
         using var pemClient = X509Certificate2.CreateFromPemFile(Path.Combine(directory, CertFile), Path.Combine(directory, KeyFile));

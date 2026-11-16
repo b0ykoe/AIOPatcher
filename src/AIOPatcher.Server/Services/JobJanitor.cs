@@ -25,7 +25,7 @@ public sealed class JobJanitor(IServiceScopeFactory scopes, AIOPatcherOptions op
             }
             catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
             {
-                logger.LogError(ex, "Aufräumen der Jobs fehlgeschlagen");
+                logger.LogError(ex, "Job cleanup failed");
             }
         }
         while (await timer.WaitForNextTickAsync(stoppingToken));
@@ -46,7 +46,8 @@ public sealed class JobJanitor(IServiceScopeFactory scopes, AIOPatcherOptions op
         {
             job.Status = JobStatus.Failed;
             job.FinishedAt = now;
-            job.Summary = $"Zeitüberschreitung: seit {StaleAfter.TotalHours:0} Stunden kein Lebenszeichen vom Agent.";
+            job.Summary = L.T($"Zeitüberschreitung: seit {StaleAfter.TotalHours:0} Stunden kein Lebenszeichen vom Agent.",
+                $"Timed out: no sign of life from the agent for {StaleAfter.TotalHours:0} hours.");
         }
 
         await db.SaveChangesAsync(ct);
@@ -58,7 +59,7 @@ public sealed class JobJanitor(IServiceScopeFactory scopes, AIOPatcherOptions op
 
         if (stale.Count > 0 || deleted > 0)
         {
-            logger.LogInformation("Aufgeräumt: {Stale} hängende Jobs, {Lines} alte Logzeilen", stale.Count, deleted);
+            logger.LogInformation("Cleaned up: {Stale} stale jobs, {Lines} old log lines", stale.Count, deleted);
         }
     }
 }

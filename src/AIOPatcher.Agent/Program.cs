@@ -40,7 +40,7 @@ switch (commandLine.Command)
         var stateDir = commandLine.Get("state-dir") ?? AgentState.DefaultDirectory;
         if (!AgentState.Exists(stateDir))
         {
-            await Console.Error.WriteLineAsync($"Agent ist nicht registriert ({stateDir}). Zuerst 'aiopatcher-agent enroll ...' ausführen.");
+            await Console.Error.WriteLineAsync($"Agent is not enrolled ({stateDir}). Run 'aiopatcher-agent enroll ...' first.");
             return 3;
         }
 
@@ -63,6 +63,7 @@ switch (commandLine.Command)
         builder.Services.AddSingleton(sp => CreateInventory(sp.GetRequiredService<ILoggerFactory>()));
         builder.Services.AddSingleton<IPatchPlatform>(_ => OperatingSystem.IsWindows() ? new WindowsPatcher() : new AptPatcher());
         builder.Services.AddSingleton<JobExecutor>();
+        builder.Services.AddSingleton<AIOPatcher.Agent.Maintenance.SelfMaintenance>();
         builder.Services.AddHostedService<CheckinService>();
 
         await builder.Build().RunAsync(cts.Token);
@@ -70,7 +71,7 @@ switch (commandLine.Command)
     }
 
     default:
-        await Console.Error.WriteLineAsync("Befehle: run (Standard), enroll, scan, version");
+        await Console.Error.WriteLineAsync("Commands: run (default), enroll, scan, version");
         return 2;
 }
 

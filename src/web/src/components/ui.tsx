@@ -1,0 +1,141 @@
+// Gemeinsame Bausteine, damit alle Seiten gleich aussehen und sich gleich verhalten.
+import type { ReactNode } from "react";
+import { Badge, Card, Group, Stack, Text, ThemeIcon, Title, type MantineColor } from "@mantine/core";
+import { modals } from "@mantine/modals";
+import { notifications } from "@mantine/notifications";
+import { IconAlertTriangle, IconCheck } from "@tabler/icons-react";
+import type { HostStatus, JobStatus } from "../api";
+import { t } from "../i18n";
+
+// --- Rückmeldungen -------------------------------------------------------------------------------
+
+export function notifySuccess(title: string, message?: string) {
+  notifications.show({ title, message, color: "teal", icon: <IconCheck size={18} />, autoClose: 4000 });
+}
+
+export function notifyError(error: unknown, title?: string) {
+  notifications.show({
+    title: title ?? t("common.failed"),
+    message: error instanceof Error ? error.message : String(error),
+    color: "red",
+    icon: <IconAlertTriangle size={18} />,
+    autoClose: 8000,
+  });
+}
+
+/** Ergebnis einer Sammelaktion: Erfolg plus übersprungene Hosts mit Grund. */
+export function reportBulk(title: string, done: number, skipped: { hostName: string; reason: string }[], showCount = true) {
+  const details = skipped.length > 0 ? t("bulk.skipped", { count: skipped.length, list: skipped.map((s) => `${s.hostName} (${s.reason})`).join(", ") }) : undefined;
+  notifications.show({
+    title,
+    message: [showCount ? t("bulk.hosts", { count: done }) : null, details].filter(Boolean).join(" · ") || undefined,
+    color: skipped.length > 0 ? "yellow" : "teal",
+    icon: skipped.length > 0 ? <IconAlertTriangle size={18} /> : <IconCheck size={18} />,
+    autoClose: skipped.length > 0 ? 10000 : 4000,
+  });
+}
+
+/** Bestätigungsdialog statt window.confirm(). */
+export function confirmAction(options: { title: string; message: ReactNode; confirmLabel: string; danger?: boolean; onConfirm: () => void | Promise<void> }) {
+  modals.openConfirmModal({
+    title: <Text fw={700}>{options.title}</Text>,
+    children: <Text size="sm" c="dimmed">{options.message}</Text>,
+    labels: { confirm: options.confirmLabel, cancel: t("common.cancel") },
+    confirmProps: options.danger ? { color: "red" } : { variant: "gradient" },
+    onConfirm: () => void options.onConfirm(),
+  });
+}
+
+// --- Seitenkopf ----------------------------------------------------------------------------------
+
+export function PageHeader({ title, description, actions }: { title: ReactNode; description?: ReactNode; actions?: ReactNode }) {
+  return (
+    <Group justify="space-between" align="flex-end" mb="lg" gap="md" wrap="wrap">
+      <Stack gap={2}>
+        <Title order={2}>{title}</Title>
+        {description && <Text c="dimmed" size="sm">{description}</Text>}
+      </Stack>
+      {actions && <Group gap="sm" wrap="wrap">{actions}</Group>}
+    </Group>
+  );
+}
+
+// --- Kennzahl-Kachel -----------------------------------------------------------------------------
+
+export function StatCard({ label, value, icon, color, hint }: { label: string; value: ReactNode; icon: ReactNode; color: MantineColor; hint?: ReactNode }) {
+  return (
+    <Card className="stat-card" style={{ ["--stat-color" as string]: `var(--mantine-color-${color}-5)` }}>
+      <ThemeIcon variant="light" color={color} size="lg" radius="md">
+        {icon}
+      </ThemeIcon>
+      <Text fz={32} fw={800} mt="sm" lh={1.1}>
+        {value}
+      </Text>
+      <Text size="sm" c="dimmed">
+        {label}
+      </Text>
+      {hint && <Text size="xs" c="dimmed" mt={4}>{hint}</Text>}
+    </Card>
+  );
+}
+
+// --- Status --------------------------------------------------------------------------------------
+
+const hostStatus: Record<HostStatus, { dot: string; color: MantineColor }> = {
+  Online: { dot: "dot-online", color: "teal" },
+  Offline: { dot: "dot-offline", color: "red" },
+  Pending: { dot: "dot-pending", color: "yellow" },
+  Revoked: { dot: "dot-revoked", color: "gray" },
+};
+
+export function HostStatusLabel({ status }: { status: HostStatus }) {
+  const s = hostStatus[status];
+  return (
+    <Group gap={8} wrap="nowrap">
+      <span className={`dot ${s.dot}`} />
+      <Text size="sm" c={s.color} fw={600}>
+        {t(`hostStatus.${status}`)}
+      </Text>
+    </Group>
+  );
+}
+
+const jobStatus: Record<JobStatus, MantineColor> = {
+  Queued: "blue",
+  Running: "cyan",
+  Succeeded: "teal",
+  Failed: "red",
+  Rejected: "orange",
+  Cancelled: "gray",
+};
+
+export function JobStatusBadge({ status }: { status: JobStatus }) {
+  return (
+    <Badge color={jobStatus[status]} leftSection={status === "Running" ? <span className="dot dot-live" /> : undefined}>
+      {t(`jobStatus.${status}`)}
+    </Badge>
+  );
+}
+
+// --- Leerer Zustand ------------------------------------------------------------------------------
+
+export function EmptyState({ icon, title, text, action }: { icon: ReactNode; title: string; text: string; action?: ReactNode }) {
+  return (
+    <Stack align="center" gap="xs" py="xl">
+      <ThemeIcon size={56} radius="xl" variant="light">
+        {icon}
+      </ThemeIcon>
+      <Text fw={700} mt="xs">
+        {title}
+      </Text>
+      <Text size="sm" c="dimmed" ta="center" maw={420}>
+        {text}
+      </Text>
+      {action}
+    </Stack>
+  );
+}
+
+export function errorText(e: unknown): string {
+  return e instanceof Error ? e.message : String(e);
+}

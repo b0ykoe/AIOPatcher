@@ -24,7 +24,8 @@ public static class JobEndpoints
         DateTime? StartedAt,
         DateTime? FinishedAt,
         string? Summary,
-        bool RebootPerformed);
+        bool RebootPerformed,
+        DateTime? NotAfter);
 
     public sealed record JobLogLineDto(long Id, DateTime Timestamp, string Text);
 
@@ -34,48 +35,56 @@ public static class JobEndpoints
     public static void MapJobEndpoints(this IEndpointRouteBuilder app)
     {
         var api = app.MapGroup("/api").RequireAuthorization();
-        api.MapPost("/hosts/{hostId:guid}/jobs", CreateJob);
+        var op = api.MapGroup("").RequireAuthorization(UserAccounts.OperatorPolicy);
+        op.MapPost("/hosts/{hostId:guid}/jobs", CreateJob);
+        op.MapPost("/jobs/bulk", CreateJobsBulk);
         api.MapGet("/jobs", ListJobs);
         api.MapGet("/jobs/{id:guid}", GetJob);
-        api.MapPost("/jobs/{id:guid}/cancel", CancelJob);
+        op.MapPost("/jobs/{id:guid}/cancel", CancelJob);
     }
 
     private static IQueryable<JobDto> Project(IQueryable<PatchJob> jobs) =>
         jobs.Select(j => new JobDto(
             j.Id, j.HostId, j.Host!.Name, j.Host.Site!.Name, j.Type, j.Scope, j.AllowReboot, j.Status,
-            j.RequestedBy, j.CreatedAt, j.StartedAt, j.FinishedAt, j.Summary, j.RebootPerformed));
+            j.RequestedBy, j.CreatedAt, j.StartedAt, j.FinishedAt, j.Summary, j.RebootPerformed, j.NotAfter));
 
     private static async Task<IResult> CreateJob(Guid hostId, CreateJobRequest request, ClaimsPrincipal user, AppDbContext db, AuditLog audit, CancellationToken ct)
     {
-        var host = await db.Hosts.FindAsync([hostId], ct);
-        if (host is null)
+        var plan = await JobPlanner.PlanAsync(db, [hostId], request.Type, request.Scope, request.AllowReboot, $"admin:{user.Identity!.Name}", ct);
+        if (plan.Skipped.Count > 0)
         {
-            return Results.NotFound();
+            var skip = plan.Skipped[0];
+            return skip.Reason == JobPlanner.HostNotFound
+                ? Results.NotFound()
+                : Results.Problem(skip.Reason, statusCode: StatusCodes.Status409Conflict);
         }
 
-        if (host.IsRevoked)
-        {
-            return Results.Problem("Host ist gesperrt.", statusCode: StatusCodes.Status409Conflict);
-        }
-
-        if (await db.Jobs.AnyAsync(j => j.HostId == hostId && (j.Status == JobStatus.Queued || j.Status == JobStatus.Running), ct))
-        {
-            return Results.Problem("Für diesen Host ist bereits ein Job geplant oder aktiv.", statusCode: StatusCodes.Status409Conflict);
-        }
-
-        var job = new PatchJob
-        {
-            HostId = hostId,
-            Type = request.Type,
-            Scope = request.Scope,
-            AllowReboot = request.Type == JobType.Reboot || request.AllowReboot,
-            RequestedBy = $"admin:{user.Identity!.Name}",
-        };
-        db.Jobs.Add(job);
-        audit.Add("job.created", $"{job.Type} ({job.Scope}, Neustart {(job.AllowReboot ? "erlaubt" : "nein")}) für {host.Name}", siteId: host.SiteId, hostId: host.Id);
+        var job = plan.Created[0];
+        audit.Add("job.created", $"{job.Type} ({job.Scope}, reboot {(job.AllowReboot ? "allowed" : "no")}) for {job.Host!.Name}",siteId: job.Host.SiteId, hostId: job.HostId);
         await db.SaveChangesAsync(ct);
 
         return Results.Created($"/api/jobs/{job.Id}", await Project(db.Jobs.Where(j => j.Id == job.Id)).SingleAsync(ct));
+    }
+
+    public sealed record BulkJobRequest(Guid[] HostIds, JobType Type, PatchScope Scope = PatchScope.Security, bool AllowReboot = false);
+
+    public sealed record BulkJobResult(int Created, IReadOnlyList<JobPlanner.Skip> Skipped);
+
+    private static async Task<IResult> CreateJobsBulk(BulkJobRequest request, ClaimsPrincipal user, AppDbContext db, AuditLog audit, CancellationToken ct)
+    {
+        if (request.HostIds is null || request.HostIds.Length == 0 || request.HostIds.Length > JobPlanner.MaxHostsPerRequest)
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]> { ["hostIds"] = [L.T($"1 bis {JobPlanner.MaxHostsPerRequest} Hosts auswählen.", $"Select 1 to {JobPlanner.MaxHostsPerRequest} hosts.")] });
+        }
+
+        var plan = await JobPlanner.PlanAsync(db, request.HostIds, request.Type, request.Scope, request.AllowReboot, $"admin:{user.Identity!.Name}", ct);
+        foreach (var job in plan.Created)
+        {
+            audit.Add("job.created", $"{job.Type} ({job.Scope}, reboot {(job.AllowReboot ? "allowed" : "no")}) for {job.Host!.Name} (bulk)", siteId: job.Host.SiteId, hostId: job.HostId);
+        }
+
+        await db.SaveChangesAsync(ct);
+        return Results.Ok(new BulkJobResult(plan.Created.Count, plan.Skipped));
     }
 
     private static async Task<IResult> ListJobs(Guid? hostId, int? limit, AppDbContext db, CancellationToken ct)
@@ -120,12 +129,12 @@ public static class JobEndpoints
         // Laufende Jobs lassen sich nicht abbrechen: ein halb fertiges apt/dpkg ist schlimmer als ein fertiges.
         if (job.Status != JobStatus.Queued)
         {
-            return Results.Problem("Nur geplante Jobs können abgebrochen werden.", statusCode: StatusCodes.Status409Conflict);
+            return Results.Problem(L.T("Nur geplante Jobs können abgebrochen werden.", "Only queued jobs can be cancelled."),statusCode: StatusCodes.Status409Conflict);
         }
 
         job.Status = JobStatus.Cancelled;
         job.FinishedAt = DateTime.UtcNow;
-        audit.Add("job.cancelled", $"{job.Type} für {job.Host!.Name}", siteId: job.Host.SiteId, hostId: job.HostId);
+        audit.Add("job.cancelled", $"{job.Type} for {job.Host!.Name}", siteId: job.Host.SiteId, hostId: job.HostId);
         await db.SaveChangesAsync(ct);
         return Results.NoContent();
     }

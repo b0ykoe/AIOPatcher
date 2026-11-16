@@ -66,7 +66,7 @@ public sealed class JobLog : IAsyncDisposable
         {
             if (_dropped > 0)
             {
-                _buffer.Add(new JobLogLine(DateTime.UtcNow, $"[agent] {_dropped} Logzeilen verworfen (Puffer voll)."));
+                _buffer.Add(new JobLogLine(DateTime.UtcNow, $"[agent] {_dropped} log lines dropped (buffer full)."));
                 _dropped = 0;
             }
 
@@ -88,7 +88,7 @@ public sealed class JobLog : IAsyncDisposable
         }
         catch (Exception ex) when (ex is HttpRequestException or ServerRejectedException or TaskCanceledException)
         {
-            _logger.LogWarning("Job-Log konnte nicht gesendet werden: {Message}", ex.Message);
+            _logger.LogWarning("Job log could not be sent: {Message}", ex.Message);
             lock (_lock)
             {
                 _buffer.InsertRange(0, batch);
@@ -122,7 +122,7 @@ public sealed class JobLog : IAsyncDisposable
         }
         catch (OperationCanceledException)
         {
-            _logger.LogWarning("Job-Log konnte vor Ende nicht vollständig gesendet werden.");
+            _logger.LogWarning("Job log could not be sent completely before the end.");
         }
 
         _stop.Dispose();

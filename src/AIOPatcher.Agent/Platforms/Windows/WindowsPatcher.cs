@@ -8,9 +8,9 @@ namespace AIOPatcher.Agent.Platforms.Windows;
 [SupportedOSPlatform("windows")]
 public sealed class WindowsPatcher : IPatchPlatform
 {
-    public async Task<PatchOutcome> PatchAsync(PatchScope scope, Action<string> log, CancellationToken ct)
+    public async Task<PatchOutcome> PatchAsync(PatchScope scope, IReadOnlyList<string> holds, Action<string> log, CancellationToken ct)
     {
-        var result = await WindowsUpdateApi.InstallAsync(scope, log).WaitAsync(ct);
+        var result = await WindowsUpdateApi.InstallAsync(scope, holds, log).WaitAsync(ct);
         return new PatchOutcome(result.Success, result.Summary);
     }
 
@@ -19,7 +19,7 @@ public sealed class WindowsPatcher : IPatchPlatform
         log("$ shutdown.exe /r /t 60");
         var exit = await ProcessRunner.RunStreamingAsync(
             Path.Combine(Environment.SystemDirectory, "shutdown.exe"),
-            ["/r", "/t", "60", "/d", "p:2:17", "/c", "AIOPatcher: Neustart nach Patch-Job"],
+            ["/r", "/t", "60", "/d", "p:2:17", "/c", "AIOPatcher: reboot after patch job"],
             TimeSpan.FromSeconds(30), log, ct);
         return exit == 0;
     }

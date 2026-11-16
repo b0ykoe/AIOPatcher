@@ -22,6 +22,27 @@ public sealed class AIOPatcherOptions
     /// <summary>Wie oft sich Agents melden. Ein Host gilt nach 3 verpassten Check-ins als offline.</summary>
     public int AgentCheckinIntervalSeconds { get; set; } = 60;
 
+    /// <summary>Zeitzone der Wartungsfenster, z. B. "Europe/Berlin". Leer = Systemzeitzone (im Container: TZ).</summary>
+    public string? TimeZone { get; set; }
+
+    /// <summary>
+    /// Sprache für Texte, die ohne Anfrage entstehen (Notizen des Planers, Job-Zusammenfassungen, Ablauf-Meldungen): "de" oder "en".
+    /// API-Fehlermeldungen folgen der Sprache des Browsers bzw. Benutzers.
+    /// </summary>
+    public string Language { get; set; } = "en";
+
+    /// <summary>
+    /// CVE-Zuordnung über OSV.dev und Microsoft MSRC, Bewertung über CISA KEV und FIRST EPSS.
+    /// Der Server fragt dafür Paketnamen/KB-Nummern bei diesen Diensten ab. false = aus.
+    /// </summary>
+    public bool CveLookupEnabled { get; set; } = true;
+
+    /// <summary>Docker-Images gegen ihre Registry prüfen (anonym, nur öffentliche Images).</summary>
+    public bool ContainerUpdateCheckEnabled { get; set; } = true;
+
+    /// <summary>Signierte Agent-Updates an ältere Agents verteilen (der Agent prüft die Signatur selbst).</summary>
+    public bool AgentAutoUpdate { get; set; } = true;
+
     /// <summary>Gültigkeit eines Enrollment-Tokens.</summary>
     public int EnrollmentTokenLifetimeMinutes { get; set; } = 15;
 

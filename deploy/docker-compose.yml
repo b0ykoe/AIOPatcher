@@ -12,6 +12,7 @@ services:
       AIOPatcher__DataDirectory: /data
       AIOPatcher__DashboardPort: "9443"
       AIOPatcher__AgentPort: "8443"
+      AIOPatcher__Language: de
       TZ: Europe/Berlin
     labels:
       - com.centurylinklabs.watchtower.enable=true

@@ -23,19 +23,19 @@ public static class EnrollCommand
 
         if (server is null || token is null || fingerprint is null)
         {
-            await Console.Error.WriteLineAsync("Aufruf: aiopatcher-agent enroll --server https://<host>:8443 --token <token> --fingerprint <sha256> [--state-dir <pfad>] [--force]");
+            await Console.Error.WriteLineAsync("Usage: aiopatcher-agent enroll --server https://<host>:8443 --token <token> --fingerprint <sha256> [--state-dir <path>] [--force]");
             return 2;
         }
 
         if (AgentState.Exists(stateDir) && !args.Has("force"))
         {
-            await Console.Error.WriteLineAsync($"Agent ist bereits registriert ({stateDir}). Mit --force neu registrieren.");
+            await Console.Error.WriteLineAsync($"Agent is already enrolled ({stateDir}). Use --force to re-enroll.");
             return 1;
         }
 
         if (!Uri.TryCreate(server, UriKind.Absolute, out var serverUri) || serverUri.Scheme != Uri.UriSchemeHttps)
         {
-            await Console.Error.WriteLineAsync("--server muss eine https://-URL sein.");
+            await Console.Error.WriteLineAsync("--server must be an https:// URL.");
             return 2;
         }
 
@@ -47,11 +47,11 @@ public static class EnrollCommand
         }
         catch (Exception ex) when (ex is HttpRequestException or CryptographicException or InvalidDataException)
         {
-            await Console.Error.WriteLineAsync($"CA-Prüfung fehlgeschlagen: {ex.Message}");
+            await Console.Error.WriteLineAsync($"CA verification failed: {ex.Message}");
             return 1;
         }
 
-        Console.WriteLine($"CA bestätigt: {CertificateHelper.Sha256Fingerprint(ca)}");
+        Console.WriteLine($"CA verified: {CertificateHelper.Sha256Fingerprint(ca)}");
 
         // 2. Schlüssel + CSR, Enrollment über die gepinnte Verbindung
         using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
@@ -68,7 +68,7 @@ public static class EnrollCommand
             }
             catch (Exception ex) when (ex is HttpRequestException or ServerRejectedException)
             {
-                await Console.Error.WriteLineAsync($"Registrierung fehlgeschlagen: {ex.Message}");
+                await Console.Error.WriteLineAsync($"Enrollment failed: {ex.Message}");
                 return 1;
             }
         }
@@ -78,14 +78,14 @@ public static class EnrollCommand
         using var issuedKey = issued.GetECDsaPublicKey();
         if (issuedKey is null || !issuedKey.ExportSubjectPublicKeyInfo().AsSpan().SequenceEqual(key.ExportSubjectPublicKeyInfo()))
         {
-            await Console.Error.WriteLineAsync("Server hat ein Zertifikat für einen fremden Schlüssel ausgestellt. Abbruch.");
+            await Console.Error.WriteLineAsync("Server issued a certificate for a different key. Aborting.");
             return 1;
         }
 
         using var returnedCa = X509Certificate2.CreateFromPem(response.CaCertificatePem);
         if (!returnedCa.RawDataMemory.Span.SequenceEqual(ca.RawDataMemory.Span))
         {
-            await Console.Error.WriteLineAsync("Server hat eine andere CA geliefert als die gepinnte. Abbruch.");
+            await Console.Error.WriteLineAsync("Server returned a different CA than the pinned one. Aborting.");
             return 1;
         }
 
@@ -93,8 +93,8 @@ public static class EnrollCommand
             ca.ExportCertificatePem(), response.ClientCertificatePem, key);
 
         AgentPolicy.WriteDefaultIfMissing(stateDir);
-        Console.WriteLine($"Registriert. Host-ID {response.HostId}, Daten in {stateDir}");
-        Console.WriteLine($"Lokale Policy: {Path.Combine(stateDir, AgentPolicy.FileName)} (Patchen und Neustarts hier einschränkbar).");
+        Console.WriteLine($"Enrolled. Host ID {response.HostId}, data in {stateDir}");
+        Console.WriteLine($"Local policy: {Path.Combine(stateDir, AgentPolicy.FileName)} (restrict patching and reboots here).");
         return 0;
     }
 
@@ -123,17 +123,17 @@ public static class EnrollCommand
         var actual = CertificateHelper.Sha256Fingerprint(ca);
         if (!string.Equals(actual, expectedFingerprint, StringComparison.Ordinal))
         {
-            throw new CryptographicException($"Fingerprint stimmt nicht. Erwartet {expectedFingerprint}, Server liefert {actual}.");
+            throw new CryptographicException($"Fingerprint mismatch. Expected {expectedFingerprint}, server returned {actual}.");
         }
 
         if (nameMismatch)
         {
-            throw new CryptographicException($"Server-Zertifikat passt nicht zum Hostnamen '{server.Host}'.");
+            throw new CryptographicException($"Server certificate does not match the hostname '{server.Host}'.");
         }
 
         if (presentedLeaf is null || !CertificateHelper.ValidateServer(ca, presentedLeaf, System.Net.Security.SslPolicyErrors.None))
         {
-            throw new CryptographicException("Server-Zertifikat wurde nicht von der gepinnten CA ausgestellt.");
+            throw new CryptographicException("Server certificate was not issued by the pinned CA.");
         }
 
         return ca;

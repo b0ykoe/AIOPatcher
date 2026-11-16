@@ -11,6 +11,8 @@ export default defineConfig({
   build: {
     outDir: "../AIOPatcher.Server/wwwroot",
     emptyOutDir: true,
+    // Mantine + Icons ergeben ~700 kB (220 kB gzip). Für ein internes Dashboard ok.
+    chunkSizeWarningLimit: 1000,
   },
   server: {
     port: 5173,

@@ -27,32 +27,42 @@ public sealed partial class AptPatcher : IPatchPlatform
     [GeneratedRegex(@"^\d+ upgraded, \d+ newly installed, \d+ to remove")]
     private static partial Regex SummaryLine();
 
-    public async Task<PatchOutcome> PatchAsync(PatchScope scope, Action<string> log, CancellationToken ct)
+    public async Task<PatchOutcome> PatchAsync(PatchScope scope, IReadOnlyList<string> holds, Action<string> log, CancellationToken ct)
     {
         log("$ apt-get update");
         var updateExit = await RunPrivilegedAsync("apt-get", ["update"], UpdateTimeout, log, ct);
         if (updateExit != 0)
         {
-            return new PatchOutcome(false, $"apt-get update fehlgeschlagen (Exit {updateExit}).");
+            return new PatchOutcome(false, $"apt-get update failed (exit {updateExit}).");
         }
 
         string[] args;
-        if (scope == PatchScope.Security)
+        if (scope == PatchScope.Security || holds.Count > 0)
         {
+            // Mit zurückgehaltenen Paketen gibt es kein "dist-upgrade außer X": stattdessen die Paketliste explizit
+            // aktualisieren. Neue Abhängigkeiten (z. B. ein neuer Kernel) zieht apt dabei selbst mit.
             var simulation = await ProcessRunner.RunAsync("apt-get", ["-s", "-o", "Debug::NoLocking=1", "dist-upgrade"], UpdateTimeout, ct);
-            var packages = AptOutputParser.Parse(simulation.StandardOutput)
-                .Where(u => u.IsSecurity && u.CurrentVersion is not null) // nur Upgrades installierter Pakete
+            var candidates = AptOutputParser.Parse(simulation.StandardOutput)
+                .Where(u => (scope == PatchScope.All || u.IsSecurity) && u.CurrentVersion is not null) // nur Upgrades installierter Pakete
                 .Select(u => u.Name)
                 .Distinct()
-                .ToArray();
+                .ToList();
 
-            if (packages.Length == 0)
+            var held = candidates.Where(p => HoldPatterns.IsHeld(holds, p)).ToList();
+            if (held.Count > 0)
             {
-                log("[agent] Keine Security-Updates offen.");
-                return new PatchOutcome(true, "Keine Security-Updates offen.");
+                log($"[agent] Held back: {string.Join(", ", held)}");
             }
 
-            log($"[agent] {packages.Length} Security-Updates: {string.Join(", ", packages)}");
+            var packages = candidates.Except(held).ToArray();
+            if (packages.Length == 0)
+            {
+                var none = scope == PatchScope.Security ? "No pending security updates." : "No pending updates.";
+                log($"[agent] {none}");
+                return new PatchOutcome(true, held.Count > 0 ? $"{none} {held.Count} held back." : none);
+            }
+
+            log($"[agent] {packages.Length} {(scope == PatchScope.Security ? "security " : "")}updates: {string.Join(", ", packages)}");
             args = [.. NonInteractive, "install", "--only-upgrade", .. packages];
         }
         else
@@ -72,15 +82,15 @@ public sealed partial class AptPatcher : IPatchPlatform
         }, ct);
 
         return exit == 0
-            ? new PatchOutcome(true, summary ?? "Updates installiert.")
-            : new PatchOutcome(false, $"apt-get beendet mit Exit {exit}. Details im Log.");
+            ? new PatchOutcome(true, summary ?? "Updates installed.")
+            : new PatchOutcome(false, $"apt-get exited with code {exit}. See the log for details.");
     }
 
     public async Task<bool> RequestRebootAsync(Action<string> log, CancellationToken ct)
     {
         // +1 Minute: Zeit, um Log und Ergebnis-Datei sauber abzuschließen. Angemeldete Nutzer bekommen eine Meldung.
         log("$ shutdown -r +1");
-        var exit = await RunPrivilegedAsync("shutdown", ["-r", "+1", "AIOPatcher: Neustart nach Patch-Job"], TimeSpan.FromSeconds(30), log, ct);
+        var exit = await RunPrivilegedAsync("shutdown", ["-r", "+1", "AIOPatcher: reboot after patch job"], TimeSpan.FromSeconds(30), log, ct);
         return exit == 0;
     }
 

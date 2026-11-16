@@ -1,3 +1,14 @@
+# syntax=docker/dockerfile:1
+#
+# Build-Argumente:
+#   VERSION            Versionsnummer für Server und Agents (z. B. 0.2.0, im CI aus dem Git-Tag)
+#   AGENT_RELEASE_KEY  öffentlicher Schlüssel (Base64) für signierte Agent-Self-Updates
+# Build-Secret (optional):
+#   agent_signing_key  privater Schlüssel (PEM); damit werden die Agent-Binaries signiert (*.sig)
+# Ohne Schlüssel entsteht ein funktionierendes Image, nur ohne automatische Agent-Updates.
+
+ARG VERSION=0.1.0
+
 # --- Frontend ---------------------------------------------------------------------------------------
 FROM node:24-alpine AS web
 WORKDIR /src/web
@@ -8,6 +19,7 @@ RUN npx tsc --noEmit && npx vite build --outDir /out/wwwroot --emptyOutDir
 
 # --- Server -----------------------------------------------------------------------------------------
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+ARG VERSION
 WORKDIR /src
 COPY global.json Directory.Build.props ./
 COPY src/AIOPatcher.Contracts/AIOPatcher.Contracts.csproj src/AIOPatcher.Contracts/
@@ -15,11 +27,13 @@ COPY src/AIOPatcher.Server/AIOPatcher.Server.csproj src/AIOPatcher.Server/
 RUN dotnet restore src/AIOPatcher.Server
 COPY src/AIOPatcher.Contracts/ src/AIOPatcher.Contracts/
 COPY src/AIOPatcher.Server/ src/AIOPatcher.Server/
-RUN dotnet publish src/AIOPatcher.Server -c Release -o /app --no-restore
+RUN dotnet publish src/AIOPatcher.Server -c Release -o /app --no-restore -p:Version=$VERSION
 
 # --- Agents -----------------------------------------------------------------------------------------
 # linux-x64 wird mit Native AOT gebaut und braucht dafür clang. Das Image muss daher auf x64 gebaut werden.
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS agents
+ARG VERSION
+ARG AGENT_RELEASE_KEY=""
 RUN apt-get update \
  && apt-get install -y --no-install-recommends clang zlib1g-dev \
  && rm -rf /var/lib/apt/lists/*
@@ -27,13 +41,25 @@ WORKDIR /src
 COPY global.json Directory.Build.props ./
 COPY src/AIOPatcher.Contracts/ src/AIOPatcher.Contracts/
 COPY src/AIOPatcher.Agent/ src/AIOPatcher.Agent/
-RUN dotnet publish src/AIOPatcher.Agent -c Release -r linux-x64   -o /out/linux-x64 \
- && dotnet publish src/AIOPatcher.Agent -c Release -r linux-arm64 -o /out/linux-arm64 \
- && dotnet publish src/AIOPatcher.Agent -c Release -r win-x64     -o /out/win-x64 \
+COPY tools/AIOPatcher.Signer/ tools/AIOPatcher.Signer/
+RUN for rid in linux-x64 linux-arm64 win-x64; do \
+      dotnet publish src/AIOPatcher.Agent -c Release -r $rid -o /out/$rid -p:Version=$VERSION -p:AgentReleaseKey="$AGENT_RELEASE_KEY" || exit 1; \
+    done \
  && find /out -type f ! -name 'aiopatcher-agent' ! -name 'aiopatcher-agent.exe' -delete
+# Signieren nur, wenn der private Schlüssel als Build-Secret mitgegeben wurde.
+RUN --mount=type=secret,id=agent_signing_key,required=false \
+    if [ -s /run/secrets/agent_signing_key ]; then \
+      dotnet build tools/AIOPatcher.Signer -c Release -o /signer -v q \
+      && for f in /out/*/aiopatcher-agent*; do dotnet /signer/aiopatcher-signer.dll sign "$f" /run/secrets/agent_signing_key || exit 1; done; \
+    else \
+      echo "No agent_signing_key secret: agents are not signed, self-update stays off."; \
+    fi
 
 # --- Runtime ----------------------------------------------------------------------------------------
 FROM mcr.microsoft.com/dotnet/aspnet:10.0
+ARG VERSION
+LABEL org.opencontainers.image.title="AIOPatcher" \
+      org.opencontainers.image.version=$VERSION
 WORKDIR /app
 COPY --from=build /app ./
 COPY --from=web /out/wwwroot ./wwwroot

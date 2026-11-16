@@ -6,6 +6,8 @@ using AIOPatcher.Server.Data;
 using AIOPatcher.Server.Options;
 using AIOPatcher.Server.Security;
 using AIOPatcher.Server.Services;
+using AIOPatcher.Server.Services.Notifications;
+using AIOPatcher.Server.Services.Security;
 using Microsoft.EntityFrameworkCore;
 
 namespace AIOPatcher.Server.Endpoints;
@@ -31,6 +33,7 @@ public static class AgentEndpoints
 
         var authenticated = agent.MapGroup("").AddEndpointFilter(AuthenticateAgent);
         authenticated.MapPost("/checkin", Checkin);
+        authenticated.MapPost("/renew", Renew);
         authenticated.MapPost("/jobs/{jobId:guid}/log", AppendJobLog);
         authenticated.MapPost("/jobs/{jobId:guid}/result", CompleteJob);
     }
@@ -49,7 +52,7 @@ public static class AgentEndpoints
     {
         var logger = loggerFactory.CreateLogger("AIOPatcher.Enrollment");
         var remote = http.Connection.RemoteIpAddress;
-        var denied = Results.Problem("Enrollment-Token ungültig, abgelaufen oder bereits benutzt.", statusCode: StatusCodes.Status403Forbidden);
+        var denied = Results.Problem(L.T("Enrollment-Token ungültig, abgelaufen oder bereits benutzt.", "Enrollment token invalid, expired or already used."),statusCode: StatusCodes.Status403Forbidden);
 
         if (string.IsNullOrWhiteSpace(request.EnrollmentToken) || string.IsNullOrWhiteSpace(request.CertificateSigningRequestPem))
         {
@@ -60,16 +63,16 @@ public static class AgentEndpoints
         var token = await db.EnrollmentTokens.Include(t => t.Site).SingleOrDefaultAsync(t => t.TokenHash == hash, ct);
         if (token is null || token.UsedAt is not null || token.ExpiresAt < DateTime.UtcNow)
         {
-            logger.LogWarning("Enrollment abgelehnt (Token ungültig) von {Remote}", remote);
-            audit.Add("agent.enroll.denied", "Token ungültig/abgelaufen/benutzt", actor: $"agent:{remote}");
+            logger.LogWarning("Enrollment denied (invalid token) from {Remote}", remote);
+            audit.Add("agent.enroll.denied", "Token invalid/expired/used",actor: $"agent:{remote}");
             await db.SaveChangesAsync(ct);
             return denied;
         }
 
         if (!AgentNetworkPolicy.IsAllowed(token.Site!.AllowedAgentCidrs, remote))
         {
-            logger.LogWarning("Enrollment abgelehnt: {Remote} nicht in Allowlist der Site {Site}", remote, token.Site.Name);
-            audit.Add("agent.enroll.denied", $"IP {remote} nicht in Allowlist", siteId: token.SiteId, actor: $"agent:{remote}");
+            logger.LogWarning("Enrollment denied: {Remote} not in allowlist of site {Site}", remote, token.Site.Name);
+            audit.Add("agent.enroll.denied", $"IP {remote} not in allowlist",siteId: token.SiteId, actor: $"agent:{remote}");
             await db.SaveChangesAsync(ct);
             return denied;
         }
@@ -93,7 +96,7 @@ public static class AgentEndpoints
         }
         catch (CryptographicException ex)
         {
-            return Results.Problem($"CSR ungültig: {ex.Message}", statusCode: StatusCodes.Status400BadRequest);
+            return Results.Problem(L.T($"CSR ungültig: {ex.Message}", $"Invalid CSR: {ex.Message}"),statusCode: StatusCodes.Status400BadRequest);
         }
 
         using (certificate)
@@ -113,10 +116,10 @@ public static class AgentEndpoints
 
             token.UsedAt = claimedAt;
             token.UsedByHostId = hostId;
-            audit.Add("agent.enrolled", $"{host.Name} ({request.OsFamily}) von {remote}", siteId: token.SiteId, hostId: hostId, actor: $"agent:{host.Name}");
+            audit.Add("agent.enrolled", $"{host.Name} ({request.OsFamily}) from {remote}", siteId: token.SiteId, hostId: hostId, actor: $"agent:{host.Name}");
             await db.SaveChangesAsync(ct);
 
-            logger.LogInformation("Agent {Host} in Site {Site} registriert", host.Name, token.Site.Name);
+            logger.LogInformation("Agent {Host} enrolled in site {Site}", host.Name, token.Site.Name);
             return Results.Ok(new EnrollResponse(hostId, token.SiteId, certificate.ExportCertificatePem(), ca.RootCertificatePem));
         }
     }
@@ -132,16 +135,29 @@ public static class AgentEndpoints
 
         var db = http.RequestServices.GetRequiredService<AppDbContext>();
         var thumbprint = CertificateAuthority.GetIdentityThumbprint(certificate);
-        var host = await db.Hosts.Include(h => h.Site).SingleOrDefaultAsync(h => h.CertificateThumbprint == thumbprint, http.RequestAborted);
+        var host = await db.Hosts.Include(h => h.Site)
+            .SingleOrDefaultAsync(h => h.CertificateThumbprint == thumbprint || h.PendingCertificateThumbprint == thumbprint, http.RequestAborted);
 
         if (host is null)
         {
             return Results.Unauthorized();
         }
 
+        // Agent benutzt das erneuerte Zertifikat: ab jetzt gilt nur noch dieses.
+        if (host.PendingCertificateThumbprint == thumbprint)
+        {
+            host.CertificateThumbprint = thumbprint;
+            host.CertificateExpiresAt = host.PendingCertificateExpiresAt ?? certificate.NotAfter.ToUniversalTime();
+            host.PendingCertificateThumbprint = null;
+            host.PendingCertificateExpiresAt = null;
+            host.CertificateExpiryNotifiedAt = null;
+            db.AuditEntries.Add(new AuditEntry { Actor = $"agent:{host.Name}", Action = "agent.certificate.renewed", SiteId = host.SiteId, HostId = host.Id, Details = $"valid until {host.CertificateExpiresAt:u}" });
+            await db.SaveChangesAsync(http.RequestAborted);
+        }
+
         if (host.IsRevoked || !AgentNetworkPolicy.IsAllowed(host.Site!.AllowedAgentCidrs, http.Connection.RemoteIpAddress))
         {
-            return Results.Problem("Agent gesperrt oder IP nicht erlaubt.", statusCode: StatusCodes.Status403Forbidden);
+            return Results.Problem(L.T("Agent gesperrt oder IP nicht erlaubt.", "Agent revoked or IP not allowed."),statusCode: StatusCodes.Status403Forbidden);
         }
 
         http.Items[HostItemKey] = host;
@@ -153,10 +169,21 @@ public static class AgentEndpoints
         HttpContext http,
         AppDbContext db,
         AIOPatcherOptions options,
+        Notifier notifier,
+        AgentDownloads downloads,
         CancellationToken ct)
     {
         var host = (ManagedHost)http.Items[HostItemKey]!;
         var now = DateTime.UtcNow;
+
+        if (host.OfflineNotifiedAt is not null)
+        {
+            host.OfflineNotifiedAt = null;
+            notifier.Publish(new Notification(NotificationEvents.HostOnline,
+                L.T($"{host.Name} ist wieder online", $"{host.Name} is back online"),
+                L.T($"Site {host.Site?.Name}", $"Site {host.Site?.Name}"),
+                NotificationSeverity.Success, host.SiteId, host.Id, $"/hosts/{host.Id}"));
+        }
 
         host.LastSeenAt = now;
         host.AgentVersion = Truncate(request.AgentVersion, 32);
@@ -171,14 +198,56 @@ public static class AgentEndpoints
 
         if (request.Updates is not null)
         {
-            await ReplaceUpdatesAsync(db, host, request.Updates, now, ct);
+            var newSecurity = await ReplaceUpdatesAsync(db, host, request.Updates, now, ct);
+            if (newSecurity.Count > 0)
+            {
+                notifier.Publish(new Notification(NotificationEvents.NewSecurityUpdates,
+                    L.T($"{host.Name}: {newSecurity.Count} neue Security-Updates", $"{host.Name}: {newSecurity.Count} new security updates"),
+                    string.Join(", ", newSecurity.Take(10)) + (newSecurity.Count > 10 ? " …" : ""),
+                    NotificationSeverity.Warning, host.SiteId, host.Id, $"/hosts/{host.Id}"));
+            }
+        }
+
+        if (request.Containers is not null)
+        {
+            await ContainerUpdateService.ReplaceContainersAsync(db, host, request.Containers, now, ct);
         }
 
         await ReplaceAddressesAsync(db, host, request.Addresses ?? [], now, ct);
         var job = await DispatchJobAsync(db, host, request.RunningJobId, now, ct);
         await db.SaveChangesAsync(ct);
 
-        return Results.Ok(new CheckinResponse(options.AgentCheckinIntervalSeconds, job));
+        var renew = host.CertificateExpiresAt - now < CertificateRenewBefore;
+        var update = job is null && options.AgentAutoUpdate ? downloads.OfferFor(host.OsFamily, request.Architecture, host.AgentVersion) : null;
+        return Results.Ok(new CheckinResponse(options.AgentCheckinIntervalSeconds, job, update, renew));
+    }
+
+    /// <summary>So lange vor Ablauf bittet der Server den Agent, ein neues Zertifikat anzufordern.</summary>
+    public static readonly TimeSpan CertificateRenewBefore = TimeSpan.FromDays(60);
+
+    private static async Task<IResult> Renew(RenewRequest request, HttpContext http, AppDbContext db, CertificateAuthority ca, CancellationToken ct)
+    {
+        var host = (ManagedHost)http.Items[HostItemKey]!;
+        if (host.CertificateExpiresAt - DateTime.UtcNow > CertificateRenewBefore)
+        {
+            return Results.Problem(L.T("Zertifikat ist noch lange gültig.", "Certificate is still valid for a long time."), statusCode: StatusCodes.Status409Conflict);
+        }
+
+        System.Security.Cryptography.X509Certificates.X509Certificate2 certificate;
+        try
+        {
+            certificate = ca.IssueClientCertificate(request.CertificateSigningRequestPem ?? "", host.Id, host.SiteId);
+        }
+        catch (CryptographicException ex)
+        {
+            return Results.Problem(L.T($"CSR ungültig: {ex.Message}", $"Invalid CSR: {ex.Message}"), statusCode: StatusCodes.Status400BadRequest);
+        }
+
+        host.PendingCertificateThumbprint = CertificateAuthority.GetIdentityThumbprint(certificate);
+        host.PendingCertificateExpiresAt = certificate.NotAfter.ToUniversalTime();
+        db.AuditEntries.Add(new AuditEntry { Actor = $"agent:{host.Name}", Action = "agent.certificate.issued", SiteId = host.SiteId, HostId = host.Id, Details = $"renewal, valid until {host.PendingCertificateExpiresAt:u}" });
+        await db.SaveChangesAsync(ct);
+        return Results.Ok(new RenewResponse(certificate.ExportCertificatePem()));
     }
 
     /// <summary>
@@ -198,13 +267,22 @@ public static class AgentEndpoints
         {
             job.Status = JobStatus.Failed;
             job.FinishedAt = now;
-            job.Summary = "Agent hat den Job nicht abgeschlossen (Abbruch, Absturz oder Neustart ohne Ergebnis).";
+            job.Summary = L.T("Agent hat den Job nicht abgeschlossen (Abbruch, Absturz oder Neustart ohne Ergebnis).",
+                "The agent did not finish the job (cancelled, crashed or restarted without a result).");
         }
 
-        var next = await db.Jobs
+        var queued = await db.Jobs
             .Where(j => j.HostId == host.Id && j.Status == JobStatus.Queued)
             .OrderBy(j => j.CreatedAt)
-            .FirstOrDefaultAsync(ct);
+            .ToListAsync(ct);
+
+        // Auto-Jobs nur innerhalb ihres Wartungsfensters vergeben, danach verwerfen.
+        foreach (var expired in queued.Where(j => j.NotAfter <= now))
+        {
+            AutoPatchScheduler.ExpireJob(expired, now);
+        }
+
+        var next = queued.FirstOrDefault(j => j.NotAfter is null || j.NotAfter > now);
         if (next is null)
         {
             return null;
@@ -212,7 +290,8 @@ public static class AgentEndpoints
 
         next.Status = JobStatus.Running;
         next.StartedAt = now;
-        return new AgentJob(next.Id, next.Type, next.Scope, next.AllowReboot);
+        var holds = next.Type == JobType.Patch ? await PatchRules.HoldsForHostAsync(db, host, now, ct) : null;
+        return new AgentJob(next.Id, next.Type, next.Scope, next.AllowReboot, holds is { Count: > 0 } ? holds : null);
     }
 
     private static async Task<IResult> AppendJobLog(Guid jobId, JobLogRequest request, HttpContext http, AppDbContext db, CancellationToken ct)
@@ -249,7 +328,7 @@ public static class AgentEndpoints
         return Results.NoContent();
     }
 
-    private static async Task<IResult> CompleteJob(Guid jobId, JobResultRequest request, HttpContext http, AppDbContext db, AuditLog audit, CancellationToken ct)
+    private static async Task<IResult> CompleteJob(Guid jobId, JobResultRequest request, HttpContext http, AppDbContext db, AuditLog audit, Notifier notifier, CancellationToken ct)
     {
         var host = (ManagedHost)http.Items[HostItemKey]!;
         var job = await db.Jobs.SingleOrDefaultAsync(j => j.Id == jobId && j.HostId == host.Id, ct);
@@ -277,13 +356,32 @@ public static class AgentEndpoints
         host.LastSeenAt = DateTime.UtcNow;
         audit.Add($"job.{job.Status.ToString().ToLowerInvariant()}", $"{job.Type}: {job.Summary}", siteId: host.SiteId, hostId: host.Id, actor: $"agent:{host.Name}");
         await db.SaveChangesAsync(ct);
+
+        var succeeded = job.Status == JobStatus.Succeeded;
+        notifier.Publish(new Notification(
+            succeeded ? NotificationEvents.JobSucceeded : NotificationEvents.JobFailed,
+            succeeded
+                ? L.T($"{host.Name}: {job.Type} erfolgreich", $"{host.Name}: {job.Type} succeeded")
+                : L.T($"{host.Name}: {job.Type} fehlgeschlagen", $"{host.Name}: {job.Type} failed"),
+            job.Summary ?? "",
+            succeeded ? NotificationSeverity.Success : NotificationSeverity.Critical,
+            host.SiteId, host.Id, $"/jobs/{job.Id}"));
         return Results.NoContent();
     }
 
-    private static async Task ReplaceUpdatesAsync(AppDbContext db, ManagedHost host, IReadOnlyList<AvailableUpdate> updates, DateTime now, CancellationToken ct)
+    /// <summary>Ersetzt die offenen Updates. Gibt die Namen neu aufgetauchter Security-Updates zurück (nicht beim ersten Scan).</summary>
+    private static async Task<List<string>> ReplaceUpdatesAsync(AppDbContext db, ManagedHost host, IReadOnlyList<AvailableUpdate> updates, DateTime now, CancellationToken ct)
     {
+        var firstScan = host.LastScanAt is null;
         host.LastScanAt = now;
         var existing = await db.PendingUpdates.Where(u => u.HostId == host.Id).ToListAsync(ct);
+        var known = existing.Select(u => u.Name).ToHashSet(StringComparer.Ordinal);
+        // CVE-Bewertung vom vorherigen Scan übernehmen, damit sie nicht bis zum nächsten Abgleich verschwindet.
+        var scored = existing
+            .Where(u => u.CveCheckedAt != null)
+            .GroupBy(u => (u.Name, u.CurrentVersion, u.AvailableVersion))
+            .ToDictionary(g => g.Key, g => g.First());
+        var newSecurity = new List<string>();
         var firstSeen = existing
             .GroupBy(u => (u.Name, u.AvailableVersion))
             .ToDictionary(g => g.Key, g => g.Min(u => u.FirstSeenAt));
@@ -293,7 +391,7 @@ public static class AgentEndpoints
         {
             var name = Truncate(update.Name, 300);
             var version = update.AvailableVersion is null ? null : Truncate(update.AvailableVersion, 200);
-            db.PendingUpdates.Add(new PendingUpdate
+            var added = new PendingUpdate
             {
                 HostId = host.Id,
                 Name = name,
@@ -302,8 +400,24 @@ public static class AgentEndpoints
                 IsSecurity = update.IsSecurity,
                 Classification = update.Classification is null ? null : Truncate(update.Classification, 300),
                 FirstSeenAt = firstSeen.GetValueOrDefault((name, version), now),
-            });
+                SourcePackage = update.SourcePackage is null ? null : Truncate(update.SourcePackage, 200),
+            };
+            db.PendingUpdates.Add(added);
+            if (scored.TryGetValue((added.Name, added.CurrentVersion, added.AvailableVersion), out var previous))
+            {
+                added.Cves = previous.Cves;
+                added.IsKev = previous.IsKev;
+                added.MaxEpss = previous.MaxEpss;
+                added.CveCheckedAt = previous.CveCheckedAt;
+            }
+
+            if (update.IsSecurity && !firstScan && !known.Contains(name))
+            {
+                newSecurity.Add(name);
+            }
         }
+
+        return newSecurity;
     }
 
     private static async Task ReplaceAddressesAsync(AppDbContext db, ManagedHost host, IReadOnlyList<NetworkAddress> addresses, DateTime now, CancellationToken ct)

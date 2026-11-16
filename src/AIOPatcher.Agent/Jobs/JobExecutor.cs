@@ -18,8 +18,8 @@ public sealed class JobExecutor(IPlatformInventory inventory, IPatchPlatform pat
 {
     public async Task<JobExecutionResult> ExecuteAsync(AgentJob job, AgentPolicy policy, Action<string> log, CancellationToken ct)
     {
-        log($"[agent] Job {job.Type} gestartet (Umfang {job.Scope}, Neustart angefordert: {(job.AllowReboot ? "ja" : "nein")}). " +
-            $"Lokale Policy: Patchen {policy.AllowPatch}, Neustart {(policy.AllowReboot ? "erlaubt" : "verboten")}.");
+        log($"[agent] Job {job.Type} started (scope {job.Scope}, reboot requested: {(job.AllowReboot ? "yes" : "no")}). " +
+            $"Local policy: patch {policy.AllowPatch}, reboot {(policy.AllowReboot ? "allowed" : "forbidden")}.");
         try
         {
             return job.Type switch
@@ -27,25 +27,25 @@ public sealed class JobExecutor(IPlatformInventory inventory, IPatchPlatform pat
                 JobType.Scan => await ScanAsync(log, ct),
                 JobType.Patch => await PatchAsync(job, policy, log, ct),
                 JobType.Reboot => Reboot(policy, log),
-                _ => new JobExecutionResult(JobOutcome.Rejected, $"Unbekannter Job-Typ {job.Type}."),
+                _ => new JobExecutionResult(JobOutcome.Rejected, $"Unknown job type {job.Type}."),
             };
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            logger.LogError(ex, "Job {JobId} fehlgeschlagen", job.JobId);
-            log($"[agent] Fehler: {ex.Message}");
-            return new JobExecutionResult(JobOutcome.Failed, $"Fehler im Agent: {ex.Message}");
+            logger.LogError(ex, "Job {JobId} failed", job.JobId);
+            log($"[agent] Error: {ex.Message}");
+            return new JobExecutionResult(JobOutcome.Failed, $"Error in agent: {ex.Message}");
         }
     }
 
     public static JobExecutionResult? CheckPolicy(AgentJob job, AgentPolicy policy) => job.Type switch
     {
         JobType.Patch when policy.AllowPatch == PatchPermission.None =>
-            new JobExecutionResult(JobOutcome.Rejected, "Lokale Policy verbietet das Patchen."),
+            new JobExecutionResult(JobOutcome.Rejected, "Local policy forbids patching."),
         JobType.Patch when policy.AllowPatch == PatchPermission.Security && job.Scope == PatchScope.All =>
-            new JobExecutionResult(JobOutcome.Rejected, "Lokale Policy erlaubt nur Security-Updates."),
+            new JobExecutionResult(JobOutcome.Rejected, "Local policy only allows security updates."),
         JobType.Reboot when !policy.AllowReboot =>
-            new JobExecutionResult(JobOutcome.Rejected, "Lokale Policy verbietet Neustarts."),
+            new JobExecutionResult(JobOutcome.Rejected, "Local policy forbids reboots."),
         _ => null,
     };
 
@@ -54,10 +54,10 @@ public sealed class JobExecutor(IPlatformInventory inventory, IPatchPlatform pat
         var updates = await inventory.ScanUpdatesAsync(ct);
         if (updates is null)
         {
-            return new JobExecutionResult(JobOutcome.Failed, "Update-Scan ist auf dieser Plattform noch nicht verfügbar.");
+            return new JobExecutionResult(JobOutcome.Failed, "Update scan is not available on this platform yet.");
         }
 
-        var summary = $"{updates.Count} Updates verfügbar, davon {updates.Count(u => u.IsSecurity)} Security.";
+        var summary = $"{updates.Count} updates available, {updates.Count(u => u.IsSecurity)} of them security.";
         log($"[agent] {summary}");
         return new JobExecutionResult(JobOutcome.Succeeded, summary, ScannedUpdates: updates);
     }
@@ -66,11 +66,17 @@ public sealed class JobExecutor(IPlatformInventory inventory, IPatchPlatform pat
     {
         if (CheckPolicy(job, policy) is { } rejected)
         {
-            log($"[agent] Abgelehnt: {rejected.Summary}");
+            log($"[agent] Rejected: {rejected.Summary}");
             return rejected;
         }
 
-        var outcome = await patcher.PatchAsync(job.Scope, log, ct);
+        var holds = job.Holds ?? [];
+        if (holds.Count > 0)
+        {
+            log($"[agent] Held back by server rules: {string.Join(", ", holds)}");
+        }
+
+        var outcome = await patcher.PatchAsync(job.Scope, holds, log, ct);
         if (!outcome.Success)
         {
             return new JobExecutionResult(JobOutcome.Failed, outcome.Summary);
@@ -82,7 +88,7 @@ public sealed class JobExecutor(IPlatformInventory inventory, IPatchPlatform pat
         var summary = outcome.Summary.TrimEnd('.') + ".";
         if (updates is not null)
         {
-            summary += $" Danach noch offen: {updates.Count} ({updates.Count(u => u.IsSecurity)} Security).";
+            summary += $" Still pending afterwards: {updates.Count} ({updates.Count(u => u.IsSecurity)} security).";
         }
 
         if (!info.RebootRequired)
@@ -95,19 +101,19 @@ public sealed class JobExecutor(IPlatformInventory inventory, IPatchPlatform pat
             return new JobExecutionResult(JobOutcome.Succeeded, summary, RebootRequested: true, ScannedUpdates: updates);
         }
 
-        var reason = job.AllowReboot ? "lokale Policy verbietet Neustarts" : "nicht angefordert";
-        log($"[agent] Neustart erforderlich, wird nicht ausgeführt ({reason}).");
-        return new JobExecutionResult(JobOutcome.Succeeded, $"{summary} Neustart erforderlich ({reason}).", ScannedUpdates: updates);
+        var reason = job.AllowReboot ? "local policy forbids reboots" : "not requested";
+        log($"[agent] Reboot required, not performed ({reason}).");
+        return new JobExecutionResult(JobOutcome.Succeeded, $"{summary} Reboot required ({reason}).", ScannedUpdates: updates);
     }
 
     private static JobExecutionResult Reboot(AgentPolicy policy, Action<string> log)
     {
         if (CheckPolicy(new AgentJob(Guid.Empty, JobType.Reboot, PatchScope.Security, true), policy) is { } rejected)
         {
-            log($"[agent] Abgelehnt: {rejected.Summary}");
+            log($"[agent] Rejected: {rejected.Summary}");
             return rejected;
         }
 
-        return new JobExecutionResult(JobOutcome.Succeeded, "Neustart angefordert.", RebootRequested: true);
+        return new JobExecutionResult(JobOutcome.Succeeded, "Reboot requested.", RebootRequested: true);
     }
 }
