@@ -114,7 +114,8 @@ gegen echte Systeme getestet, sondern gegen nachgebaute APIs und Unit-Tests):
 - **CVE-Zuordnung** für offene Updates (OSV.dev für Debian/Ubuntu, Microsoft MSRC für Windows-KBs),
   Bewertung mit **CISA KEV** (aktiv ausgenutzt) und **EPSS**; dazu **Lücken ohne Update** in installierten Paketen
   (nur KEV oder EPSS ≥ 5 %, sonst wäre allein der Kernel tausende Einträge)
-- **CVE-Suche**: CVE-Nummer oder Stichwort (Hersteller, Produkt, Paket) nachschlagen: Beschreibung und CVSS (NVD),
+- **CVE-Suche** mit **lokaler CVE-Datenbank** (alle CVEs aus den NVD-Datenfeeds, Abgleich alle 2 Stunden, Volltextsuche
+  ohne Anfrage nach außen): CVE-Nummer oder Stichwort (Hersteller, Produkt, Paket) nachschlagen: Beschreibung und CVSS,
   behoben in welcher Paketversion je Debian/Ubuntu-Release (OSV.dev) bzw. durch welches KB je Windows-Version
   (Microsoft), KEV/EPSS und welche eigenen Hosts betroffen sind. Auch per Strg+K und CVE-Nummer.
 - **Programm-Inventar**: dpkg/snap und Windows-Programme, mit verfügbarer Version und Links (winget-Manifest,

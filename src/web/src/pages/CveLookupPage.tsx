@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import {
   Alert,
@@ -8,6 +8,7 @@ import {
   Card,
   Group,
   Loader,
+  Progress,
   SimpleGrid,
   Spoiler,
   Stack,
@@ -17,10 +18,11 @@ import {
   Title,
   Tooltip,
 } from "@mantine/core";
-import { IconAlertTriangle, IconBug, IconExternalLink, IconInfoCircle, IconSearch, IconServer, IconShieldCheck } from "@tabler/icons-react";
+import { IconAlertTriangle, IconBug, IconDatabase, IconExternalLink, IconInfoCircle, IconRefresh, IconSearch, IconServer, IconShieldCheck } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
-import { api } from "../api";
-import { EmptyState, errorText, PageHeader } from "../components/ui";
+import { api, formatRelative } from "../api";
+import { useCan } from "../App";
+import { EmptyState, errorText, notifyError, PageHeader } from "../components/ui";
 
 interface CveScore {
   version: string;
@@ -65,6 +67,7 @@ interface CveDetails {
   hosts: AffectedHost[];
   externalDisabled: boolean;
   unavailable: string[];
+  mirrorSyncedAt: string | null;
 }
 
 interface SearchHit {
@@ -84,6 +87,19 @@ interface SearchResult {
   nvdTotal: number | null;
   externalDisabled: boolean;
   unavailable: string[];
+  mirrorSyncedAt: string | null;
+}
+
+interface MirrorStatus {
+  enabled: boolean;
+  ready: boolean;
+  syncing: boolean;
+  count: number;
+  syncedAt: string | null;
+  current: { feed: string; done: number; total: number; imported: number } | null;
+  lastError: string | null;
+  lastErrorAt: string | null;
+  sizeBytes: number;
 }
 
 /** "cve-2024-3094" bzw. "2024-3094" → "CVE-2024-3094", sonst null (gleiche Regel wie der Server). */
@@ -153,13 +169,91 @@ export function CveLookupPage() {
             </Button>
           </Group>
         </form>
-        <Text size="xs" c="dimmed" mt="xs">
-          {t("cveLookup.privacy")}
-        </Text>
+        <MirrorStatusLine />
       </Card>
 
       {id ? <CveDetail id={id} /> : query ? <CveSearch query={query} /> : <StartHint />}
     </>
+  );
+}
+
+const formatSize = (bytes: number) => (bytes >= 1e9 ? `${(bytes / 1e9).toFixed(1)} GB` : `${Math.round(bytes / 1e6)} MB`);
+
+/** Stand der lokalen CVE-Datenbank; aktualisiert sich selbst, solange ein Abgleich läuft. */
+function MirrorStatusLine() {
+  const { t, i18n } = useTranslation();
+  const can = useCan();
+  const [status, setStatus] = useState<MirrorStatus | null>(null);
+  const [requested, setRequested] = useState(false);
+
+  const load = useCallback(() => {
+    api.get<MirrorStatus>("/api/cves/mirror").then(setStatus).catch(() => setStatus(null));
+  }, []);
+
+  useEffect(load, [load]);
+  // nachladen, solange ein Abgleich läuft oder die Datenbank noch fehlt (der erste Abgleich startet von selbst)
+  const waiting = !!status && (status.syncing || (status.enabled && !status.ready));
+  useEffect(() => {
+    if (!waiting && !requested) return;
+    const timer = window.setInterval(load, 4000);
+    return () => window.clearInterval(timer);
+  }, [waiting, requested, load]);
+  useEffect(() => {
+    if (status?.syncing) setRequested(false);
+  }, [status?.syncing]);
+
+  const syncNow = () => {
+    setRequested(true);
+    api.post("/api/cves/mirror/sync").then(load).catch((e) => {
+      setRequested(false);
+      notifyError(e);
+    });
+  };
+
+  if (!status) {
+    return <Text size="xs" c="dimmed" mt="xs">{t("cveLookup.privacy")}</Text>;
+  }
+
+  const when = (iso: string) => new Date(iso).toLocaleString(i18n.language, { dateStyle: "short", timeStyle: "short" });
+  const num = (n: number) => n.toLocaleString(i18n.language);
+  const current = status.current;
+  const feedName = (feed: string) => (feed === "modified" ? t("cveLookup.mirrorChanges") : feed);
+
+  return (
+    <Stack gap={6} mt="sm">
+      <Group gap="xs" wrap="wrap" align="flex-start">
+        <IconDatabase size={16} style={{ flexShrink: 0, marginTop: 2 }} color="var(--mantine-color-dimmed)" />
+        <Text size="xs" c="dimmed" style={{ flex: "1 1 220px" }}>
+          {status.ready
+            ? t("cveLookup.mirrorReady", { count: num(status.count), date: formatRelative(status.syncedAt), size: formatSize(status.sizeBytes) })
+            : !status.enabled
+              ? t("cveLookup.mirrorOff")
+              : t("cveLookup.mirrorLoading")}
+          {" "}
+          {t("cveLookup.privacyShort")}
+        </Text>
+        {can.operate && status.enabled && (
+          <Button size="compact-xs" variant="subtle" leftSection={<IconRefresh size={14} />} loading={status.syncing || requested} onClick={syncNow}>
+            {t("cveLookup.mirrorSync")}
+          </Button>
+        )}
+      </Group>
+      {current && (
+        <div>
+          <Text size="xs" c="dimmed" mb={4}>
+            {current.imported > 0
+              ? t("cveLookup.mirrorProgress", { feed: feedName(current.feed), done: current.done + 1, total: current.total, imported: num(current.imported) })
+              : t("cveLookup.mirrorProgressStart", { feed: feedName(current.feed), done: current.done + 1, total: current.total })}
+          </Text>
+          <Progress value={((current.done + 0.5) / Math.max(current.total, 1)) * 100} size="sm" animated />
+        </div>
+      )}
+      {status.lastError && (
+        <Text size="xs" c="orange">
+          {t("cveLookup.mirrorError", { date: status.lastErrorAt ? when(status.lastErrorAt) : "", error: status.lastError })}
+        </Text>
+      )}
+    </Stack>
   );
 }
 
@@ -309,6 +403,11 @@ function CveDetail({ id }: { id: string }) {
                 {main.vector}
               </Text>
             )}
+            <Text size="xs" c="dimmed" mt="xs">
+              {data.mirrorSyncedAt
+                ? t("cveLookup.fromMirror", { date: new Date(data.mirrorSyncedAt).toLocaleString(i18n.language, { dateStyle: "short", timeStyle: "short" }) })
+                : t("cveLookup.fromNvdLive")}
+            </Text>
           </>
         )}
       </Card>
@@ -494,13 +593,13 @@ function CveSearch({ query }: { query: string }) {
         <Card p={0}>
           <Text fw={600} p="md" pb={0}>{t("cveLookup.localHits")}</Text>
           <Text size="xs" c="dimmed" px="md" pb="xs">{t("cveLookup.localHitsHint")}</Text>
-          <HitTable hits={data.local} date={date} showDate={false} />
+          <HitTable hits={data.local} date={date} showDate={data.local.some((h) => h.published)} />
         </Card>
       )}
 
       {data.nvd.length > 0 && (
         <Card p={0}>
-          <Text fw={600} p="md" pb={0}>{t("cveLookup.nvdHits")}</Text>
+          <Text fw={600} p="md" pb={0}>{data.mirrorSyncedAt ? t("cveLookup.mirrorHits") : t("cveLookup.nvdHits")}</Text>
           <Text size="xs" c="dimmed" px="md" pb="xs">
             {t("cveLookup.nvdHitsHint", { shown: data.nvd.length, total: data.nvdTotal ?? data.nvd.length })}
           </Text>
@@ -518,7 +617,7 @@ function HitTable({ hits, date, showDate }: { hits: SearchHit[]; date: (iso: str
       <Table verticalSpacing="sm" highlightOnHover>
         <Table.Thead>
           <Table.Tr>
-            <Table.Th w={170}>CVE</Table.Th>
+            <Table.Th w={190}>CVE</Table.Th>
             <Table.Th w={150}>{t("security.rating")}</Table.Th>
             <Table.Th>{t("cveLookup.descriptionCol")}</Table.Th>
             {showDate && <Table.Th w={110}>{t("cveLookup.published")}</Table.Th>}
@@ -529,7 +628,7 @@ function HitTable({ hits, date, showDate }: { hits: SearchHit[]; date: (iso: str
           {hits.map((h) => (
             <Table.Tr key={h.id}>
               <Table.Td>
-                <Anchor component={Link} to={`/cves/${h.id}`} ff="monospace" size="sm" fw={600}>{h.id}</Anchor>
+                <Anchor component={Link} to={`/cves/${h.id}`} ff="monospace" size="sm" fw={600} style={{ whiteSpace: "nowrap" }}>{h.id}</Anchor>
               </Table.Td>
               <Table.Td>
                 <Group gap={4} wrap="wrap">

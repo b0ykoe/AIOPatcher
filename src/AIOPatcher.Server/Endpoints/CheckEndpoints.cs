@@ -135,6 +135,7 @@ public static class CheckEndpoints
         var targets = new List<(string Key, string Url, bool Enabled)>
         {
             ("osv", "https://api.osv.dev/v1/vulns/CVE-2024-3094", features.IsOn(Feature.CveLookup)),
+            ("nvd", CveMirror.FeedBaseUrl + "nvdcve-2.0-modified.meta", features.IsOn(Feature.CveLookup)),
             ("kev", "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json", features.IsOn(Feature.CveLookup)),
             ("epss", "https://api.first.org/data/v1/epss?cve=CVE-2024-3094", features.IsOn(Feature.CveLookup)),
             ("msrc", "https://api.msrc.microsoft.com/cvrf/v3.0/updates", features.IsOn(Feature.CveLookup)),

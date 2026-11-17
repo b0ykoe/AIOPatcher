@@ -11,16 +11,18 @@ using Microsoft.EntityFrameworkCore;
 namespace AIOPatcher.Server.Services.Security;
 
 /// <summary>
-/// CVE nachschlagen (Seite "CVE-Suche"): Beschreibung und CVSS von NVD, Fix-Versionen je Distribution von OSV.dev
-/// (Debian/Ubuntu), KBs je Windows-Version von Microsoft (Security Update Guide), dazu KEV/EPSS und die eigenen
-/// betroffenen Hosts. Abfragen nur auf Anforderung, Ergebnisse einige Stunden zwischengespeichert.
+/// CVE nachschlagen (Seite "CVE-Suche"): Beschreibung und CVSS aus der lokalen CVE-Datenbank (<see cref="CveMirror"/>,
+/// solange sie noch lädt: NVD live), Fix-Versionen je Distribution von OSV.dev (Debian/Ubuntu), KBs je Windows-Version
+/// von Microsoft (Security Update Guide), dazu KEV/EPSS und die eigenen betroffenen Hosts. OSV und Microsoft werden nur
+/// beim Aufruf gefragt, Ergebnisse einige Stunden zwischengespeichert.
 /// </summary>
 public sealed partial class CveLookupService(
     IHttpClientFactory httpFactory,
     AIOPatcherOptions options,
     CveService cves,
     ILogger<CveLookupService> logger,
-    FeatureFlags? features = null)
+    FeatureFlags? features = null,
+    CveMirror? mirror = null)
 {
     public sealed record CveScore(string Version, double BaseScore, string Severity, string? Vector, string? Source);
 
@@ -49,16 +51,21 @@ public sealed partial class CveLookupService(
         IReadOnlyList<SystemFix> Fixes,
         IReadOnlyList<AffectedHost> Hosts,
         bool ExternalDisabled,
-        IReadOnlyList<string> Unavailable);
+        IReadOnlyList<string> Unavailable,
+        DateTime? MirrorSyncedAt);
 
     public sealed record SearchHit(string Id, string? Description, DateTime? Published, double? Score, string? Severity, bool IsKev, double? Epss, int Hosts);
 
-    public sealed record SearchResult(IReadOnlyList<SearchHit> Local, IReadOnlyList<SearchHit> Nvd, int? NvdTotal, bool ExternalDisabled, IReadOnlyList<string> Unavailable);
+    /// <summary>Nvd: Treffer aus der lokalen CVE-Datenbank (MirrorSyncedAt gesetzt) bzw. live von NVD.</summary>
+    public sealed record SearchResult(
+        IReadOnlyList<SearchHit> Local, IReadOnlyList<SearchHit> Nvd, int? NvdTotal, bool ExternalDisabled, IReadOnlyList<string> Unavailable,
+        DateTime? MirrorSyncedAt);
 
     private static readonly TimeSpan DetailMaxAge = TimeSpan.FromHours(6);
     private static readonly TimeSpan SearchMaxAge = TimeSpan.FromHours(1);
     private const int MaxCacheEntries = 300;
     private const int NvdPageSize = 25;
+    private const int MirrorPageSize = 50;
 
     private readonly ConcurrentDictionary<string, (DateTime At, object Value)> _cache = new(StringComparer.OrdinalIgnoreCase);
 
@@ -89,24 +96,29 @@ public sealed partial class CveLookupService(
         var external = ExternalOn;
         var unavailable = new List<string>();
 
-        NvdRecord? nvd = null;
+        // Beschreibung und Bewertung aus der lokalen Datenbank; NVD live nur, solange sie fehlt oder die CVE ganz neu ist
+        var mirrorReady = mirror?.Ready == true;
+        var nvd = mirrorReady ? mirror!.Get(id) : null;
+        var fromMirror = nvd is not null;
         var fixes = new List<SystemFix>();
         var aliases = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         string? osvSummary = null;
 
         if (external)
         {
-            var cached = FromCache<ExternalData>("detail|" + id, DetailMaxAge);
+            var askNvd = nvd is null;
+            var cacheKey = "detail|" + id + (askNvd ? "|nvd" : "");
+            var cached = FromCache<ExternalData>(cacheKey, DetailMaxAge);
             if (cached is null)
             {
-                cached = await FetchExternalAsync(id, ct);
+                cached = await FetchExternalAsync(id, askNvd, ct);
                 if (cached.Unavailable.Count == 0)
                 {
-                    ToCache("detail|" + id, cached);
+                    ToCache(cacheKey, cached);
                 }
             }
 
-            nvd = cached.Nvd;
+            nvd ??= cached.Nvd;
             fixes.AddRange(cached.Fixes);
             aliases.UnionWith(cached.Aliases);
             osvSummary = cached.OsvSummary;
@@ -149,15 +161,18 @@ public sealed partial class CveLookupService(
             fixes,
             hosts,
             !external,
-            unavailable);
+            unavailable,
+            fromMirror ? mirror!.GetStatus().SyncedAt : null);
     }
 
     private sealed record ExternalData(NvdRecord? Nvd, List<SystemFix> Fixes, List<string> Aliases, string? OsvSummary, List<string> Unavailable);
 
-    private async Task<ExternalData> FetchExternalAsync(string id, CancellationToken ct)
+    private async Task<ExternalData> FetchExternalAsync(string id, bool askNvd, CancellationToken ct)
     {
         var escaped = Uri.EscapeDataString(id);
-        var nvdTask = GetJsonAsync("NVD", $"https://services.nvd.nist.gov/rest/json/cves/2.0?cveId={escaped}", nvdKey: true, ct);
+        var nvdTask = askNvd
+            ? GetJsonAsync("NVD", $"https://services.nvd.nist.gov/rest/json/cves/2.0?cveId={escaped}", nvdKey: true, ct)
+            : Task.FromResult<(JsonNode? Node, string? Failed)>((null, null));
         var osvTask = GetJsonAsync("OSV", $"https://api.osv.dev/v1/vulns/{escaped}", nvdKey: false, ct);
         var debianTask = GetJsonAsync("OSV", $"https://api.osv.dev/v1/vulns/DEBIAN-{escaped}", nvdKey: false, ct);
         var ubuntuTask = GetJsonAsync("OSV", $"https://api.osv.dev/v1/vulns/UBUNTU-{escaped}", nvdKey: false, ct);
@@ -242,9 +257,24 @@ public sealed partial class CveLookupService(
         }
 
         var local = await SearchLocalAsync(query, db, ct);
+        if (mirror?.Ready == true)
+        {
+            var (found, total) = query.Length >= 2 ? mirror.Search(query, MirrorPageSize) : ([], 0);
+            var foundIds = found.Select(h => h.Id).ToList();
+            var foundInfos = await db.CveInfos.AsNoTracking().Where(c => foundIds.Contains(c.Id)).ToDictionaryAsync(c => c.Id, ct);
+            var hostCounts = local.ToDictionary(h => h.Id, h => h.Hosts);
+            var mirrorHits = found.Select(h =>
+            {
+                var info = foundInfos.GetValueOrDefault(h.Id);
+                return new SearchHit(h.Id, h.Description, h.Published, h.Score, h.Severity, info?.IsKev == true,
+                    cves.EpssOf(h.Id)?.Epss ?? info?.Epss, hostCounts.GetValueOrDefault(h.Id));
+            }).ToList();
+            return new SearchResult(local, mirrorHits, total, !ExternalOn, [], mirror.GetStatus().SyncedAt);
+        }
+
         if (!ExternalOn || query.Length < 3)
         {
-            return new SearchResult(local, [], null, !ExternalOn, []);
+            return new SearchResult(local, [], null, !ExternalOn, [], null);
         }
 
         var key = "search|" + query;
@@ -253,7 +283,7 @@ public sealed partial class CveLookupService(
             var fetched = await SearchNvdAsync(query, ct);
             if (fetched is null)
             {
-                return new SearchResult(local, [], null, false, ["NVD"]);
+                return new SearchResult(local, [], null, false, ["NVD"], null);
             }
 
             nvd = fetched;
@@ -271,7 +301,7 @@ public sealed partial class CveLookupService(
             return new SearchHit(h.Id, h.Description, h.Published, score?.BaseScore, score?.Severity, info?.IsKev == true, epss, localCounts.GetValueOrDefault(h.Id));
         }).ToList();
 
-        return new SearchResult(local, hits, nvd.Total, false, []);
+        return new SearchResult(local, hits, nvd.Total, false, [], null);
     }
 
     /// <summary>Treffer in den eigenen Daten: CVEs der Hosts (nach CVE, Host, Paket/Update) und der KEV-Katalog (Hersteller/Produkt).</summary>
@@ -330,11 +360,13 @@ public sealed partial class CveLookupService(
 
         var ids = hostsByCve.Keys.Concat(kev.Select(k => k.Id)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         var infos = await db.CveInfos.AsNoTracking().Where(c => ids.Contains(c.Id)).ToDictionaryAsync(c => c.Id, StringComparer.OrdinalIgnoreCase, ct);
+        var details = mirror?.Ready == true ? mirror.GetMany(ids) : [];
 
         return ids.Select(id =>
             {
                 var info = infos.GetValueOrDefault(id);
-                return new SearchHit(id, info?.KevName, null, null, null, info?.IsKev == true,
+                var detail = details.GetValueOrDefault(id);
+                return new SearchHit(id, detail?.Description ?? info?.KevName, detail?.Published, detail?.Score, detail?.Severity, info?.IsKev == true,
                     cves.EpssOf(id)?.Epss ?? info?.Epss, hostsByCve.TryGetValue(id, out var h) ? h.Count : 0);
             })
             .OrderByDescending(h => h.Hosts > 0)
@@ -426,60 +458,75 @@ public sealed partial class CveLookupService(
         List<CveScore> Scores, List<string> Weaknesses, List<string> References);
 
     /// <summary>NVD API 2.0: vulnerabilities[].cve.</summary>
-    public static List<NvdRecord> ParseNvd(JsonNode root)
+    public static List<NvdRecord> ParseNvd(JsonNode root) =>
+        (root["vulnerabilities"] as JsonArray ?? []).Select(v => v?["cve"]).OfType<JsonObject>()
+            .Select(ParseNvdCve)
+            .OfType<NvdRecord>()
+            .ToList();
+
+    /// <summary>Ein Eintrag (vulnerabilities[].cve) aus API oder Datenfeed.</summary>
+    public static NvdRecord? ParseNvdCve(JsonObject cve)
     {
-        var result = new List<NvdRecord>();
-        foreach (var cve in (root["vulnerabilities"] as JsonArray ?? []).Select(v => v?["cve"]).OfType<JsonObject>())
+        var id = (string?)cve["id"];
+        if (id is null)
         {
-            var id = (string?)cve["id"];
-            if (id is null)
+            return null;
+        }
+
+        var description = (cve["descriptions"] as JsonArray ?? []).OfType<JsonObject>()
+            .OrderByDescending(d => (string?)d["lang"] == "en")
+            .Select(d => (string?)d["value"])
+            .FirstOrDefault();
+
+        var scores = new List<CveScore>();
+        var metrics = cve["metrics"] as JsonObject;
+        foreach (var (key, version) in new[] { ("cvssMetricV40", "4.0"), ("cvssMetricV31", "3.1"), ("cvssMetricV30", "3.0"), ("cvssMetricV2", "2.0") })
+        {
+            var metric = (metrics?[key] as JsonArray ?? []).OfType<JsonObject>()
+                .OrderByDescending(m => (string?)m["type"] == "Primary")
+                .FirstOrDefault();
+            var data = metric?["cvssData"];
+            if (data?["baseScore"] is not { } score)
             {
                 continue;
             }
 
-            var description = (cve["descriptions"] as JsonArray ?? []).OfType<JsonObject>()
-                .OrderByDescending(d => (string?)d["lang"] == "en")
-                .Select(d => (string?)d["value"])
-                .FirstOrDefault();
-
-            var scores = new List<CveScore>();
-            var metrics = cve["metrics"] as JsonObject;
-            foreach (var (key, version) in new[] { ("cvssMetricV40", "4.0"), ("cvssMetricV31", "3.1"), ("cvssMetricV30", "3.0"), ("cvssMetricV2", "2.0") })
-            {
-                var metric = (metrics?[key] as JsonArray ?? []).OfType<JsonObject>()
-                    .OrderByDescending(m => (string?)m["type"] == "Primary")
-                    .FirstOrDefault();
-                var data = metric?["cvssData"];
-                if (data?["baseScore"] is not { } score)
-                {
-                    continue;
-                }
-
-                var severity = (string?)data["baseSeverity"] ?? (string?)metric!["baseSeverity"] ?? "";
-                scores.Add(new CveScore(version, (double)score, severity.ToUpperInvariant(), (string?)data["vectorString"], (string?)metric!["source"]));
-            }
-
-            var weaknesses = (cve["weaknesses"] as JsonArray ?? []).OfType<JsonObject>()
-                .SelectMany(w => w["description"] as JsonArray ?? [])
-                .Select(d => (string?)d?["value"])
-                .Where(v => v is not null && v.StartsWith("CWE-", StringComparison.Ordinal))
-                .Select(v => v!)
-                .Distinct()
-                .ToList();
-
-            var references = (cve["references"] as JsonArray ?? []).Select(r => (string?)r?["url"])
-                .Where(u => u is not null && u.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
-                .Select(u => u!)
-                .Distinct()
-                .Take(30)
-                .ToList();
-
-            result.Add(new NvdRecord(id, description, ParseDate((string?)cve["published"]), ParseDate((string?)cve["lastModified"]),
-                (string?)cve["vulnStatus"], scores, weaknesses, references));
+            var severity = (string?)data["baseSeverity"] ?? (string?)metric!["baseSeverity"] ?? "";
+            scores.Add(new CveScore(version, (double)score, severity.ToUpperInvariant(), (string?)data["vectorString"], (string?)metric!["source"]));
         }
 
-        return result;
+        var weaknesses = (cve["weaknesses"] as JsonArray ?? []).OfType<JsonObject>()
+            .SelectMany(w => w["description"] as JsonArray ?? [])
+            .Select(d => (string?)d?["value"])
+            .Where(v => v is not null && v.StartsWith("CWE-", StringComparison.Ordinal))
+            .Select(v => v!)
+            .Distinct()
+            .ToList();
+
+        var references = (cve["references"] as JsonArray ?? []).Select(r => (string?)r?["url"])
+            .Where(u => u is not null && u.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+            .Select(u => u!)
+            .Distinct()
+            .Take(30)
+            .ToList();
+
+        return new NvdRecord(id, description, ParseDate((string?)cve["published"]), ParseDate((string?)cve["lastModified"]),
+            (string?)cve["vulnStatus"], scores, weaknesses, references);
     }
+
+    /// <summary>Hersteller und Produkte aus den CPE-Angaben ("cpe:2.3:a:microsoft:exchange_server:…" → "microsoft exchange server").</summary>
+    public static List<string> ParseNvdProducts(JsonObject cve) =>
+        (cve["configurations"] as JsonArray ?? []).OfType<JsonObject>()
+            .SelectMany(c => c["nodes"] as JsonArray ?? [])
+            .OfType<JsonObject>()
+            .SelectMany(n => n["cpeMatch"] as JsonArray ?? [])
+            .Select(m => (string?)m?["criteria"])
+            .Select(c => c?.Split(':'))
+            .Where(p => p is { Length: > 4 } && p[3] != "*" && p[4] != "*")
+            .Select(p => $"{p![3]} {p[4]}".Replace('_', ' ').Replace("\\", ""))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(30)
+            .ToList();
 
     public sealed record OsvRecord(string? Summary, List<string> Aliases, List<SystemFix> Fixes);
 

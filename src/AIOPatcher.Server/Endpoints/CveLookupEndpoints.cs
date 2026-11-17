@@ -1,15 +1,21 @@
 using AIOPatcher.Server.Data;
+using AIOPatcher.Server.Services;
 using AIOPatcher.Server.Services.Security;
 
 namespace AIOPatcher.Server.Endpoints;
 
-/// <summary>CVE-Suche: einzelne CVE nachschlagen oder nach Stichwort suchen (eigene Daten, KEV-Katalog, NVD).</summary>
+/// <summary>CVE-Suche: einzelne CVE nachschlagen oder nach Stichwort suchen (eigene Daten, KEV-Katalog, lokale CVE-Datenbank).</summary>
 public static class CveLookupEndpoints
 {
     public static void MapCveLookupEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/cves").RequireAuthorization();
         group.MapGet("/search", SearchAsync);
+        group.MapGet("/mirror", (CveMirror mirror) => Results.Ok(mirror.GetStatus()));
+        group.MapPost("/mirror/sync", (CveMirror mirror) => mirror.RequestSync()
+                ? Results.Accepted()
+                : Results.Conflict(new { error = L.T("Die lokale CVE-Datenbank ist abgeschaltet (Schalter „CVE-Abgleich“ bzw. AIOPatcher__CveMirrorEnabled).", "The local CVE database is disabled (switch “CVE lookup” or AIOPatcher__CveMirrorEnabled).") }))
+            .RequireAuthorization(UserAccounts.OperatorPolicy);
         group.MapGet("/{id}", LookupAsync);
     }
 

@@ -43,6 +43,12 @@ public sealed class AIOPatcherOptions
     /// </summary>
     public string? NvdApiKey { get; set; }
 
+    /// <summary>
+    /// Lokale CVE-Datenbank: lädt die NVD-Datenfeeds (alle CVEs, einmalig ca. 250 MB) und gleicht sie alle 2 Stunden ab.
+    /// Die CVE-Suche läuft dann lokal. Braucht zusätzlich den Schalter "CVE-Abgleich". false = aus (Suche fragt NVD live).
+    /// </summary>
+    public bool CveMirrorEnabled { get; set; } = true;
+
     /// <summary>Docker-Images gegen ihre Registry prüfen (anonym, nur öffentliche Images).</summary>
     public bool ContainerUpdateCheckEnabled { get; set; } = true;
 
@@ -85,4 +91,7 @@ public sealed class AIOPatcherOptions
     public string CaDirectory => Path.Combine(DataDirectory, "ca");
     public string DataProtectionDirectory => Path.Combine(DataDirectory, "dataprotection");
     public string BackupDirectory => Path.Combine(DataDirectory, "backups");
+
+    /// <summary>Wiederbeschaffbare Daten (lokale CVE-Datenbank); nicht Teil der Sicherungen.</summary>
+    public string CacheDirectory => Path.Combine(DataDirectory, "cache");
 }

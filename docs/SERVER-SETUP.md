@@ -275,8 +275,9 @@ Alle als Umgebungsvariable in `docker-compose.yml` (Standardwerte in Klammern):
 
 | Variable | Bedeutung |
 |---|---|
-| `AIOPatcher__CveLookupEnabled` (`true`) | CVE-Zuordnung und -Bewertung. Der Server fragt dafür **Paketnamen/Versionen bzw. KB-Nummern** (keine Hostnamen, keine IPs) bei `api.osv.dev`, `api.msrc.microsoft.com`, `www.cisa.gov`, `api.first.org` und `epss.empiricalsecurity.com` ab. Die CVE-Suche fragt zusätzlich `services.nvd.nist.gov` (nur CVE-Nummer bzw. Suchbegriff). |
-| `AIOPatcher__NvdApiKey` (leer) | Optionaler NVD-API-Schlüssel (kostenlos bei nvd.nist.gov) für die CVE-Suche. Ohne Schlüssel erlaubt NVD 5 Abfragen je 30 Sekunden, das reicht für gelegentliches Nachschlagen. |
+| `AIOPatcher__CveLookupEnabled` (`true`) | CVE-Zuordnung und -Bewertung. Der Server fragt dafür **Paketnamen/Versionen bzw. KB-Nummern** (keine Hostnamen, keine IPs) bei `api.osv.dev`, `api.msrc.microsoft.com`, `www.cisa.gov`, `api.first.org` und `epss.empiricalsecurity.com` ab. Dazu lädt er die NVD-Datenfeeds von `nvd.nist.gov` für die lokale CVE-Datenbank (nur Downloads, es wird nichts gesendet). |
+| `AIOPatcher__CveMirrorEnabled` (`true`) | Lokale CVE-Datenbank für die CVE-Suche: beim ersten Start alle CVEs aus den NVD-Datenfeeds (ca. 250 MB Download, rund 350 MB unter `data/cache/`, Import ca. 2 Minuten), danach alle 2 Stunden die Änderungen. `false` = Suche fragt NVD live (`services.nvd.nist.gov`, mit CVE-Nummer bzw. Suchbegriff). `data/cache/` muss nicht gesichert werden, `aiopatcher-update` lässt es aus der Sicherung heraus. |
+| `AIOPatcher__NvdApiKey` (leer) | Optionaler NVD-API-Schlüssel (kostenlos bei nvd.nist.gov) für Live-Abfragen bei NVD (ohne lokale CVE-Datenbank, oder solange sie zum ersten Mal lädt). Ohne Schlüssel erlaubt NVD 5 Abfragen je 30 Sekunden. |
 | `AIOPatcher__ContainerUpdateCheckEnabled` (`true`) | Image-Tags laufender Container gegen ihre Registry prüfen (anonym, nur öffentliche Images). |
 | `AIOPatcher__AgentAutoUpdate` (`true`) | Signierte Agent-Updates an ältere Agents anbieten (Release-Signatur oder Server-Schlüssel). `false` sperrt den Schalter „Agent-Self-Update“. |
 | `AIOPatcher__UpdateCheckRepository` (leer) | GitHub-Repository (`owner/name`), dessen Releases auf neue AIOPatcher-Versionen geprüft werden. Nur Hinweis, nichts wird installiert. |

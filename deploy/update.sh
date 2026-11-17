@@ -188,7 +188,8 @@ swap_in() {
   backup="$BASE/backups/data-$(date +%Y%m%d-%H%M%S).tar.gz"
   info "Halte AIOPatcher kurz an und sichere die Daten ($backup) ..."
   docker compose stop aiopatcher >/dev/null
-  tar -czpf "$backup" -C "$BASE" data
+  # data/cache (lokale CVE-Datenbank) lässt sich jederzeit neu laden und bleibt draußen
+  tar -czpf "$backup" -C "$BASE" --exclude=data/cache data
   chmod 600 "$backup"
   # nur die letzten Sicherungen behalten
   ls -1t "$BASE"/backups/data-*.tar.gz 2>/dev/null | tail -n +$((KEEP_BACKUPS + 1)) | xargs -r rm -f
@@ -212,6 +213,8 @@ swap_in() {
   rm -rf "$BASE/data.failed"
   mv "$BASE/data" "$BASE/data.failed"
   tar -xzpf "$backup" -C "$BASE"
+  # CVE-Datenbank nicht neu laden müssen (baut sich bei anderem Format selbst neu auf)
+  [ -d "$BASE/data.failed/cache" ] && mv "$BASE/data.failed/cache" "$BASE/data/cache"
   docker compose up -d aiopatcher >/dev/null
   if wait_healthy; then
     die "Update zurückgerollt, alte Version läuft wieder. Daten der fehlgeschlagenen Version: $BASE/data.failed"

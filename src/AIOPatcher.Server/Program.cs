@@ -167,6 +167,8 @@ builder.Services.AddHttpClient(CveService.HttpClientName, c =>
 });
 builder.Services.AddSingleton<CveService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<CveService>());
+builder.Services.AddSingleton<CveMirror>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<CveMirror>());
 builder.Services.AddSingleton<CveLookupService>();
 builder.Services.AddHostedService<ContainerUpdateService>();
 builder.Services.AddSingleton<ReleaseCheck>();

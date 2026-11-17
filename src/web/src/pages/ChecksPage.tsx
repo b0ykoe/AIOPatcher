@@ -202,7 +202,7 @@ export function ChecksPage() {
           action={<Button size="xs" variant="light" loading={running.has("external")} onClick={() => void runExternal()}>{t("checks.test")}</Button>}
         >
           <Stack gap="xs">
-            {["osv", "kev", "epss", "msrc", "dockerHub"].map((key) => (
+            {["nvd", "osv", "kev", "epss", "msrc", "dockerHub"].map((key) => (
               <Group key={key} justify="space-between" wrap="nowrap" align="flex-start">
                 <Text size="sm" w={200} style={{ flexShrink: 0 }}>{t(`checks.ext_${key}` as "checks.ext_osv")}</Text>
                 <div style={{ flex: 1 }}>
