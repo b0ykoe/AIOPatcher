@@ -28,9 +28,6 @@ public sealed class SelfMaintenance(AgentState state, ILogger<SelfMaintenance> l
 
     private static readonly TimeSpan SelfTestTimeout = TimeSpan.FromSeconds(90);
 
-    private DateTime _nextRenewAttempt = DateTime.MinValue;
-    private DateTime _nextUpdateAttempt = DateTime.MinValue;
-    private string? _lastSkipLogged;
     private bool _warnedKeyChange;
     private PendingSelfUpdate? _awaitingConfirmation;
 
@@ -66,7 +63,7 @@ public sealed class SelfMaintenance(AgentState state, ILogger<SelfMaintenance> l
         _awaitingConfirmation = UpdateState.Resume(state.Directory, AgentState.AgentVersion, BackupPath);
         if (_awaitingConfirmation is { } pending)
         {
-            logger.LogInformation("Updated from {From} to {To}. Waiting for the first check-in to confirm the update.", pending.FromVersion, pending.ToVersion);
+            logger.LogInformation("Updated from {From} to {To}. Waiting for the first successful poll to confirm the update.", pending.FromVersion, pending.ToVersion);
         }
         else if (UpdateState.LoadResult(state.Directory) is { Outcome: AgentUpdateOutcome.RolledBack } rolledBack)
         {
@@ -74,24 +71,22 @@ public sealed class SelfMaintenance(AgentState state, ILogger<SelfMaintenance> l
         }
     }
 
-    /// <summary>Was beim nächsten Check-in über Updates gemeldet wird (Ergebnis-Datei oder die Bestätigung dieses Starts).</summary>
-    public AgentUpdateReport? ReportForCheckin() =>
-        UpdateState.LoadResult(state.Directory)
-        ?? (_awaitingConfirmation is { } pending
-            ? new AgentUpdateReport(pending.FromVersion, pending.ToVersion, AgentUpdateOutcome.Installed, null, DateTime.UtcNow)
-            : null);
+    /// <summary>Ergebnis des letzten Self-Updates für die Antwort auf system.describe (null = nichts zu melden).</summary>
+    public AgentUpdateReport? ReportForDescribe() => UpdateState.LoadResult(state.Directory);
 
-    /// <summary>Nach jedem erfolgreichen Check-in: Bericht abhaken, Update bestätigen, Server-Schlüssel merken.</summary>
-    public void CheckinSucceeded(AgentUpdateReport? sent, string? serverUpdateKey)
+    /// <summary>Der Server hat die Antwort mit dem Bericht angenommen.</summary>
+    public void ReportDelivered() => UpdateState.DeleteResult(state.Directory);
+
+    /// <summary>
+    /// Nach jeder erfolgreichen Abfrage: Update bestätigen (die neue Version erreicht den Server), Server-Schlüssel merken.
+    /// Der Bericht darüber geht erst raus, wenn der Server danach fragt (system.describe).
+    /// </summary>
+    public void PollSucceeded(string? serverUpdateKey)
     {
-        if (sent is not null)
-        {
-            UpdateState.DeleteResult(state.Directory);
-        }
-
         if (_awaitingConfirmation is { } pending)
         {
             UpdateState.Confirm(state.Directory, BackupPath);
+            UpdateState.SaveResult(state.Directory, new AgentUpdateReport(pending.FromVersion, pending.ToVersion, AgentUpdateOutcome.Installed, null, DateTime.UtcNow));
             _awaitingConfirmation = null;
             logger.LogInformation("Update to {Version} confirmed.", pending.ToVersion);
         }
@@ -125,33 +120,25 @@ public sealed class SelfMaintenance(AgentState state, ILogger<SelfMaintenance> l
         }
     }
 
-    /// <summary>true = Agent wird neu gestartet (Aufrufer soll nichts mehr tun).</summary>
-    public async Task<bool> RenewCertificateAsync(ServerClient client, CancellationToken ct)
+    /// <summary>agent.renew, Schritt 1: neuer Schlüssel und CSR für die Antwort. Der Schlüssel bleibt bis Schritt 2 im Speicher.</summary>
+    public static (ECDsa Key, string CsrPem) CreateRenewal()
     {
-        if (DateTime.UtcNow < _nextRenewAttempt)
-        {
-            return false;
-        }
-
-        _nextRenewAttempt = DateTime.UtcNow.AddHours(12);
-        try
-        {
-            using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
-            var csr = new System.Security.Cryptography.X509Certificates.CertificateRequest(
-                $"CN={System.Net.Dns.GetHostName()}", key, HashAlgorithmName.SHA256).CreateSigningRequestPem();
-            var response = await client.RenewAsync(new RenewRequest(csr), ct);
-
-            AgentState.Save(state.Directory, state.Config, state.CaCertificate.ExportCertificatePem(), response.ClientCertificatePem, key);
-            logger.LogInformation("Client certificate renewed. Restarting agent to use it.");
-            Restart(watchdog: false);
-            return true;
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            logger.LogWarning("Certificate renewal failed: {Message}", ex.Message);
-            return false;
-        }
+        var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        var csr = new System.Security.Cryptography.X509Certificates.CertificateRequest(
+            $"CN={System.Net.Dns.GetHostName()}", key, HashAlgorithmName.SHA256).CreateSigningRequestPem();
+        return (key, csr);
     }
+
+    /// <summary>agent.renew, Schritt 2: Zertifikat aus der Rückgabe des Servers speichern, danach neu starten.</summary>
+    public void CompleteRenewal(string clientCertificatePem, ECDsa key)
+    {
+        AgentState.Save(state.Directory, state.Config, state.CaCertificate.ExportCertificatePem(), clientCertificatePem, key);
+        logger.LogInformation("Client certificate renewed. Restarting agent to use it.");
+        Restart(watchdog: false);
+    }
+
+    /// <summary>Nach der Antwort auf agent.update: neu starten, mit Wächter für das Rollback.</summary>
+    public void RestartAfterUpdate() => Restart(watchdog: true);
 
     /// <summary>
     /// Welcher Schlüssel prüft dieses Angebot? Null = Update nicht annehmen (mit Grund).
@@ -184,34 +171,30 @@ public sealed class SelfMaintenance(AgentState state, ILogger<SelfMaintenance> l
         return serverKey is null ? (null, "the server's update key is not known yet") : (serverKey, null);
     }
 
-    /// <summary>true = Update installiert, Agent startet neu.</summary>
-    public async Task<bool> TryUpdateAsync(ServerClient client, AgentUpdateOffer offer, CancellationToken ct)
+    /// <summary>
+    /// agent.update: prüfen, testen, tauschen. Startet NICHT neu (erst antworten, dann <see cref="RestartAfterUpdate"/>).
+    /// Rückgabe: (installiert?, Begründung für die Antwort).
+    /// </summary>
+    public async Task<(bool Installed, string Message)> TryUpdateAsync(ServerClient client, AgentUpdateOffer offer, CancellationToken ct)
     {
-        if (DateTime.UtcNow < _nextUpdateAttempt || _awaitingConfirmation is not null)
+        if (_awaitingConfirmation is not null)
         {
-            return false;
+            return (false, "Previous update not confirmed yet.");
         }
 
         var policy = AgentPolicy.Load(state.Directory);
         if (!policy.AllowSelfUpdate)
         {
-            return false;
+            return (false, "policy.json: allowSelfUpdate is false.");
         }
 
         var (key, reason) = ChooseKey(ReleaseKey, offer.SignedBy, policy.TrustServerUpdates, UpdateState.LoadServerKey(state.Directory));
         if (key is null)
         {
-            var skip = $"{offer.Version}:{reason}";
-            if (_lastSkipLogged != skip)
-            {
-                _lastSkipLogged = skip;
-                logger.LogInformation("Agent {Version} available, not installing automatically: {Reason}.", offer.Version, reason);
-            }
-
-            return false;
+            logger.LogInformation("Agent {Version} available, not installing automatically: {Reason}.", offer.Version, reason);
+            return (false, $"Not installed: {reason}.");
         }
 
-        _nextUpdateAttempt = DateTime.UtcNow.AddHours(6);
         var exe = Exe ?? throw new InvalidOperationException("Unknown executable path.");
         var temp = NewPath(exe);
         try
@@ -241,15 +224,14 @@ public sealed class SelfMaintenance(AgentState state, ILogger<SelfMaintenance> l
                 UpdateState.SaveResult(state.Directory, new AgentUpdateReport(AgentState.AgentVersion, offer.Version, AgentUpdateOutcome.Rejected,
                     $"Self-test failed: {output}", DateTime.UtcNow));
                 UpdateState.Delete(temp);
-                return false;
+                return (false, $"Self-test of {offer.Version} failed, keeping {AgentState.AgentVersion}.");
             }
 
             UpdateState.SavePending(state.Directory, new PendingSelfUpdate(AgentState.AgentVersion, offer.Version, DateTime.UtcNow));
             Replace(exe, temp, BackupPath!);
-            logger.LogInformation("Agent updated to {Version}. Restarting; the previous version is restored if the new one does not report within {Minutes} minutes.",
+            logger.LogInformation("Agent updated to {Version}. Restarting after the answer; the previous version is restored if the new one does not reach the server within {Minutes} minutes.",
                 offer.Version, UpdateState.ConfirmTimeout.TotalMinutes);
-            Restart(watchdog: true);
-            return true;
+            return (true, $"Installed {offer.Version}, restarting. Rollback if it does not reach the server within {UpdateState.ConfirmTimeout.TotalMinutes:0} minutes.");
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -262,7 +244,7 @@ public sealed class SelfMaintenance(AgentState state, ILogger<SelfMaintenance> l
             }
 
             UpdateState.Delete(Path.Combine(state.Directory, UpdateState.PendingFile));
-            return false;
+            return (false, $"Update failed: {ex.Message}");
         }
     }
 

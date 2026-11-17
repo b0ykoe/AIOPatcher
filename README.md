@@ -185,6 +185,7 @@ jeden Schalter selbst durch, auch für API-Tokens, Auto-Patch und Abläufe; ausg
 | Neustarts | an | Neustart-Jobs werden abgelehnt, Patches laufen ohne Neustart. |
 | Programm-Updates per winget | **aus** | Programm-Updates werden abgelehnt. |
 | Agent-Self-Update | an | Agents bekommen keine Updates angeboten. |
+| Alter Agent-Check-in | an | Agents vor dem Pull-Protokoll werden abgewiesen (erst abschalten, wenn alle aktualisiert sind). |
 | Test-Snapshots | an | Kein Test-Snapshot auf der Prüfen-Seite. |
 | OPNsense-Firmware-Update per Klick | **aus** | Firmware-Updates nur in der OPNsense selbst. |
 | API-Tokens | an | Jeder Token wird abgewiesen (bleibt gespeichert). |
@@ -202,6 +203,37 @@ AIOPatcher__LockedFeatures: "AppUpdates,OpnsenseUpdates"
 ```
 
 Gesperrte Funktionen sind aus und lassen sich im Dashboard nicht einschalten, auch nicht von einem Admin.
+
+## Pull-Agent und Module
+
+Der Agent ist ein reiner **Pull-Agent**: Er fragt den Server nach Aufträgen (`GET /agent/v2/poll`) und schickt Daten nur als
+Antwort auf genau einen Auftrag (Log-Zeilen und Ergebnis). Ungefragt sendet er nichts, auch kein Inventar. Der Server
+entscheidet, welche Daten er wann braucht, z. B. Systemdaten alle 15 Minuten und Updates, Programme, Container und
+Compliance alle 6 Stunden, nach einer Installation sofort.
+
+Jede Funktion ist ein **Modul** mit festen Aktionen. Andere Aufträge lehnt der Agent ab:
+
+| Modul | Aktionen |
+|---|---|
+| `system` | `describe`: OS, IPs, Neustart nötig, Module, Ergebnis des letzten Self-Updates |
+| `updates` | `scan`, `install`, `reboot` (apt bzw. Windows Update) |
+| `software` | `inventory`, `appupdate` (winget) |
+| `docker` | `inventory` |
+| `firewall`, `remoteaccess` | `status`, `change` |
+| `users` | `list`, `change` |
+| `agent` | `update` (Self-Update), `renew` (Client-Zertifikat) |
+
+Module lassen sich **pro Host** im Dashboard abschalten (Host → *Agent & Module*). Dann vergibt der Server dafür keine
+Aufträge mehr. Auf dem Host selbst sperrt `policy.json` Module endgültig:
+
+```bash
+sudo aiopatcher-agent policy set disabledModules docker,users
+```
+
+`system` und `agent` lassen sich nicht abschalten.
+
+**Übergang:** Agents vor dem Pull-Protokoll checken weiter wie bisher ein und aktualisieren sich per Self-Update. Die
+Prüfen-Seite zeigt, welche noch alt sind. Danach unter *Funktionen & Sicherheit* „Alter Agent-Check-in“ abschalten.
 
 ## Agent-Updates
 
@@ -285,7 +317,8 @@ Der Server kann sie nicht ändern; sie wird bei jedem Job neu gelesen.
   "allowSelfUpdate": true,
   "trustServerUpdates": true,
   "allowAppUpdates": true,
-  "allowSystemChanges": false
+  "allowSystemChanges": false,
+  "disabledModules": []
 }
 ```
 

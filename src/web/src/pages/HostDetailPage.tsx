@@ -34,6 +34,7 @@ import { CveCell } from "../components/CveCell";
 import { ContainerTable } from "../components/ContainerTable";
 import { SoftwareTab } from "../components/SoftwareTab";
 import { ComplianceTab } from "../components/compliance/ComplianceTab";
+import { AgentModulesCard } from "../components/AgentModulesCard";
 import { confirmAction, EmptyState, errorText, HostStatusLabel, notifyError, notifySuccess } from "../components/ui";
 
 export function HostDetailPage() {
@@ -290,6 +291,8 @@ export function HostDetailPage() {
       <AutoPatchCard host={h} onSaved={() => void load()} />
       {!simple && <MappingCard host={host} onSaved={() => void load()} />}
       <HoldModal opened={holdFor !== undefined} sites={[]} hosts={[h]} initial={holdFor} onClose={() => setHoldFor(undefined)} onSaved={() => void load()} />
+
+      {!simple && <AgentModulesCard hostId={h.id} protocol={host.agentProtocol} modules={host.modules ?? []} onChanged={() => void load()} />}
 
       <SimpleGrid cols={{ base: 2, sm: 3, lg: 5 }} spacing="md" mb="lg">
         <Fact label={t("hostDetail.hostname")} value={h.hostname} />

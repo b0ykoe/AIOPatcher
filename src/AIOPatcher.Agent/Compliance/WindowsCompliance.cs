@@ -42,16 +42,18 @@ public sealed class WindowsCompliance(ComplianceStore store) : IComplianceProvid
              Convert.ToBase64String(Encoding.Unicode.GetBytes("$ProgressPreference = 'SilentlyContinue'\n" + script))],
             Timeout, ct, stdin);
 
-    public async Task<ComplianceReport> CollectAsync(CancellationToken ct)
+    public async Task<IReadOnlyList<RemoteAccessSetting>> RemoteAccessAsync(CancellationToken ct)
     {
         var remote = RdpSettings();
         remote.AddRange(await OpenSshAsync(ct));
-        return new ComplianceReport(await FirewallAsync(ct), remote, await UsersAsync(ct), DateTime.UtcNow);
+        return remote;
     }
+
+    async Task<IReadOnlyList<LocalUser>> IComplianceProvider.UsersAsync(CancellationToken ct) => await UsersAsync(ct);
 
     // --- Lesen ----------------------------------------------------------------------------------------
 
-    private async Task<FirewallStatus> FirewallAsync(CancellationToken ct)
+    public async Task<FirewallStatus> FirewallAsync(CancellationToken ct)
     {
         const string script = """
             $ErrorActionPreference = 'Stop'

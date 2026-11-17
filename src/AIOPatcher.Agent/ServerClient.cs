@@ -39,14 +39,6 @@ public sealed class ServerClient : IDisposable
                ?? throw new InvalidDataException("Empty response from server.");
     }
 
-    public async Task<RenewResponse> RenewAsync(RenewRequest request, CancellationToken ct)
-    {
-        using var response = await _http.PostAsJsonAsync(AgentProtocol.RenewPath, request, AgentJsonContext.Default.RenewRequest, ct);
-        await EnsureSuccessAsync(response, ct);
-        return await response.Content.ReadFromJsonAsync(AgentJsonContext.Default.RenewResponse, ct)
-               ?? throw new InvalidDataException("Empty response from server.");
-    }
-
     /// <summary>Lädt eine Datei vom Server (nur relative Pfade unter /agent/).</summary>
     public async Task DownloadAsync(string path, string target, CancellationToken ct)
     {
@@ -61,14 +53,6 @@ public sealed class ServerClient : IDisposable
         await response.Content.CopyToAsync(file, ct);
     }
 
-    public async Task<CheckinResponse> CheckinAsync(CheckinRequest request, CancellationToken ct)
-    {
-        using var response = await _http.PostAsJsonAsync(AgentProtocol.CheckinPath, request, AgentJsonContext.Default.CheckinRequest, ct);
-        await EnsureSuccessAsync(response, ct);
-        return await response.Content.ReadFromJsonAsync(AgentJsonContext.Default.CheckinResponse, ct)
-               ?? throw new InvalidDataException("Empty response from server.");
-    }
-
     public async Task<HelloResponse> HelloAsync(CancellationToken ct)
     {
         using var response = await _http.GetAsync(AgentProtocol.HelloPath, ct);
@@ -77,16 +61,34 @@ public sealed class ServerClient : IDisposable
                ?? throw new InvalidDataException("Empty response from server.");
     }
 
-    public async Task AppendJobLogAsync(Guid jobId, JobLogRequest request, CancellationToken ct)
+    // --- Pull: abholen und antworten. Andere Aufrufe hat der Agent nicht (außer Registrierung und Downloads). ---
+
+    /// <summary>Auftrag abholen. running: Auftrag, den der Agent noch bearbeitet (z. B. über einen Neustart hinweg).</summary>
+    public async Task<PollResponse> PollAsync(Guid? running, CancellationToken ct)
     {
-        using var response = await _http.PostAsJsonAsync(AgentProtocol.JobLogPath(jobId), request, AgentJsonContext.Default.JobLogRequest, ct);
+        using var request = new HttpRequestMessage(HttpMethod.Get, running is { } id ? $"{PullProtocol.PollPath}?running={id}" : PullProtocol.PollPath);
+        request.Headers.Add(PullProtocol.VersionHeader, AgentState.AgentVersion);
+        using var response = await _http.SendAsync(request, ct);
+        await EnsureSuccessAsync(response, ct);
+        return await response.Content.ReadFromJsonAsync(PullJsonContext.Default.PollResponse, ct)
+               ?? throw new InvalidDataException("Empty response from server.");
+    }
+
+    /// <summary>Log-Zeilen als Teil der Antwort auf einen Auftrag.</summary>
+    public async Task SendTaskLogAsync(Guid taskId, JobLogRequest lines, CancellationToken ct)
+    {
+        using var response = await _http.PostAsJsonAsync(PullProtocol.TaskLogPath(taskId), lines, PullJsonContext.Default.JobLogRequest, ct);
         await EnsureSuccessAsync(response, ct);
     }
 
-    public async Task SendJobResultAsync(Guid jobId, JobResultRequest request, CancellationToken ct)
+    /// <summary>Antwort auf einen Auftrag.</summary>
+    public async Task<TaskResultResponse> SendTaskResultAsync(Guid taskId, TaskResultRequest result, CancellationToken ct)
     {
-        using var response = await _http.PostAsJsonAsync(AgentProtocol.JobResultPath(jobId), request, AgentJsonContext.Default.JobResultRequest, ct);
+        using var response = await _http.PostAsJsonAsync(PullProtocol.TaskResultPath(taskId), result, PullJsonContext.Default.TaskResultRequest, ct);
         await EnsureSuccessAsync(response, ct);
+        return response.Content.Headers.ContentLength is 0
+            ? new TaskResultResponse()
+            : await response.Content.ReadFromJsonAsync(PullJsonContext.Default.TaskResultResponse, ct) ?? new TaskResultResponse();
     }
 
     private static async Task EnsureSuccessAsync(HttpResponseMessage response, CancellationToken ct)

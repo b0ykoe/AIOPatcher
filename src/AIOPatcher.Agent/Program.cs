@@ -3,6 +3,7 @@ using AIOPatcher.Agent;
 using AIOPatcher.Agent.Commands;
 using AIOPatcher.Agent.Inventory;
 using AIOPatcher.Agent.Jobs;
+using AIOPatcher.Agent.Modules;
 using AIOPatcher.Agent.Platforms.Apt;
 using AIOPatcher.Agent.Platforms.Windows;
 using AIOPatcher.Contracts;
@@ -51,12 +52,16 @@ switch (commandLine.Command)
 
     case "scan":
     {
-        // Diagnose: zeigt, was der Agent beim nächsten Check-in melden würde (ohne Server).
+        // Diagnose: zeigt, was das Modul "updates" auf einen Scan-Auftrag antworten würde (ohne Server).
         using var loggerFactory = LoggerFactory.Create(l => l.AddSimpleConsole(o => o.SingleLine = true));
         var inventory = CreateInventory(loggerFactory);
-        var updates = commandLine.Has("no-updates") ? null : await inventory.ScanUpdatesAsync(cts.Token);
-        var request = await CheckinService.BuildRequestAsync(inventory, updates, cts.Token);
-        Console.WriteLine(JsonSerializer.Serialize(request, AgentJsonContext.Default.CheckinRequest));
+        var info = await inventory.GetSystemInfoAsync(cts.Token);
+        Console.WriteLine($"{info.OsName} {info.OsVersion}, reboot required: {info.RebootRequired}");
+        if (!commandLine.Has("no-updates") && await inventory.ScanUpdatesAsync(cts.Token) is { } updates)
+        {
+            Console.WriteLine(JsonSerializer.Serialize(new UpdateScanResult(updates), PullJsonContext.Default.UpdateScanResult));
+        }
+
         return 0;
     }
 
@@ -93,7 +98,19 @@ switch (commandLine.Command)
         builder.Services.AddSingleton<IPatchPlatform>(_ => OperatingSystem.IsWindows() ? new WindowsPatcher() : new AptPatcher());
         builder.Services.AddSingleton<JobExecutor>();
         builder.Services.AddSingleton<AIOPatcher.Agent.Maintenance.SelfMaintenance>();
-        builder.Services.AddHostedService<CheckinService>();
+
+        // Module: jedes kennt nur seine festen Aktionen (siehe AIOPatcher.Contracts.AgentModules).
+        builder.Services.AddSingleton<IAgentModule>(sp => new SystemModule(sp.GetRequiredService<IPlatformInventory>(),
+            sp.GetRequiredService<AIOPatcher.Agent.Maintenance.SelfMaintenance>(), () => sp.GetRequiredService<ModuleHost>()));
+        builder.Services.AddSingleton<IAgentModule, UpdatesModule>();
+        builder.Services.AddSingleton<IAgentModule, SoftwareModule>();
+        builder.Services.AddSingleton<IAgentModule, DockerModule>();
+        builder.Services.AddSingleton<IAgentModule, FirewallModule>();
+        builder.Services.AddSingleton<IAgentModule, RemoteAccessModule>();
+        builder.Services.AddSingleton<IAgentModule, UsersModule>();
+        builder.Services.AddSingleton<IAgentModule, AgentSelfModule>();
+        builder.Services.AddSingleton<ModuleHost>();
+        builder.Services.AddHostedService<PollService>();
 
         await builder.Build().RunAsync(cts.Token);
         return 0;

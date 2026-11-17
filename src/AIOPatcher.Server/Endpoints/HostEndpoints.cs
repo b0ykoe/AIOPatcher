@@ -78,7 +78,14 @@ public static class HostEndpoints
         string? IntegrationName,
         string? ExternalId,
         IReadOnlyList<ContainerDto> Containers,
-        AgentUpdateDto? AgentUpdate = null);
+        AgentUpdateDto? AgentUpdate = null,
+        int AgentProtocol = 0,
+        IReadOnlyList<HostModuleDto>? Modules = null);
+
+    /// <summary>Modul des Agents: vorhanden, lokal (policy.json) oder im Dashboard abgeschaltet. Required = nicht abschaltbar.</summary>
+    public sealed record HostModuleDto(string Id, bool Available, bool DisabledLocally, bool DisabledInDashboard, bool Required, IReadOnlyList<string> Actions);
+
+    public sealed record ModuleToggleRequest(bool Enabled);
 
     /// <summary>Available: Server hat eine neuere Agent-Version. Blocked: diese ist hier gescheitert und wird nicht erneut angeboten.</summary>
     public sealed record AgentUpdateDto(
@@ -137,6 +144,7 @@ public static class HostEndpoints
                 releases.Latest?.Version, releases.Latest?.Url, releases.UpdateAvailable));
         op.MapPost("/hosts/{id:guid}/revoke", RevokeHost);
         op.MapPost("/hosts/{id:guid}/agent-update/retry", RetryAgentUpdate);
+        op.MapPut("/hosts/{id:guid}/modules/{module}", ToggleModule);
         op.MapDelete("/hosts/{id:guid}", DeleteHost).RequireAuthorization(UserAccounts.AdminPolicy);
 
         api.MapGet("/enrollment-tokens", GetEnrollmentTokens);
@@ -258,7 +266,44 @@ public static class HostEndpoints
             host.AgentUpdateOutcome, host.AgentUpdateFromVersion, host.AgentUpdateToVersion, host.AgentUpdateMessage, host.AgentUpdateAt);
 
         return Results.Ok(new HostDetailDto(summary, host.KernelVersion, host.Uptime, host.EnrolledAt, host.CertificateExpiresAt, updates, addresses,
-            host.IntegrationId, host.Integration?.Name, host.ExternalId, await ContainersAsync(db, id, ct), agentUpdate));
+            host.IntegrationId, host.Integration?.Name, host.ExternalId, await ContainersAsync(db, id, ct), agentUpdate,
+            host.ProtocolVersion, ModulesOf(host)));
+    }
+
+    private static List<HostModuleDto> ModulesOf(ManagedHost host)
+    {
+        var disabled = AIOPatcher.Server.Services.Modules.ModuleJson.DisabledInDashboard(host);
+        var reported = AIOPatcher.Server.Services.Modules.ModuleJson.Reported(host).ToDictionary(m => m.Id);
+        return AgentModules.All.Select(id => reported.TryGetValue(id, out var m)
+                ? new HostModuleDto(id, m.Available, m.DisabledLocally, disabled.Contains(id), AgentModules.Required.Contains(id), m.Actions)
+                : new HostModuleDto(id, false, false, disabled.Contains(id), AgentModules.Required.Contains(id), []))
+            .Where(m => reported.Count == 0 || reported.ContainsKey(m.Id) || m.DisabledInDashboard)
+            .ToList();
+    }
+
+    /// <summary>Modul für diesen Host an/aus. Aus = der Server vergibt keine Aufträge dafür (Daten und Jobs).</summary>
+    private static async Task<IResult> ToggleModule(Guid id, string module, ModuleToggleRequest request, AppDbContext db, AuditLog audit, CancellationToken ct)
+    {
+        if (!AgentModules.All.Contains(module) || AgentModules.Required.Contains(module))
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]> { ["module"] = [L.T("Dieses Modul lässt sich nicht abschalten.", "This module cannot be turned off.")] });
+        }
+
+        var host = await db.Hosts.FindAsync([id], ct);
+        if (host is null)
+        {
+            return Results.NotFound();
+        }
+
+        var disabled = AIOPatcher.Server.Services.Modules.ModuleJson.DisabledInDashboard(host);
+        if (request.Enabled ? disabled.Remove(module) : disabled.Add(module))
+        {
+            host.DisabledModules = disabled.Count == 0 ? null : string.Join(',', disabled.Order());
+            audit.Add(request.Enabled ? "host.module.enabled" : "host.module.disabled", $"{host.Name}: {module}", siteId: host.SiteId, hostId: host.Id);
+            await db.SaveChangesAsync(ct);
+        }
+
+        return Results.NoContent();
     }
 
     /// <summary>Gescheiterte Agent-Version wieder anbieten (z. B. nachdem die Ursache behoben ist).</summary>

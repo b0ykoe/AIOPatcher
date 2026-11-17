@@ -20,7 +20,8 @@ export type Feature =
   | "ComplianceChecks"
   | "FirewallManagement"
   | "RemoteAccessFixes"
-  | "UserManagement";
+  | "UserManagement"
+  | "LegacyAgentProtocol";
 
 export interface FeatureState {
   feature: Feature;

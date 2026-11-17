@@ -17,6 +17,52 @@ namespace AIOPatcher.Server.Data.Migrations
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.15");
 
+            modelBuilder.Entity("AIOPatcher.Server.Data.AgentTaskRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("FinishedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("HostId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("JobId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Module")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Summary")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.HasIndex("HostId", "Status");
+
+                    b.ToTable("AgentTasks", (string)null);
+                });
+
             modelBuilder.Entity("AIOPatcher.Server.Data.ApiToken", b =>
                 {
                     b.Property<Guid>("Id")
@@ -608,6 +654,10 @@ namespace AIOPatcher.Server.Data.Migrations
                     b.Property<string>("AgentVersion")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("Architecture")
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
                     b.Property<bool>("AutoPatchEnabled")
                         .HasColumnType("INTEGER");
 
@@ -628,6 +678,10 @@ namespace AIOPatcher.Server.Data.Migrations
                     b.Property<string>("CertificateThumbprint")
                         .IsRequired()
                         .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DisabledModules")
+                        .HasMaxLength(500)
                         .HasColumnType("TEXT");
 
                     b.Property<DateTime>("EnrolledAt")
@@ -712,8 +766,15 @@ namespace AIOPatcher.Server.Data.Migrations
                         .HasMaxLength(128)
                         .HasColumnType("TEXT");
 
+                    b.Property<int>("ProtocolVersion")
+                        .HasColumnType("INTEGER");
+
                     b.Property<bool>("RebootRequired")
                         .HasColumnType("INTEGER");
+
+                    b.Property<string>("ReportedModules")
+                        .HasMaxLength(4000)
+                        .HasColumnType("TEXT");
 
                     b.Property<Guid>("SiteId")
                         .HasColumnType("TEXT");
@@ -1433,6 +1494,17 @@ namespace AIOPatcher.Server.Data.Migrations
                     b.HasKey("Key");
 
                     b.ToTable("FeatureToggles");
+                });
+
+            modelBuilder.Entity("AIOPatcher.Server.Data.AgentTaskRecord", b =>
+                {
+                    b.HasOne("AIOPatcher.Server.Data.ManagedHost", "Host")
+                        .WithMany()
+                        .HasForeignKey("HostId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Host");
                 });
 
             modelBuilder.Entity("AIOPatcher.Server.Data.ContainerInfo", b =>

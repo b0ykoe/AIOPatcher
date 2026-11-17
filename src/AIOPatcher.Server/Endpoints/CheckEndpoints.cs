@@ -108,6 +108,16 @@ public static class CheckEndpoints
                             $"Agents {AgentDownloads.AgentVersion} present. No release signature: this server signs updates (hosts can refuse via policy.json)."))
                         : (CheckStatus.Ok, L.T($"Alle Agents vorhanden und mit Release-Schlüssel signiert (Version {AgentDownloads.AgentVersion}).", $"All agents present and signed with the release key (version {AgentDownloads.AgentVersion}).")));
             }),
+            await Measure("agentProtocol", async () =>
+            {
+                var legacy = await db.Hosts.Where(h => !h.IsRevoked && h.ProtocolVersion == 1).Select(h => h.Name).ToListAsync();
+                var pull = await db.Hosts.CountAsync(h => !h.IsRevoked && h.ProtocolVersion == AIOPatcher.Contracts.PullProtocol.Version);
+                return legacy.Count == 0
+                    ? (CheckStatus.Ok, L.T($"Alle Agents holen Aufträge ab (Pull): {pull}.", $"All agents pull their tasks: {pull}."))
+                    : (CheckStatus.Warning, L.T(
+                        $"{legacy.Count} Agent(s) mit altem Check-in (senden ungefragt Daten): {string.Join(", ", legacy.Take(10))}. Self-Update an lassen oder Installationsbefehl erneut ausführen; danach „Alter Agent-Check-in“ abschalten.",
+                        $"{legacy.Count} agent(s) on the legacy check-in (send data unasked): {string.Join(", ", legacy.Take(10))}. Keep self-update on or re-run the install command; then turn off \"Legacy agent check-in\"."));
+            }),
             await Measure("clientIp", () =>
             {
                 var (ok, message) = TrustedProxies.Describe(http);

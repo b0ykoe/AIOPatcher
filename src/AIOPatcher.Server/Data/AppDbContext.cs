@@ -33,6 +33,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<HostVulnerability> HostVulnerabilities => Set<HostVulnerability>();
     public DbSet<AIOPatcher.Server.Services.FeatureToggle> FeatureToggles => Set<AIOPatcher.Server.Services.FeatureToggle>();
     public DbSet<HostCompliance> HostCompliance => Set<HostCompliance>();
+    public DbSet<AgentTaskRecord> AgentTasks => Set<AgentTaskRecord>();
     public DbSet<FirewallProfile> FirewallProfiles => Set<FirewallProfile>();
     public DbSet<FirewallProfileVersion> FirewallProfileVersions => Set<FirewallProfileVersion>();
 
@@ -70,6 +71,9 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             e.Property(x => x.AgentUpdateToVersion).HasMaxLength(32);
             e.Property(x => x.AgentUpdateBlockedVersion).HasMaxLength(32);
             e.Property(x => x.AgentUpdateMessage).HasMaxLength(1000);
+            e.Property(x => x.ReportedModules).HasMaxLength(4000);
+            e.Property(x => x.DisabledModules).HasMaxLength(500);
+            e.Property(x => x.Architecture).HasMaxLength(16);
             e.HasIndex(x => x.CertificateThumbprint).IsUnique();
             e.HasIndex(x => new { x.SiteId, x.Name });
             e.HasOne(x => x.Site).WithMany(s => s.Hosts).HasForeignKey(x => x.SiteId).OnDelete(DeleteBehavior.Restrict);
@@ -206,6 +210,17 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             e.HasKey(x => x.Key);
             e.Property(x => x.Key).HasMaxLength(64);
             e.Property(x => x.ChangedBy).HasMaxLength(100);
+        });
+
+        b.Entity<AgentTaskRecord>(e =>
+        {
+            e.ToTable("AgentTasks");
+            e.HasOne(x => x.Host).WithMany().HasForeignKey(x => x.HostId).OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(x => new { x.HostId, x.Status });
+            e.HasIndex(x => x.CreatedAt);
+            e.Property(x => x.Module).HasMaxLength(32);
+            e.Property(x => x.Action).HasMaxLength(32);
+            e.Property(x => x.Summary).HasMaxLength(2000);
         });
 
         b.Entity<HostCompliance>(e =>

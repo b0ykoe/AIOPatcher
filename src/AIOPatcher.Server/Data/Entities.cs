@@ -67,6 +67,19 @@ public sealed class ManagedHost
     /// <summary>Diese Version ist auf dem Host gescheitert und wird nicht erneut angeboten (bis "Erneut versuchen").</summary>
     public string? AgentUpdateBlockedVersion { get; set; }
 
+    // Pull-Agent (Protokoll v2). Wann was angefordert wurde, steht in AgentTasks.
+    /// <summary>1 = alter Check-in (Push), 2 = Pull-Agent. 0 = noch nie gemeldet.</summary>
+    public int ProtocolVersion { get; set; }
+
+    /// <summary>"x64" oder "arm64" (für das passende Update-Binary).</summary>
+    public string? Architecture { get; set; }
+
+    /// <summary>Module laut Agent (JSON-Liste von <see cref="AIOPatcher.Contracts.ModuleInfo"/>).</summary>
+    public string? ReportedModules { get; set; }
+
+    /// <summary>Im Dashboard abgeschaltete Module (kommagetrennt). Für die gibt es keine Aufträge.</summary>
+    public string? DisabledModules { get; set; }
+
     /// <summary>Zuletzt erfolgreich ausgerollte Firewall-Version (null = keine bzw. Original wiederhergestellt).</summary>
     public Guid? FirewallVersionId { get; set; }
     public DateTime? FirewallAppliedAt { get; set; }

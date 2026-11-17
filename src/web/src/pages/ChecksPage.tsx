@@ -167,6 +167,7 @@ export function ChecksPage() {
     database: t("checks.database"),
     agentBuilds: t("checks.agentBuilds"),
     clientIp: t("checks.clientIp"),
+    agentProtocol: t("checks.agentProtocol"),
   };
 
   return (

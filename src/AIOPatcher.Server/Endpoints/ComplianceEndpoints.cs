@@ -125,6 +125,20 @@ public static class ComplianceEndpoints
     private static SystemChange? Deserialize(string? payload) =>
         payload is null ? null : JsonSerializer.Deserialize(payload, AgentJsonContext.Default.SystemChange);
 
+    /// <summary>Pull-Agent: Firewall, SSH/RDP und Benutzer kommen aus eigenen Modulen. Fehlende Teile bleiben wie gespeichert.</summary>
+    public static async Task StorePartAsync(AppDbContext db, ManagedHost host, DateTime now, CancellationToken ct,
+        FirewallStatus? firewall = null, IReadOnlyList<RemoteAccessSetting>? remoteAccess = null, IReadOnlyList<LocalUser>? users = null)
+    {
+        var row = await db.HostCompliance.AsNoTracking().SingleOrDefaultAsync(r => r.HostId == host.Id, ct);
+        var current = row is null ? null : JsonSerializer.Deserialize(row.Json, AgentJsonContext.Default.ComplianceReport);
+        var report = new ComplianceReport(
+            firewall ?? current?.Firewall ?? new FirewallStatus("unknown", false, false, null, null, [], 0, null, false),
+            remoteAccess ?? current?.RemoteAccess ?? [],
+            users ?? current?.Users ?? [],
+            now);
+        await StoreAsync(db, host, report, now, ct);
+    }
+
     public static async Task StoreAsync(AppDbContext db, ManagedHost host, ComplianceReport report, DateTime now, CancellationToken ct)
     {
         // Größen begrenzen: ein Agent soll die DB nicht fluten können.

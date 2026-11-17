@@ -33,7 +33,8 @@ Ein Admin, mehrere Sites, Linux- und Windows-Server, IPAM light.
 | Dashboard-Port | `9443`, nur intern/VPN | Keine Angriffsfläche nach außen |
 | Login | Ein lokaler Admin, Passwort + TOTP (Pflicht). Ersteinrichtung nur mit Setup-Token aus dem Server-Log | Kein IdP vorhanden |
 | Mandanten | `Site` über allem: Hosts, Subnetze, Tokens, Einstellungen | Mehrere Kunden möglich, ein Admin |
-| IPAM | Subnetze manuell, IPs aus Agent-Check-ins, eindeutig pro Site | Überlappende Kundennetze |
+| IPAM | Subnetze manuell, IPs aus den Antworten der Agents (system.describe), eindeutig pro Site | Überlappende Kundennetze |
+| Agent-Protokoll | Pull: Agent holt Aufträge ab (`/agent/v2/poll`) und antwortet nur darauf; Module mit festen Aktionen, pro Host schaltbar. Alter Check-in (v1) nur für den Übergang | Agent sendet nie ungefragt Daten |
 
 ## Sicherheitsprinzipien
 
@@ -83,6 +84,8 @@ Zertifikatserneuerung, IPAM light, OPNsense, CI/Release
 
 **v0.3** Agent-Update mit Server-Schlüssel, Selbsttest und Rollback; Installations-Crash-Check; Compliance (Firewall-Regelsätze
 mit Versionen, SSH/RDP-Empfehlungen, lokale Benutzer), alles hinter Schaltern und lokaler Freigabe
+
+**v0.4** Pull-Agent (Protokoll v2) mit Modulen in Agent und Server, Module pro Host schaltbar, alter Check-in hinter Schalter
 
 **Offen / Ideen:** Passkeys, Rollen pro Site (Kunden-Logins), Patch-Fenster pro Tag-Gruppe, Snapshot-Rollback per Klick,
 Container-Updates ausführen, Debian-/Ubuntu-Changelogs im Dashboard, Code-Splitting im Frontend

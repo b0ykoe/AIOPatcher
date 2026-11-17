@@ -23,6 +23,9 @@ public enum Feature
     /// <summary>Firewall, SSH/RDP und Benutzer erfassen (nur lesen).</summary>
     ComplianceChecks,
 
+    /// <summary>Alter Check-in (Agents vor dem Pull-Protokoll schicken ungefragt Daten). Übergang, bis alle aktualisiert sind.</summary>
+    LegacyAgentProtocol,
+
     /// <summary>Firewall-Regelsätze ausrollen und wiederherstellen.</summary>
     FirewallManagement,
 
@@ -67,6 +70,7 @@ public sealed class FeatureFlags(AIOPatcherOptions options)
         new(Feature.Reboots, true, FeatureRisk.Medium, "hosts"),
         new(Feature.AppUpdates, false, FeatureRisk.High, "hosts"),
         new(Feature.AgentSelfUpdate, true, FeatureRisk.Medium, "hosts"),
+        new(Feature.LegacyAgentProtocol, true, FeatureRisk.Medium, "hosts"),
         new(Feature.SnapshotTests, true, FeatureRisk.Low, "integrations"),
         new(Feature.OpnsenseUpdates, false, FeatureRisk.High, "integrations"),
         new(Feature.ApiTokens, true, FeatureRisk.Medium, "access"),
@@ -179,6 +183,7 @@ public sealed class FeatureFlags(AIOPatcherOptions options)
         Feature.ContainerChecks => german ? "Container-Prüfung" : "Container checks",
         Feature.ReleaseCheck => german ? "Versionsprüfung" : "Version check",
         Feature.ComplianceChecks => german ? "Compliance-Prüfung" : "Compliance checks",
+        Feature.LegacyAgentProtocol => german ? "Alter Agent-Check-in" : "Legacy agent check-in",
         Feature.FirewallManagement => german ? "Firewall verwalten" : "Manage firewalls",
         Feature.RemoteAccessFixes => german ? "SSH/RDP korrigieren" : "Fix SSH/RDP",
         Feature.UserManagement => german ? "Benutzer verwalten" : "Manage users",

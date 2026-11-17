@@ -169,6 +169,18 @@ export interface HostDetail {
   externalId: string | null;
   containers: ContainerItem[];
   agentUpdate: AgentUpdateInfo | null;
+  /** 1 = alter Check-in (Push), 2 = Pull-Agent, 0 = noch nie gemeldet. */
+  agentProtocol: number;
+  modules: HostModule[] | null;
+}
+
+export interface HostModule {
+  id: string;
+  available: boolean;
+  disabledLocally: boolean;
+  disabledInDashboard: boolean;
+  required: boolean;
+  actions: string[];
 }
 
 export type AgentUpdateOutcome = "Installed" | "RolledBack" | "Rejected";

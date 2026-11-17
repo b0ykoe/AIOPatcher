@@ -21,13 +21,18 @@ public enum PatchPermission
 /// Updates annehmen, die der AIOPatcher-Server selbst signiert hat (Image ohne Release-Schlüssel). false = nur noch per
 /// Installationsbefehl aktualisieren. Agents mit eingebautem Release-Schlüssel ignorieren Server-Signaturen ohnehin.
 /// </param>
+/// <param name="DisabledModules">Module, die auf diesem Host nie laufen (z. B. "users", "firewall"); Aufträge dafür lehnt der Agent ab.</param>
 /// <param name="AllowSystemChanges">
 /// Firewall, SSH/RDP-Einstellungen und lokale Benutzer ändern lassen. Ab Werk aus: Diese Aktionen können einen Host
 /// aussperren oder übernehmen, daher muss sie jeder Host selbst freigeben (zusätzlich zu den Schaltern im Dashboard).
 /// </param>
 public sealed record AgentPolicy(PatchPermission AllowPatch = PatchPermission.All, bool AllowReboot = true, bool AllowSelfUpdate = true, bool AllowAppUpdates = true, bool TrustServerUpdates = true,
-    bool AllowSystemChanges = false)
+    bool AllowSystemChanges = false, IReadOnlyList<string>? DisabledModules = null)
 {
+    /// <summary>Modul auf diesem Host gesperrt? (system und agent lassen sich nicht sperren.)</summary>
+    public bool IsModuleDisabled(string module) =>
+        !AIOPatcher.Contracts.AgentModules.Required.Contains(module) && (DisabledModules ?? []).Contains(module, StringComparer.OrdinalIgnoreCase);
+
     /// <summary>Einzelnen Schalter in policy.json setzen (Befehl "policy set"), übrige Einträge bleiben.</summary>
     public static AgentPolicy Set(string directory, string key, string value)
     {
@@ -41,6 +46,7 @@ public sealed record AgentPolicy(PatchPermission AllowPatch = PatchPermission.Al
             "allowappupdates" => policy with { AllowAppUpdates = Bool() },
             "trustserverupdates" => policy with { TrustServerUpdates = Bool() },
             "allowsystemchanges" => policy with { AllowSystemChanges = Bool() },
+            "disabledmodules" => policy with { DisabledModules = value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) is var list && list.All(m => AIOPatcher.Contracts.AgentModules.All.Contains(m)) ? list : throw new ArgumentException($"disabledModules: comma-separated list of {string.Join(", ", AIOPatcher.Contracts.AgentModules.All)}.") },
             _ => throw new ArgumentException($"Unknown policy key '{key}'."),
         };
         File.WriteAllText(Path.Combine(directory, FileName), JsonSerializer.Serialize(policy, AgentPolicyJsonContext.Default.AgentPolicy) + "\n");

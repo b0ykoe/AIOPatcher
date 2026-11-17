@@ -39,12 +39,13 @@ public sealed class LinuxCompliance(ComplianceStore store) : IComplianceProvider
         }
     }
 
-    public async Task<ComplianceReport> CollectAsync(CancellationToken ct) =>
-        new(await FirewallAsync(ct), await SshAsync(ct), await UsersAsync(ct), DateTime.UtcNow);
+    public async Task<IReadOnlyList<RemoteAccessSetting>> RemoteAccessAsync(CancellationToken ct) => await SshAsync(ct);
+
+    async Task<IReadOnlyList<LocalUser>> IComplianceProvider.UsersAsync(CancellationToken ct) => await UsersAsync(ct);
 
     // --- Lesen ----------------------------------------------------------------------------------------
 
-    private async Task<FirewallStatus> FirewallAsync(CancellationToken ct)
+    public async Task<FirewallStatus> FirewallAsync(CancellationToken ct)
     {
         var proxmox = IsProxmox;
         var ufwPath = Ufw;

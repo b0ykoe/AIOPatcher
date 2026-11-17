@@ -15,7 +15,7 @@ namespace AIOPatcher.Server.Endpoints;
 /// <summary>Agent-API auf dem Agent-Port (mTLS). Siehe <see cref="PortIsolation"/>.</summary>
 public static class AgentEndpoints
 {
-    private const string HostItemKey = "aiopatcher.agent.host";
+    internal const string HostItemKey = "aiopatcher.agent.host";
     private const int MaxUpdatesPerCheckin = 5000;
     private const int MaxAddressesPerCheckin = 256;
     private const int MaxLogLinesPerRequest = 2000;
@@ -32,7 +32,8 @@ public static class AgentEndpoints
         agent.MapPost("/enroll", Enroll).RequireRateLimiting(AuthEndpoints.RateLimitPolicy);
 
         var authenticated = agent.MapGroup("").AddEndpointFilter(AuthenticateAgent);
-        authenticated.MapPost("/checkin", Checkin);
+        authenticated.MapPost("/checkin", Checkin); // Protokoll v1 (Push), nur noch für den Übergang
+        authenticated.MapPullEndpoints();
         authenticated.MapPost("/renew", Renew);
         authenticated.MapGet("/hello", (HttpContext http) =>
         {
@@ -184,21 +185,22 @@ public static class AgentEndpoints
         var host = (ManagedHost)http.Items[HostItemKey]!;
         var now = DateTime.UtcNow;
 
+        // Alte Agents schicken bei jedem Check-in ungefragt Daten. Nur noch zum Aktualisieren auf den Pull-Agent.
+        if (!features.IsOn(Feature.LegacyAgentProtocol))
+        {
+            return Results.Problem(L.T("Alter Check-in ist abgeschaltet: Agent per Installationsbefehl aktualisieren.",
+                "Legacy check-in is turned off: update the agent with the install command."), statusCode: StatusCodes.Status410Gone);
+        }
+
+        host.ProtocolVersion = 1;
+        host.Architecture = request.Architecture is "x64" or "arm64" ? request.Architecture : host.Architecture;
+
         if (request.UpdateReport is { } report)
         {
             RecordUpdateReport(db, notifier, host, report, now);
         }
 
-        if (host.OfflineNotifiedAt is not null)
-        {
-            host.OfflineNotifiedAt = null;
-            notifier.Publish(new Notification(NotificationEvents.HostOnline,
-                L.T($"{host.Name} ist wieder online", $"{host.Name} is back online"),
-                L.T($"Site {host.Site?.Name}", $"Site {host.Site?.Name}"),
-                NotificationSeverity.Success, host.SiteId, host.Id, $"/hosts/{host.Id}"));
-        }
-
-        host.LastSeenAt = now;
+        MarkSeen(host, notifier, now);
         host.AgentVersion = Truncate(request.AgentVersion, 32);
         host.Hostname = Truncate(request.Hostname, 255);
         host.OsFamily = request.OsFamily;
@@ -287,6 +289,21 @@ public static class AgentEndpoints
             NotificationSeverity.Warning, host.SiteId, host.Id, $"/hosts/{host.Id}"));
     }
 
+    /// <summary>Host hat sich gemeldet: zuletzt gesehen, ggf. "wieder online" melden.</summary>
+    internal static void MarkSeen(ManagedHost host, Notifier notifier, DateTime now)
+    {
+        if (host.OfflineNotifiedAt is not null)
+        {
+            host.OfflineNotifiedAt = null;
+            notifier.Publish(new Notification(NotificationEvents.HostOnline,
+                L.T($"{host.Name} ist wieder online", $"{host.Name} is back online"),
+                L.T($"Site {host.Site?.Name}", $"Site {host.Site?.Name}"),
+                NotificationSeverity.Success, host.SiteId, host.Id, $"/hosts/{host.Id}"));
+        }
+
+        host.LastSeenAt = now;
+    }
+
     /// <summary>So lange vor Ablauf bittet der Server den Agent, ein neues Zertifikat anzufordern.</summary>
     public static readonly TimeSpan CertificateRenewBefore = TimeSpan.FromDays(60);
 
@@ -326,6 +343,21 @@ public static class AgentEndpoints
     /// </remarks>
     public static async Task<AgentJob?> DispatchJobAsync(AppDbContext db, ManagedHost host, Guid? runningJobId, DateTime now, CancellationToken ct, FeatureFlags? features = null,
         Microsoft.AspNetCore.DataProtection.IDataProtector? secrets = null)
+    {
+        var next = await SelectJobAsync(db, host, runningJobId, now, ct, features);
+        if (next is null)
+        {
+            return null;
+        }
+
+        var holds = next.Type == JobType.Patch ? await PatchRules.HoldsForHostAsync(db, host, now, ct) : null;
+        var packages = next.Type == JobType.AppUpdate ? next.Packages?.Split(',', StringSplitOptions.RemoveEmptyEntries) : null;
+        var change = next.Type == JobType.SystemChange ? ComplianceEndpoints.TakeChange(next, secrets) : null;
+        return new AgentJob(next.Id, next.Type, next.Scope, next.AllowReboot, holds is { Count: > 0 } ? holds : null, packages, change);
+    }
+
+    /// <summary>Nächsten Job wählen (Durchsetzung der Schalter, Notaus, Wartungsfenster) und auf Running setzen. Für Check-in (v1) und Pull (v2).</summary>
+    public static async Task<PatchJob?> SelectJobAsync(AppDbContext db, ManagedHost host, Guid? runningJobId, DateTime now, CancellationToken ct, FeatureFlags? features = null)
     {
         if (runningJobId is not null)
         {
@@ -401,10 +433,7 @@ public static class AgentEndpoints
 
         next.Status = JobStatus.Running;
         next.StartedAt = now;
-        var holds = next.Type == JobType.Patch ? await PatchRules.HoldsForHostAsync(db, host, now, ct) : null;
-        var packages = next.Type == JobType.AppUpdate ? next.Packages?.Split(',', StringSplitOptions.RemoveEmptyEntries) : null;
-        var change = next.Type == JobType.SystemChange ? ComplianceEndpoints.TakeChange(next, secrets) : null;
-        return new AgentJob(next.Id, next.Type, next.Scope, next.AllowReboot, holds is { Count: > 0 } ? holds : null, packages, change);
+        return next;
     }
 
     private static async Task<IResult> AppendJobLog(Guid jobId, JobLogRequest request, HttpContext http, AppDbContext db, CancellationToken ct)
@@ -421,6 +450,14 @@ public static class AgentEndpoints
             return Results.Conflict();
         }
 
+        AppendLog(db, job, request);
+        host.LastSeenAt = DateTime.UtcNow; // Lange Jobs: Host bleibt "online", obwohl er nicht eincheckt.
+        await db.SaveChangesAsync(ct);
+        return Results.NoContent();
+    }
+
+    internal static void AppendLog(AppDbContext db, PatchJob job, JobLogRequest request)
+    {
         foreach (var line in (request.Lines ?? []).Take(MaxLogLinesPerRequest))
         {
             if (line is null)
@@ -435,10 +472,6 @@ public static class AgentEndpoints
                 Text = Truncate(line.Text, MaxLogLineLength),
             });
         }
-
-        host.LastSeenAt = DateTime.UtcNow; // Lange Jobs: Host bleibt "online", obwohl er nicht eincheckt.
-        await db.SaveChangesAsync(ct);
-        return Results.NoContent();
     }
 
     private static async Task<IResult> CompleteJob(Guid jobId, JobResultRequest request, HttpContext http, AppDbContext db, AuditLog audit, Notifier notifier, CancellationToken ct)
@@ -457,14 +490,22 @@ public static class AgentEndpoints
             return Results.Conflict();
         }
 
-        job.Status = request.Outcome switch
+        await CompleteJobCoreAsync(db, audit, notifier, host, job, request.Outcome, request.Summary, request.RebootPerformed, ct);
+        return Results.NoContent();
+    }
+
+    /// <summary>Job abschließen: Status, Audit, Benachrichtigung. Für Check-in (v1) und Pull (v2).</summary>
+    internal static async Task CompleteJobCoreAsync(AppDbContext db, AuditLog audit, Notifier notifier, ManagedHost host, PatchJob job,
+        JobOutcome outcome, string? summary, bool rebootPerformed, CancellationToken ct)
+    {
+        job.Status = outcome switch
         {
             JobOutcome.Succeeded => JobStatus.Succeeded,
             JobOutcome.Rejected => JobStatus.Rejected,
             _ => JobStatus.Failed,
         };
-        job.Summary = request.Summary is null ? null : Truncate(request.Summary, 2000);
-        job.RebootPerformed = request.RebootPerformed;
+        job.Summary = summary is null ? null : Truncate(summary, 2000);
+        job.RebootPerformed = rebootPerformed;
         job.FinishedAt = DateTime.UtcNow;
         host.LastSeenAt = DateTime.UtcNow;
         if (job.Status == JobStatus.Succeeded && job.Type == JobType.SystemChange)
@@ -484,11 +525,10 @@ public static class AgentEndpoints
             job.Summary ?? "",
             succeeded ? NotificationSeverity.Success : NotificationSeverity.Critical,
             host.SiteId, host.Id, $"/jobs/{job.Id}"));
-        return Results.NoContent();
     }
 
     /// <summary>Ersetzt die offenen Updates. Gibt die Namen neu aufgetauchter Security-Updates zurück (nicht beim ersten Scan).</summary>
-    private static async Task<List<string>> ReplaceUpdatesAsync(AppDbContext db, ManagedHost host, IReadOnlyList<AvailableUpdate> updates, DateTime now, CancellationToken ct)
+    internal static async Task<List<string>> ReplaceUpdatesAsync(AppDbContext db, ManagedHost host, IReadOnlyList<AvailableUpdate> updates, DateTime now, CancellationToken ct)
     {
         var firstScan = host.LastScanAt is null;
         host.LastScanAt = now;
@@ -538,7 +578,7 @@ public static class AgentEndpoints
         return newSecurity;
     }
 
-    private static async Task ReplaceAddressesAsync(AppDbContext db, ManagedHost host, IReadOnlyList<NetworkAddress> addresses, DateTime now, CancellationToken ct)
+    internal static async Task ReplaceAddressesAsync(AppDbContext db, ManagedHost host, IReadOnlyList<NetworkAddress> addresses, DateTime now, CancellationToken ct)
     {
         var subnets = (await db.Subnets.Where(s => s.SiteId == host.SiteId).ToListAsync(ct))
             .Select(s => (s.Id, Network: IPNetwork.TryParse(s.Cidr, out var n) ? n : (IPNetwork?)null))
@@ -576,6 +616,6 @@ public static class AgentEndpoints
     }
 
     // Agents sind nicht vertrauenswürdig genug, um Längen und null-Werte ungeprüft zu übernehmen.
-    private static string Truncate(string? value, int max) =>
+    internal static string Truncate(string? value, int max) =>
         value is null ? "" : value.Length <= max ? value : value[..max];
 }

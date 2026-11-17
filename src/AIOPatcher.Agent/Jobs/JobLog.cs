@@ -4,7 +4,7 @@ using Microsoft.Extensions.Logging;
 namespace AIOPatcher.Agent.Jobs;
 
 /// <summary>
-/// Sammelt Logzeilen eines Jobs und schickt sie alle paar Sekunden gebündelt an den Server.
+/// Sammelt Logzeilen eines Auftrags und gibt sie alle paar Sekunden gebündelt als Teil der Antwort an den Server.
 /// Ist der Server kurz weg, bleiben die Zeilen im Puffer und gehen mit dem nächsten Versuch raus.
 /// </summary>
 public sealed class JobLog : IAsyncDisposable
@@ -83,7 +83,7 @@ public sealed class JobLog : IAsyncDisposable
         {
             foreach (var chunk in batch.Chunk(1000))
             {
-                await _client.AppendJobLogAsync(_jobId, new JobLogRequest(chunk), ct);
+                await _client.SendTaskLogAsync(_jobId, new JobLogRequest(chunk), ct);
             }
         }
         catch (Exception ex) when (ex is HttpRequestException or ServerRejectedException or TaskCanceledException)

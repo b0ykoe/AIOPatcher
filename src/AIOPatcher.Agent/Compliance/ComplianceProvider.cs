@@ -7,7 +7,14 @@ namespace AIOPatcher.Agent.Compliance;
 /// <summary>Firewall, SSH/RDP und Benutzer lesen bzw. ändern. Eine Implementierung pro Plattform.</summary>
 public interface IComplianceProvider
 {
-    Task<ComplianceReport> CollectAsync(CancellationToken ct);
+    Task<FirewallStatus> FirewallAsync(CancellationToken ct);
+
+    Task<IReadOnlyList<RemoteAccessSetting>> RemoteAccessAsync(CancellationToken ct);
+
+    Task<IReadOnlyList<LocalUser>> UsersAsync(CancellationToken ct);
+
+    async Task<ComplianceReport> CollectAsync(CancellationToken ct) =>
+        new(await FirewallAsync(ct), await RemoteAccessAsync(ct), await UsersAsync(ct), DateTime.UtcNow);
 
     /// <param name="serverReachable">Erreicht der Agent den Server noch? Nach Firewall-Änderungen, sonst Rollback.</param>
     Task<JobExecutionResult> ApplyAsync(SystemChange change, Func<CancellationToken, Task<bool>> serverReachable, Action<string> log, CancellationToken ct);
