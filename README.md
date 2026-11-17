@@ -56,12 +56,18 @@ CA-Fingerprint**. Im Dashboard: Token eingeben, Konto und Authenticator einricht
 - Manuell statt Skript: [deploy/docker-compose.yml](deploy/docker-compose.yml) anpassen, gehärtete Variante in
   [docs/SERVER-SETUP.md](docs/SERVER-SETUP.md), Proxys in [docs/REVERSE-PROXY.md](docs/REVERSE-PROXY.md).
 
-**Mit Portainer** (fertiges Image, ohne Setup-Skript): Am [neuesten Release](https://github.com/b0ykoe/AIOPatcher/releases/latest)
-`portainer-stack.yml` herunterladen (oder [deploy/portainer-stack.yml](deploy/portainer-stack.yml) in den Web-Editor kopieren),
-in Portainer unter *Stacks → Add stack → Upload* hochladen, bei *Environment variables* `AIOPATCHER_HOSTNAME` setzen
-(DNS-Name oder IP, unter der die Agents den Server erreichen) und deployen. Der Setup-Token steht in den Logs des
-Containers `aiopatcher`, das Dashboard läuft auf `https://<host>:9443`. Daten liegen im Volume `aiopatcher-data`.
-Update: *Pull and redeploy* bzw. `AIOPATCHER_VERSION` hochsetzen. Firewall: 8443 für die Agents, 9443 nur intern/VPN.
+**Mit Portainer** (fertiges Image, ohne Setup-Skript), per App-Template:
+
+1. Einmalig unter *Settings → App Templates → URL* eintragen und speichern:
+   `https://raw.githubusercontent.com/b0ykoe/AIOPatcher/main/deploy/portainer-templates.json`
+2. *App Templates* → nach „AIOPatcher“ suchen → *Hostname oder IP* ausfüllen (unter dem die Agents den Server
+   erreichen) → *Deploy the stack*.
+
+Der Setup-Token steht in den Logs des Containers `aiopatcher`, das Dashboard läuft auf `https://<host>:9443`. Daten liegen
+im Volume `aiopatcher-data`. Jeder Deploy holt das aktuelle Image (`pull_policy: always`); Update also einfach den Stack
+neu deployen. Firewall: 8443 für die Agents, 9443 nur intern/VPN. Ohne Template: `portainer-stack.yml` vom
+[neuesten Release](https://github.com/b0ykoe/AIOPatcher/releases/latest) unter *Stacks → Add stack → Upload* hochladen
+und `AIOPATCHER_HOSTNAME` als Environment variable setzen.
 
 **Updates von AIOPatcher** – ohne Setup, ein Befehl:
 

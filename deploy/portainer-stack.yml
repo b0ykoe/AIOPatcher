@@ -9,6 +9,7 @@
 services:
   aiopatcher:
     image: ghcr.io/b0ykoe/aiopatcher-server:${AIOPATCHER_VERSION:-latest}
+    pull_policy: always # bei jedem Deploy das aktuelle Image holen (Portainer nimmt sonst das alte, lokal gespeicherte :latest)
     container_name: aiopatcher
     restart: unless-stopped
     network_mode: host # Agents sehen die echte Server-IP, ufw-Regeln greifen
