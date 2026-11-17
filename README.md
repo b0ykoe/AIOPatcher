@@ -389,7 +389,7 @@ Jede Funktion ist ein **Modul** mit festen Aktionen. Andere Aufträge lehnt der 
 | `system` | `describe`: OS, IPs, Neustart nötig, Module, Ergebnis des letzten Self-Updates |
 | `updates` | `scan`, `install`, `reboot` (apt bzw. Windows Update), `change` (eigene Update-Automatik an/aus) |
 | `software` | `inventory`, `appupdate` (winget) |
-| `docker` | `inventory` |
+| `docker` | `inventory`, `appupdate` (einen Compose-Container auf ein neues Image heben) |
 | `services` | `list`: laufende Autostart-Dienste und Container (Vergleich vor/nach Neustart) |
 | `metrics` | `sample`: CPU, RAM, Datenträger, Container-Auslastung |
 | `firewall`, `remoteaccess` | `status`, `change` |
@@ -501,8 +501,8 @@ Der Server kann sie nicht ändern; sie wird bei jedem Job neu gelesen.
 z. B. auf dem Proxmox-Host selbst oder der OPNsense-VM. `"allowSelfUpdate": false` verhindert, dass der Agent
 signierte Updates selbst installiert. `"trustServerUpdates": false` lässt nur Updates mit Release-Signatur zu
 (siehe [Agent-Updates](#agent-updates)). `"allowSystemChanges": true` erlaubt Änderungen an Firewall, SSH/RDP und
-Benutzern (siehe [Compliance](#compliance-firewall-sshrdp-benutzer), ab Werk aus). `"allowSourceFixes": false` verhindert, dass der Agent kaputte Paketquellen deaktiviert (siehe [Kaputte Paketquellen](#kaputte-paketquellen-apt)). `"allowAutoUpdateChanges": false` verhindert, dass das Dashboard unattended-upgrades bzw. Windows Update ab- oder einschaltet (siehe [Auto-Patch](#auto-patch)). `"allowAppUpdates": false` verbietet Programm-Updates per winget auf diesem Host
-(diese brauchen außerdem `allowPatch: All`). Die Policy gilt zusätzlich zu den Schaltern im Dashboard: ausgeführt wird nur,
+Benutzern (siehe [Compliance](#compliance-firewall-sshrdp-benutzer), ab Werk aus). `"allowSourceFixes": false` verhindert, dass der Agent kaputte Paketquellen deaktiviert (siehe [Kaputte Paketquellen](#kaputte-paketquellen-apt)). `"allowAutoUpdateChanges": false` verhindert, dass das Dashboard unattended-upgrades bzw. Windows Update ab- oder einschaltet (siehe [Auto-Patch](#auto-patch)). `"allowAppUpdates": false` verbietet Programm-Updates per winget und Container-Updates auf diesem Host
+(beide brauchen außerdem `allowPatch: All`). Die Policy gilt zusätzlich zu den Schaltern im Dashboard: ausgeführt wird nur,
 was beide erlauben.
 
 ## Agent (Entwicklung)
