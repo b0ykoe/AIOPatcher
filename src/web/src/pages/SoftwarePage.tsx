@@ -70,9 +70,9 @@ export function SoftwarePage() {
                       {i.packageId && i.packageId !== i.name && <Text size="xs" c="dimmed" ff="monospace">{i.packageId}</Text>}
                     </Table.Td>
                     <Table.Td ta="right"><Text size="sm">{i.hosts}</Text></Table.Td>
-                    <Table.Td ta="right">{i.outdated > 0 ? <Badge color="blue" variant="light">{i.outdated}</Badge> : <Text size="sm" c="dimmed">0</Text>}</Table.Td>
+                    <Table.Td ta="right">{i.outdated > 0 ? <Badge color="blue">{i.outdated}</Badge> : <Text size="sm" c="dimmed">0</Text>}</Table.Td>
                     <Table.Td><Text size="xs" ff="monospace" c="dimmed" lineClamp={1}>{i.versions.join(", ")}</Text></Table.Td>
-                    <Table.Td>{i.availableVersion && <Badge size="sm" variant="light" color="blue">{i.availableVersion}</Badge>}</Table.Td>
+                    <Table.Td>{i.availableVersion && <Badge size="sm" color="blue">{i.availableVersion}</Badge>}</Table.Td>
                     <Table.Td>
                       {i.infoUrl && (
                         <Anchor href={i.infoUrl} target="_blank" rel="noreferrer" size="xs">

@@ -25,7 +25,7 @@ export function AgentModulesCard({ hostId, protocol, modules, onChanged }: { hos
   };
 
   return (
-    <Card withBorder mb="lg">
+    <Card mb="lg">
       <Group justify="space-between" mb="sm" wrap="wrap">
         <Group gap="xs">
           <IconPuzzle size={18} />

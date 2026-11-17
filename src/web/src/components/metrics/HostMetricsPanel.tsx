@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { Card, Group, SegmentedControl, SimpleGrid, Stack, Table, Text } from "@mantine/core";
-import { IconGauge } from "@tabler/icons-react";
+import { IconActivity, IconArrowsExchange, IconClockHour4, IconCpu, IconDatabase, IconGauge, IconStack2 } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import { api, formatRelative, formatUptime, type HostMetricsResponse } from "../../api";
 import { EmptyState } from "../ui";
-import { formatBytes, percentOf, TimeSeriesChart, UsageMeter } from "./charts";
+import { formatBytes, MetricRow, percentOf, TimeSeriesChart, UsageCell, UsageMeter } from "./charts";
 
 const ranges = { "24": 24, "168": 168 } as const;
 
@@ -36,58 +36,57 @@ export function HostMetricsPanel({ hostId }: { hostId: string }) {
   const memory = percentOf(m.memoryUsed, m.memoryTotal);
 
   return (
-    <Stack gap="lg">
+    <Stack gap="md">
       {/* Zeitraum: eine Zeile über allem, gilt für alle Diagramme */}
       <Group justify="space-between" gap="xs" wrap="wrap">
-        <Text size="xs" c="dimmed">
-          {t("metrics.measured", { when: formatRelative(data.at) })} · {t("metrics.uptime", { value: formatUptime(m.uptime) })}
-          {m.load ? ` · Load ${m.load.map((l) => l.toFixed(2)).join(" / ")}` : ""}
-        </Text>
+        <Text size="xs" c="dimmed">{t("metrics.measured", { when: formatRelative(data.at) })}</Text>
         <SegmentedControl size="xs" value={hours} onChange={(v) => setHours(v as keyof typeof ranges)}
           data={[{ value: "24", label: t("metrics.range24h") }, { value: "168", label: t("metrics.range7d") }]} />
       </Group>
 
-      {/* Oben zwei halbe Karten: aktuelle Werte untereinander (wie Proxmox) und die Datenträger */}
-      <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
-        <Card withBorder>
-          <Text fw={700} mb="md">{t("metrics.current")}</Text>
-          <Stack gap="md">
-            <UsageMeter label={t("metrics.cpuCores", { cores: m.cpuCores })} percent={m.cpuPercent} />
-            <UsageMeter label={t("metrics.memory")} percent={memory} detail={`${formatBytes(m.memoryUsed)} / ${formatBytes(m.memoryTotal)}`} />
+      {/* Wertekarten wie bei Proxmox: Zeilen untereinander, Karten schmal (metric-grid) */}
+      <div className="metric-grid">
+        <Card>
+          <Text fw={700} mb="sm">{t("metrics.current")}</Text>
+          <Stack gap="sm">
+            <UsageMeter icon={<IconCpu size={16} />} label={t("metrics.cpu")} percent={m.cpuPercent} detail={t("metrics.ofCpus", { count: m.cpuCores })} />
+            <UsageMeter icon={<IconStack2 size={16} />} label={t("metrics.memory")} percent={memory} detail={`${formatBytes(m.memoryUsed)} / ${formatBytes(m.memoryTotal)}`} />
             {m.swapTotal ? (
-              <UsageMeter label={t("metrics.swap")} percent={percentOf(m.swapUsed, m.swapTotal)} detail={`${formatBytes(m.swapUsed)} / ${formatBytes(m.swapTotal)}`} />
+              <UsageMeter icon={<IconArrowsExchange size={16} />} label={t("metrics.swap")} percent={percentOf(m.swapUsed, m.swapTotal)} detail={`${formatBytes(m.swapUsed)} / ${formatBytes(m.swapTotal)}`} />
             ) : null}
+            <MetricRow icon={<IconClockHour4 size={16} />} label={t("metrics.uptimeLabel")} value={formatUptime(m.uptime)} />
+            {m.load && <MetricRow icon={<IconActivity size={16} />} label={t("metrics.loadLabel")} value={m.load.map((l) => l.toFixed(2)).join(" / ")} />}
           </Stack>
         </Card>
-        <Card withBorder>
-          <Text fw={700} mb="md">{t("metrics.disks")}</Text>
-          <Stack gap="md">
+        <Card>
+          <Text fw={700} mb="sm">{t("metrics.disks")}</Text>
+          <Stack gap="sm">
             {m.disks.map((d) => (
-              <UsageMeter key={d.mount} label={`${d.mount}${d.fileSystem ? ` (${d.fileSystem})` : ""}`} percent={percentOf(d.used, d.total)}
+              <UsageMeter key={d.mount} icon={<IconDatabase size={16} />} label={`${d.mount}${d.fileSystem ? ` (${d.fileSystem})` : ""}`} percent={percentOf(d.used, d.total)}
                 detail={`${formatBytes(d.used)} / ${formatBytes(d.total)}`} />
             ))}
             {m.disks.length === 0 && <Text size="sm" c="dimmed">–</Text>}
           </Stack>
         </Card>
-      </SimpleGrid>
+      </div>
 
       {/* Verlauf: drei gleich breite Diagramme über die volle Breite */}
       <SimpleGrid cols={{ base: 1, md: 3 }} spacing="md">
-        <Card withBorder><TimeSeriesChart title={t("metrics.cpu")} points={series("cpu")} from={from} to={to} /></Card>
-        <Card withBorder><TimeSeriesChart title={t("metrics.memory")} points={series("memory")} from={from} to={to} /></Card>
-        <Card withBorder><TimeSeriesChart title={t("metrics.diskFullest")} points={series("disk")} from={from} to={to} /></Card>
+        <Card><TimeSeriesChart title={t("metrics.cpu")} points={series("cpu")} from={from} to={to} /></Card>
+        <Card><TimeSeriesChart title={t("metrics.memory")} points={series("memory")} from={from} to={to} /></Card>
+        <Card><TimeSeriesChart title={t("metrics.diskFullest")} points={series("disk")} from={from} to={to} /></Card>
       </SimpleGrid>
 
         {m.containers && m.containers.length > 0 && (
-          <Card withBorder p={0}>
-            <Text fw={700} p="md" pb="xs">{t("metrics.containers", { count: m.containers.length })}</Text>
-            <Table.ScrollContainer minWidth={420}>
-              <Table fz="sm" verticalSpacing={6}>
+          <Card p={0}>
+            <Text fw={700} px="md" py="sm">{t("metrics.containers", { count: m.containers.length })}</Text>
+            <Table.ScrollContainer minWidth={600}>
+              <Table fz="sm">
                 <Table.Thead>
                   <Table.Tr>
                     <Table.Th>{t("sitesPage.name")}</Table.Th>
-                    <Table.Th ta="right">CPU</Table.Th>
-                    <Table.Th>{t("metrics.memory")}</Table.Th>
+                    <Table.Th ta="right" w={90}>CPU</Table.Th>
+                    <Table.Th w={320}>{t("metrics.memory")}</Table.Th>
                   </Table.Tr>
                 </Table.Thead>
                 <Table.Tbody>
@@ -95,9 +94,9 @@ export function HostMetricsPanel({ hostId }: { hostId: string }) {
                     <Table.Tr key={c.name}>
                       <Table.Td><Text size="sm" ff="monospace" truncate maw={260}>{c.name}</Text></Table.Td>
                       <Table.Td ta="right" style={{ fontVariantNumeric: "tabular-nums" }}>{c.cpuPercent.toFixed(1)} %</Table.Td>
-                      <Table.Td miw={170}>
+                      <Table.Td>
                         {c.memoryLimit
-                          ? <UsageMeter size="sm" label="" percent={percentOf(c.memoryUsed, c.memoryLimit)} detail={formatBytes(c.memoryUsed)} />
+                          ? <UsageCell percent={percentOf(c.memoryUsed, c.memoryLimit)} detail={formatBytes(c.memoryUsed)} />
                           : <Text size="sm">{formatBytes(c.memoryUsed)}</Text>}
                       </Table.Td>
                     </Table.Tr>

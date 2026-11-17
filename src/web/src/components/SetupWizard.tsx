@@ -140,7 +140,7 @@ export function SetupWizard({ autoOpen }: { autoOpen: boolean }) {
           <Stepper.Step label={t("wizard.stepNotify")} icon={<IconBell size={16} />} />
         </Stepper>
 
-        {error && <Alert color="red" variant="light" mb="md">{error}</Alert>}
+        {error && <Alert color="red" mb="md">{error}</Alert>}
 
         {step === 0 && (
           <Stack>
@@ -186,7 +186,7 @@ export function SetupWizard({ autoOpen }: { autoOpen: boolean }) {
         {step === 2 && (
           <Stack>
             <Text size="sm" c="dimmed">{t("wizard.planText")}</Text>
-            {plans.length > 0 && <Alert color="teal" variant="light" icon={<IconCheck size={16} />}>{t("wizard.planExists", { count: plans.length })}</Alert>}
+            {plans.length > 0 && <Alert color="teal" icon={<IconCheck size={16} />}>{t("wizard.planExists", { count: plans.length })}</Alert>}
             <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
               {templates.map(({ key, icon: Icon }) => (
                 <UnstyledButton key={key} className="template-card" data-selected={template === key || undefined} onClick={() => setTemplate(key)}>
@@ -212,7 +212,7 @@ export function SetupWizard({ autoOpen }: { autoOpen: boolean }) {
           <Stack>
             <Text size="sm" c="dimmed">{t("wizard.notifyText")}</Text>
             {channels.length > 0 && (
-              <Group gap="xs">{channels.map((c) => <Badge key={c.id} variant="light" leftSection={<IconBell size={12} />}>{c.name}</Badge>)}</Group>
+              <Group gap="xs">{channels.map((c) => <Badge key={c.id} leftSection={<IconBell size={12} />}>{c.name}</Badge>)}</Group>
             )}
             <Group><Button variant="light" leftSection={<IconBell size={16} />} onClick={() => setPicking(true)}>{t("wizard.notifyAdd")}</Button></Group>
             <Group justify="space-between" mt="md">

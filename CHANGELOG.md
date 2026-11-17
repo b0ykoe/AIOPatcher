@@ -8,6 +8,12 @@ Geschrieben für Anwender, nicht als Commit-Liste.
 
 ## [Unveröffentlicht]
 
+### Verbessert
+- **Kompakter und einheitlicher** nach dem neuen Styleguide: Karten und Tabellen enger, Farben haben überall dieselbe
+  Bedeutung (z. B. „Neustart nötig“ immer gelb, Warteschlange grau, verfügbare Updates blau).
+- **Auslastung wie bei Proxmox:** „Aktuell“ (CPU, RAM, Swap, Laufzeit, Load) und „Datenträger“ als schmale Karten mit
+  Zeilen untereinander statt Balken über die ganze Bildschirmbreite; in Tabellen kurze Balken mit Wert daneben.
+
 ### Behoben
 - Der Zurück-Link oben auf Host-, Job-, Plan- und Lauf-Seiten war über die ganze Bildschirmbreite klickbar; jetzt nur
   noch der Text selbst. Der Lauf führt zurück zu Auto-Patch.

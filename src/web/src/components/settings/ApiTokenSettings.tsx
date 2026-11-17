@@ -52,7 +52,7 @@ export function ApiTokenSettings() {
   return (
     <Stack>
       {!isOn("ApiTokens") && (
-        <Alert color="yellow" variant="light">
+        <Alert color="yellow">
           <Text size="sm">{t("features.tokensOff")}</Text>
           <FeatureOffHint feature="ApiTokens" />
         </Alert>
@@ -86,7 +86,7 @@ export function ApiTokenSettings() {
                       <Text size="sm" fw={600}>{tok.name}</Text>
                       <Text size="xs" c="dimmed" ff="monospace">{tok.prefix}…</Text>
                     </Table.Td>
-                    <Table.Td><Badge variant="light">{t(`roles.${tok.role}`)}</Badge></Table.Td>
+                    <Table.Td><Badge>{t(`roles.${tok.role}`)}</Badge></Table.Td>
                     <Table.Td><Text size="sm">{formatRelative(tok.lastUsedAt)}</Text></Table.Td>
                     <Table.Td><Text size="sm">{tok.expiresAt ? formatDateTime(tok.expiresAt) : t("rules.unlimited")}</Text></Table.Td>
                     <Table.Td>
@@ -115,7 +115,7 @@ export function ApiTokenSettings() {
       <Modal opened={secret !== null} onClose={() => setSecret(null)} title={<Text fw={800}>{t("apiTokens.createdTitle")}</Text>} size="lg" centered>
         {secret && (
           <Stack>
-            <Alert color="violet" variant="light">{t("apiTokens.createdText")}</Alert>
+            <Alert color="violet">{t("apiTokens.createdText")}</Alert>
             <Group gap="xs" wrap="nowrap">
               <Code block style={{ flex: 1, wordBreak: "break-all" }}>{secret}</Code>
               <CopyButton value={secret}>
@@ -178,7 +178,7 @@ function CreateTokenModal({ opened, onClose, onCreated }: { opened: boolean; onC
           allowDeselect={false}
         />
         <NumberInput label={t("apiTokens.validDays")} description={t("apiTokens.validDaysHint")} value={days} onChange={(v) => setDays(typeof v === "number" ? v : "")} min={1} max={3650} />
-        {error && <Alert color="red" variant="light">{error}</Alert>}
+        {error && <Alert color="red">{error}</Alert>}
         <Group justify="flex-end">
           <Button variant="default" onClick={onClose}>{t("common.cancel")}</Button>
           <Button variant="gradient" className="gradient-button" loading={busy} disabled={!name.trim()} onClick={() => void save()}>

@@ -158,7 +158,7 @@ export function HostDetailPage() {
   const attention: React.ReactNode[] = [];
   if (h.rebootRequired) {
     attention.push(
-      <Alert key="reboot" color="yellow" variant="light" icon={<IconRefresh size={18} />}>
+      <Alert key="reboot" color="yellow" icon={<IconRefresh size={18} />}>
         <Group justify="space-between" gap="xs" wrap="wrap">
           <Text size="sm">{t("hostDetail.rebootRequired")}</Text>
           {can.operate && isOn("Reboots") && <Button size="xs" variant="light" color="yellow" disabled={!canRun} onClick={reboot}>{t("hostsPage.reboot")}</Button>}
@@ -168,18 +168,18 @@ export function HostDetailPage() {
   }
   if (host.brokenSources && host.brokenSources.length > 0) {
     attention.push(
-      <Alert key="sources" color="orange" variant="light" icon={<IconAlertTriangle size={18} />} title={t("hostDetail.brokenSourcesTitle", { count: host.brokenSources.length })}>
+      <Alert key="sources" color="orange" icon={<IconAlertTriangle size={18} />} title={t("hostDetail.brokenSourcesTitle", { count: host.brokenSources.length })}>
         <Stack gap={6}>
           {host.brokenSources.map((b) => (
             <div key={b.source}>
               <Group gap={6} wrap="wrap">
                 <Text size="sm" ff="monospace" style={{ wordBreak: "break-all" }}>{b.source}</Text>
                 {b.fixable && host.autoFixSources ? (
-                  <Badge size="sm" color="teal" variant="light">{t("hostDetail.brokenSourceAutoFix")}</Badge>
+                  <Badge size="sm" color="teal">{t("hostDetail.brokenSourceAutoFix")}</Badge>
                 ) : b.permanent ? (
-                  <Badge size="sm" color="orange" variant="light">{t("hostDetail.brokenSourceManual")}</Badge>
+                  <Badge size="sm" color="orange">{t("hostDetail.brokenSourceManual")}</Badge>
                 ) : (
-                  <Badge size="sm" color="gray" variant="light">{t("hostDetail.brokenSourceTemporary")}</Badge>
+                  <Badge size="sm" color="gray">{t("hostDetail.brokenSourceTemporary")}</Badge>
                 )}
               </Group>
               <Text size="xs" c="dimmed">{b.reason}{b.file ? ` · ${b.file}` : ""}</Text>
@@ -195,7 +195,7 @@ export function HostDetailPage() {
   }
   if (h.nativeAutoUpdatesEnabled && !h.autoPatch.enabled && h.planId) {
     attention.push(
-      <Alert key="native" color="blue" variant="light" icon={<IconInfoCircle size={18} />}>
+      <Alert key="native" color="blue" icon={<IconInfoCircle size={18} />}>
         <Group justify="space-between" gap="xs" wrap="wrap">
           <Text size="sm">{h.osFamily === "Linux" ? t("hostDetail.nativeLinux") : t("hostDetail.nativeWindows")}</Text>
           <NativeUpdatesButton hostId={h.id} enabled modules={host.modules} isLinux={h.osFamily === "Linux"} onDone={() => void load()} />
@@ -205,7 +205,7 @@ export function HostDetailPage() {
   }
   if (agentUpdate?.blocked && agentUpdate.lastOutcome && agentUpdate.lastOutcome !== "Installed") {
     attention.push(
-      <Alert key="agent" color="orange" variant="light" icon={<IconAlertTriangle size={18} />}
+      <Alert key="agent" color="orange" icon={<IconAlertTriangle size={18} />}
         title={t("hostDetail.agentUpdateFailedTitle", { version: agentUpdate.toVersion ?? agentUpdate.latestVersion })}>
         <Stack gap="xs">
           <Text size="sm">
@@ -225,7 +225,7 @@ export function HostDetailPage() {
     );
   }
   if (h.status === "Offline" && !activeJob) {
-    attention.push(<Alert key="offline" color="gray" variant="light" icon={<IconAlertTriangle size={18} />}>{t("hostDetail.offline")}</Alert>);
+    attention.push(<Alert key="offline" color="gray" icon={<IconAlertTriangle size={18} />}>{t("hostDetail.offline")}</Alert>);
   }
 
   const u = h.usage;
@@ -278,7 +278,7 @@ export function HostDetailPage() {
       </Group>
 
       {activeJob && (
-        <Alert mb="md" color="cyan" variant="light" icon={<span className="dot dot-live" />}>
+        <Alert mb="md" color="cyan" icon={<span className="dot dot-live" />}>
           {activeJob.status === "Queued" ? t("hostDetail.jobQueuedNow") : t("hostDetail.jobActiveNow")}{" "}
           <Anchor component={Link} to={`/jobs/${activeJob.id}`}>{t("hostDetail.openLog")}</Anchor>
         </Alert>
@@ -319,10 +319,10 @@ export function HostDetailPage() {
           <div className="overview-grid">
             <Stack gap="md">
               {attention.length > 0 ? attention : (
-                <Alert color="teal" variant="light" icon={<IconCircleCheck size={18} />}>{t("hostDetail.allGood")}</Alert>
+                <Alert color="teal" icon={<IconCircleCheck size={18} />}>{t("hostDetail.allGood")}</Alert>
               )}
               <PlanCard host={h} modules={host.modules} onChanged={() => void load()} />
-              <Card withBorder p={0}>
+              <Card p={0}>
                 <Group justify="space-between" p="md" pb={0}>
                   <Text fw={700}>{t("nav.jobs")}</Text>
                 </Group>
@@ -331,7 +331,7 @@ export function HostDetailPage() {
             </Stack>
             <Stack gap="md">
               {isOn("Metrics") && (
-                <Card withBorder>
+                <Card>
                   <Group justify="space-between" mb="sm">
                     <Text fw={700}>{t("nav.utilization")}</Text>
                     <Anchor size="sm" onClick={() => setTab("metrics")}>{t("hostDetail.details")}</Anchor>
@@ -346,7 +346,7 @@ export function HostDetailPage() {
                   ) : <Text size="sm" c="dimmed">{t("metrics.noSampleHint")}</Text>}
                 </Card>
               )}
-              <Card withBorder>
+              <Card>
                 <Text fw={700} mb="sm">{t("hostDetail.facts")}</Text>
                 <Stack gap={6}>
                   <Fact label={t("hostDetail.hostname")} value={h.hostname} />
@@ -363,7 +363,7 @@ export function HostDetailPage() {
         </Tabs.Panel>
 
         <Tabs.Panel value="updates">
-          <Card p="md">
+          <Card>
             {!h.lastScanAt ? (
               <EmptyState icon={<IconScan size={28} />} title={t("hostDetail.noScanTitle")} text={t("hostDetail.noScanText")} />
             ) : (
@@ -424,13 +424,13 @@ export function HostDetailPage() {
           </Card>
         </Tabs.Panel>
 
-        <Tabs.Panel value="software"><Card p="md"><SoftwareTab hostId={h.id} windows={h.osFamily === "Windows"} busy={!!activeJob} /></Card></Tabs.Panel>
-        <Tabs.Panel value="containers"><Card p="md"><ContainerTable containers={host.containers} hostId={h.id} onRechecked={() => void load()} /></Card></Tabs.Panel>
+        <Tabs.Panel value="software"><Card><SoftwareTab hostId={h.id} windows={h.osFamily === "Windows"} busy={!!activeJob} /></Card></Tabs.Panel>
+        <Tabs.Panel value="containers"><Card><ContainerTable containers={host.containers} hostId={h.id} onRechecked={() => void load()} /></Card></Tabs.Panel>
         <Tabs.Panel value="metrics">{isOn("Metrics") && <HostMetricsPanel hostId={h.id} />}</Tabs.Panel>
         <Tabs.Panel value="compliance"><Card p={0}><ComplianceTab hostId={h.id} os={h.osFamily} /></Card></Tabs.Panel>
 
         <Tabs.Panel value="network">
-          <Card p="md">
+          <Card>
             {host.addresses.length === 0 ? (
               <EmptyState icon={<IconNetwork size={28} />} title={t("hostDetail.noAddresses")} text={t("hostDetail.noAddressesText")} />
             ) : (
@@ -458,7 +458,7 @@ export function HostDetailPage() {
 
         <Tabs.Panel value="settings">
           <Stack gap="md">
-            <Card withBorder>
+            <Card>
               <Text fw={700} mb="xs">{t("rules.tags")}</Text>
               <Text size="sm" c="dimmed" mb="xs">{t("hostDetail.tagsHint")}</Text>
               {can.operate ? (
@@ -471,7 +471,7 @@ export function HostDetailPage() {
             {!simple && <MappingCard host={host} onSaved={() => void load()} />}
             {!simple && <AgentModulesCard hostId={h.id} protocol={host.agentProtocol} modules={host.modules ?? []} onChanged={() => void load()} />}
             {can.operate && (
-              <Card withBorder style={{ borderColor: "var(--mantine-color-red-9)" }}>
+              <Card style={{ borderColor: "var(--mantine-color-red-9)" }}>
                 <Text fw={700} mb="xs">{t("hostDetail.dangerZone")}</Text>
                 <Group gap="sm">
                   {h.status !== "Revoked" && <Button variant="light" color="red" leftSection={<IconBan size={16} />} onClick={revoke}>{t("hostDetail.revokeConfirm")}</Button>}

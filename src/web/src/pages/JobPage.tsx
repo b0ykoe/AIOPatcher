@@ -82,12 +82,12 @@ export function JobPage() {
       </Group>
 
       {job.status === "Queued" && (
-        <Alert mb="md" color="blue" variant="light" icon={<IconClockPause size={18} />}>
+        <Alert mb="md" color="blue" icon={<IconClockPause size={18} />}>
           {t("jobPage.waiting")}
         </Alert>
       )}
       {job.summary && (
-        <Alert mb="md" variant="light" color={job.status === "Succeeded" ? "teal" : job.status === "Cancelled" ? "gray" : "orange"} icon={<IconInfoCircle size={18} />}>
+        <Alert mb="md" color={job.status === "Succeeded" ? "teal" : job.status === "Cancelled" ? "gray" : "orange"} icon={<IconInfoCircle size={18} />}>
           {job.summary}
         </Alert>
       )}
@@ -106,7 +106,7 @@ export function JobPage() {
 
 function Fact({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
-    <Card padding="md">
+    <Card>
       <Text size="xs" c="dimmed" tt="uppercase" fw={700} style={{ letterSpacing: 0.5 }}>
         {label}
       </Text>

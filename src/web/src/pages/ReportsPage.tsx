@@ -152,7 +152,7 @@ export function ReportsPage() {
                         </Text>
                       </Table.Td>
                       <Table.Td>
-                        <Badge color={r.compliant ? "teal" : "red"} variant="light">{r.compliant ? t("common.yes") : t("common.no")}</Badge>
+                        <Badge color={r.compliant ? "teal" : "red"}>{r.compliant ? t("common.yes") : t("common.no")}</Badge>
                       </Table.Td>
                     </Table.Tr>
                   ))}

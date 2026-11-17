@@ -63,7 +63,7 @@ export function InvitePage({ onCompleted }: { onCompleted: () => void }) {
         </Group>
 
         {invalid && (
-          <Alert color="red" variant="light" icon={<IconAlertTriangle size={18} />} title={t("invite.title")}>
+          <Alert color="red" icon={<IconAlertTriangle size={18} />} title={t("invite.title")}>
             {t("invite.invalid")}
           </Alert>
         )}
@@ -86,7 +86,7 @@ export function InvitePage({ onCompleted }: { onCompleted: () => void }) {
               <Stack gap="md">
                 <Group gap="xs">
                   <Title order={3}>{t("invite.welcome", { name: info.username })}</Title>
-                  <Badge variant="light">{t(`roles.${info.role}`)}</Badge>
+                  <Badge>{t(`roles.${info.role}`)}</Badge>
                 </Group>
                 <Text size="sm" c="dimmed">
                   {t("invite.roleInfo", { role: t(`roles.${info.role}`) })} {t("invite.expires", { date: formatDateTime(info.expiresAt) })}
@@ -112,7 +112,7 @@ export function InvitePage({ onCompleted }: { onCompleted: () => void }) {
             )}
 
             {error && (
-              <Alert color="red" variant="light" icon={<IconAlertTriangle size={18} />} mt="md">
+              <Alert color="red" icon={<IconAlertTriangle size={18} />} mt="md">
                 {error}
               </Alert>
             )}

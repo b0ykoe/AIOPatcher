@@ -29,7 +29,7 @@ export function CveCell({ update }: { update: UpdateItem }) {
             </Badge>
           )}
           {epss !== null && (
-            <Badge size="xs" color={epssColor} variant="light">
+            <Badge size="xs" color={epssColor}>
               EPSS {(epss * 100).toFixed(epss < 0.01 ? 2 : 1)}%
             </Badge>
           )}

@@ -59,7 +59,8 @@ export const theme = createTheme({
     Textarea: Textarea.extend(inputDefaults),
     TagsInput: TagsInput.extend(inputDefaults),
     TimeInput: TimeInput.extend(inputDefaults),
-    Card: Card.extend({ defaultProps: { radius: "lg", withBorder: true, padding: "lg" }, classNames: { root: "glass" } }),
+    // Kompakt (Styleguide): Innenabstand md, Tabellenzeilen eng
+    Card: Card.extend({ defaultProps: { radius: "lg", withBorder: true, padding: "md" }, classNames: { root: "glass" } }),
     Paper: Paper.extend({ defaultProps: { radius: "lg" } }),
     Button: Button.extend({
       defaultProps: { radius: "md" },
@@ -84,7 +85,7 @@ export const theme = createTheme({
       classNames: { content: "glass-strong", header: "glass-strong" },
     }),
     Tooltip: Tooltip.extend({ defaultProps: { withArrow: true, openDelay: 300 } }),
-    Table: Table.extend({ defaultProps: { verticalSpacing: "sm", highlightOnHover: true } }),
+    Table: Table.extend({ defaultProps: { verticalSpacing: "xs", highlightOnHover: true } }),
     // Hinweise dezent: durchscheinende Tönung mit farbigem Rand statt deckender Farbfläche.
     Alert: Alert.extend({
       defaultProps: { variant: "light", radius: "lg" },

@@ -202,8 +202,8 @@ export function PlanEditorPage() {
                   <Group gap="sm" wrap="nowrap">
                     <ThemeIcon variant="gradient" radius="xl" size="md"><Text size="sm" fw={800} c="white">{index + 1}</Text></ThemeIcon>
                     <TextInput value={g.name} onChange={(e) => update(g.key, { name: e.currentTarget.value })} aria-label={t("plans.groupName")} w={240} />
-                    <Tooltip label={members.join(", ") || t("plans.noMembers")} multiline maw={360} withArrow>
-                      <Badge variant="light" color={members.length ? "violet" : "gray"} leftSection={<IconUsersGroup size={12} />}>
+                    <Tooltip label={members.join(", ") || t("plans.noMembers")} multiline maw={360}>
+                      <Badge color={members.length ? "violet" : "gray"} leftSection={<IconUsersGroup size={12} />}>
                         {t("plans.hostCount", { count: members.length })}
                       </Badge>
                     </Tooltip>
@@ -230,7 +230,7 @@ export function PlanEditorPage() {
                       <Select label={t("plans.bySite")} placeholder={t("plans.anySite")} clearable data={sites.map((s) => ({ value: s.id, label: s.name }))}
                         value={g.memberSiteId} onChange={(v) => update(g.key, { memberSiteId: v })} />
                     </Group>
-                    <Tooltip label={othersElsewhere ? t("plans.othersTaken", { name: othersElsewhere.name }) : t("plans.othersHint")} multiline w={320} withArrow>
+                    <Tooltip label={othersElsewhere ? t("plans.othersTaken", { name: othersElsewhere.name }) : t("plans.othersHint")} multiline w={320}>
                       <div>
                         <Switch label={t("plans.includeOthers")} checked={g.includeOthers} disabled={!!othersElsewhere && !g.includeOthers}
                           onChange={(e) => set({ groups: draft.groups.map((x) => ({ ...x, includeOthers: x.key === g.key ? e.currentTarget.checked : false })) })} />

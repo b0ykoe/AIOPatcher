@@ -55,7 +55,7 @@ export function LoginPage({ onLoggedIn }: { onLoggedIn: () => void }) {
               </>
             )}
             {ssoState && (
-              <Alert color="red" variant="light" icon={<IconAlertTriangle size={18} />}>
+              <Alert color="red" icon={<IconAlertTriangle size={18} />}>
                 {ssoState === "denied" ? t("login.ssoDenied") : t("login.ssoError")}
               </Alert>
             )}
@@ -75,7 +75,7 @@ export function LoginPage({ onLoggedIn }: { onLoggedIn: () => void }) {
               />
             </Stack>
             {error && (
-              <Alert color="red" variant="light" icon={<IconAlertTriangle size={18} />}>
+              <Alert color="red" icon={<IconAlertTriangle size={18} />}>
                 {error}
               </Alert>
             )}

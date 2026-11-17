@@ -115,7 +115,7 @@ function PasswordCard() {
           <Text size="sm" fw={500}>{t("common.totpCode")}</Text>
           <PinInput length={6} type="number" oneTimeCode value={code} onChange={setCode} aria-label={t("common.totpAria")} />
         </Stack>
-        {error && <Alert color="red" variant="light">{error}</Alert>}
+        {error && <Alert color="red">{error}</Alert>}
         <Group justify="flex-end">
           <Button variant="gradient" className="gradient-button" loading={busy} disabled={!current || !next || code.length !== 6} onClick={() => void submit()}>
             {t("common.save")}

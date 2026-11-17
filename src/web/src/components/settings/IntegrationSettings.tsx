@@ -161,11 +161,11 @@ export function IntegrationSettings() {
                     </Text>
                   </div>
                 </Group>
-                {i.type !== "Opnsense" && <Badge variant="light">{t("integrations.mapped", { count: i.mappedHosts })}</Badge>}
+                {i.type !== "Opnsense" && <Badge>{t("integrations.mapped", { count: i.mappedHosts })}</Badge>}
               </Group>
 
               {result ? (
-                <Alert mt="sm" color={result.ok ? "teal" : "red"} variant="light" p="xs">
+                <Alert mt="sm" color={result.ok ? "teal" : "red"} p="xs">
                   <Text size="sm">{result.message}</Text>
                   {!result.ok && result.presentedFingerprint && (
                     <Button mt="xs" size="compact-xs" variant="light" onClick={() => void pin(i, result.presentedFingerprint!)}>
@@ -181,11 +181,11 @@ export function IntegrationSettings() {
 
               {i.type === "Opnsense" && i.firmware && (
                 <Group gap={6} mt="sm">
-                  <Badge variant="light" color="gray">{t("opnsense.version", { version: i.firmware.productVersion ?? "?" })}</Badge>
+                  <Badge color="gray">{t("opnsense.version", { version: i.firmware.productVersion ?? "?" })}</Badge>
                   {i.firmware.updatesAvailable ? (
-                    <Badge color="orange">{t("opnsense.updateAvailable", { latest: i.firmware.latestVersion ?? "?", count: i.firmware.packageUpdates })}</Badge>
+                    <Badge color="blue">{t("opnsense.updateAvailable", { latest: i.firmware.latestVersion ?? "?", count: i.firmware.packageUpdates })}</Badge>
                   ) : (
-                    <Badge color="teal" variant="light">{t("opnsense.upToDate")}</Badge>
+                    <Badge color="teal">{t("opnsense.upToDate")}</Badge>
                   )}
                   {i.firmware.rebootRequired && <Badge color="yellow">{t("opnsense.reboot")}</Badge>}
                 </Group>
@@ -344,7 +344,7 @@ function IntegrationModal({ integration, sites, onClose, onSaved }: { integratio
         </Group>
         <Switch label={t("notifications.enabled")} checked={enabled} onChange={(e) => setEnabled(e.currentTarget.checked)} />
         <GuidePanel topic={type} defaultOpen={integration === "new"} />
-        {error && <Alert color="red" variant="light">{error}</Alert>}
+        {error && <Alert color="red">{error}</Alert>}
         <Group justify="flex-end">
           <Button variant="default" onClick={onClose}>{t("common.cancel")}</Button>
           <Button variant="gradient" className="gradient-button" loading={busy} disabled={!name.trim() || (integration === "new" && !secret)} onClick={() => void save()}>

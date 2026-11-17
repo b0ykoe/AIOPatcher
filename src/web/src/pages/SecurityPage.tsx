@@ -108,7 +108,7 @@ export function SecurityPage() {
           <Text p="md" c="dimmed" size="sm">{(items ?? []).length === 0 ? t("security.empty") : all.length === 0 ? t("vulns.allAcked") : t("hostsPage.noMatchText")}</Text>
         ) : (
           <Table.ScrollContainer minWidth={900}>
-            <Table verticalSpacing="sm">
+            <Table>
               <Table.Thead>
                 <Table.Tr>
                   <Table.Th>CVE</Table.Th>
@@ -135,10 +135,10 @@ export function SecurityPage() {
                             <Badge size="sm" color="red" variant="filled">KEV</Badge>
                           </Tooltip>
                         )}
-                        {v.kevRansomware && <Badge size="sm" color="red" variant="light">{t("security.ransomware")}</Badge>}
+                        {v.kevRansomware && <Badge size="sm" color="red">{t("security.ransomware")}</Badge>}
                         {v.epss !== null && (
                           <Tooltip label={t("security.epssHint", { percentile: Math.round((v.epssPercentile ?? 0) * 100) })}>
-                            <Badge size="sm" color={epssColor(v.epss)} variant="light">EPSS {pct(v.epss)}</Badge>
+                            <Badge size="sm" color={epssColor(v.epss)}>EPSS {pct(v.epss)}</Badge>
                           </Tooltip>
                         )}
                       </Group>
@@ -169,10 +169,10 @@ export function SecurityPage() {
                       {v.acknowledged ? (
                         <Badge color="gray" variant="outline" leftSection={<IconEyeOff size={10} />}>{t("vulns.acknowledged")}</Badge>
                       ) : v.fixAvailable ? (
-                        <Badge color="teal" variant="light">{t("security.fixAvailable")}</Badge>
+                        <Badge color="teal">{t("security.fixAvailable")}</Badge>
                       ) : (
                         <Tooltip label={t("security.noFixHint")} multiline w={280}>
-                          <Badge color="gray" variant="light">{t("security.noFix")}</Badge>
+                          <Badge color="gray">{t("security.noFix")}</Badge>
                         </Tooltip>
                       )}
                     </Table.Td>

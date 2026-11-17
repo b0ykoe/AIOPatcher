@@ -143,7 +143,7 @@ function BaselineCard({ baseline: b, canEdit, onEdit, onAlign, onDelete }: { bas
     b.rules.firewallProfileId && t("baselines.sumFirewall"),
   ].filter(Boolean);
   return (
-    <Card withBorder>
+    <Card>
       <Group justify="space-between" wrap="nowrap" align="flex-start" mb="xs">
         <div style={{ minWidth: 0 }}>
           <Text fw={700} truncate>{b.name}</Text>
@@ -158,11 +158,11 @@ function BaselineCard({ baseline: b, canEdit, onEdit, onAlign, onDelete }: { bas
       </Group>
       <Text size="sm">{parts.length > 0 ? parts.join(" · ") : t("baselines.noRules")}</Text>
       <Group gap={6} mt="sm" wrap="wrap">
-        <Badge variant="light" color="gray">{t("plans.hostCount", { count: b.members.length })}</Badge>
+        <Badge color="gray">{t("plans.hostCount", { count: b.members.length })}</Badge>
         {b.members.length > 0 && (violating.length === 0
-          ? <Badge variant="light" color="teal">{t("baselines.allCompliant")}</Badge>
+          ? <Badge color="teal">{t("baselines.allCompliant")}</Badge>
           : <Tooltip label={violating.map((m) => `${m.hostName}: ${m.violations}`).join(", ")} multiline w={280}>
-              <Badge variant="light" color="orange">{t("baselines.hostsDeviating", { count: violating.length })}</Badge>
+              <Badge color="orange">{t("baselines.hostsDeviating", { count: violating.length })}</Badge>
             </Tooltip>)}
         {b.includeOthers && <Badge variant="outline" color="violet">{t("plans.includeOthers")}</Badge>}
       </Group>
@@ -249,7 +249,7 @@ function BaselineEditor({ baseline, initial, others, onClose, onSaved }: {
             <Select label={t("plans.bySite")} placeholder={t("plans.anySite")} clearable data={sites.map((s) => ({ value: s.id, label: s.name }))}
               value={draft.memberSiteId} onChange={(v) => setDraft({ ...draft, memberSiteId: v })} />
           </Group>
-          <Tooltip label={othersTaken ? t("baselines.othersTaken", { name: othersTaken.name }) : t("baselines.othersHint")} multiline w={320} withArrow>
+          <Tooltip label={othersTaken ? t("baselines.othersTaken", { name: othersTaken.name }) : t("baselines.othersHint")} multiline w={320}>
             <div><Switch label={t("plans.includeOthers")} checked={draft.includeOthers} disabled={!!othersTaken && !draft.includeOthers}
               onChange={(e) => setDraft({ ...draft, includeOthers: e.currentTarget.checked })} /></div>
           </Tooltip>
@@ -263,7 +263,7 @@ function BaselineEditor({ baseline, initial, others, onClose, onSaved }: {
           <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
             {baselineSettings.map((s) => {
               const value = settingValue(s.id);
-              const label = <Group gap={6} wrap="nowrap" component="span"><Badge size="xs" variant="light" color={s.os === "Linux" ? "orange" : "blue"}>{s.os}</Badge>{t(`compliance.setting_${s.id}`, { defaultValue: s.id })}</Group>;
+              const label = <Group gap={6} wrap="nowrap" component="span"><Badge size="xs" color={s.os === "Linux" ? "orange" : "blue"}>{s.os}</Badge>{t(`compliance.setting_${s.id}`, { defaultValue: s.id })}</Group>;
               return s.values.length > 0 ? (
                 <Select key={s.id} label={label} placeholder={t("baselines.notSet")} clearable value={value}
                   data={s.values.map((v) => ({ value: v, label: t(`baselines.val_${s.id}_${v}`, { defaultValue: v }) }))}
@@ -276,7 +276,7 @@ function BaselineEditor({ baseline, initial, others, onClose, onSaved }: {
             })}
           </SimpleGrid>
           {settingValue("ssh.passwordAuthentication") === "no" && rules.keys.length === 0 && (
-            <Alert color="orange" variant="light">{t("baselines.passwordOffNoKeys")}</Alert>
+            <Alert color="orange">{t("baselines.passwordOffNoKeys")}</Alert>
           )}
         </Section>
 
@@ -299,7 +299,7 @@ function BaselineEditor({ baseline, initial, others, onClose, onSaved }: {
             <Button size="xs" variant="light" leftSection={<IconPlus size={14} />} onClick={() => setRules({ users: [...rules.users, { name: "", requirement: "Admin", os: "Any" }] })}>
               {t("baselines.addUser")}
             </Button>
-            <Tooltip label={t("baselines.onlyListedAdminsHint")} multiline w={320} withArrow>
+            <Tooltip label={t("baselines.onlyListedAdminsHint")} multiline w={320}>
               <div><Switch label={t("baselines.onlyListedAdmins")} checked={rules.onlyListedAdmins} onChange={(e) => setRules({ onlyListedAdmins: e.currentTarget.checked })} /></div>
             </Tooltip>
           </Group>

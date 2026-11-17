@@ -75,7 +75,7 @@ export function SsoSettings() {
       {/* Breite Bildschirme: links Verbindung + Erweitert, rechts Gruppen → Rollen (wie Integrationen/Benachrichtigungen). */}
       <SimpleGrid cols={{ base: 1, lg: 2 }} spacing="md" style={{ alignItems: "start" }}>
         <Stack>
-          <Card withBorder>
+          <Card>
             <Stack>
               <Switch size="md" label={t("sso.enabled")} checked={data.enabled} onChange={(e) => set({ enabled: e.currentTarget.checked })} />
               <SimpleGrid cols={{ base: 1, sm: 2 }}>
@@ -86,13 +86,13 @@ export function SsoSettings() {
                 <PasswordInput label={t("sso.clientSecret")} description={data.hasClientSecret ? t("sso.secretStored") : t("sso.secretMissing")}
                   placeholder={data.hasClientSecret ? "••••••••" : ""} value={secret ?? ""} onChange={(e) => setSecret(e.currentTarget.value)} autoComplete="new-password" />
               </SimpleGrid>
-              <Alert color="blue" variant="light" icon={<IconInfoCircle size={18} />}>
+              <Alert color="blue" icon={<IconInfoCircle size={18} />}>
                 {t("sso.redirectHint")} <Code>{redirectUri}</Code>
               </Alert>
             </Stack>
           </Card>
 
-          <Card withBorder>
+          <Card>
             <Stack>
               <Text fw={700}>{t("sso.advanced")}</Text>
               <SimpleGrid cols={{ base: 1, sm: 2 }}>
@@ -105,7 +105,7 @@ export function SsoSettings() {
           </Card>
         </Stack>
 
-        <Card withBorder>
+        <Card>
           <Stack>
             <Text fw={700}>{t("sso.mappingTitle")}</Text>
             <Text size="sm" c="dimmed">{t("sso.mappingIntro")}</Text>
@@ -142,7 +142,7 @@ export function SsoSettings() {
                 {t("sso.addMapping")}
               </Button>
             </Group>
-            {err("roleMappings") && <Alert color="red" variant="light">{err("roleMappings")}</Alert>}
+            {err("roleMappings") && <Alert color="red">{err("roleMappings")}</Alert>}
             <SimpleGrid cols={{ base: 1, sm: 2 }}>
               <Select label={t("sso.defaultRole")} description={t("sso.defaultRoleHint")} clearable placeholder={t("sso.deny")}
                 data={roles} value={data.defaultRole} onChange={(v) => set({ defaultRole: (v as UserRole) ?? null })} />

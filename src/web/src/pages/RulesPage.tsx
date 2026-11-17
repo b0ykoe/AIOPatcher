@@ -245,7 +245,7 @@ function FreezeModal({ opened, sites, onClose, onSaved }: { opened: boolean; sit
         </Group>
         <TextInput label={t("rules.reason")} value={reason} onChange={(e) => setReason(e.currentTarget.value)} />
         <Text size="xs" c="dimmed">{t("rules.freezeExplain")}</Text>
-        {error && <Alert color="red" variant="light">{error}</Alert>}
+        {error && <Alert color="red">{error}</Alert>}
         <Group justify="flex-end">
           <Button variant="default" onClick={onClose}>{t("common.cancel")}</Button>
           <Button variant="gradient" className="gradient-button" loading={busy} disabled={!name.trim() || !startsAt || !endsAt} onClick={() => void save()}>
@@ -344,7 +344,7 @@ export function HoldModal({
         {scope === "host" && <Select searchable data={hosts.map((h) => ({ value: h.id, label: `${h.name} (${h.siteName})` }))} value={hostId} onChange={setHostId} placeholder={t("rules.host")} />}
         <TextInput label={t("rules.reason")} placeholder={t("rules.reasonPlaceholder")} value={reason} onChange={(e) => setReason(e.currentTarget.value)} />
         <TextInput type="datetime-local" label={t("rules.expires")} description={t("rules.expiresHint")} value={expiresAt} onChange={(e) => setExpiresAt(e.currentTarget.value)} />
-        {error && <Alert color="red" variant="light">{error}</Alert>}
+        {error && <Alert color="red">{error}</Alert>}
         <Group justify="flex-end">
           <Button variant="default" onClick={onClose}>{t("common.cancel")}</Button>
           <Button

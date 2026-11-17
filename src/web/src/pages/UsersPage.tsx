@@ -26,7 +26,7 @@ import { confirmAction, EmptyState, errorText, notifyError, notifySuccess, PageH
 
 const roles: UserRole[] = ["Admin", "Operator", "Viewer"];
 
-const statusColor: Record<UserStatus, MantineColor> = { Active: "teal", Invited: "blue", InviteExpired: "orange", Disabled: "gray" };
+const statusColor: Record<UserStatus, MantineColor> = { Active: "teal", Invited: "gray", InviteExpired: "orange", Disabled: "gray" };
 
 export function UsersPage() {
   const { t } = useTranslation();
@@ -129,7 +129,7 @@ export function UsersPage() {
           <EmptyState icon={<IconUsers size={28} />} title={t("users.title")} text={t("users.description")} />
         ) : (
           <Table.ScrollContainer minWidth={640}>
-            <Table verticalSpacing="sm" highlightOnHover>
+            <Table>
               <Table.Thead>
                 <Table.Tr>
                   <Table.Th>{t("common.username")}</Table.Th>
@@ -147,8 +147,8 @@ export function UsersPage() {
                       <Table.Td>
                         <Group gap={6} wrap="nowrap">
                           <Text fw={600}>{u.username}</Text>
-                          {self && <Badge size="xs" variant="light">{t("common.you")}</Badge>}
-                          {u.sso && <Badge size="xs" color="grape" variant="light">{u.ssoOnly ? t("users.ssoOnly") : t("users.ssoLinked")}</Badge>}
+                          {self && <Badge size="xs">{t("common.you")}</Badge>}
+                          {u.sso && <Badge size="xs" color="grape">{u.ssoOnly ? t("users.ssoOnly") : t("users.ssoLinked")}</Badge>}
                         </Group>
                         {u.createdBy && <Text size="xs" c="dimmed">{t("users.createdBy", { name: u.createdBy })}</Text>}
                       </Table.Td>
@@ -165,7 +165,7 @@ export function UsersPage() {
                         />
                       </Table.Td>
                       <Table.Td>
-                        <Badge color={statusColor[u.status]} variant="light">
+                        <Badge color={statusColor[u.status]}>
                           {t(`users.status${u.status}`)}
                         </Badge>
                         {u.inviteExpiresAt && u.status === "Invited" && (
@@ -222,7 +222,7 @@ export function UsersPage() {
           <Stack gap={6}>
             {roles.map((r) => (
               <Group key={r} gap="xs" wrap="nowrap" align="flex-start">
-                <Badge variant="light" w={92}>{t(`roles.${r}`)}</Badge>
+                <Badge w={92}>{t(`roles.${r}`)}</Badge>
                 <Text size="sm" c="dimmed">{t(`roles.${r}Hint`)}</Text>
               </Group>
             ))}
@@ -292,7 +292,7 @@ function InviteModal({ opened, onClose, onCreated }: { opened: boolean; onClose:
           allowDeselect={false}
           onChange={(v) => v && setRole(v as UserRole)}
         />
-        {error && <Alert color="red" variant="light">{error}</Alert>}
+        {error && <Alert color="red">{error}</Alert>}
         <Group justify="flex-end">
           <Button variant="default" onClick={onClose}>{t("common.cancel")}</Button>
           <Button variant="gradient" className="gradient-button" loading={busy} disabled={username.trim().length < 3} onClick={() => void submit()}>

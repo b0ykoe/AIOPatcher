@@ -21,7 +21,7 @@ export function PlanCard({ host, modules, onChanged }: { host: HostSummary; modu
   const isLinux = host.osFamily === "Linux";
 
   return (
-    <Card withBorder>
+    <Card>
       <Group justify="space-between" wrap="wrap" gap="sm" align="flex-start">
         <Group gap="sm" wrap="nowrap" align="flex-start">
           <ThemeIcon variant="light" size="lg" color={host.planId ? "violet" : "gray"}><IconCalendarTime size={20} /></ThemeIcon>
@@ -29,7 +29,7 @@ export function PlanCard({ host, modules, onChanged }: { host: HostSummary; modu
             <Group gap={8}>
               <Text fw={700}>{host.scheduledRunbook ?? t("overview.noPlan")}</Text>
               {host.planId && (
-                <Badge size="sm" variant="light" color="gray">
+                <Badge size="sm" color="gray">
                   {host.planVia === "Rule" ? t("plans.viaRule") : host.planVia === "Others" ? t("plans.viaOthers") : t("plans.viaHost")}
                 </Badge>
               )}
@@ -63,7 +63,7 @@ export function PlanCard({ host, modules, onChanged }: { host: HostSummary; modu
       </Group>
 
       {a.enabled && host.nativeAutoUpdatesEnabled && (
-        <Alert mt="sm" color="yellow" variant="light" icon={<IconAlertTriangle size={18} />}>
+        <Alert mt="sm" color="yellow" icon={<IconAlertTriangle size={18} />}>
           <Group justify="space-between" gap="xs" wrap="wrap">
             <Text size="sm">{t("autoPatch.nativeConflict")}</Text>
             <NativeUpdatesButton hostId={host.id} enabled modules={modules} isLinux={isLinux} onDone={onChanged} />
@@ -76,7 +76,7 @@ export function PlanCard({ host, modules, onChanged }: { host: HostSummary; modu
           <Group justify="space-between" gap="xs" wrap="wrap">
             <Group gap={6}>
               <Text size="sm">{t(isLinux ? "nativeUpdates.labelLinux" : "nativeUpdates.labelWindows")}</Text>
-              <Badge size="sm" variant="light" color={host.nativeAutoUpdatesEnabled ? "yellow" : "gray"}>
+              <Badge size="sm" color={host.nativeAutoUpdatesEnabled ? "yellow" : "gray"}>
                 {host.nativeAutoUpdatesEnabled ? t("nativeUpdates.active") : t("nativeUpdates.inactive")}
               </Badge>
             </Group>

@@ -60,7 +60,7 @@ export function AssignPlanModal({ opened, onClose, onDone, hostIds, hosts }: {
           <MultiSelect label={t("nav.hosts")} data={hosts.map((h) => ({ value: h.id, label: h.name }))} value={selected} onChange={setSelected} searchable clearable />
         )}
         {plans.length === 0 ? (
-          <Alert color="yellow" variant="light">{t("plans.noPlansYet")}</Alert>
+          <Alert color="yellow">{t("plans.noPlansYet")}</Alert>
         ) : (
           <Group grow align="flex-start">
             <Select label={t("hubs.plans")} data={plans.map((p) => ({ value: p.id, label: p.name }))} value={planId} onChange={setPlanId} allowDeselect={false} />
@@ -69,7 +69,7 @@ export function AssignPlanModal({ opened, onClose, onDone, hostIds, hosts }: {
           </Group>
         )}
         <Text size="xs" c="dimmed">{t("plans.assignHint")}</Text>
-        {error && <Alert color="red" variant="light">{error}</Alert>}
+        {error && <Alert color="red">{error}</Alert>}
         <Group justify="space-between">
           <Button variant="subtle" color="gray" onClick={() => void save(true)} disabled={selected.length === 0} loading={busy}>
             {t("plans.removeFromPlans")}

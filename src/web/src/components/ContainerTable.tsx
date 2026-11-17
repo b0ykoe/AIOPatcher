@@ -142,7 +142,7 @@ export function ContainerTable({ containers, hostId, onRechecked }: { containers
                   <Badge color="blue">{t("security.newImage")}</Badge>
                 ) : c.checkedAt ? (
                   <Tooltip label={t("security.checked", { when: formatRelative(c.checkedAt) })}>
-                    <Badge color="teal" variant="light">{t("security.upToDate")}</Badge>
+                    <Badge color="teal">{t("security.upToDate")}</Badge>
                   </Tooltip>
                 ) : (
                   <Text size="xs" c="dimmed">…</Text>
@@ -151,7 +151,7 @@ export function ContainerTable({ containers, hostId, onRechecked }: { containers
               {canUpdate && (
                 <Table.Td style={{ whiteSpace: "nowrap" }}>
                   {c.updateAvailable && (c.updateBlocker ? (
-                    <Tooltip label={t(`containers.blocker.${c.updateBlocker}`)} multiline w={300} withArrow>
+                    <Tooltip label={t(`containers.blocker.${c.updateBlocker}`)} multiline w={300}>
                       <Group gap={4} wrap="nowrap" c="dimmed" style={{ cursor: "help" }}>
                         <IconInfoCircle size={14} />
                         <Text size="xs">{t(`containers.blockerShort.${c.updateBlocker}`)}</Text>

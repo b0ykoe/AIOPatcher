@@ -86,7 +86,7 @@ export function BaselineResults({ hostId, baseline, canAlign, busyElsewhere, onA
   });
 
   return (
-    <Card withBorder>
+    <Card>
       <Group justify="space-between" mb="sm" wrap="wrap" gap="sm">
         <Group gap="sm" wrap="nowrap">
           <ThemeIcon variant="light" color={violations.length ? "orange" : unknown ? "gray" : "teal"} radius="md">
@@ -105,7 +105,7 @@ export function BaselineResults({ hostId, baseline, canAlign, busyElsewhere, onA
           </div>
         </Group>
         {canAlign && fixable.length > 0 && (
-          <Tooltip label={busyElsewhere ? t("baselines.jobPending") : t("baselines.alignHint")} multiline w={300} withArrow>
+          <Tooltip label={busyElsewhere ? t("baselines.jobPending") : t("baselines.alignHint")} multiline w={300}>
             <Button size="xs" leftSection={<IconWand size={14} />} loading={busy} disabled={busyElsewhere} onClick={align}>
               {t("baselines.alignN", { count: fixable.length })}
             </Button>
@@ -140,7 +140,7 @@ export function BaselineResults({ hostId, baseline, canAlign, busyElsewhere, onA
                   <Table.Td>
                     <Group gap={6} wrap="nowrap">
                       <Text size="sm" c={r.state === "Violation" ? "orange" : undefined}>{text.actual(r)}</Text>
-                      {r.state === "Violation" && r.fixable && <Badge size="xs" variant="light" style={{ flexShrink: 0 }}>{t("baselines.fixable")}</Badge>}
+                      {r.state === "Violation" && r.fixable && <Badge size="xs" style={{ flexShrink: 0 }}>{t("baselines.fixable")}</Badge>}
                     </Group>
                   </Table.Td>
                 </Table.Tr>

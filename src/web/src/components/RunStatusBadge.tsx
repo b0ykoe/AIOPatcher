@@ -13,9 +13,9 @@ const runColors: Record<RunStatus, MantineColor> = {
 
 const itemColors: Record<RunItemStatus, MantineColor> = {
   Pending: "gray",
-  Preparing: "violet",
+  Preparing: "cyan",
   Running: "cyan",
-  Verifying: "blue",
+  Verifying: "cyan",
   Succeeded: "teal",
   Failed: "red",
   Skipped: "orange",

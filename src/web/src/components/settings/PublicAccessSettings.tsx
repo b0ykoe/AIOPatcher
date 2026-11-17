@@ -110,7 +110,7 @@ export function PublicAccessSettings() {
 
   return (
     <Stack gap="lg">
-      <Card withBorder>
+      <Card>
         <Group gap="md" wrap="nowrap" align="flex-start">
           <ThemeIcon size={42} radius="md" variant="light" color={info.agentUrl ? "teal" : "gray"}><IconWorld size={24} /></ThemeIcon>
           <div>
@@ -162,7 +162,7 @@ export function PublicAccessSettings() {
               ))}
             </SimpleGrid>
 
-            <Alert variant="light" color="blue" icon={<IconInfoCircle size={18} />}>
+            <Alert color="blue" icon={<IconInfoCircle size={18} />}>
               <List size="sm" spacing={4}>
                 <List.Item>{t("publicAccess.target", { target: `http://${info.internalHost}:${info.proxyPort}` })}</List.Item>
                 <List.Item>{t("publicAccess.dns", { host: input.agentHost })}</List.Item>
@@ -173,7 +173,7 @@ export function PublicAccessSettings() {
             {config ? (
               <CopyBlock title={proxyLabel[proxy]} text={config} />
             ) : (
-              <Card withBorder>
+              <Card>
                 <Text fw={700} mb="xs">{proxyLabel[proxy]}</Text>
                 <List type="ordered" size="sm" spacing={6}>
                   {(proxy === "npm" ? ["npm1", "npm2", "npm3", "npm4", "npm5"] : ["opn1", "opn2", "opn3", "opn4"]).map((key) => (
@@ -204,7 +204,7 @@ export function PublicAccessSettings() {
               <>
                 <Text size="sm">{t("publicAccess.testIntro")}</Text>
                 <CopyBlock title={t("publicAccess.testTitle")} text={checkCommand(info.agentUrl, info.checkPath)} />
-                <Card withBorder>
+                <Card>
                   <Group gap="sm" wrap="nowrap" align="flex-start">
                     {info.lastCheck ? (
                       <ThemeIcon color="teal" variant="light" radius="xl"><IconCheck size={18} /></ThemeIcon>
@@ -215,9 +215,9 @@ export function PublicAccessSettings() {
                       <Text fw={600}>{info.lastCheck ? t("publicAccess.checkSeen", { when: formatRelative(info.lastCheck.at) }) : t("publicAccess.checkWaiting")}</Text>
                       {info.lastCheck && (
                         <Group gap={6} mt={4}>
-                          {info.lastCheck.clientIp && <Badge variant="light" color="gray">{t("publicAccess.from", { ip: info.lastCheck.clientIp })}</Badge>}
-                          {info.lastCheck.cloudflare && <Badge variant="light" color="orange" leftSection={<IconBrandCloudflare size={12} />}>Cloudflare</Badge>}
-                          {info.lastCheck.forwardedHost && <Badge variant="light" color="violet">{info.lastCheck.forwardedHost}</Badge>}
+                          {info.lastCheck.clientIp && <Badge color="gray">{t("publicAccess.from", { ip: info.lastCheck.clientIp })}</Badge>}
+                          {info.lastCheck.cloudflare && <Badge color="orange" leftSection={<IconBrandCloudflare size={12} />}>Cloudflare</Badge>}
+                          {info.lastCheck.forwardedHost && <Badge color="violet">{info.lastCheck.forwardedHost}</Badge>}
                         </Group>
                       )}
                       <Text size="xs" c="dimmed" mt={4}>{t("publicAccess.checkExplain")}</Text>
@@ -225,9 +225,9 @@ export function PublicAccessSettings() {
                   </Group>
                 </Card>
                 {!info.trustedProxiesSet && (
-                  <Alert variant="light" color="gray" icon={<IconInfoCircle size={18} />}>{t("publicAccess.trustedHint")}</Alert>
+                  <Alert color="gray" icon={<IconInfoCircle size={18} />}>{t("publicAccess.trustedHint")}</Alert>
                 )}
-                <Alert variant="light" color="violet" icon={<IconPlugConnected size={18} />}>{t("publicAccess.nextHosts")}</Alert>
+                <Alert color="violet" icon={<IconPlugConnected size={18} />}>{t("publicAccess.nextHosts")}</Alert>
               </>
             ) : (
               <Text size="sm" c="dimmed">{t("publicAccess.notSaved")}</Text>

@@ -106,7 +106,7 @@ export function SoftwareTab({ hostId, windows, busy }: { hostId: string; windows
                 </Table.Td>
                 <Table.Td><Text size="xs" ff="monospace">{i.version ?? "–"}</Text></Table.Td>
                 <Table.Td>
-                  {i.availableVersion ? <Badge size="sm" variant="light" color="blue">{i.availableVersion}</Badge> : <Text size="xs" c="dimmed">–</Text>}
+                  {i.availableVersion ? <Badge size="sm" color="blue">{i.availableVersion}</Badge> : <Text size="xs" c="dimmed">–</Text>}
                 </Table.Td>
                 <Table.Td><Text size="xs" c="dimmed" lineClamp={1}>{i.publisher}</Text></Table.Td>
                 <Table.Td>

@@ -97,7 +97,7 @@ export function ApiPage() {
                 <Accordion.Control>
                   <Group gap="xs">
                     <Text fw={600} ff="monospace">/api/{group}</Text>
-                    <Badge size="xs" variant="light">{ops.length}</Badge>
+                    <Badge size="xs">{ops.length}</Badge>
                   </Group>
                 </Accordion.Control>
                 <Accordion.Panel>
@@ -108,7 +108,7 @@ export function ApiPage() {
                       return (
                         <div key={key}>
                           <Group gap="xs" wrap="nowrap">
-                            <Badge w={64} color={methodColor[op.method] ?? "gray"} variant="light">{op.method}</Badge>
+                            <Badge w={64} color={methodColor[op.method] ?? "gray"}>{op.method}</Badge>
                             <Text size="sm" ff="monospace" style={{ flex: 1, wordBreak: "break-all" }}>{op.path}</Text>
                             {canTry && (
                               <Button size="compact-xs" variant="subtle" leftSection={<IconPlayerPlay size={12} />} onClick={() => void tryIt(op)}>

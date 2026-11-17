@@ -21,7 +21,7 @@ const color: Record<Status, string> = { Ok: "teal", Warning: "yellow", Failed: "
 
 function ResultView({ result, running }: { result?: CheckResult; running?: boolean }) {
   const { t } = useTranslation();
-  if (running) return <Badge variant="light" color="gray">{t("checks.running")}</Badge>;
+  if (running) return <Badge color="gray">{t("checks.running")}</Badge>;
   if (!result) return <Text size="xs" c="dimmed">–</Text>;
   return (
     <Group gap={6} wrap="nowrap" align="flex-start">
@@ -252,7 +252,7 @@ export function ChecksPage() {
 
         <Section icon={<IconServer size={20} />} title={t("checks.hosts")} hint={t("checks.hostsHint")}>
           <Table.ScrollContainer minWidth={900}>
-            <Table verticalSpacing="sm">
+            <Table>
               <Table.Thead>
                 <Table.Tr>
                   <Table.Th w={160}>{t("jobs.colHost")}</Table.Th>

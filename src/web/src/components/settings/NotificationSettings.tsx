@@ -149,7 +149,7 @@ export function NotificationSettings() {
               </Group>
               <Group gap={4} mt="sm">
                 {c.events.map((e) => (
-                  <Badge key={e} size="xs" variant="light">
+                  <Badge key={e} size="xs">
                     {t(`notificationEvents.${e}`)}
                   </Badge>
                 ))}
@@ -353,7 +353,7 @@ export function ChannelModal({ channel, sites, onClose, onSaved, initialType = "
         </div>
 
         <GuidePanel topic={type} defaultOpen={channel === "new"} />
-        {error && <Alert color="red" variant="light">{error}</Alert>}
+        {error && <Alert color="red">{error}</Alert>}
         <Group justify="flex-end">
           <Button variant="default" onClick={onClose}>
             {t("common.cancel")}

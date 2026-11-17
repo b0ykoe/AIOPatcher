@@ -18,27 +18,27 @@ export function GeneralSettings() {
 
   return (
     <div className="card-grid card-grid-wide">
-      <Card withBorder>
+      <Card>
         <Text fw={700} mb="sm">{t("settings.generalVersion")}</Text>
         <Group gap="sm">
           <Text ff="monospace">v{info?.version ?? "…"}</Text>
           {info?.updateAvailable && info.latestVersion ? (
-            <Badge color="violet" variant="light" component="a" href={info.releaseUrl ?? undefined} target="_blank" style={{ cursor: "pointer" }}>
+            <Badge color="violet" component="a" href={info.releaseUrl ?? undefined} target="_blank" style={{ cursor: "pointer" }}>
               {t("settings.updateAvailable", { version: info.latestVersion })}
             </Badge>
-          ) : info?.latestVersion ? <Badge color="teal" variant="light">{t("settings.upToDate")}</Badge> : null}
+          ) : info?.latestVersion ? <Badge color="teal">{t("settings.upToDate")}</Badge> : null}
         </Group>
         <Text fw={700} mt="lg" mb={4}>{t("settings.generalTimeZone")}</Text>
         <Text ff="monospace">{info?.timeZone ?? "…"}</Text>
         <Text size="xs" c="dimmed">{t("settings.generalTimeZoneHint")}</Text>
       </Card>
 
-      <Card withBorder>
+      <Card>
         <Text fw={700} mb="sm">{t("settings.generalCve")}</Text>
         <MirrorStatusLine />
       </Card>
 
-      <Card withBorder>
+      <Card>
         <Stack gap="xs">
           <Text fw={700}>{t("settings.generalWizard")}</Text>
           <Text size="sm" c="dimmed">{t("settings.generalWizardText")}</Text>
@@ -46,7 +46,7 @@ export function GeneralSettings() {
         </Stack>
       </Card>
 
-      <Card withBorder>
+      <Card>
         <Stack gap="xs">
           <Text fw={700}>{t("settings.generalApi")}</Text>
           <Text size="sm" c="dimmed">{t("settings.generalApiText")}</Text>

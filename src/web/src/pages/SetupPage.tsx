@@ -92,7 +92,7 @@ export function SetupPage({ onCompleted }: { onCompleted: () => void }) {
         )}
 
         {error && (
-          <Alert color="red" variant="light" icon={<IconAlertTriangle size={18} />} mt="md">
+          <Alert color="red" icon={<IconAlertTriangle size={18} />} mt="md">
             {error}
           </Alert>
         )}

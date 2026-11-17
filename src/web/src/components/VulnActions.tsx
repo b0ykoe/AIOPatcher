@@ -120,7 +120,7 @@ function CheckResult({ r }: { r: FixCheck }) {
   const vars = { host: r.hostName, package: r.package ?? "?", installed: r.installed ?? "?", fixedIn: r.fixedIn ?? "?", distribution: r.distribution ?? "?" };
   return (
     <Group gap="sm" wrap="nowrap" align="flex-start">
-      <Badge color={verdictColor[r.verdict]} variant="light" style={{ flexShrink: 0 }} mt={2}>{t(`vulns.verdict.${r.verdict}`)}</Badge>
+      <Badge color={verdictColor[r.verdict]} style={{ flexShrink: 0 }} mt={2}>{t(`vulns.verdict.${r.verdict}`)}</Badge>
       <div>
         <Text size="sm">
           <Anchor component={Link} to={`/hosts/${r.hostId}`} size="sm" fw={600}>{r.hostName}</Anchor>
@@ -181,7 +181,7 @@ export function VulnHostsPanel({ cve, hosts, autoCheck, onChanged }: { cve: stri
         <Group gap="xs">
           <IconServer size={18} />
           <Text fw={600}>{t("cveLookup.yourHosts")}</Text>
-          <Badge variant="light" color={hosts.length ? "red" : "teal"}>{hosts.length}</Badge>
+          <Badge color={hosts.length ? "red" : "teal"}>{hosts.length}</Badge>
         </Group>
         {can.operate && hosts.length > 0 && (
           <Group gap="xs">
@@ -238,7 +238,7 @@ export function VulnHostsPanel({ cve, hosts, autoCheck, onChanged }: { cve: stri
         </Group>
       ) : (
         <Table.ScrollContainer minWidth={480}>
-          <Table verticalSpacing="sm">
+          <Table>
             <Table.Thead>
               <Table.Tr>
                 <Table.Th>{t("cveLookup.host")}</Table.Th>
@@ -257,12 +257,12 @@ export function VulnHostsPanel({ cve, hosts, autoCheck, onChanged }: { cve: stri
                   <Table.Td>
                     {h.fix ? (
                       <Group gap={6} wrap="nowrap">
-                        <Badge color="teal" variant="light">{t("security.fixAvailable")}</Badge>
+                        <Badge color="teal">{t("security.fixAvailable")}</Badge>
                         <Text size="sm" lineClamp={1}>{h.fix}</Text>
                       </Group>
                     ) : (
                       <Group gap={6} wrap="nowrap">
-                        <Badge color="gray" variant="light">{t("security.noFix")}</Badge>
+                        <Badge color="gray">{t("security.noFix")}</Badge>
                         <Text size="sm" ff="monospace">{h.package}</Text>
                       </Group>
                     )}

@@ -126,7 +126,7 @@ export function HostStatusLabel({ status }: { status: HostStatus }) {
 }
 
 const jobStatus: Record<JobStatus, MantineColor> = {
-  Queued: "blue",
+  Queued: "gray",
   Running: "cyan",
   Succeeded: "teal",
   Failed: "red",

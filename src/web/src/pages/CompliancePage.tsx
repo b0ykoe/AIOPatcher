@@ -78,7 +78,7 @@ function Overview() {
       </SimpleGrid>
       <Card p={0}>
         <Table.ScrollContainer minWidth={900}>
-          <Table verticalSpacing="sm" highlightOnHover>
+          <Table>
             <Table.Thead>
               <Table.Tr>
                 <Table.Th>Host</Table.Th>
@@ -102,9 +102,9 @@ function Overview() {
                       <Group gap={6} wrap="nowrap">
                         <Text size="sm" truncate maw={180}>{h.baselineName}</Text>
                         {!h.collectedAt ? null : h.baselineViolations > 0
-                          ? <Badge size="xs" color="orange" variant="light" style={{ flexShrink: 0 }}>{t("baselines.deviations", { count: h.baselineViolations })}</Badge>
-                          : h.baselineUnknown > 0 ? <Badge size="xs" color="gray" variant="light" style={{ flexShrink: 0 }}>?</Badge>
-                            : <Badge size="xs" color="teal" variant="light" style={{ flexShrink: 0 }}>OK</Badge>}
+                          ? <Badge size="xs" color="orange" style={{ flexShrink: 0 }}>{t("baselines.deviations", { count: h.baselineViolations })}</Badge>
+                          : h.baselineUnknown > 0 ? <Badge size="xs" color="gray" style={{ flexShrink: 0 }}>?</Badge>
+                            : <Badge size="xs" color="teal" style={{ flexShrink: 0 }}>OK</Badge>}
                       </Group>
                     ) : <Text size="sm" c="dimmed">–</Text>}
                   </Table.Td>
@@ -114,7 +114,7 @@ function Overview() {
                     <>
                       <Table.Td>
                         <Group gap={6}>
-                          <Badge color={h.firewallEnabled ? "teal" : "red"} variant="light">{h.firewallEnabled ? t("compliance.on") : t("compliance.off")}</Badge>
+                          <Badge color={h.firewallEnabled ? "teal" : "red"}>{h.firewallEnabled ? t("compliance.on") : t("compliance.off")}</Badge>
                           <Text size="sm">{t(`compliance.product_${h.firewallProduct}`, { defaultValue: h.firewallProduct ?? "" })}</Text>
                         </Group>
                       </Table.Td>
@@ -122,14 +122,14 @@ function Overview() {
                         {h.firewallVersion ? (
                           <Group gap={6}>
                             <Text size="sm">{h.firewallVersion.profileName} v{h.firewallVersion.number}</Text>
-                            {h.firewallDrift && <Tooltip label={t("compliance.driftHint")}><Badge size="xs" color="orange" variant="light">{t("compliance.drift")}</Badge></Tooltip>}
+                            {h.firewallDrift && <Tooltip label={t("compliance.driftHint")}><Badge size="xs" color="orange">{t("compliance.drift")}</Badge></Tooltip>}
                           </Group>
                         ) : <Text size="sm" c="dimmed">–</Text>}
                       </Table.Td>
                       <Table.Td>
                         {h.remoteAccessIssues > 0
-                          ? <Badge color="orange" variant="light">{t("compliance.issues", { count: h.remoteAccessIssues })}</Badge>
-                          : <Badge color="teal" variant="light">OK</Badge>}
+                          ? <Badge color="orange">{t("compliance.issues", { count: h.remoteAccessIssues })}</Badge>
+                          : <Badge color="teal">OK</Badge>}
                       </Table.Td>
                       <Table.Td>
                         <Group gap={6}>
@@ -182,7 +182,7 @@ function FirewallProfiles() {
       {profiles.map((p) => {
         const latest = p.versions[0];
         return (
-          <Card key={p.id} withBorder>
+          <Card key={p.id}>
             <Group justify="space-between" mb="xs" wrap="wrap">
               <div>
                 <Text fw={700}>{p.name}</Text>
@@ -220,7 +220,7 @@ function FirewallProfiles() {
                     <Table.Td>
                       <Group gap={6}>
                         <Text fw={600}>v{v.number}</Text>
-                        {i === 0 && <Badge size="xs" variant="light">{t("compliance.latest")}</Badge>}
+                        {i === 0 && <Badge size="xs">{t("compliance.latest")}</Badge>}
                       </Group>
                       <Text size="xs" c="dimmed">{formatDateTime(v.createdAt)} · {v.createdBy}</Text>
                     </Table.Td>
@@ -228,7 +228,7 @@ function FirewallProfiles() {
                       <Text size="sm"><ConfigSummary config={v.config} /></Text>
                     </Table.Td>
                     <Table.Td><Text size="sm" c="dimmed">{v.note ?? ""}</Text></Table.Td>
-                    <Table.Td>{v.hosts > 0 ? <Badge variant="light">{t("compliance.hostsCount", { count: v.hosts })}</Badge> : "–"}</Table.Td>
+                    <Table.Td>{v.hosts > 0 ? <Badge>{t("compliance.hostsCount", { count: v.hosts })}</Badge> : "–"}</Table.Td>
                     <Table.Td>
                       {canDeploy && (
                         <Button size="xs" variant={i === 0 ? "filled" : "default"} leftSection={i === 0 ? <IconRocket size={14} /> : <IconHistory size={14} />}

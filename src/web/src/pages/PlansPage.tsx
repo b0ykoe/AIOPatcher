@@ -80,7 +80,7 @@ export function PlansPage() {
       />
 
       {unplanned.length > 0 && plans && plans.length > 0 && (
-        <Alert color="yellow" variant="light" mb="lg" icon={<IconUsersGroup size={18} />} title={t("plans.unplannedTitle", { count: unplanned.length })}>
+        <Alert color="yellow" mb="lg" icon={<IconUsersGroup size={18} />} title={t("plans.unplannedTitle", { count: unplanned.length })}>
           <Group justify="space-between" gap="xs" wrap="wrap">
             <Text size="sm">{unplanned.slice(0, 8).map((h) => h.name).join(", ")}{unplanned.length > 8 ? " …" : ""}</Text>
             {can.operate && <Button size="xs" variant="light" color="yellow" onClick={() => setAssignOpen(true)}>{t("plans.assignShort")}</Button>}
@@ -127,7 +127,7 @@ export function PlansPage() {
                         <Group gap={6} wrap="wrap">
                           <Text size="sm" fw={600}>{w.name}</Text>
                           <Tooltip label={w.members.map((m) => m.name).join(", ") || t("plans.noMembers")} multiline maw={360} withArrow>
-                            <Badge size="sm" variant="light" color={w.members.length ? "violet" : "gray"}>{t("plans.hostCount", { count: w.members.length })}</Badge>
+                            <Badge size="sm" color={w.members.length ? "violet" : "gray"}>{t("plans.hostCount", { count: w.members.length })}</Badge>
                           </Tooltip>
                           {w.includeOthers && <Badge size="sm" variant="outline" color="gray">{t("plans.badgeOthers")}</Badge>}
                           {w.memberTags && <Badge size="sm" variant="outline" color="gray">#{w.memberTags.replaceAll(",", " #")}</Badge>}

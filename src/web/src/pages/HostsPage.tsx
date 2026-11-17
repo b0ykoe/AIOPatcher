@@ -163,8 +163,8 @@ export function HostsPage() {
                       {h.lastScanAt && <Badge size="sm" color={h.securityUpdates > 0 ? "pink" : "gray"}>{h.pendingUpdates} Updates{h.securityUpdates > 0 ? ` · ${h.securityUpdates} Sec` : ""}</Badge>}
                       {h.kevUpdates > 0 && <Badge size="sm" color="red" variant="filled">KEV</Badge>}
                       {h.containerUpdates > 0 && <ContainerUpdatesBadge hostId={h.id} count={h.containerUpdates} size="sm" />}
-                      {h.rebootRequired && <Badge size="sm" color="orange">{t("overview.rebootRequired")}</Badge>}
-                      {h.scheduledRunbook && <Badge size="sm" color="violet" variant="light" leftSection={<IconClock size={11} />}>{h.scheduledRunbook}</Badge>}
+                      {h.rebootRequired && <Badge size="sm" color="yellow">{t("overview.rebootRequired")}</Badge>}
+                      {h.scheduledRunbook && <Badge size="sm" color="violet" leftSection={<IconClock size={11} />}>{h.scheduledRunbook}</Badge>}
                     </Group>
                   </Stack>
                 </Group>
@@ -471,7 +471,7 @@ function HostHints({ host: h }: { host: HostSummary }) {
   if (h.kevUpdates > 0) hints.push({ key: "kev", label: "KEV", node: <Tooltip label={t("security.kevHint")}><Badge color="red" variant="filled">KEV</Badge></Tooltip> });
   if (h.rebootRequired) hints.push({ key: "reboot", label: t("jobType.reboot"), node: <Badge color="yellow" leftSection={<IconRefresh size={12} />}>{t("jobType.reboot")}</Badge> });
   if (h.containerUpdates > 0) hints.push({ key: "containers", label: t("security.containerBadge", { count: h.containerUpdates }), node: <ContainerUpdatesBadge hostId={h.id} count={h.containerUpdates} /> });
-  if (h.nativeAutoUpdatesEnabled) hints.push({ key: "native", label: t("hostsPage.native"), node: <Tooltip label={t("hostsPage.nativeHint")}><Badge color="blue">{t("hostsPage.native")}</Badge></Tooltip> });
+  if (h.nativeAutoUpdatesEnabled) hints.push({ key: "native", label: t("hostsPage.native"), node: <Tooltip label={t("hostsPage.nativeHint")}><Badge color="yellow">{t("hostsPage.native")}</Badge></Tooltip> });
   const rest = hints.slice(2);
   return (
     <Group gap={6} wrap="nowrap">

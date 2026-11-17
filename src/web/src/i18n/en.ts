@@ -1042,6 +1042,9 @@ const en: Translation = {
     },
   },
   metrics: {
+    ofCpus: "of {{count}} CPUs",
+    uptimeLabel: "Uptime",
+    loadLabel: "Load (1 / 5 / 15 min)",
     current: "Current",
     description: "CPU, RAM and storage of hosts (every 5 minutes) and Proxmox guests, even without an agent.",
     filter: "Filter …",

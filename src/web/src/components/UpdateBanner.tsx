@@ -18,7 +18,7 @@ export function UpdateBanner() {
   if (!info?.updateAvailable) return null;
 
   return (
-    <Alert mb="lg" color="violet" variant="light" icon={<IconSparkles size={18} />} title={t("update.title", { version: info.latestVersion, current: info.version })}>
+    <Alert mb="lg" color="violet" icon={<IconSparkles size={18} />} title={t("update.title", { version: info.latestVersion, current: info.version })}>
       <Text size="sm">{t("update.text")}</Text>
       <Code block mt={6}>docker compose pull && docker compose up -d</Code>
       {info.releaseUrl && (

@@ -21,7 +21,7 @@ export function RebootCheckAlert({ hostId, check, onChanged }: { hostId: string;
   if (check.missing.length === 0) {
     if (Date.now() - new Date(check.checkedAt).getTime() > showAllGoodFor) return null;
     return (
-      <Alert mb="md" color="teal" variant="light" icon={<IconCircleCheck size={18} />}>
+      <Alert mb="md" color="teal" icon={<IconCircleCheck size={18} />}>
         <Text size="sm">
           {t("rebootCheck.allGood", { when: formatRelative(check.bootedAt) })} <Text span c="dimmed" size="sm">({before})</Text>
         </Text>
@@ -39,14 +39,14 @@ export function RebootCheckAlert({ hostId, check, onChanged }: { hostId: string;
   };
 
   return (
-    <Alert mb="md" color="red" variant="light" icon={<IconPower size={18} />}
+    <Alert mb="md" color="red" icon={<IconPower size={18} />}
       title={t("rebootCheck.title", { count: check.missing.length, when: formatDateTime(check.bootedAt) })}>
       <Stack gap="xs">
         <Text size="sm">{t("rebootCheck.text", { baseline: formatDateTime(check.baselineAt) })}</Text>
         <Group gap={6} wrap="wrap">
           {check.missing.map((m) => (
-            <Tooltip key={`${m.kind}:${m.name}`} label={t(`rebootCheck.reason_${m.reason ?? "none"}`)} multiline w={280} withArrow>
-              <Badge size="lg" variant="light" color={m.reason ? "red" : "orange"} tt="none" fw={600}
+            <Tooltip key={`${m.kind}:${m.name}`} label={t(`rebootCheck.reason_${m.reason ?? "none"}`)} multiline w={280}>
+              <Badge size="lg" color={m.reason ? "red" : "orange"} tt="none" fw={600}
                 leftSection={m.kind === "container" ? <IconBrandDocker size={14} /> : <IconSettingsAutomation size={14} />}>
                 <Text span size="sm" ff="monospace">{m.name}</Text>
               </Badge>

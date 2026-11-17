@@ -61,12 +61,12 @@ export function ComplianceTab({ hostId, os }: { hostId: string; os: OsFamily }) 
   return (
     <Stack p="md" gap="lg">
       {(canFirewall || canRemote || canUsers) && (
-        <Alert color="gray" variant="light" icon={<IconInfoCircle size={18} />}>
+        <Alert color="gray" icon={<IconInfoCircle size={18} />}>
           {t("compliance.policyHint")} <Code>{os === "Windows" ? "& 'C:\\Program Files\\AIOPatcher\\aiopatcher-agent.exe' policy set allowSystemChanges true" : "sudo aiopatcher-agent policy set allowSystemChanges true"}</Code>
         </Alert>
       )}
       {data.hasPendingChange && (
-        <Alert color="blue" variant="light" icon={<Loader size={16} />}>{t("compliance.pending")}</Alert>
+        <Alert color="blue" icon={<Loader size={16} />}>{t("compliance.pending")}</Alert>
       )}
 
       {data.baseline ? (
@@ -79,12 +79,12 @@ export function ComplianceTab({ hostId, os }: { hostId: string; os: OsFamily }) 
       )}
 
       {/* --- Firewall --- */}
-      <Card withBorder>
+      <Card>
         <Group justify="space-between" mb="sm" wrap="wrap">
           <Group gap="sm">
             {fw.enabled ? <IconShieldCheck size={22} color="var(--mantine-color-teal-5)" /> : <IconShieldOff size={22} color="var(--mantine-color-red-5)" />}
             <Text fw={700}>{t("compliance.firewall")}</Text>
-            <Badge variant="light" color="gray">{t(`compliance.product_${fw.product}`, { defaultValue: fw.product })}</Badge>
+            <Badge color="gray">{t(`compliance.product_${fw.product}`, { defaultValue: fw.product })}</Badge>
             <Badge color={fw.enabled ? "teal" : "red"}>{fw.enabled ? t("compliance.on") : t("compliance.off")}</Badge>
             {fw.incomingDefault && <Badge variant="outline" color="gray">{t("compliance.incoming")}: {policyLabel(fw.incomingDefault)}</Badge>}
             {fw.outgoingDefault && <Badge variant="outline" color="gray">{t("compliance.outgoing")}: {policyLabel(fw.outgoingDefault)}</Badge>}
@@ -110,7 +110,7 @@ export function ComplianceTab({ hostId, os }: { hostId: string; os: OsFamily }) 
         {data.firewallVersion && (
           <Text size="sm" mb="xs">
             {t("compliance.activeVersion", { name: data.firewallVersion.profileName, number: data.firewallVersion.number, date: formatDateTime(data.firewallVersion.appliedAt) })}
-            {data.firewallDrift && <Badge ml="xs" color="orange" variant="light">{t("compliance.drift")}</Badge>}
+            {data.firewallDrift && <Badge ml="xs" color="orange">{t("compliance.drift")}</Badge>}
           </Text>
         )}
         {!fw.manageable && fw.product !== "none" && <Text size="sm" c="dimmed" mb="xs">{t(`compliance.notManageable_${fw.product}`, { defaultValue: t("compliance.notManageable") })}</Text>}
@@ -122,7 +122,7 @@ export function ComplianceTab({ hostId, os }: { hostId: string; os: OsFamily }) 
               {fw.rules.map((r, i) => (
                 <Table.Tr key={i}>
                   <Table.Td ff="monospace" style={{ wordBreak: "break-word" }}>{r.text}</Table.Td>
-                  <Table.Td w={120}>{r.managed && <Badge size="xs" variant="light">AIOPatcher</Badge>}</Table.Td>
+                  <Table.Td w={120}>{r.managed && <Badge size="xs">AIOPatcher</Badge>}</Table.Td>
                 </Table.Tr>
               ))}
             </Table.Tbody>
@@ -132,7 +132,7 @@ export function ComplianceTab({ hostId, os }: { hostId: string; os: OsFamily }) 
       </Card>
 
       {/* --- SSH / RDP --- */}
-      <Card withBorder>
+      <Card>
         <Group justify="space-between" mb="sm" wrap="wrap">
           <Text fw={700}>{t("compliance.remoteAccess")}</Text>
           {canRemote && (
@@ -163,7 +163,7 @@ export function ComplianceTab({ hostId, os }: { hostId: string; os: OsFamily }) 
         {report.remoteAccess.length === 0 ? (
           <Text size="sm" c="dimmed">{t("compliance.noRemoteAccess")}</Text>
         ) : (
-          <Table fz="sm" verticalSpacing="xs">
+          <Table fz="sm">
             <Table.Thead>
               <Table.Tr>
                 {canRemote && <Table.Th w={36} />}
@@ -185,7 +185,7 @@ export function ComplianceTab({ hostId, os }: { hostId: string; os: OsFamily }) 
                   )}
                   <Table.Td>
                     <Group gap={6} wrap="nowrap">
-                      <Badge size="xs" color={s.compliant ? "teal" : "orange"} variant="light" style={{ flexShrink: 0 }} miw={30}>{s.compliant ? "OK" : "!"}</Badge>
+                      <Badge size="xs" color={s.compliant ? "teal" : "orange"} style={{ flexShrink: 0 }} miw={30}>{s.compliant ? "OK" : "!"}</Badge>
                       <Text size="sm">{t(`compliance.setting_${s.id}`, { defaultValue: s.id })}</Text>
                       {s.note === "managed" && <Badge size="xs" variant="outline">AIOPatcher</Badge>}
                     </Group>
@@ -203,12 +203,12 @@ export function ComplianceTab({ hostId, os }: { hostId: string; os: OsFamily }) 
       </Card>
 
       {/* --- Benutzer --- */}
-      <Card withBorder>
+      <Card>
         <Group justify="space-between" mb="sm">
           <Text fw={700}>{t("compliance.users")}</Text>
           <Text size="xs" c="dimmed">{t("compliance.collected", { when: formatRelative(data.collectedAt) })}</Text>
         </Group>
-        <Table fz="sm" verticalSpacing="xs" striped>
+        <Table fz="sm" striped>
           <Table.Thead>
             <Table.Tr>
               <Table.Th>{t("compliance.user")}</Table.Th>
@@ -226,11 +226,11 @@ export function ComplianceTab({ hostId, os }: { hostId: string; os: OsFamily }) 
                   <Group gap={6} wrap="nowrap">
                     <Text size="sm" fw={600}>{u.name}</Text>
                     {u.isBuiltIn && <Tooltip label={t("compliance.builtInHint")}><Badge size="xs" color="grape" leftSection={<IconFlame size={10} />} style={{ flexShrink: 0 }}>{t("compliance.builtIn")}</Badge></Tooltip>}
-                    {u.isAdmin && !u.isBuiltIn && <Badge size="xs" color="violet" variant="light">{t("compliance.admin")}</Badge>}
+                    {u.isAdmin && !u.isBuiltIn && <Badge size="xs" color="violet">{t("compliance.admin")}</Badge>}
                   </Group>
                   {u.fullName && <Text size="xs" c="dimmed">{u.fullName}</Text>}
                 </Table.Td>
-                <Table.Td><Badge size="sm" color={u.enabled ? "teal" : "gray"} variant="light">{u.enabled ? t("compliance.enabled") : t("compliance.disabled")}</Badge></Table.Td>
+                <Table.Td><Badge size="sm" color={u.enabled ? "teal" : "gray"}>{u.enabled ? t("compliance.enabled") : t("compliance.disabled")}</Badge></Table.Td>
                 <Table.Td><Badge size="sm" variant="outline" color={u.passwordState === "empty" ? "red" : u.passwordState === "set" ? "gray" : "teal"}>{t(`compliance.pw_${u.passwordState}`)}</Badge></Table.Td>
                 {os === "Linux" && <Table.Td>{u.sshKeys}</Table.Td>}
                 <Table.Td>{u.lastLogonUtc ? formatRelative(u.lastLogonUtc) : "–"}</Table.Td>

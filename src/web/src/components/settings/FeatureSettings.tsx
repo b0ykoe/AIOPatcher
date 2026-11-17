@@ -50,7 +50,7 @@ export function FeatureSettings() {
       <Text size="sm" c="dimmed" maw={760}>{t("features.intro")}</Text>
 
       {automation && (
-        <Card withBorder style={{ borderColor: automation.enabled ? undefined : "var(--mantine-color-red-6)" }}>
+        <Card style={{ borderColor: automation.enabled ? undefined : "var(--mantine-color-red-6)" }}>
           <Group justify="space-between" wrap="nowrap">
             <Group gap="md" wrap="nowrap">
               <ThemeIcon size={48} radius="xl" color={automation.enabled ? "teal" : "red"} variant="light">
@@ -89,7 +89,7 @@ export function FeatureSettings() {
                     <div style={{ flex: 1 }}>
                       <Group gap={6}>
                         <Text fw={600} size="sm">{t(`features.name_${f.feature}`)}</Text>
-                        <Badge size="xs" variant="light" color={riskColor[f.risk]}>{t(`features.risk${f.risk}`)}</Badge>
+                        <Badge size="xs" color={riskColor[f.risk]}>{t(`features.risk${f.risk}`)}</Badge>
                         {f.enabled !== f.default && <Badge size="xs" variant="outline" color="gray">{t("features.changed")}</Badge>}
                         {f.lockedBy && (
                           <Tooltip label={t("features.lockedHint", { by: f.lockedBy })} multiline w={300}>
@@ -115,7 +115,7 @@ export function FeatureSettings() {
           );
         })}
 
-        <Alert variant="light" color="gray" icon={<IconLock size={18} />} title={t("features.lockTitle")}>
+        <Alert color="gray" icon={<IconLock size={18} />} title={t("features.lockTitle")}>
           <Text size="sm">{t("features.lockText")}</Text>
           <Code block mt="xs">AIOPATCHER_LOCKED_FEATURES=AppUpdates,OpnsenseUpdates</Code>
           <Text size="xs" c="dimmed" mt="xs">{t("features.agentText")}</Text>

@@ -122,11 +122,11 @@ export function AddHostModal({ opened, onClose }: { opened: boolean; onClose: ()
         </Stack>
       ) : (
         <Stack gap="md">
-          <Alert variant="light" color="violet" icon={<IconInfoCircle size={18} />}>
+          <Alert color="violet" icon={<IconInfoCircle size={18} />}>
             {t("addHost.tokenInfo", { date: formatDateTime(created.expiresAt) })}
           </Alert>
           {missing.length > 0 && (
-            <Alert variant="light" color="red">
+            <Alert color="red">
               {t("addHost.missingBuilds", { list: missing.join(", ") })}
             </Alert>
           )}
@@ -154,7 +154,7 @@ export function AddHostModal({ opened, onClose }: { opened: boolean; onClose: ()
             </Tabs.List>
             <Tabs.Panel value="linux">
               {where === "external" && !(created.linuxInstallScriptSha256 && created.agentSha256) ? (
-                <Alert color="red" variant="light">{t("addHost.externalMissing")}</Alert>
+                <Alert color="red">{t("addHost.externalMissing")}</Alert>
               ) : (
                 <CommandBlock text={where === "external" ? linuxExternalCommand(created) : linuxInstallCommand(created)} />
               )}
@@ -165,12 +165,12 @@ export function AddHostModal({ opened, onClose }: { opened: boolean; onClose: ()
             <Tabs.Panel value="windows">
               {created.windowsInstallScriptSha256 ? (
                 where === "external" && !created.agentSha256?.includes("win-x64=") ? (
-                  <Alert color="red" variant="light">{t("addHost.externalMissing")}</Alert>
+                  <Alert color="red">{t("addHost.externalMissing")}</Alert>
                 ) : (
                   <CommandBlock text={where === "external" ? windowsExternalCommand(created, created.windowsInstallScriptSha256) : windowsInstallCommand(created, created.windowsInstallScriptSha256)} />
                 )
               ) : (
-                <Alert color="red" variant="light">{t("addHost.ps1Missing")}</Alert>
+                <Alert color="red">{t("addHost.ps1Missing")}</Alert>
               )}
               <Text size="xs" c="dimmed" mt="xs">
                 {t("addHost.windowsHint")}

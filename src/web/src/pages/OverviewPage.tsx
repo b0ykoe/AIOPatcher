@@ -160,7 +160,7 @@ export function OverviewPage() {
     <Stack gap="lg">
       <UpdateBanner />
       {o?.activeFreeze && (
-        <Alert color="orange" variant="light" icon={<IconHandStop size={18} />}>
+        <Alert color="orange" icon={<IconHandStop size={18} />}>
           <Anchor component={Link} to="/auto-patch?tab=rules" c="inherit">
             {t("rules.freezeBanner", { name: o.activeFreeze.name, date: formatDateTime(o.activeFreeze.endsAt) })}
           </Anchor>
@@ -177,7 +177,7 @@ export function OverviewPage() {
         >
           {todos.slice(0, 3).map((todo) => (
             <Group key={todo.key} gap="xs" wrap="nowrap" justify="space-between">
-              <Tooltip label={todo.text} multiline w={300} withArrow openDelay={300}>
+              <Tooltip label={todo.text} multiline w={300} openDelay={300}>
                 <Group gap={8} wrap="nowrap" style={{ minWidth: 0 }}>
                   <ThemeIcon size={22} radius="sm" variant="light" color={todo.color}>{todo.icon}</ThemeIcon>
                   <Text size="sm" truncate>{todo.title}</Text>
@@ -280,18 +280,18 @@ function HostTile({ host: h }: { host: HostSummary }) {
   const fresh = !!u && Date.now() - new Date(u.at).getTime() < staleAfterMs;
   const meters: [string, number | null][] = [["CPU", u?.cpu ?? null], ["RAM", u?.memory ?? null], [t("metrics.disk"), u?.disk ?? null]];
   return (
-    <Card withBorder padding="sm" className="host-tile">
+    <Card padding="sm" className="host-tile">
       <Group justify="space-between" wrap="nowrap" gap="xs">
         <Anchor component={Link} to={`/hosts/${h.id}`} fw={700} size="sm" truncate>{h.name}</Anchor>
         <HostStatusLabel status={h.status} />
       </Group>
       <Group gap={4} mt={6} wrap="wrap">
         {h.pendingUpdates > 0
-          ? <Badge size="xs" variant="light" color={h.kevUpdates > 0 ? "red" : h.securityUpdates > 0 ? "pink" : "gray"}>{h.pendingUpdates} Updates{h.securityUpdates > 0 ? ` · ${h.securityUpdates} Sec` : ""}</Badge>
-          : <Badge size="xs" variant="light" color="teal">{t("overview.upToDate")}</Badge>}
-        {h.rebootRequired && <Badge size="xs" variant="light" color="yellow">{t("overview.rebootRequired")}</Badge>}
+          ? <Badge size="xs" color={h.kevUpdates > 0 ? "red" : h.securityUpdates > 0 ? "pink" : "gray"}>{h.pendingUpdates} Updates{h.securityUpdates > 0 ? ` · ${h.securityUpdates} Sec` : ""}</Badge>
+          : <Badge size="xs" color="teal">{t("overview.upToDate")}</Badge>}
+        {h.rebootRequired && <Badge size="xs" color="yellow">{t("overview.rebootRequired")}</Badge>}
       </Group>
-      <Tooltip label={u ? t("metrics.measured", { when: formatRelative(u.at) }) : t("overview.noUsage")} withArrow>
+      <Tooltip label={u ? t("metrics.measured", { when: formatRelative(u.at) }) : t("overview.noUsage")}>
         <SimpleGrid cols={3} spacing={8} mt="sm" style={{ opacity: fresh ? 1 : 0.4 }}>
           {meters.map(([label, value]) => {
             const level = value == null ? "ok" : levelOf(value);

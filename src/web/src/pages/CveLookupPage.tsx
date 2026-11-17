@@ -362,10 +362,10 @@ function CveDetail({ id }: { id: string }) {
               </Tooltip>
             )}
             {data.isKev && <Badge size="lg" color="red" variant="filled">KEV</Badge>}
-            {data.kevRansomware && <Badge size="lg" color="red" variant="light">{t("security.ransomware")}</Badge>}
+            {data.kevRansomware && <Badge size="lg" color="red">{t("security.ransomware")}</Badge>}
             {data.epss !== null && (
               <Tooltip label={t("security.epssHint", { percentile: Math.round((data.epssPercentile ?? 0) * 100) })}>
-                <Badge size="lg" color={epssColor(data.epss)} variant="light">EPSS {pct(data.epss)}</Badge>
+                <Badge size="lg" color={epssColor(data.epss)}>EPSS {pct(data.epss)}</Badge>
               </Tooltip>
             )}
             {rejected && <Badge size="lg" color="gray">{t("cveLookup.rejected")}</Badge>}
@@ -475,7 +475,7 @@ function FixTable({ title, fixes, packageLabel, versionLabel }: { title: string;
     <Card p={0}>
       <Text fw={600} p="md" pb="xs">{title}</Text>
       <Table.ScrollContainer minWidth={420}>
-        <Table verticalSpacing="xs">
+        <Table>
           <Table.Thead>
             <Table.Tr>
               <Table.Th>{t("cveLookup.system")}</Table.Th>
@@ -500,7 +500,7 @@ function FixTable({ title, fixes, packageLabel, versionLabel }: { title: string;
                   {f.fixedIn ? (
                     <Text size="sm" ff="monospace" style={{ wordBreak: "break-all" }}>{f.fixedIn}</Text>
                   ) : f.source === "OSV" ? (
-                    <Badge color="red" variant="light">{t("cveLookup.open")}</Badge>
+                    <Badge color="red">{t("cveLookup.open")}</Badge>
                   ) : (
                     <Text size="sm" c="dimmed">–</Text>
                   )}
@@ -571,7 +571,7 @@ function HitTable({ hits, date, showDate }: { hits: SearchHit[]; date: (iso: str
   const { t } = useTranslation();
   return (
     <Table.ScrollContainer minWidth={640}>
-      <Table verticalSpacing="sm" highlightOnHover>
+      <Table>
         <Table.Thead>
           <Table.Tr>
             <Table.Th w={190}>CVE</Table.Th>
@@ -591,7 +591,7 @@ function HitTable({ hits, date, showDate }: { hits: SearchHit[]; date: (iso: str
                 <Group gap={4} wrap="wrap">
                   {h.score !== null && <Badge size="sm" color={severityColor(h.severity)} variant="filled">{h.score.toFixed(1)}</Badge>}
                   {h.isKev && <Badge size="sm" color="red" variant="filled">KEV</Badge>}
-                  {h.epss !== null && <Badge size="sm" color={epssColor(h.epss)} variant="light">EPSS {pct(h.epss)}</Badge>}
+                  {h.epss !== null && <Badge size="sm" color={epssColor(h.epss)}>EPSS {pct(h.epss)}</Badge>}
                 </Group>
               </Table.Td>
               <Table.Td>
@@ -599,7 +599,7 @@ function HitTable({ hits, date, showDate }: { hits: SearchHit[]; date: (iso: str
               </Table.Td>
               {showDate && <Table.Td><Text size="sm">{date(h.published)}</Text></Table.Td>}
               <Table.Td>
-                {h.hosts > 0 ? <Badge color="red" variant="light">{h.hosts}</Badge> : <Text size="sm" c="dimmed">–</Text>}
+                {h.hosts > 0 ? <Badge color="red">{h.hosts}</Badge> : <Text size="sm" c="dimmed">–</Text>}
               </Table.Td>
             </Table.Tr>
           ))}

@@ -5,7 +5,7 @@ import { IconAlertTriangle, IconBox, IconBrandDocker, IconDeviceDesktop, IconGau
 import { useTranslation } from "react-i18next";
 import { api, formatRelative, type HostUtilization, type ProxmoxResource, type ProxmoxUtilization, type Utilization } from "../api";
 import { EmptyState, PageHeader } from "../components/ui";
-import { formatBytes, percentOf, Sparkline, UsageMeter } from "../components/metrics/charts";
+import { formatBytes, percentOf, Sparkline, UsageCell, UsageMeter } from "../components/metrics/charts";
 
 /** Messung älter als 15 Minuten: Host aus oder Agent hängt. */
 const staleAfterMs = 15 * 60 * 1000;
@@ -35,7 +35,7 @@ export function UtilizationPage() {
         description={t("metrics.description")}
         actions={<TextInput placeholder={t("metrics.filter")} leftSection={<IconSearch size={16} />} value={filter} onChange={(e) => setFilter(e.currentTarget.value)} />}
       />
-      {data && !data.enabled && <Alert color="gray" variant="light">{t("metrics.disabled")}</Alert>}
+      {data && !data.enabled && <Alert color="gray">{t("metrics.disabled")}</Alert>}
       {data?.enabled && (
         <Stack gap="xl">
           <section>
@@ -61,7 +61,7 @@ function HostCard({ host }: { host: HostUtilization }) {
   const stale = !host.at || Date.now() - new Date(host.at).getTime() > staleAfterMs;
   const memory = percentOf(host.memoryUsed, host.memoryTotal);
   return (
-    <Card withBorder style={{ opacity: stale && host.at ? 0.65 : 1 }}>
+    <Card style={{ opacity: stale && host.at ? 0.65 : 1 }}>
       <Group justify="space-between" gap="xs" wrap="nowrap" mb="sm">
         <div style={{ minWidth: 0 }}>
           <Anchor component={Link} to={`/hosts/${host.id}?tab=metrics`} fw={700} truncate display="block">{host.name}</Anchor>
@@ -116,17 +116,17 @@ function ProxmoxSection({ data, match }: { data: ProxmoxUtilization; match: (nam
           { value: "unmanaged", label: t("metrics.guestsUnmanaged", { count: unmanaged }) },
         ]} />
       </Group>
-      {data.error && <Alert color="orange" variant="light" icon={<IconAlertTriangle size={18} />} mb="sm">{data.error}</Alert>}
+      {data.error && <Alert color="orange" icon={<IconAlertTriangle size={18} />} mb="sm">{data.error}</Alert>}
 
       <Stack gap="md">
         {nodes.length > 0 && (
           <div className="card-grid">
             {nodes.map(({ resource: n, hostId }) => (
-              <Card key={n.id} withBorder>
+              <Card key={n.id}>
                 <Group gap="xs" mb="sm" wrap="nowrap">
                   <ThemeIcon variant="light" size="sm"><IconServer size={14} /></ThemeIcon>
                   {hostId ? <Anchor component={Link} to={`/hosts/${hostId}?tab=metrics`} fw={700}>{n.name}</Anchor> : <Text fw={700}>{n.name}</Text>}
-                  <Badge size="xs" variant="light" color={n.status === "online" ? "teal" : "red"}>{n.status}</Badge>
+                  <Badge size="xs" color={n.status === "online" ? "teal" : "red"}>{n.status}</Badge>
                 </Group>
                 <Stack gap={8}>
                   <UsageMeter size="sm" label={t("metrics.cpuCores", { cores: n.maxCpu ?? "?" })} percent={n.cpu == null ? null : n.cpu * 100} />
@@ -136,7 +136,7 @@ function ProxmoxSection({ data, match }: { data: ProxmoxUtilization; match: (nam
               </Card>
             ))}
             {storages.length > 0 && (
-              <Card withBorder>
+              <Card>
                 <Text fw={700} mb="sm">{t("metrics.storage")}</Text>
                 <Stack gap={8}>
                   {storages.map(({ resource: s }) => (
@@ -149,9 +149,9 @@ function ProxmoxSection({ data, match }: { data: ProxmoxUtilization; match: (nam
           </div>
         )}
 
-        <Card withBorder p={0}>
+        <Card p={0}>
           <Table.ScrollContainer minWidth={760}>
-            <Table fz="sm" verticalSpacing={8} highlightOnHover>
+            <Table fz="sm" verticalSpacing={8}>
               <Table.Thead>
                 <Table.Tr>
                   <Table.Th>{t("sitesPage.name")}</Table.Th>
@@ -192,7 +192,7 @@ function GuestRow({ guest: g, hostId, hostName }: { guest: ProxmoxResource; host
         <Group gap={6} wrap="nowrap">
           {g.type === "lxc" ? <IconBox size={14} /> : <IconDeviceDesktop size={14} />}
           <Text size="sm">{g.type === "lxc" ? "LXC" : "VM"}</Text>
-          {!running && <Badge size="xs" variant="light" color="gray">{g.status}</Badge>}
+          {!running && <Badge size="xs" color="gray">{g.status}</Badge>}
         </Group>
       </Table.Td>
       <Table.Td>
@@ -201,13 +201,13 @@ function GuestRow({ guest: g, hostId, hostName }: { guest: ProxmoxResource; host
           : <Text size="sm" c="dimmed">–</Text>}
       </Table.Td>
       <Table.Td>
-        {running ? <UsageMeter size="sm" label="" percent={percentOf(g.memory, g.maxMemory)} detail={`${formatBytes(g.memory)} / ${formatBytes(g.maxMemory)}`} /> : <Text size="sm" c="dimmed">{formatBytes(g.maxMemory)}</Text>}
+        {running ? <UsageCell percent={percentOf(g.memory, g.maxMemory)} detail={`${formatBytes(g.memory)} / ${formatBytes(g.maxMemory)}`} /> : <Text size="sm" c="dimmed">{formatBytes(g.maxMemory)}</Text>}
       </Table.Td>
       <Table.Td>
         {g.type === "lxc" && g.maxDisk
-          ? <UsageMeter size="sm" label="" percent={percentOf(g.disk, g.maxDisk)} detail={`${formatBytes(g.disk)} / ${formatBytes(g.maxDisk)}`} />
+          ? <UsageCell percent={percentOf(g.disk, g.maxDisk)} detail={`${formatBytes(g.disk)} / ${formatBytes(g.maxDisk)}`} />
           : (
-            <Tooltip label={t("metrics.vmDiskHint")} multiline w={260} withArrow>
+            <Tooltip label={t("metrics.vmDiskHint")} multiline w={260}>
               <Text size="sm" c="dimmed">{formatBytes(g.maxDisk)}</Text>
             </Tooltip>
           )}
@@ -215,7 +215,7 @@ function GuestRow({ guest: g, hostId, hostName }: { guest: ProxmoxResource; host
       <Table.Td>
         {hostId
           ? <Anchor component={Link} to={`/hosts/${hostId}?tab=metrics`} size="sm">{hostName}</Anchor>
-          : <Badge size="sm" variant="light" color="gray">{t("metrics.unmanaged")}</Badge>}
+          : <Badge size="sm" color="gray">{t("metrics.unmanaged")}</Badge>}
       </Table.Td>
     </Table.Tr>
   );

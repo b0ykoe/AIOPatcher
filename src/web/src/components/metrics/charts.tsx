@@ -1,4 +1,4 @@
-import { useId, useMemo, useState, type KeyboardEvent, type PointerEvent } from "react";
+import { useId, useMemo, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
 import { Box, Group, Progress, Text, Tooltip } from "@mantine/core";
 import { useElementSize } from "@mantine/hooks";
 import { IconAlertTriangle } from "@tabler/icons-react";
@@ -31,13 +31,21 @@ export function percentOf(used: number | null | undefined, total: number | null 
   return used == null || !total ? null : Math.min(100, Math.max(0, (100 * used) / total));
 }
 
-/** Füllstand mit Beschriftung: Prozent fett, Details gedämpft daneben. */
-export function UsageMeter({ label, percent, detail, size = "md" }: { label: string; percent: number | null; detail?: string; size?: "sm" | "md" }) {
+/**
+ * Wertezeile wie bei Proxmox (Styleguide 8): Icon + Name links, Prozent fett und Details rechts, dünner Balken darunter.
+ * In Karten untereinander; die Karte selbst bleibt schmal (metric-grid), damit Balken nicht über den Bildschirm laufen.
+ */
+export function UsageMeter({ label, percent, detail, size = "md", icon }: {
+  label: string; percent: number | null; detail?: string; size?: "sm" | "md"; icon?: ReactNode;
+}) {
   const level = percent == null ? "ok" : levelOf(percent);
   return (
     <Box>
       <Group justify="space-between" gap={6} wrap="nowrap" mb={4}>
-        <Text size="xs" c="dimmed" truncate>{label}</Text>
+        <Group gap={6} wrap="nowrap" style={{ minWidth: 0 }}>
+          {icon && <Box c="dimmed" style={{ display: "flex", flexShrink: 0 }}>{icon}</Box>}
+          <Text size={icon ? "sm" : "xs"} c={icon ? undefined : "dimmed"} truncate>{label}</Text>
+        </Group>
         <Group gap={4} wrap="nowrap">
           {level !== "ok" && <IconAlertTriangle size={12} color={`var(--mantine-color-${levelColor[level]}-5)`} aria-hidden />}
           <Text size={size === "sm" ? "xs" : "sm"} fw={700} style={{ fontVariantNumeric: "tabular-nums" }}>
@@ -46,9 +54,37 @@ export function UsageMeter({ label, percent, detail, size = "md" }: { label: str
           {detail && <Text size="xs" c="dimmed" style={{ whiteSpace: "nowrap" }}>{detail}</Text>}
         </Group>
       </Group>
-      <Progress value={percent ?? 0} size={size === "sm" ? 6 : 8} radius="xl" color={levelColor[level]}
+      <Progress value={percent ?? 0} size={size === "sm" ? 5 : 6} radius="xl" color={levelColor[level]}
         bg={`var(--mantine-color-${levelColor[level]}-light)`} aria-label={`${label}: ${percent == null ? "–" : Math.round(percent) + " %"}`} />
     </Box>
+  );
+}
+
+/** Wertezeile ohne Balken (Uptime, Load, Kerne): Icon + Name links, Wert rechts. */
+export function MetricRow({ label, value, icon }: { label: string; value: ReactNode; icon?: ReactNode }) {
+  return (
+    <Group justify="space-between" gap={6} wrap="nowrap">
+      <Group gap={6} wrap="nowrap" style={{ minWidth: 0 }}>
+        {icon && <Box c="dimmed" style={{ display: "flex", flexShrink: 0 }}>{icon}</Box>}
+        <Text size="sm" truncate>{label}</Text>
+      </Group>
+      <Text size="sm" fw={600} ta="right" style={{ fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{value}</Text>
+    </Group>
+  );
+}
+
+/** Füllstand in einer Tabellenzelle: kurzer Balken (höchstens 140 px) und Wert daneben, nie über die ganze Spalte. */
+export function UsageCell({ percent, detail }: { percent: number | null; detail?: string }) {
+  const level = percent == null ? "ok" : levelOf(percent);
+  return (
+    <Group gap="xs" wrap="nowrap">
+      <Progress value={percent ?? 0} size={5} radius="xl" w={140} style={{ flexShrink: 0 }} color={levelColor[level]}
+        bg={`var(--mantine-color-${levelColor[level]}-light)`} aria-label={percent == null ? "–" : `${Math.round(percent)} %`} />
+      <Text size="xs" fw={level === "ok" ? 500 : 700} style={{ fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
+        {percent == null ? "–" : `${Math.round(percent)} %`}
+      </Text>
+      {detail && <Text size="xs" c="dimmed" style={{ whiteSpace: "nowrap" }}>{detail}</Text>}
+    </Group>
   );
 }
 
@@ -61,7 +97,7 @@ export function Sparkline({ values, label, width = 120, height = 28 }: { values:
   const y = (v: number) => height - 2 - (Math.min(100, v) / 100) * (height - 4);
   const line = values.map((v, i) => `${i === 0 ? "M" : "L"}${(i * step).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
   return (
-    <Tooltip label={t("metrics.sparkTip", { label, max: Math.round(max), now: Math.round(values[values.length - 1]) })} withArrow>
+    <Tooltip label={t("metrics.sparkTip", { label, max: Math.round(max), now: Math.round(values[values.length - 1]) })}>
       <svg width={width} height={height} role="img" aria-label={label} style={{ display: "block", overflow: "visible" }}>
         <path d={`${line} L${width},${height} L0,${height} Z`} fill="var(--mantine-color-violet-5)" opacity={0.1} />
         <path d={line} fill="none" stroke="var(--mantine-color-violet-4)" strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" />

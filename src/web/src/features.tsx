@@ -83,7 +83,7 @@ export function EmergencyBanner() {
   const { list } = useFeatures();
   if (list.find((f) => f.feature === "Automation")?.enabled !== false) return null;
   return (
-    <Alert color="red" variant="light" mb="md" icon={<IconHandStop size={18} />}>
+    <Alert color="red" mb="md" icon={<IconHandStop size={18} />}>
       <Group justify="space-between" gap="xs">
         <Text size="sm" fw={600}>{t("features.emergencyBanner")}</Text>
         <Anchor component={Link} to="/settings/features" size="sm">{t("settings.features")}</Anchor>

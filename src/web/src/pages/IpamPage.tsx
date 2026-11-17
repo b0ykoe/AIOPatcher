@@ -23,6 +23,7 @@ import { useTranslation } from "react-i18next";
 import { api, formatRelative, type Site } from "../api";
 import { useCan } from "../App";
 import { confirmAction, EmptyState, errorText, notifyError, notifySuccess, PageHeader } from "../components/ui";
+import { levelColor, levelOf } from "../components/metrics/charts";
 
 interface SubnetItem {
   id: string;
@@ -148,7 +149,7 @@ export function IpamPage() {
       />
 
       {conflicts > 0 && (
-        <Alert color="red" variant="light" mb="lg">
+        <Alert color="red" mb="lg">
           {t("ipam.conflicts", { count: conflicts })}
         </Alert>
       )}
@@ -184,7 +185,7 @@ export function IpamPage() {
               </Group>
               {s.size !== null ? (
                 <>
-                  <Progress mt="sm" value={Math.min(100, (s.used / s.size) * 100)} color={s.used / s.size > 0.85 ? "red" : "violet"} size="sm" />
+                  <Progress mt="sm" value={Math.min(100, (s.used / s.size) * 100)} color={levelColor[levelOf((s.used / s.size) * 100)]} size="sm" />
                   <Text size="xs" c="dimmed" mt={4}>{t("ipam.usage", { used: s.used, size: s.size })}</Text>
                 </>
               ) : (
@@ -248,7 +249,7 @@ export function IpamPage() {
                   <Table.Td><Text size="xs" ff="monospace" c="dimmed">{a.macAddress ?? ""}</Text></Table.Td>
                   <Table.Td><Text size="xs" c="dimmed">{a.interfaceName}</Text></Table.Td>
                   <Table.Td><Text size="xs">{a.subnetName ?? "–"}</Text></Table.Td>
-                  <Table.Td><Badge size="xs" variant="light" color={sourceColor[a.source]}>{t(`ipam.source${a.source}`)}</Badge></Table.Td>
+                  <Table.Td><Badge size="xs" color={sourceColor[a.source]}>{t(`ipam.source${a.source}`)}</Badge></Table.Td>
                   <Table.Td><Text size="xs" c="dimmed">{formatRelative(a.lastSeenAt)}</Text></Table.Td>
                   <Table.Td>
                     {can.operate && a.source === "Manual" && (
@@ -308,7 +309,7 @@ function SubnetModal({ subnet, siteId, onClose, onSaved }: { subnet: SubnetItem 
         <TextInput label="CIDR" placeholder="10.10.20.0/24" value={cidr} onChange={(e) => setCidr(e.currentTarget.value)} ff="monospace" data-autofocus />
         <TextInput label={t("sitesPage.name")} placeholder={t("ipam.subnetPlaceholder")} value={name} onChange={(e) => setName(e.currentTarget.value)} />
         <TextInput label={t("sitesPage.descriptionField")} value={description} onChange={(e) => setDescription(e.currentTarget.value)} />
-        {error && <Alert color="red" variant="light">{error}</Alert>}
+        {error && <Alert color="red">{error}</Alert>}
         <Group justify="flex-end">
           <Button variant="default" onClick={onClose}>{t("common.cancel")}</Button>
           <Button variant="gradient" className="gradient-button" loading={busy} disabled={!cidr.trim() || !name.trim()} onClick={() => void save()}>{t("common.save")}</Button>
@@ -350,7 +351,7 @@ function AddressModal({ opened, siteId, onClose, onSaved }: { opened: boolean; s
         <TextInput label={t("hostDetail.address")} placeholder="10.10.20.50" value={address} onChange={(e) => setAddress(e.currentTarget.value)} ff="monospace" data-autofocus />
         <TextInput label={t("sitesPage.name")} placeholder="nas01" value={hostname} onChange={(e) => setHostname(e.currentTarget.value)} />
         <TextInput label={t("sitesPage.descriptionField")} placeholder={t("ipam.addressPlaceholder")} value={description} onChange={(e) => setDescription(e.currentTarget.value)} />
-        {error && <Alert color="red" variant="light">{error}</Alert>}
+        {error && <Alert color="red">{error}</Alert>}
         <Group justify="flex-end">
           <Button variant="default" onClick={onClose}>{t("common.cancel")}</Button>
           <Button variant="gradient" className="gradient-button" disabled={!address.trim()} onClick={() => void save()}>{t("common.save")}</Button>

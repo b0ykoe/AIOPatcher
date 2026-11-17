@@ -85,7 +85,7 @@ export function QuickPlanModal({ opened, onClose, onDone, hostIds = [] }: {
         </Group>
         <TextInput label={t("plans.quickName")} value={name} maxLength={100} onChange={(e) => { setName(e.currentTarget.value); setNameTouched(true); }} />
         {moving.length > 0 && (
-          <Alert color="blue" variant="light" icon={<IconInfoCircle size={18} />}>
+          <Alert color="blue" icon={<IconInfoCircle size={18} />}>
             {t("plans.quickMoves", { hosts: moving.map((h) => h.name).join(", ") })}
           </Alert>
         )}

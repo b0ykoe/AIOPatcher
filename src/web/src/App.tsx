@@ -470,7 +470,7 @@ function VersionInfo() {
     return (
       <Group gap={6} px={6} py={4} wrap="nowrap">
         <IconCircleCheck size={14} color="var(--mantine-color-teal-5)" opacity={info.latestVersion ? 1 : 0} aria-hidden />
-        <Tooltip label={info.latestVersion ? t("update.upToDate") : t("update.unknown")} withArrow position="right">
+        <Tooltip label={info.latestVersion ? t("update.upToDate") : t("update.unknown")} position="right">
           {version}
         </Tooltip>
       </Group>

@@ -1041,6 +1041,9 @@ const de = {
     },
   },
   metrics: {
+    ofCpus: "von {{count}} CPUs",
+    uptimeLabel: "Laufzeit",
+    loadLabel: "Load (1 / 5 / 15 Min.)",
     current: "Aktuell",
     description: "CPU, RAM und Speicher der Hosts (alle 5 Minuten) und der Proxmox-Gäste, auch ohne Agent.",
     filter: "Filtern …",
