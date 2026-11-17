@@ -3,7 +3,8 @@ import { Link, useSearchParams } from "react-router";
 import {
   ActionIcon, Alert, Anchor, Badge, Button, Card, Checkbox, Group, Loader, Modal, MultiSelect, Select, SimpleGrid, Stack, Switch, Table, Tabs, Text, TextInput, Tooltip,
 } from "@mantine/core";
-import { IconAlertTriangle, IconFlame, IconHistory, IconPlus, IconRocket, IconShieldCheck, IconShieldOff, IconTrash, IconUsers } from "@tabler/icons-react";
+import { IconAlertTriangle, IconFlame, IconHistory, IconListCheck, IconPlus, IconRocket, IconShieldCheck, IconShieldOff, IconTrash, IconUsers } from "@tabler/icons-react";
+import { BaselinesPanel } from "../components/compliance/Baselines";
 import { useTranslation } from "react-i18next";
 import { ApiError, formatDateTime, formatRelative } from "../api";
 import { useCan } from "../App";
@@ -39,9 +40,11 @@ export function CompliancePage() {
       <Tabs value={view} onChange={setView}>
         <Tabs.List mb="md">
           <Tabs.Tab value="overview" leftSection={<IconShieldCheck size={16} />}>{t("compliance.tabOverview")}</Tabs.Tab>
+          <Tabs.Tab value="baselines" leftSection={<IconListCheck size={16} />}>{t("baselines.tab")}</Tabs.Tab>
           <Tabs.Tab value="firewall" leftSection={<IconFlame size={16} />}>{t("compliance.tabFirewall")}</Tabs.Tab>
         </Tabs.List>
         <Tabs.Panel value="overview"><Overview /></Tabs.Panel>
+        <Tabs.Panel value="baselines"><BaselinesPanel /></Tabs.Panel>
         <Tabs.Panel value="firewall"><FirewallProfiles /></Tabs.Panel>
       </Tabs>
     </>
@@ -79,6 +82,7 @@ function Overview() {
             <Table.Thead>
               <Table.Tr>
                 <Table.Th>Host</Table.Th>
+                <Table.Th>{t("baselines.column")}</Table.Th>
                 <Table.Th>{t("compliance.firewall")}</Table.Th>
                 <Table.Th>{t("compliance.ruleSet")}</Table.Th>
                 <Table.Th>{t("compliance.remoteAccess")}</Table.Th>
@@ -92,6 +96,17 @@ function Overview() {
                   <Table.Td>
                     <Anchor component={Link} to={`/hosts/${h.hostId}?tab=compliance`} fw={600}>{h.hostName}</Anchor>
                     <Text size="xs" c="dimmed">{h.siteName}</Text>
+                  </Table.Td>
+                  <Table.Td>
+                    {h.baselineName ? (
+                      <Group gap={6} wrap="nowrap">
+                        <Text size="sm" truncate maw={180}>{h.baselineName}</Text>
+                        {!h.collectedAt ? null : h.baselineViolations > 0
+                          ? <Badge size="xs" color="orange" variant="light" style={{ flexShrink: 0 }}>{t("baselines.deviations", { count: h.baselineViolations })}</Badge>
+                          : h.baselineUnknown > 0 ? <Badge size="xs" color="gray" variant="light" style={{ flexShrink: 0 }}>?</Badge>
+                            : <Badge size="xs" color="teal" variant="light" style={{ flexShrink: 0 }}>OK</Badge>}
+                      </Group>
+                    ) : <Text size="sm" c="dimmed">–</Text>}
                   </Table.Td>
                   {!h.collectedAt ? (
                     <Table.Td colSpan={4}><Text size="sm" c="dimmed">{t("compliance.noDataShort")}</Text></Table.Td>

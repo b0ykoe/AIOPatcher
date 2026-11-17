@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router";
-import { ActionIcon, Alert, Badge, Button, Card, Checkbox, Code, Group, Loader, Menu, Modal, PasswordInput, Stack, Table, Text, Textarea, Tooltip } from "@mantine/core";
+import { ActionIcon, Alert, Anchor, Badge, Button, Card, Checkbox, Code, Group, Loader, Menu, Modal, PasswordInput, Stack, Table, Text, Textarea, Tooltip } from "@mantine/core";
 import { IconDots, IconFlame, IconHistory, IconInfoCircle, IconKey, IconLock, IconLockOpen, IconShieldCheck, IconShieldOff, IconUserMinus, IconUserPlus, IconWand } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import { formatDateTime, formatRelative, type OsFamily } from "../../api";
@@ -8,6 +8,7 @@ import { useCan } from "../../App";
 import { complianceApi, type ChangeResult, type HostCompliance, type LocalUser, type UserAction } from "../../compliance";
 import { FeatureOffHint, useFeatures } from "../../features";
 import { confirmAction, EmptyState, notifyError, notifySuccess } from "../ui";
+import { BaselineResults } from "./BaselineResults";
 
 /** Host → Compliance: Firewall, SSH/RDP und lokale Benutzer, mit Änderungen (Admin, eigene Schalter). */
 export function ComplianceTab({ hostId, os }: { hostId: string; os: OsFamily }) {
@@ -66,6 +67,15 @@ export function ComplianceTab({ hostId, os }: { hostId: string; os: OsFamily }) 
       )}
       {data.hasPendingChange && (
         <Alert color="blue" variant="light" icon={<Loader size={16} />}>{t("compliance.pending")}</Alert>
+      )}
+
+      {data.baseline ? (
+        <BaselineResults hostId={hostId} baseline={data.baseline} canAlign={can.admin} busyElsewhere={data.hasPendingChange} onAligned={load} />
+      ) : (
+        <Text size="sm" c="dimmed">
+          {t("baselines.noneForHost")}{" "}
+          <Anchor component={Link} to="/security?tab=compliance&view=baselines" size="sm">{t("baselines.manage")}</Anchor>
+        </Text>
       )}
 
       {/* --- Firewall --- */}

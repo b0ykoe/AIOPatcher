@@ -218,6 +218,8 @@ public static class ComplianceBaselineEndpoints
 
     // --- Angleichen -----------------------------------------------------------------------------------
 
+    private static string NothingToAlign => L.T("Nichts anzugleichen: keine behebbaren Abweichungen.", "Nothing to align: no fixable deviations.");
+
     /// <summary>Plant den Sammel-Job für einen Host. Rückgabe: Job oder Grund, warum nicht.</summary>
     private static async Task<(PatchJob? Job, JobPlanner.Skip? Skip)> PlanAlignAsync(AppDbContext db, FeatureFlags features, ClaimsPrincipal user, Guid hostId,
         IReadOnlyCollection<string>? keys, CancellationToken ct)
@@ -237,6 +239,11 @@ public static class ComplianceBaselineEndpoints
 
         var chosen = check.Results.Where(r => keys is null || keys.Count == 0 || keys.Contains(r.Key)).ToList();
         var steps = ComplianceBaselines.Steps(chosen);
+        if (steps.Count == 0)
+        {
+            return (null, new JobPlanner.Skip(hostId, host.Name, NothingToAlign));
+        }
+
         var off = steps.Select(s => ComplianceBaselines.FeatureFor(s.Kind)).Distinct().Where(f => !features.IsOn(f)).ToList();
         if (off.Count > 0)
         {
@@ -246,9 +253,7 @@ public static class ComplianceBaselineEndpoints
 
         if (steps.Count == 0)
         {
-            return (null, new JobPlanner.Skip(hostId, host.Name, off.Count > 0
-                ? string.Join(" ", off.Select(FeatureFlags.DisabledMessage))
-                : L.T("Nichts anzugleichen: keine behebbaren Abweichungen.", "Nothing to align: no fixable deviations.")));
+            return (null, new JobPlanner.Skip(hostId, host.Name, string.Join(" ", off.Select(FeatureFlags.DisabledMessage))));
         }
 
         var firewallVersion = chosen.FirstOrDefault(r => r.FirewallVersionId is not null && r.State == RuleState.Violation && r.Fixable)?.FirewallVersionId;
@@ -291,7 +296,12 @@ public static class ComplianceBaselineEndpoints
             var (job, skip) = await PlanAlignAsync(db, features, user, hostId, null, ct);
             if (skip is not null)
             {
-                skipped.Add(skip);
+                // Hosts ohne Abweichung gehören nicht in die Liste "übersprungen"
+                if (skip.Reason != NothingToAlign)
+                {
+                    skipped.Add(skip);
+                }
+
                 continue;
             }
 
