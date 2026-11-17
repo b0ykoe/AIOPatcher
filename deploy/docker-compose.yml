@@ -1,7 +1,7 @@
 # AIOPatcher: Server + Dashboard in einem Container.
 # Schnellstart: README.md → "Schnellstart". Ausführlich (VM, Firewall, Backups): docs/SERVER-SETUP.md.
 #
-#   mkdir -p /opt/aiopatcher/data && chown 1654:1654 /opt/aiopatcher/data
+#   mkdir -p /opt/aiopatcher/data   (Besitzer setzt der Container beim Start selbst)
 #   docker compose up -d && docker compose logs aiopatcher | grep -i "setup token"
 #
 # Mit Traefik: deploy/docker-compose.traefik.yml. nginx / Nginx Proxy Manager: docs/REVERSE-PROXY.md.

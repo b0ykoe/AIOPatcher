@@ -166,12 +166,12 @@ sudo docker run --rm hello-world
 
 ```bash
 sudo mkdir -p /opt/aiopatcher/data
-sudo chown 1654:1654 /opt/aiopatcher/data
 sudo chmod 700 /opt/aiopatcher/data
 cd /opt/aiopatcher
 ```
 
-> `1654` ist die UID des Users `app` in den offiziellen .NET-Container-Images. Der Server läuft im Container nicht als Root.
+> Der Server läuft im Container nicht als Root, sondern als `app` (UID 1654). Den Besitzer des Datenordners setzt der
+> Container beim Start selbst (ab 0.6.1), ein `chown` von Hand ist nicht nötig.
 
 `docker-compose.yml` anlegen (identisch zu [`deploy/docker-compose.yml`](../deploy/docker-compose.yml) im Repo):
 
