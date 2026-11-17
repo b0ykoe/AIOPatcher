@@ -1,8 +1,11 @@
 import { useState } from "react";
-import { Badge, Group, Table, Text, Tooltip, UnstyledButton } from "@mantine/core";
-import { IconChevronDown, IconChevronUp, IconSelector } from "@tabler/icons-react";
+import { Badge, Button, Group, Table, Text, Tooltip, UnstyledButton } from "@mantine/core";
+import { IconChevronDown, IconChevronUp, IconRefresh, IconSelector } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
-import { formatRelative, type ContainerItem } from "../api";
+import { api, formatRelative, type ContainerItem } from "../api";
+import { useCan } from "../App";
+import { t as tGlobal } from "../i18n";
+import { notifyError, notifySuccess } from "./ui";
 
 type SortKey = "name" | "image" | "state" | "registry";
 
@@ -24,7 +27,26 @@ const compare: Record<SortKey, (a: ContainerItem, b: ContainerItem) => number> =
 };
 
 /** Container eines Hosts mit Hinweis auf neuere Images in der Registry. Spalten sortierbar, Standard: neue Images zuerst. */
-export function ContainerTable({ containers }: { containers: ContainerItem[] }) {
+export function ContainerTable({ containers, hostId, onRechecked }: { containers: ContainerItem[]; hostId?: string; onRechecked?: () => void }) {
+  const can = useCan();
+  const [busy, setBusy] = useState(false);
+  const seen = containers.map((c) => c.seenAt).filter((x): x is string => !!x).sort().at(-1) ?? null;
+  const checked = containers.map((c) => c.checkedAt).filter((x): x is string => !!x).sort().at(0) ?? null;
+
+  // Neu prüfen: Registry sofort, der Agent meldet seine Container beim nächsten Abruf (Sekunden bis wenige Minuten)
+  const recheck = async () => {
+    if (!hostId) return;
+    setBusy(true);
+    try {
+      await api.post(`/api/hosts/${hostId}/containers/recheck`);
+      notifySuccess(tGlobal("security.recheckStarted"));
+      onRechecked?.();
+    } catch (e) {
+      notifyError(e);
+    } finally {
+      setBusy(false);
+    }
+  };
   const { t } = useTranslation();
   const [sort, setSort] = useState<{ key: SortKey; desc: boolean }>({ key: "registry", desc: false });
 
@@ -49,6 +71,15 @@ export function ContainerTable({ containers }: { containers: ContainerItem[] }) 
   };
 
   return (
+    <>
+    {hostId && (
+      <Group justify="space-between" gap="xs" mb="sm" wrap="wrap">
+        <Text size="xs" c="dimmed">
+          {tGlobal("security.freshness", { seen: formatRelative(seen), checked: formatRelative(checked) })}
+        </Text>
+        {can.operate && <Button size="xs" variant="light" leftSection={<IconRefresh size={14} />} loading={busy} onClick={() => void recheck()}>{tGlobal("security.recheck")}</Button>}
+      </Group>
+    )}
     <Table.ScrollContainer minWidth={600}>
       <Table>
         <Table.Thead>
@@ -93,5 +124,6 @@ export function ContainerTable({ containers }: { containers: ContainerItem[] }) 
         </Table.Tbody>
       </Table>
     </Table.ScrollContainer>
+    </>
   );
 }

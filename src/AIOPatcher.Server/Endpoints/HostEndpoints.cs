@@ -6,6 +6,7 @@ using AIOPatcher.Server.Options;
 using AIOPatcher.Server.Security;
 using AIOPatcher.Server.Services;
 using AIOPatcher.Server.Services.Modules;
+using AIOPatcher.Server.Services.Security;
 using Microsoft.EntityFrameworkCore;
 
 namespace AIOPatcher.Server.Endpoints;
@@ -77,7 +78,7 @@ public static class HostEndpoints
     public sealed record UpdateDto(string Name, string? CurrentVersion, string? AvailableVersion, bool IsSecurity, string? Classification, DateTime FirstSeenAt, bool IsHeld,
         string? Cves, bool IsKev, double? MaxEpss);
 
-    public sealed record ContainerDto(string Name, string Image, string? State, bool UpdateAvailable, DateTime? CheckedAt, string? CheckError, bool Pinned);
+    public sealed record ContainerDto(string Name, string Image, string? State, bool UpdateAvailable, DateTime? CheckedAt, string? CheckError, bool Pinned, DateTime? SeenAt = null);
     public sealed record AddressDto(string Address, int? PrefixLength, string? InterfaceName, string? SubnetName);
 
     public sealed record HostDetailDto(
@@ -165,6 +166,7 @@ public static class HostEndpoints
         op.MapPost("/hosts/{id:guid}/revoke", RevokeHost);
         op.MapPost("/hosts/{id:guid}/agent-update/retry", RetryAgentUpdate);
         op.MapDelete("/hosts/{id:guid}/reboot-check", DismissRebootCheck);
+        op.MapPost("/hosts/{id:guid}/containers/recheck", RecheckContainers);
         op.MapPut("/hosts/{id:guid}/modules/{module}", ToggleModule);
         op.MapDelete("/hosts/{id:guid}", DeleteHost).RequireAuthorization(UserAccounts.AdminPolicy);
 
@@ -198,7 +200,7 @@ public static class HostEndpoints
             null,
             h.Tags,
             h.PendingUpdates.Count(u => u.IsKev),
-            h.Containers.Count(c => c.LocalDigest != null && images.Any(i => i.Reference == c.Reference && i.RemoteDigest != null && i.RemoteDigest != c.LocalDigest)),
+            h.Containers.Count(c => c.LocalDigest != null && images.Any(i => i.Reference == c.Reference && i.RemoteDigest != null && !c.LocalDigest.Contains(i.RemoteDigest))),
             h.IntegrationId != null && h.ExternalId != null));
 
     /// <summary>
@@ -387,6 +389,25 @@ public static class HostEndpoints
         return Results.NoContent();
     }
 
+    /// <summary>Container neu prüfen: Images sofort bei der Registry abfragen, Agent meldet seine Container beim nächsten Abruf.</summary>
+    private static async Task<IResult> RecheckContainers(Guid id, AppDbContext db, IServiceProvider services, CancellationToken ct)
+    {
+        var host = await db.Hosts.FindAsync([id], ct);
+        if (host is null)
+        {
+            return Results.NotFound();
+        }
+
+        host.ContainersRequestedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync(ct);
+        if (services.GetServices<IHostedService>().OfType<ContainerUpdateService>().FirstOrDefault() is { } checker)
+        {
+            await checker.RecheckHostAsync(db, id, DateTime.UtcNow, ct);
+        }
+
+        return Results.NoContent();
+    }
+
     /// <summary>Hinweis "nach dem Neustart fehlt …" ausblenden (z. B. Dienst absichtlich entfernt). Der nächste Neustart prüft neu.</summary>
     private static async Task<IResult> DismissRebootCheck(Guid id, AppDbContext db, AuditLog audit, CancellationToken ct)
     {
@@ -414,8 +435,8 @@ public static class HostEndpoints
         return containers.Select(c =>
         {
             var check = c.Reference is null ? null : checks.GetValueOrDefault(c.Reference);
-            var update = check?.RemoteDigest is { } remote && c.LocalDigest is not null && remote != c.LocalDigest;
-            return new ContainerDto(c.Name, c.Image, c.State, update, check?.CheckedAt, check?.Error, c.Reference is null);
+            var update = check?.RemoteDigest is { } remote && c.LocalDigest is not null && !c.HasDigest(remote);
+            return new ContainerDto(c.Name, c.Image, c.State, update, check?.CheckedAt, check?.Error, c.Reference is null, c.SeenAt);
         }).ToList();
     }
 

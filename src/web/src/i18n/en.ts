@@ -657,6 +657,9 @@ const en: Translation = {
     hint: "Required for snapshots and backup checks in patch plans.",
   },
   security: {
+    recheck: "Check again",
+    recheckStarted: "Querying the registry; the agent reports its containers again shortly.",
+    freshness: "Containers reported {{seen}} · registry checked {{checked}}",
     pageDescription: "All known vulnerabilities on your hosts, with sources and whether an update exists.",
     statTotal: "Known vulnerabilities",
     statTotalHint: "with update or relevant without one",

@@ -55,9 +55,14 @@ public sealed partial record ImageReference(string Registry, string Repository, 
         return RepositoryPattern().IsMatch(name) && tag.Length is > 0 and <= 128 ? new ImageReference(registry.ToLowerInvariant(), name, tag) : null;
     }
 
-    /// <summary>Lokaler Digest aus RepoDigests ("nginx@sha256:…", "ghcr.io/org/app@sha256:…") passend zu dieser Referenz.</summary>
+    /// <summary>
+    /// Lokale Digests aus RepoDigests ("nginx@sha256:…", "ghcr.io/org/app@sha256:…") passend zu diesem Repository. Alle, nicht
+    /// nur der erste: Wurde dasselbe Image über mehrere Tags gezogen, hat es je Tag einen Digest; aktuell ist es, wenn einer
+    /// davon dem Digest des Tags in der Registry entspricht. null = keiner (lokal gebaut).
+    /// </summary>
     public string? LocalDigest(IReadOnlyList<string>? repoDigests)
     {
+        var digests = new List<string>();
         foreach (var entry in repoDigests ?? [])
         {
             var at = entry.IndexOf('@');
@@ -67,13 +72,14 @@ public sealed partial record ImageReference(string Registry, string Repository, 
             }
 
             var repo = Parse(entry[..at]);
-            if (repo is not null && repo.Registry == Registry && repo.Repository == Repository)
+            var digest = entry[(at + 1)..];
+            if (repo is not null && repo.Registry == Registry && repo.Repository == Repository && digest.Length <= 80 && !digests.Contains(digest))
             {
-                return entry[(at + 1)..];
+                digests.Add(digest);
             }
         }
 
-        return null;
+        return digests.Count == 0 ? null : string.Join(' ', digests.Take(5));
     }
 }
 
@@ -125,14 +131,26 @@ public sealed class ContainerUpdateService(
         while (await timer.WaitForNextTickAsync(stoppingToken));
     }
 
+    /// <summary>"Neu prüfen" für einen Host: dessen Images sofort bei der Registry abfragen (statt nach bis zu 6 Stunden).</summary>
+    public async Task RecheckHostAsync(AppDbContext db, Guid hostId, DateTime now, CancellationToken ct)
+    {
+        var references = await db.Containers.Where(c => c.HostId == hostId && c.Reference != null).Select(c => c.Reference!).Distinct().ToListAsync(ct);
+        await CheckAsync(db, references, now, force: true, ct);
+    }
+
     public async Task RunOnceAsync(AppDbContext db, DateTime now, CancellationToken ct)
     {
         var references = await db.Containers.Where(c => c.Reference != null).Select(c => c.Reference!).Distinct().ToListAsync(ct);
+        await CheckAsync(db, references, now, force: false, ct);
+    }
+
+    private async Task CheckAsync(AppDbContext db, List<string> references, DateTime now, bool force, CancellationToken ct)
+    {
         var checks = await db.ImageChecks.Where(i => references.Contains(i.Reference)).ToDictionaryAsync(i => i.Reference, ct);
 
         foreach (var reference in references)
         {
-            if (checks.TryGetValue(reference, out var check) && now - check.CheckedAt < RecheckAfter)
+            if (checks.TryGetValue(reference, out var check) && now - check.CheckedAt < (force ? TimeSpan.FromMinutes(1) : RecheckAfter))
             {
                 continue;
             }
@@ -166,7 +184,7 @@ public sealed class ContainerUpdateService(
         {
             var outdated = await db.Containers
                 .Include(c => c.Host)
-                .Where(c => c.Reference == check.Reference && c.LocalDigest != null && c.LocalDigest != check.RemoteDigest)
+                .Where(c => c.Reference == check.Reference && c.LocalDigest != null && !c.LocalDigest.Contains(check.RemoteDigest!))
                 .ToListAsync(ct);
             if (outdated.Count == 0)
             {
@@ -265,7 +283,7 @@ public sealed class ContainerUpdateService(
                 Image = Cut(report.Image, 300),
                 Reference = reference?.Normalized is { } n ? Cut(n, 300) : null,
                 ImageId = report.ImageId is null ? null : Cut(report.ImageId, 100),
-                LocalDigest = reference?.LocalDigest(report.RepoDigests) is { } d ? Cut(d, 100) : null,
+                LocalDigest = reference?.LocalDigest(report.RepoDigests) is { } d ? Cut(d, 400) : null,
                 State = report.State is null ? null : Cut(report.State, 32),
                 SeenAt = now,
             });

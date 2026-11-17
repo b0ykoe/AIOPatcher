@@ -156,6 +156,8 @@ export interface ContainerItem {
   checkedAt: string | null;
   checkError: string | null;
   pinned: boolean;
+  /** wann der Agent den Container zuletzt gemeldet hat */
+  seenAt: string | null;
 }
 
 export interface AddressItem {

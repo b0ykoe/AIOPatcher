@@ -149,6 +149,24 @@ public sealed class MetricsTests : IDisposable
         Assert.Null(await PollAsync()); // nicht vor Ablauf von 5 Minuten
     }
 
+    [Fact]
+    public async Task Containers_ReportedAgainOnRequestAndAfterScan()
+    {
+        await AnswerAsync((await PollAsync())!, PullJsonContext.ToElement(new SystemDescription(
+            "0.1.0", "docker1", OsFamily.Linux, "Debian", "13", "6.12", TimeSpan.FromHours(5), false, false, [], "x64",
+            [new(AgentModules.System, true, false, []), new(AgentModules.Docker, true, false, []), new(AgentModules.Agent, true, false, [])]),
+            PullJsonContext.Default.SystemDescription));
+        var inventory = await PollAsync();
+        Assert.Equal((AgentModules.Docker, ModuleActions.Inventory), (inventory!.Module, inventory.Action));
+        await AnswerAsync(inventory, PullJsonContext.ToElement(new ContainerList([]), PullJsonContext.Default.ContainerList));
+        Assert.Null(await PollAsync());
+
+        // "Neu prüfen" im Dashboard
+        _host.ContainersRequestedAt = DateTime.UtcNow.AddSeconds(1);
+        await _db.SaveChangesAsync();
+        Assert.Equal(AgentModules.Docker, (await PollAsync())!.Module);
+    }
+
     private async Task<AgentTask?> PollAsync()
     {
         var task = await PullEndpoints.NextTaskAsync(_db, _host, _notifier, _features, _downloads, null, "0.1.0", DateTime.UtcNow, CancellationToken.None);

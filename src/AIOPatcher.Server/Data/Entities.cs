@@ -62,6 +62,9 @@ public sealed class ManagedHost
     public string? Metrics { get; set; }
     public DateTime? MetricsAt { get; set; }
 
+    /// <summary>"Container neu prüfen" im Dashboard: Agent soll seine Container gleich wieder melden.</summary>
+    public DateTime? ContainersRequestedAt { get; set; }
+
     // mTLS-Identität
     public required string CertificateThumbprint { get; set; }
     public DateTime CertificateExpiresAt { get; set; }

@@ -203,7 +203,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             e.Property(x => x.Image).HasMaxLength(300);
             e.Property(x => x.Reference).HasMaxLength(300);
             e.Property(x => x.ImageId).HasMaxLength(100);
-            e.Property(x => x.LocalDigest).HasMaxLength(100);
+            e.Property(x => x.LocalDigest).HasMaxLength(400);
             e.Property(x => x.State).HasMaxLength(32);
             e.HasOne(x => x.Host).WithMany(h => h.Containers).HasForeignKey(x => x.HostId).OnDelete(DeleteBehavior.Cascade);
             e.HasIndex(x => x.HostId);

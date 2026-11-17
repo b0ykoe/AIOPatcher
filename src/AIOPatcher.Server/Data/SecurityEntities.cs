@@ -45,8 +45,14 @@ public sealed class ContainerInfo
     public string? Reference { get; set; }
     public string? ImageId { get; set; }
 
-    /// <summary>Digest des lokalen Images aus RepoDigests ("sha256:…"), null bei lokal gebauten Images.</summary>
+    /// <summary>
+    /// Digests des lokalen Images aus RepoDigests für dieses Repository ("sha256:…", mehrere durch Leerzeichen getrennt:
+    /// ein Image kann über mehrere Tags gezogen worden sein). null bei lokal gebauten Images.
+    /// </summary>
     public string? LocalDigest { get; set; }
+
+    /// <summary>Gilt das lokale Image als aktuell, wenn die Registry diesen Digest meldet?</summary>
+    public bool HasDigest(string remote) => LocalDigest is not null && LocalDigest.Split(' ').Contains(remote);
     public string? State { get; set; }
     public DateTime SeenAt { get; set; }
 }

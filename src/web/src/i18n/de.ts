@@ -656,6 +656,9 @@ const de = {
     hint: "Nötig für Snapshots und Backup-Prüfung in Patch-Plänen.",
   },
   security: {
+    recheck: "Neu prüfen",
+    recheckStarted: "Registry wird abgefragt; der Agent meldet seine Container gleich neu.",
+    freshness: "Container gemeldet {{seen}} · Registry geprüft {{checked}}",
     pageDescription: "Alle bekannten Lücken auf deinen Hosts, mit Quellen und ob es schon ein Update gibt.",
     statTotal: "Bekannte Lücken",
     statTotalHint: "mit Update oder relevant ohne Update",

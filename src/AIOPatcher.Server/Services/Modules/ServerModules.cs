@@ -188,8 +188,15 @@ public sealed class DockerServerModule : ServerModule
 {
     public override string Id => AgentModules.Docker;
 
-    public override PlannedTask? Due(ManagedHost host, ModuleContext context, string? polledVersion) =>
-        context.Older(Id, ModuleActions.Inventory, InventoryInterval) ? new PlannedTask(ModuleActions.Inventory) : null;
+    /// <summary>Container ändern sich oft (Update, neu erstellt): alle 30 Minuten, nach einem Scan und auf Wunsch sofort.</summary>
+    public static readonly TimeSpan Interval = TimeSpan.FromMinutes(30);
+
+    public override PlannedTask? Due(ManagedHost host, ModuleContext context, string? polledVersion)
+    {
+        var last = context.LastRequested(Id, ModuleActions.Inventory);
+        var asked = host.ContainersRequestedAt > last || context.LastRequested(AgentModules.Updates, ModuleActions.Scan) > last;
+        return context.Older(Id, ModuleActions.Inventory, Interval) || asked ? new PlannedTask(ModuleActions.Inventory) : null;
+    }
 
     public override async Task<JsonElement?> HandleAsync(ModuleContext context, ManagedHost host, AgentTaskRecord task, TaskResultRequest result, CancellationToken ct)
     {

@@ -166,7 +166,7 @@ namespace AIOPatcher.Server.Data.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<string>("LocalDigest")
-                        .HasMaxLength(100)
+                        .HasMaxLength(400)
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Name")
@@ -720,6 +720,9 @@ namespace AIOPatcher.Server.Data.Migrations
                     b.Property<string>("CertificateThumbprint")
                         .IsRequired()
                         .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("ContainersRequestedAt")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("DisabledModules")

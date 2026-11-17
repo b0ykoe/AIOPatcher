@@ -142,7 +142,10 @@ gegen echte Systeme getestet, sondern gegen nachgebaute APIs und Unit-Tests):
   (Microsoft), KEV/EPSS und welche eigenen Hosts betroffen sind. Auch per Strg+K und CVE-Nummer.
 - **Programm-Inventar**: dpkg/snap und Windows-Programme, mit verfügbarer Version und Links (winget-Manifest,
   Debian-Tracker, Launchpad, Hersteller); unter Windows **Programm-Updates per winget** (Windows 10/11, Server 2025)
-- **Docker-Container**: erkennt neuere Images in der Registry (nur Anzeige/Meldung, aktualisiert nichts)
+- **Docker-Container**: erkennt neuere Images in der Registry (nur Anzeige/Meldung, aktualisiert nichts). Der Agent meldet
+  seine Container alle 30 Minuten und nach jedem Scan, die Registry wird pro Image alle 6 Stunden gefragt; *Neu prüfen* im
+  Reiter Container fragt beides sofort ab. Aktuell ist ein Container, wenn einer der lokalen Digests seines Images
+  (auch über andere Tags gezogen) dem Digest des Tags in der Registry entspricht.
 - **Benachrichtigungen**: ntfy, E-Mail, Discord, Slack, Telegram, Webhook (HMAC-signiert)
 - **Berichte**: Konformität pro Site und Zeitraum, CSV und Druck/PDF
 - **IPAM light**: Subnetze, Belegung, nächste freie Adresse, Konflikte; Adressen aus Agents, OPNsense-ARP und manuell
@@ -376,8 +379,8 @@ Gesperrte Funktionen sind aus und lassen sich im Dashboard nicht einschalten, au
 
 Der Agent ist ein reiner **Pull-Agent**: Er fragt den Server nach Aufträgen (`GET /agent/v2/poll`) und schickt Daten nur als
 Antwort auf genau einen Auftrag (Log-Zeilen und Ergebnis). Ungefragt sendet er nichts, auch kein Inventar. Der Server
-entscheidet, welche Daten er wann braucht, z. B. Systemdaten alle 15 Minuten und Updates, Programme, Container und
-Compliance alle 6 Stunden, nach einer Installation sofort.
+entscheidet, welche Daten er wann braucht, z. B. Systemdaten alle 15 Minuten, Container alle 30 Minuten, Auslastung alle
+5 Minuten und Updates, Programme und Compliance alle 6 Stunden, nach einer Installation sofort.
 
 Jede Funktion ist ein **Modul** mit festen Aktionen. Andere Aufträge lehnt der Agent ab:
 

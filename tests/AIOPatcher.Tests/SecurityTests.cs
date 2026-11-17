@@ -85,6 +85,19 @@ public sealed class ContainerTests
     }
 
     [Fact]
+    public void ImageReference_KeepsAllDigestsOfTheRepository_CurrentIfAnyMatches()
+    {
+        // Dasselbe Image über zwei Tags gezogen (z. B. mssql 2022-latest und 2022-CU16): je Tag ein Digest
+        var reference = ImageReference.Parse("mcr.microsoft.com/mssql/server:2022-latest")!;
+        var digests = reference.LocalDigest(["mcr.microsoft.com/mssql/server@sha256:cu16", "mcr.microsoft.com/mssql/server@sha256:latest", "other@sha256:x"]);
+        Assert.Equal("sha256:cu16 sha256:latest", digests);
+
+        var container = new ContainerInfo { HostId = Guid.NewGuid(), Name = "sql", Image = "mcr.microsoft.com/mssql/server:2022-latest", LocalDigest = digests };
+        Assert.True(container.HasDigest("sha256:latest"));
+        Assert.False(container.HasDigest("sha256:newer"));
+    }
+
+    [Fact]
     public void DockerInventory_ParsesInspectOutput()
     {
         var containers = DockerInventory.ParseContainers("/web|nginx:1.27|sha256:img1|running\n/db|postgres:16|sha256:img2|running\nbroken line\n");
