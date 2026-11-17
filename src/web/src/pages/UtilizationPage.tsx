@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
-import { Alert, Anchor, Badge, Card, Group, SegmentedControl, Stack, Table, Text, TextInput, ThemeIcon, Tooltip } from "@mantine/core";
-import { IconAlertTriangle, IconBox, IconBrandDocker, IconDeviceDesktop, IconGauge, IconSearch, IconServer } from "@tabler/icons-react";
+import { Alert, Anchor, Badge, Card, Group, Loader, SegmentedControl, Stack, Table, Text, TextInput, ThemeIcon, Tooltip } from "@mantine/core";
+import { IconAlertTriangle, IconBox, IconBrandDocker, IconCpu, IconDatabase, IconDeviceDesktop, IconGauge, IconSearch, IconServer, IconStack2 } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import { api, formatRelative, type HostUtilization, type ProxmoxResource, type ProxmoxUtilization, type Utilization } from "../api";
-import { EmptyState, PageHeader } from "../components/ui";
+import { CardTitle, EmptyState, PageHeader } from "../components/ui";
 import { formatBytes, percentOf, Sparkline, UsageCell, UsageMeter } from "../components/metrics/charts";
 
 /** Messung älter als 15 Minuten: Host aus oder Agent hängt. */
@@ -35,15 +35,16 @@ export function UtilizationPage() {
         description={t("metrics.description")}
         actions={<TextInput placeholder={t("metrics.filter")} leftSection={<IconSearch size={16} />} value={filter} onChange={(e) => setFilter(e.currentTarget.value)} />}
       />
+      {!data && <Loader />}
       {data && !data.enabled && <Alert color="gray">{t("metrics.disabled")}</Alert>}
       {data?.enabled && (
-        <Stack gap="xl">
+        <Stack gap="md">
           <section>
-            <Text fw={700} mb="sm">{t("metrics.hostsTitle")}</Text>
+            <CardTitle>{t("metrics.hostsTitle")}</CardTitle>
             {data.hosts.length === 0 ? (
               <EmptyState icon={<IconGauge size={28} />} title={t("metrics.noneTitle")} text={t("metrics.noneText")} />
             ) : (
-              <div className="card-grid">
+              <div className="metric-grid">
                 {data.hosts.filter((h) => match(h.name)).map((h) => <HostCard key={h.id} host={h} />)}
               </div>
             )}
@@ -72,10 +73,10 @@ function HostCard({ host }: { host: HostUtilization }) {
         {host.recent.length > 1 && <Sparkline values={host.recent.map((p) => p.cpu)} label={t("metrics.cpu24h")} width={96} />}
       </Group>
       {host.at ? (
-        <Stack gap={8}>
-          <UsageMeter size="sm" label={host.cores ? t("metrics.cpuCores", { cores: host.cores }) : t("metrics.cpu")} percent={host.cpu} />
-          <UsageMeter size="sm" label={t("metrics.memory")} percent={memory} detail={`${formatBytes(host.memoryUsed)} / ${formatBytes(host.memoryTotal)}`} />
-          <UsageMeter size="sm" label={host.diskMount ? t("metrics.diskAt", { mount: host.diskMount }) : t("metrics.disk")} percent={host.disk} />
+        <Stack gap="sm">
+          <UsageMeter size="sm" icon={<IconCpu size={16} />} label={host.cores ? t("metrics.cpuCores", { cores: host.cores }) : t("metrics.cpu")} percent={host.cpu} />
+          <UsageMeter size="sm" icon={<IconStack2 size={16} />} label={t("metrics.memory")} percent={memory} detail={`${formatBytes(host.memoryUsed)} / ${formatBytes(host.memoryTotal)}`} />
+          <UsageMeter size="sm" icon={<IconDatabase size={16} />} label={host.diskMount ? t("metrics.diskAt", { mount: host.diskMount }) : t("metrics.disk")} percent={host.disk} />
           {host.containers != null && host.containers > 0 && (
             <Group gap={4}>
               <IconBrandDocker size={14} opacity={0.7} />
@@ -120,27 +121,28 @@ function ProxmoxSection({ data, match }: { data: ProxmoxUtilization; match: (nam
 
       <Stack gap="md">
         {nodes.length > 0 && (
-          <div className="card-grid">
+          <div className="metric-grid">
             {nodes.map(({ resource: n, hostId }) => (
               <Card key={n.id}>
-                <Group gap="xs" mb="sm" wrap="nowrap">
-                  <ThemeIcon variant="light" size="sm"><IconServer size={14} /></ThemeIcon>
-                  {hostId ? <Anchor component={Link} to={`/hosts/${hostId}?tab=metrics`} fw={700}>{n.name}</Anchor> : <Text fw={700}>{n.name}</Text>}
-                  <Badge size="xs" color={n.status === "online" ? "teal" : "red"}>{n.status}</Badge>
-                </Group>
-                <Stack gap={8}>
-                  <UsageMeter size="sm" label={t("metrics.cpuCores", { cores: n.maxCpu ?? "?" })} percent={n.cpu == null ? null : n.cpu * 100} />
-                  <UsageMeter size="sm" label={t("metrics.memory")} percent={percentOf(n.memory, n.maxMemory)} detail={`${formatBytes(n.memory)} / ${formatBytes(n.maxMemory)}`} />
-                  <UsageMeter size="sm" label={t("metrics.rootDisk")} percent={percentOf(n.disk, n.maxDisk)} detail={`${formatBytes(n.disk)} / ${formatBytes(n.maxDisk)}`} />
+                <CardTitle
+                  icon={<ThemeIcon variant="light" size="sm"><IconServer size={14} /></ThemeIcon>}
+                  badge={<Badge size="sm" color={n.status === "online" ? "teal" : "red"}>{n.status}</Badge>}
+                >
+                  {hostId ? <Anchor component={Link} to={`/hosts/${hostId}?tab=metrics`} fw={700}>{n.name}</Anchor> : n.name}
+                </CardTitle>
+                <Stack gap="sm">
+                  <UsageMeter size="sm" icon={<IconCpu size={16} />} label={t("metrics.cpuCores", { cores: n.maxCpu ?? "?" })} percent={n.cpu == null ? null : n.cpu * 100} />
+                  <UsageMeter size="sm" icon={<IconStack2 size={16} />} label={t("metrics.memory")} percent={percentOf(n.memory, n.maxMemory)} detail={`${formatBytes(n.memory)} / ${formatBytes(n.maxMemory)}`} />
+                  <UsageMeter size="sm" icon={<IconDatabase size={16} />} label={t("metrics.rootDisk")} percent={percentOf(n.disk, n.maxDisk)} detail={`${formatBytes(n.disk)} / ${formatBytes(n.maxDisk)}`} />
                 </Stack>
               </Card>
             ))}
             {storages.length > 0 && (
               <Card>
-                <Text fw={700} mb="sm">{t("metrics.storage")}</Text>
-                <Stack gap={8}>
+                <CardTitle>{t("metrics.storage")}</CardTitle>
+                <Stack gap="sm">
                   {storages.map(({ resource: s }) => (
-                    <UsageMeter key={s.id} size="sm" label={`${s.name}${nodes.length > 1 && s.node ? ` (${s.node})` : ""}`}
+                    <UsageMeter key={s.id} size="sm" icon={<IconDatabase size={16} />} label={`${s.name}${nodes.length > 1 && s.node ? ` (${s.node})` : ""}`}
                       percent={percentOf(s.disk, s.maxDisk)} detail={`${formatBytes(s.disk)} / ${formatBytes(s.maxDisk)}`} />
                   ))}
                 </Stack>
@@ -150,15 +152,15 @@ function ProxmoxSection({ data, match }: { data: ProxmoxUtilization; match: (nam
         )}
 
         <Card p={0}>
-          <Table.ScrollContainer minWidth={760}>
-            <Table fz="sm" verticalSpacing={8}>
+          <Table.ScrollContainer minWidth={960}>
+            <Table>
               <Table.Thead>
                 <Table.Tr>
                   <Table.Th>{t("sitesPage.name")}</Table.Th>
                   <Table.Th>{t("metrics.type")}</Table.Th>
-                  <Table.Th w={150}>CPU</Table.Th>
-                  <Table.Th w={210}>{t("metrics.memory")}</Table.Th>
-                  <Table.Th w={210}>{t("metrics.disk")}</Table.Th>
+                  <Table.Th>CPU</Table.Th>
+                  <Table.Th>{t("metrics.memory")}</Table.Th>
+                  <Table.Th>{t("metrics.disk")}</Table.Th>
                   <Table.Th>AIOPatcher</Table.Th>
                 </Table.Tr>
               </Table.Thead>
@@ -192,12 +194,12 @@ function GuestRow({ guest: g, hostId, hostName }: { guest: ProxmoxResource; host
         <Group gap={6} wrap="nowrap">
           {g.type === "lxc" ? <IconBox size={14} /> : <IconDeviceDesktop size={14} />}
           <Text size="sm">{g.type === "lxc" ? "LXC" : "VM"}</Text>
-          {!running && <Badge size="xs" color="gray">{g.status}</Badge>}
+          {!running && <Badge size="sm" color="gray">{g.status}</Badge>}
         </Group>
       </Table.Td>
       <Table.Td>
         {running && g.cpu != null
-          ? <UsageMeter size="sm" label={t("metrics.coresShort", { cores: g.maxCpu ?? "?" })} percent={g.cpu * 100} />
+          ? <UsageCell percent={g.cpu * 100} detail={t("metrics.coresShort", { cores: g.maxCpu ?? "?" })} />
           : <Text size="sm" c="dimmed">–</Text>}
       </Table.Td>
       <Table.Td>

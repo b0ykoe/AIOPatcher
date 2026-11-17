@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
-import { ActionIcon, Alert, Badge, Button, Card, Code, CopyButton, Group, Modal, NumberInput, Select, Stack, Table, Text, TextInput, Tooltip } from "@mantine/core";
+import { ActionIcon, Alert, Badge, Button, Card, Code, CopyButton, Group, Loader, Modal, NumberInput, Select, Stack, Table, Text, TextInput, Tooltip } from "@mantine/core";
 import { IconCheck, IconCopy, IconKey, IconPlus, IconTrash } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
 import { api, formatDateTime, formatRelative, type UserRole } from "../../api";
-import { confirmAction, EmptyState, errorText, notifyError } from "../ui";
+import { CardTitle, confirmAction, EmptyState, errorText, notifyError } from "../ui";
 import { FeatureOffHint, useFeatures } from "../../features";
 
 interface ApiToken {
@@ -25,8 +25,16 @@ export function ApiTokenSettings() {
   const [open, setOpen] = useState(false);
   const [secret, setSecret] = useState<string | null>(null);
 
+  const [loadError, setLoadError] = useState<string | null>(null);
+
   const load = useCallback(() => {
-    api.get<ApiToken[]>("/api/api-tokens").then(setTokens).catch((e) => notifyError(e));
+    api
+      .get<ApiToken[]>("/api/api-tokens")
+      .then((list) => {
+        setTokens(list);
+        setLoadError(null);
+      })
+      .catch((e) => setLoadError(errorText(e)));
   }, []);
 
   useEffect(load, [load]);
@@ -50,7 +58,7 @@ export function ApiTokenSettings() {
   const origin = window.location.origin;
 
   return (
-    <Stack>
+    <Stack gap="md">
       {!isOn("ApiTokens") && (
         <Alert color="yellow">
           <Text size="sm">{t("features.tokensOff")}</Text>
@@ -64,11 +72,14 @@ export function ApiTokenSettings() {
         </Button>
       </Group>
 
+      {loadError && <Alert color="red">{loadError}</Alert>}
       <Card p={0}>
-        {tokens && tokens.length === 0 ? (
+        {tokens === null ? (
+          !loadError && <Loader size="sm" m="md" />
+        ) : tokens.length === 0 ? (
           <EmptyState icon={<IconKey size={28} />} title={t("apiTokens.noneTitle")} text={t("apiTokens.noneText")} />
         ) : (
-          <Table.ScrollContainer minWidth={640}>
+          <Table.ScrollContainer minWidth={600}>
             <Table>
               <Table.Thead>
                 <Table.Tr>
@@ -80,18 +91,18 @@ export function ApiTokenSettings() {
                 </Table.Tr>
               </Table.Thead>
               <Table.Tbody>
-                {tokens?.map((tok) => (
+                {tokens.map((tok) => (
                   <Table.Tr key={tok.id}>
                     <Table.Td>
                       <Text size="sm" fw={600}>{tok.name}</Text>
                       <Text size="xs" c="dimmed" ff="monospace">{tok.prefix}…</Text>
                     </Table.Td>
-                    <Table.Td><Badge>{t(`roles.${tok.role}`)}</Badge></Table.Td>
+                    <Table.Td><Badge size="sm">{t(`roles.${tok.role}`)}</Badge></Table.Td>
                     <Table.Td><Text size="sm">{formatRelative(tok.lastUsedAt)}</Text></Table.Td>
                     <Table.Td><Text size="sm">{tok.expiresAt ? formatDateTime(tok.expiresAt) : t("rules.unlimited")}</Text></Table.Td>
                     <Table.Td>
                       <Tooltip label={t("common.delete")}>
-                        <ActionIcon color="red" variant="subtle" onClick={() => remove(tok)} aria-label={t("common.delete")}>
+                        <ActionIcon color="red" onClick={() => remove(tok)} aria-label={t("common.delete")}>
                           <IconTrash size={16} />
                         </ActionIcon>
                       </Tooltip>
@@ -105,14 +116,14 @@ export function ApiTokenSettings() {
       </Card>
 
       <Card>
-        <Text fw={700} mb="xs">{t("apiTokens.example")}</Text>
+        <CardTitle>{t("apiTokens.example")}</CardTitle>
         <Code block>{`curl -H "Authorization: Bearer aiop_…" ${origin}/api/overview\ncurl -H "Authorization: Bearer aiop_…" "${origin}/api/reports/patch.csv?days=30" -o report.csv`}</Code>
         <Text size="xs" c="dimmed" mt="xs">{t("apiTokens.webhookHint")}</Text>
-        <Button component={Link} to="/developer" variant="light" size="xs" mt="sm">{t("apiPage.allEndpoints")}</Button>
+        <Button component={Link} to="/developer" variant="light" size="compact-xs" mt="sm">{t("apiPage.allEndpoints")}</Button>
       </Card>
 
       <CreateTokenModal opened={open} onClose={() => setOpen(false)} onCreated={(s) => { setOpen(false); setSecret(s); load(); }} />
-      <Modal opened={secret !== null} onClose={() => setSecret(null)} title={<Text fw={800}>{t("apiTokens.createdTitle")}</Text>} size="lg" centered>
+      <Modal opened={secret !== null} onClose={() => setSecret(null)} title={<Text fw={800}>{t("apiTokens.createdTitle")}</Text>} size="lg">
         {secret && (
           <Stack>
             <Alert color="violet">{t("apiTokens.createdText")}</Alert>
@@ -127,7 +138,7 @@ export function ApiTokenSettings() {
               </CopyButton>
             </Group>
             <Group justify="flex-end">
-              <Button onClick={() => setSecret(null)}>{t("common.close")}</Button>
+              <Button variant="default" onClick={() => setSecret(null)}>{t("common.close")}</Button>
             </Group>
           </Stack>
         )}

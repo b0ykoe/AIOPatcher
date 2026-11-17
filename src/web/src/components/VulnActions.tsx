@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router";
 import { Alert, Anchor, Badge, Button, Card, Code, Group, Modal, SegmentedControl, Select, Stack, Table, Text, Textarea, Tooltip } from "@mantine/core";
-import { IconCheck, IconEyeOff, IconInfoCircle, IconServer, IconShieldCheck, IconShieldSearch, IconX } from "@tabler/icons-react";
+import { IconEyeOff, IconInfoCircle, IconServer, IconShieldCheck, IconShieldSearch, IconX } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import { api, formatDateTime } from "../api";
 import { useCan } from "../App";
-import { notifyError, notifySuccess } from "./ui";
+import { CardTitle, notifyError, notifySuccess } from "./ui";
 
 export interface VulnHost {
   hostId: string;
@@ -75,7 +75,7 @@ export function AckModal({ cve, hosts, opened, onClose, onDone }: { cve: string;
   };
 
   return (
-    <Modal opened={opened} onClose={onClose} title={t("vulns.ackTitle", { cve })} size="md">
+    <Modal opened={opened} onClose={onClose} title={<Text fw={800}>{t("vulns.ackTitle", { cve })}</Text>} size="md">
       <Stack gap="md">
         <Text size="sm" c="dimmed">{t("vulns.ackText")}</Text>
         <Select
@@ -120,7 +120,7 @@ function CheckResult({ r }: { r: FixCheck }) {
   const vars = { host: r.hostName, package: r.package ?? "?", installed: r.installed ?? "?", fixedIn: r.fixedIn ?? "?", distribution: r.distribution ?? "?" };
   return (
     <Group gap="sm" wrap="nowrap" align="flex-start">
-      <Badge color={verdictColor[r.verdict]} style={{ flexShrink: 0 }} mt={2}>{t(`vulns.verdict.${r.verdict}`)}</Badge>
+      <Badge size="sm" color={verdictColor[r.verdict]} style={{ flexShrink: 0 }} mt={2}>{t(`vulns.verdict.${r.verdict}`)}</Badge>
       <div>
         <Text size="sm">
           <Anchor component={Link} to={`/hosts/${r.hostId}`} size="sm" fw={600}>{r.hostName}</Anchor>
@@ -177,25 +177,25 @@ export function VulnHostsPanel({ cve, hosts, autoCheck, onChanged }: { cve: stri
 
   return (
     <Card p={0}>
-      <Group p="md" pb="xs" gap="xs" justify="space-between" wrap="wrap">
-        <Group gap="xs">
-          <IconServer size={18} />
-          <Text fw={600}>{t("cveLookup.yourHosts")}</Text>
-          <Badge color={hosts.length ? "red" : "teal"}>{hosts.length}</Badge>
-        </Group>
-        {can.operate && hosts.length > 0 && (
-          <Group gap="xs">
+      <CardTitle
+        inset
+        icon={<IconServer size={18} />}
+        badge={<Badge size="sm" color={hosts.length ? "red" : "teal"}>{hosts.length}</Badge>}
+        actions={can.operate && hosts.length > 0 && (
+          <>
             {noFix && (
               <Tooltip label={t("vulns.checkHint")} multiline w={300}>
-                <Button size="xs" variant="light" leftSection={<IconShieldSearch size={14} />} loading={checking} onClick={() => void check()}>
+                <Button size="compact-xs" variant="light" leftSection={<IconShieldSearch size={14} />} loading={checking} onClick={() => void check()}>
                   {t("vulns.check")}
                 </Button>
               </Tooltip>
             )}
-            <Button size="xs" variant="default" leftSection={<IconEyeOff size={14} />} onClick={() => setAckOpen(true)}>{t("vulns.ack")}…</Button>
-          </Group>
+            <Button size="compact-xs" variant="light" leftSection={<IconEyeOff size={14} />} onClick={() => setAckOpen(true)}>{t("vulns.ack")}…</Button>
+          </>
         )}
-      </Group>
+      >
+        {t("cveLookup.yourHosts")}
+      </CardTitle>
 
       {results && (
         <Alert mx="md" mb="sm" color={results.every((r) => r.verdict === "Resolved" || r.verdict === "FalsePositive" || r.verdict === "UpdateAvailable") ? "teal" : "blue"} icon={<IconShieldSearch size={18} />}
@@ -207,10 +207,10 @@ export function VulnHostsPanel({ cve, hosts, autoCheck, onChanged }: { cve: stri
       )}
 
       {acks.length > 0 && (
-        <Stack gap={6} px="md" pb="sm">
+        <Stack gap="xs" px="md" pb="sm">
           {acks.map((a) => (
             <Group key={a.id} gap="sm" wrap="nowrap" justify="space-between" className="ack-row">
-              <Group gap="xs" wrap="nowrap" style={{ minWidth: 0 }}>
+              <Group gap={6} wrap="nowrap" style={{ minWidth: 0 }}>
                 <IconEyeOff size={16} color="var(--mantine-color-dimmed)" style={{ flexShrink: 0 }} />
                 <div style={{ minWidth: 0 }}>
                   <Text size="sm">
@@ -224,7 +224,7 @@ export function VulnHostsPanel({ cve, hosts, autoCheck, onChanged }: { cve: stri
                 </div>
               </Group>
               {can.operate && (
-                <Button size="compact-xs" variant="subtle" color="gray" leftSection={<IconX size={12} />} onClick={() => void unack(a.id)}>{t("vulns.unack")}</Button>
+                <Button size="compact-xs" variant="light" color="gray" leftSection={<IconX size={12} />} onClick={() => void unack(a.id)}>{t("vulns.unack")}</Button>
               )}
             </Group>
           ))}
@@ -232,12 +232,12 @@ export function VulnHostsPanel({ cve, hosts, autoCheck, onChanged }: { cve: stri
       )}
 
       {hosts.length === 0 ? (
-        <Group p="md" pt={0} gap="xs" wrap="nowrap" align="flex-start">
+        <Group px="md" pb="md" gap={6} wrap="nowrap" align="flex-start">
           <IconShieldCheck size={18} color="var(--mantine-color-teal-6)" style={{ flexShrink: 0 }} />
           <Text size="sm" c="dimmed">{t("cveLookup.noHosts")}</Text>
         </Group>
       ) : (
-        <Table.ScrollContainer minWidth={480}>
+        <Table.ScrollContainer minWidth={600}>
           <Table>
             <Table.Thead>
               <Table.Tr>
@@ -249,20 +249,20 @@ export function VulnHostsPanel({ cve, hosts, autoCheck, onChanged }: { cve: stri
               {hosts.map((h) => (
                 <Table.Tr key={`${h.hostId}-${h.fix ?? h.package}`} style={h.acknowledged ? { opacity: 0.6 } : undefined}>
                   <Table.Td>
-                    <Group gap={6} wrap="nowrap">
+                    <Group gap="xs" wrap="nowrap">
                       <Anchor component={Link} to={`/hosts/${h.hostId}`} fw={600} size="sm">{h.hostName}</Anchor>
-                      {h.acknowledged && <Badge size="xs" variant="outline" color="gray" leftSection={<IconCheck size={10} />}>{t("vulns.acknowledged")}</Badge>}
+                      {h.acknowledged && <Badge size="sm" variant="outline" color="gray" leftSection={<IconEyeOff size={10} />}>{t("vulns.acknowledged")}</Badge>}
                     </Group>
                   </Table.Td>
                   <Table.Td>
                     {h.fix ? (
-                      <Group gap={6} wrap="nowrap">
-                        <Badge color="teal">{t("security.fixAvailable")}</Badge>
+                      <Group gap="xs" wrap="nowrap">
+                        <Badge size="sm" color="teal">{t("security.fixAvailable")}</Badge>
                         <Text size="sm" lineClamp={1}>{h.fix}</Text>
                       </Group>
                     ) : (
-                      <Group gap={6} wrap="nowrap">
-                        <Badge color="gray">{t("security.noFix")}</Badge>
+                      <Group gap="xs" wrap="nowrap">
+                        <Badge size="sm" color="gray">{t("security.noFix")}</Badge>
                         <Text size="sm" ff="monospace">{h.package}</Text>
                       </Group>
                     )}
@@ -275,7 +275,7 @@ export function VulnHostsPanel({ cve, hosts, autoCheck, onChanged }: { cve: stri
       )}
 
       {noFix && !results && (
-        <Group px="md" pb="md" gap="xs" wrap="nowrap" align="flex-start">
+        <Group px="md" pb="md" gap={6} wrap="nowrap" align="flex-start">
           <IconInfoCircle size={16} color="var(--mantine-color-dimmed)" style={{ flexShrink: 0, marginTop: 2 }} />
           <Text size="xs" c="dimmed">{t("vulns.noFixSteps")}</Text>
         </Group>

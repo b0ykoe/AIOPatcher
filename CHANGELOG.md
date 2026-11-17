@@ -13,6 +13,13 @@ Geschrieben für Anwender, nicht als Commit-Liste.
   Bedeutung (z. B. „Neustart nötig“ immer gelb, Warteschlange grau, verfügbare Updates blau).
 - **Auslastung wie bei Proxmox:** „Aktuell“ (CPU, RAM, Swap, Laufzeit, Load) und „Datenträger“ als schmale Karten mit
   Zeilen untereinander statt Balken über die ganze Bildschirmbreite; in Tabellen kurze Balken mit Wert daneben.
+- **Alle Seiten nach dem Styleguide überarbeitet:** einheitliche Kartenüberschriften, gleiche Abstände, Badges in
+  Tabellen und Listen gleich groß (z. B. KEV und „akzeptiert“ überall gleich), Tabellen in Karten mit Kopfzeile,
+  Hauptaktionen als Verlaufsknopf, Aktionen in Zeilen klein. Fehler beim Laden von Listen (Benutzer, Sites, API-Tokens,
+  Integrationen, Benachrichtigungen, Berichte) stehen jetzt als Hinweis an Ort und Stelle; leere Ergebnisse zeigen
+  einen Leer-Zustand.
+- Host-Seite: Der Compliance-Reiter hat keinen doppelten Rahmen mehr. Firewall-Regelsatz ausrollen ist als riskante
+  Aktion rot.
 - Host-, Job-, Lauf- und Plan-Seite haben denselben Kopf (Zurück-Link, Titel mit Status, Metadaten, Aktionen rechts);
   Hauptaktionen in Dialogen sehen überall gleich aus.
 

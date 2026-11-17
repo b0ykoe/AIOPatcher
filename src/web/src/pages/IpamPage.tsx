@@ -18,7 +18,7 @@ import {
   TextInput,
   Tooltip,
 } from "@mantine/core";
-import { IconEdit, IconNetwork, IconPlus, IconSearch, IconSparkles, IconTrash } from "@tabler/icons-react";
+import { IconAlertTriangle, IconEdit, IconNetwork, IconPlus, IconSearch, IconSparkles, IconTrash } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import { api, formatRelative, type Site } from "../api";
 import { useCan } from "../App";
@@ -148,122 +148,135 @@ export function IpamPage() {
         }
       />
 
-      {conflicts > 0 && (
-        <Alert color="red" mb="lg">
-          {t("ipam.conflicts", { count: conflicts })}
-        </Alert>
-      )}
+      <Stack gap="md">
+        {conflicts > 0 && (
+          <Alert color="red">
+            {t("ipam.conflicts", { count: conflicts })}
+          </Alert>
+        )}
 
-      {subnets.length === 0 && addresses?.length === 0 ? (
-        <Card mb="lg">
-          <EmptyState icon={<IconNetwork size={28} />} title={t("ipam.noneTitle")} text={t("ipam.noneText")} />
-        </Card>
-      ) : (
-        <Box className="card-grid" mb="lg">
-          {subnets.map((s) => (
-            <Card key={s.id}>
-              <Group justify="space-between" wrap="nowrap" align="flex-start">
-                <div style={{ minWidth: 0 }}>
-                  <Text fw={700} truncate>{s.name}</Text>
-                  <Text size="sm" ff="monospace" c="dimmed">{s.cidr}</Text>
-                </div>
-                {can.operate && (
-                  <Group gap={2} wrap="nowrap">
-                    <Tooltip label={t("ipam.nextFreeHint")}>
-                      <ActionIcon variant="subtle" onClick={() => void nextFree(s)} aria-label={t("ipam.nextFreeHint")} disabled={s.size === null}>
-                        <IconSparkles size={16} />
-                      </ActionIcon>
-                    </Tooltip>
-                    <ActionIcon variant="subtle" onClick={() => setEditSubnet(s)} aria-label={t("common.edit")}>
-                      <IconEdit size={16} />
-                    </ActionIcon>
-                    <ActionIcon variant="subtle" color="red" onClick={() => removeSubnet(s)} aria-label={t("common.delete")}>
-                      <IconTrash size={16} />
-                    </ActionIcon>
-                  </Group>
-                )}
-              </Group>
-              {s.size !== null ? (
-                <>
-                  <Progress mt="sm" value={Math.min(100, (s.used / s.size) * 100)} color={levelColor[levelOf((s.used / s.size) * 100)]} size="sm" />
-                  <Text size="xs" c="dimmed" mt={4}>{t("ipam.usage", { used: s.used, size: s.size })}</Text>
-                </>
-              ) : (
-                <Text size="xs" c="dimmed" mt="sm">{t("ipam.usedCount", { count: s.used })}</Text>
-              )}
-              {s.description && <Text size="xs" c="dimmed" mt={4}>{s.description}</Text>}
-            </Card>
-          ))}
-        </Box>
-      )}
-
-      <Card p={0}>
-        <Group p="md" pb="xs" justify="space-between">
-          <Group gap="sm">
-            <TextInput placeholder={t("hostsPage.filter")} leftSection={<IconSearch size={16} />} value={query} onChange={(e) => setQuery(e.currentTarget.value)} w={220} />
-            <Select
-              data={[{ value: "", label: t("ipam.allSubnets") }, ...subnets.map((s) => ({ value: s.id, label: `${s.name} (${s.cidr})` })), { value: "none", label: t("ipam.noSubnet") }]}
-              value={subnetFilter}
-              onChange={(v) => setSubnetFilter(v ?? "")}
-              allowDeselect={false}
-              w={240}
-            />
-          </Group>
-          {can.operate && (
-            <Button variant="light" leftSection={<IconPlus size={16} />} onClick={() => setAddOpen(true)} disabled={!siteId}>
-              {t("ipam.addAddress")}
-            </Button>
-          )}
-        </Group>
-        <Table.ScrollContainer minWidth={860}>
-          <Table>
-            <Table.Thead>
-              <Table.Tr>
-                <Table.Th>{t("hostDetail.address")}</Table.Th>
-                <Table.Th>{t("sitesPage.name")}</Table.Th>
-                <Table.Th>MAC</Table.Th>
-                <Table.Th>{t("hostDetail.interface")}</Table.Th>
-                <Table.Th>{t("hostDetail.subnet")}</Table.Th>
-                <Table.Th>{t("hostDetail.source")}</Table.Th>
-                <Table.Th>{t("hostsPage.colLastSeen")}</Table.Th>
-                <Table.Th w={40} />
-              </Table.Tr>
-            </Table.Thead>
-            <Table.Tbody>
-              {shown.map((a) => (
-                <Table.Tr key={a.id} bg={a.conflict ? "var(--mantine-color-red-light)" : undefined}>
-                  <Table.Td>
-                    <Group gap={6} wrap="nowrap">
-                      <Text size="sm" ff="monospace">{a.address}{a.prefixLength != null && a.prefixLength >= 0 ? `/${a.prefixLength}` : ""}</Text>
-                      {a.conflict && <Badge size="xs" color="red">{t("ipam.conflict")}</Badge>}
+        {subnets.length === 0 && addresses?.length === 0 ? (
+          <Card>
+            <EmptyState icon={<IconNetwork size={28} />} title={t("ipam.noneTitle")} text={t("ipam.noneText")} />
+          </Card>
+        ) : subnets.length > 0 && (
+          <Box className="card-grid">
+            {subnets.map((s) => (
+              <Card key={s.id}>
+                <Group justify="space-between" wrap="nowrap" align="flex-start">
+                  <div style={{ minWidth: 0 }}>
+                    <Text fw={700} truncate>{s.name}</Text>
+                    <Text size="sm" ff="monospace" c="dimmed">{s.cidr}</Text>
+                  </div>
+                  {can.operate && (
+                    <Group gap={2} wrap="nowrap">
+                      <Tooltip label={t("ipam.nextFreeHint")}>
+                        <ActionIcon onClick={() => void nextFree(s)} aria-label={t("ipam.nextFreeHint")} disabled={s.size === null}>
+                          <IconSparkles size={16} />
+                        </ActionIcon>
+                      </Tooltip>
+                      <Tooltip label={t("common.edit")}>
+                        <ActionIcon onClick={() => setEditSubnet(s)} aria-label={t("common.edit")}>
+                          <IconEdit size={16} />
+                        </ActionIcon>
+                      </Tooltip>
+                      <Tooltip label={t("common.delete")}>
+                        <ActionIcon color="red" onClick={() => removeSubnet(s)} aria-label={t("common.delete")}>
+                          <IconTrash size={16} />
+                        </ActionIcon>
+                      </Tooltip>
                     </Group>
-                  </Table.Td>
-                  <Table.Td>
-                    {a.hostId ? (
-                      <Anchor component={Link} to={`/hosts/${a.hostId}`} size="sm">{a.hostName}</Anchor>
-                    ) : (
-                      <Text size="sm">{a.deviceName ?? "–"}</Text>
-                    )}
-                    {a.source === "Manual" && a.description && <Text size="xs" c="dimmed">{a.description}</Text>}
-                  </Table.Td>
-                  <Table.Td><Text size="xs" ff="monospace" c="dimmed">{a.macAddress ?? ""}</Text></Table.Td>
-                  <Table.Td><Text size="xs" c="dimmed">{a.interfaceName}</Text></Table.Td>
-                  <Table.Td><Text size="xs">{a.subnetName ?? "–"}</Text></Table.Td>
-                  <Table.Td><Badge size="xs" color={sourceColor[a.source]}>{t(`ipam.source${a.source}`)}</Badge></Table.Td>
-                  <Table.Td><Text size="xs" c="dimmed">{formatRelative(a.lastSeenAt)}</Text></Table.Td>
-                  <Table.Td>
-                    {can.operate && a.source === "Manual" && (
-                      <ActionIcon size="sm" variant="subtle" color="red" onClick={() => void removeAddress(a)} aria-label={t("common.delete")}>
-                        <IconTrash size={14} />
-                      </ActionIcon>
-                    )}
-                  </Table.Td>
+                  )}
+                </Group>
+                {s.size !== null ? (
+                  <>
+                    <Progress mt="sm" value={Math.min(100, (s.used / s.size) * 100)} color={levelColor[levelOf((s.used / s.size) * 100)]} size="sm" />
+                    <Group gap={4} mt={4} wrap="nowrap">
+                      {levelOf((s.used / s.size) * 100) !== "ok" && (
+                        <IconAlertTriangle size={12} color={`var(--mantine-color-${levelColor[levelOf((s.used / s.size) * 100)]}-5)`} aria-hidden />
+                      )}
+                      <Text size="xs" c="dimmed" style={{ fontVariantNumeric: "tabular-nums" }}>{t("ipam.usage", { used: s.used, size: s.size })}</Text>
+                    </Group>
+                  </>
+                ) : (
+                  <Text size="xs" c="dimmed" mt="sm">{t("ipam.usedCount", { count: s.used })}</Text>
+                )}
+                {s.description && <Text size="xs" c="dimmed" mt={4}>{s.description}</Text>}
+              </Card>
+            ))}
+          </Box>
+        )}
+
+        <Card p={0}>
+          <Group px="md" py="sm" justify="space-between">
+            <Group gap="sm">
+              <TextInput placeholder={t("hostsPage.filter")} leftSection={<IconSearch size={16} />} value={query} onChange={(e) => setQuery(e.currentTarget.value)} w={220} />
+              <Select
+                data={[{ value: "", label: t("ipam.allSubnets") }, ...subnets.map((s) => ({ value: s.id, label: `${s.name} (${s.cidr})` })), { value: "none", label: t("ipam.noSubnet") }]}
+                value={subnetFilter}
+                onChange={(v) => setSubnetFilter(v ?? "")}
+                allowDeselect={false}
+                w={240}
+              />
+            </Group>
+            {can.operate && (
+              <Button variant="light" leftSection={<IconPlus size={16} />} onClick={() => setAddOpen(true)} disabled={!siteId}>
+                {t("ipam.addAddress")}
+              </Button>
+            )}
+          </Group>
+          <Table.ScrollContainer minWidth={960}>
+            <Table>
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th>{t("hostDetail.address")}</Table.Th>
+                  <Table.Th>{t("sitesPage.name")}</Table.Th>
+                  <Table.Th>MAC</Table.Th>
+                  <Table.Th>{t("hostDetail.interface")}</Table.Th>
+                  <Table.Th>{t("hostDetail.subnet")}</Table.Th>
+                  <Table.Th>{t("hostDetail.source")}</Table.Th>
+                  <Table.Th>{t("hostsPage.colLastSeen")}</Table.Th>
+                  <Table.Th w={40} />
                 </Table.Tr>
-              ))}
-            </Table.Tbody>
-          </Table>
-        </Table.ScrollContainer>
-      </Card>
+              </Table.Thead>
+              <Table.Tbody>
+                {shown.map((a) => (
+                  <Table.Tr key={a.id} bg={a.conflict ? "var(--mantine-color-red-light)" : undefined}>
+                    <Table.Td>
+                      <Group gap={6} wrap="nowrap">
+                        <Text size="sm" ff="monospace">{a.address}{a.prefixLength != null && a.prefixLength >= 0 ? `/${a.prefixLength}` : ""}</Text>
+                        {a.conflict && <Badge size="sm" color="red">{t("ipam.conflict")}</Badge>}
+                      </Group>
+                    </Table.Td>
+                    <Table.Td>
+                      {a.hostId ? (
+                        <Anchor component={Link} to={`/hosts/${a.hostId}`} size="sm">{a.hostName}</Anchor>
+                      ) : (
+                        <Text size="sm">{a.deviceName ?? "–"}</Text>
+                      )}
+                      {a.source === "Manual" && a.description && <Text size="xs" c="dimmed">{a.description}</Text>}
+                    </Table.Td>
+                    <Table.Td><Text size="xs" ff="monospace" c="dimmed">{a.macAddress ?? ""}</Text></Table.Td>
+                    <Table.Td><Text size="xs" c="dimmed">{a.interfaceName}</Text></Table.Td>
+                    <Table.Td><Text size="sm">{a.subnetName ?? "–"}</Text></Table.Td>
+                    <Table.Td><Badge size="sm" color={sourceColor[a.source]}>{t(`ipam.source${a.source}`)}</Badge></Table.Td>
+                    <Table.Td><Text size="xs" c="dimmed">{formatRelative(a.lastSeenAt)}</Text></Table.Td>
+                    <Table.Td>
+                      {can.operate && a.source === "Manual" && (
+                        <Tooltip label={t("common.delete")}>
+                          <ActionIcon size="sm" color="red" onClick={() => void removeAddress(a)} aria-label={t("common.delete")}>
+                            <IconTrash size={14} />
+                          </ActionIcon>
+                        </Tooltip>
+                      )}
+                    </Table.Td>
+                  </Table.Tr>
+                ))}
+              </Table.Tbody>
+            </Table>
+          </Table.ScrollContainer>
+        </Card>
+      </Stack>
 
       <SubnetModal subnet={editSubnet} siteId={siteId} onClose={() => setEditSubnet(null)} onSaved={load} />
       <AddressModal opened={addOpen} siteId={siteId} onClose={() => setAddOpen(false)} onSaved={load} />

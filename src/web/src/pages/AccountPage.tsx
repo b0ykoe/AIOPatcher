@@ -4,7 +4,7 @@ import { IconDeviceMobile, IconKey, IconLanguage, IconLayoutDashboard } from "@t
 import { useTranslation } from "react-i18next";
 import { api, type Me } from "../api";
 import { useMe } from "../App";
-import { errorText, notifySuccess, PageHeader } from "../components/ui";
+import { CardTitle, errorText, notifySuccess, PageHeader } from "../components/ui";
 import { setLanguage, type Language } from "../i18n";
 
 export function AccountPage({ onMeChanged }: { onMeChanged: (me: Me) => void }) {
@@ -24,13 +24,10 @@ export function AccountPage({ onMeChanged }: { onMeChanged: (me: Me) => void }) 
   return (
     <>
       <PageHeader title={t("account.title")} description={t("account.description", { name: me.username, role: t(`roles.${me.role}`) })} />
-      <SimpleGrid cols={{ base: 1, md: 2 }} spacing="lg">
-        <Stack gap="lg">
+      <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
+        <Stack gap="md">
           <Card>
-            <Group gap="xs" mb="sm">
-              <IconLanguage size={18} />
-              <Text fw={700}>{t("account.language")}</Text>
-            </Group>
+            <CardTitle icon={<IconLanguage size={18} />}>{t("account.language")}</CardTitle>
             <SegmentedControl
               fullWidth
               value={me.language ?? "auto"}
@@ -44,10 +41,7 @@ export function AccountPage({ onMeChanged }: { onMeChanged: (me: Me) => void }) 
             <Text size="xs" c="dimmed" mt="xs">{t("account.languageHint")}</Text>
           </Card>
           <Card>
-            <Group gap="xs" mb="sm">
-              <IconLayoutDashboard size={18} />
-              <Text fw={700}>{t("account.view")}</Text>
-            </Group>
+            <CardTitle icon={<IconLayoutDashboard size={18} />}>{t("account.view")}</CardTitle>
             <SegmentedControl
               fullWidth
               value={me.uiMode}
@@ -60,10 +54,7 @@ export function AccountPage({ onMeChanged }: { onMeChanged: (me: Me) => void }) 
             <Text size="xs" c="dimmed" mt="xs">{t("nav.modeHint")}</Text>
           </Card>
           <Card>
-            <Group gap="xs" mb="sm">
-              <IconDeviceMobile size={18} />
-              <Text fw={700}>{t("account.totpTitle")}</Text>
-            </Group>
+            <CardTitle icon={<IconDeviceMobile size={18} />}>{t("account.totpTitle")}</CardTitle>
             <Text size="sm" c="dimmed">{t("account.totpText")}</Text>
           </Card>
         </Stack>
@@ -103,10 +94,7 @@ function PasswordCard() {
 
   return (
     <Card>
-      <Group gap="xs" mb="sm">
-        <IconKey size={18} />
-        <Text fw={700}>{t("account.passwordTitle")}</Text>
-      </Group>
+      <CardTitle icon={<IconKey size={18} />}>{t("account.passwordTitle")}</CardTitle>
       <Stack gap="sm">
         <PasswordInput label={t("account.currentPassword")} value={current} onChange={(e) => setCurrent(e.currentTarget.value)} autoComplete="current-password" />
         <PasswordInput label={t("account.newPassword")} description={t("common.passwordMin")} value={next} onChange={(e) => setNext(e.currentTarget.value)} autoComplete="new-password" />

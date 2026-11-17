@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router";
-import { Alert, Button, Card, Loader, SimpleGrid, Text } from "@mantine/core";
+import { Alert, Button, Card, Loader, SimpleGrid, Stack, Text } from "@mantine/core";
 import { IconClockPause, IconInfoCircle, IconX } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import { api, describeJob, describeRequester, formatDateTime, isActiveJob, type Job, type JobDetail, type JobLogLine } from "../api";
@@ -77,33 +77,36 @@ export function JobPage() {
         )}
       />
 
-      {job.status === "Queued" && (
-        <Alert mb="md" color="blue" icon={<IconClockPause size={18} />}>
-          {t("jobPage.waiting")}
-        </Alert>
-      )}
-      {job.summary && (
-        <Alert mb="md" color={job.status === "Succeeded" ? "teal" : job.status === "Cancelled" ? "gray" : "orange"} icon={<IconInfoCircle size={18} />}>
-          {job.summary}
-        </Alert>
-      )}
+      <Stack gap="md">
+        {job.status === "Queued" && (
+          <Alert color="blue" icon={<IconClockPause size={18} />}>
+            {t("jobPage.waiting")}
+          </Alert>
+        )}
+        {job.summary && (
+          <Alert color={job.status === "Succeeded" ? "teal" : job.status === "Cancelled" ? "gray" : job.status === "Failed" ? "red" : "orange"} icon={<IconInfoCircle size={18} />}>
+            {job.summary}
+          </Alert>
+        )}
 
-      <SimpleGrid cols={{ base: 2, md: 4 }} spacing="md" mb="lg">
-        <Fact label={t("jobs.colHost")} value={job.hostName} sub={job.siteName} />
-        <Fact label={t("jobPage.requestedBy")} value={auto ? "Auto-Patch" : describeRequester(job.requestedBy)} sub={auto && job.notAfter ? t("jobPage.startLatest", { date: formatDateTime(job.notAfter) }) : formatDateTime(job.createdAt)} />
-        <Fact label={t("jobPage.runtime")} value={job.startedAt ? formatDateTime(job.startedAt) : t("jobPage.notStarted")} sub={job.finishedAt ? t("jobPage.until", { date: formatDateTime(job.finishedAt) }) : undefined} />
-        <Fact label={t("jobType.reboot")} value={job.rebootPerformed ? t("jobPage.rebootDone") : job.allowReboot ? t("jobPage.rebootAllowed") : t("jobPage.rebootNotAllowed")} />
-      </SimpleGrid>
+        <SimpleGrid cols={{ base: 2, md: 4 }}>
+          <Fact label={t("jobs.colHost")} value={job.hostName} sub={job.siteName} />
+          <Fact label={t("jobPage.requestedBy")} value={auto ? "Auto-Patch" : describeRequester(job.requestedBy)} sub={auto && job.notAfter ? t("jobPage.startLatest", { date: formatDateTime(job.notAfter) }) : formatDateTime(job.createdAt)} />
+          <Fact label={t("jobPage.runtime")} value={job.startedAt ? formatDateTime(job.startedAt) : t("jobPage.notStarted")} sub={job.finishedAt ? t("jobPage.until", { date: formatDateTime(job.finishedAt) }) : undefined} />
+          <Fact label={t("jobType.reboot")} value={job.rebootPerformed ? t("jobPage.rebootDone") : job.allowReboot ? t("jobPage.rebootAllowed") : t("jobPage.rebootNotAllowed")} />
+        </SimpleGrid>
 
-      <Console title={`${job.hostName} · ${describeJob(job)}`} lines={lines} live={isActiveJob(job.status)} />
+        <Console title={`${job.hostName} · ${describeJob(job)}`} lines={lines} live={isActiveJob(job.status)} />
+      </Stack>
     </>
   );
 }
 
+/** Kompakte Wertekachel: Überschrift-Label, Wert, Hinweis (Styleguide 5). */
 function Fact({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
     <Card>
-      <Text size="xs" c="dimmed" tt="uppercase" fw={700} style={{ letterSpacing: 0.5 }}>
+      <Text size="xs" c="dimmed" tt="uppercase" fw={700} style={{ letterSpacing: 0.6 }}>
         {label}
       </Text>
       <Text fw={700} mt={4} lineClamp={1}>

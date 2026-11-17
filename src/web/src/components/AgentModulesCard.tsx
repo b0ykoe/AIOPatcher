@@ -4,7 +4,7 @@ import { IconArrowsDownUp, IconPuzzle } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import { api, type HostModule } from "../api";
 import { useCan } from "../App";
-import { notifyError } from "./ui";
+import { CardTitle, notifyError } from "./ui";
 
 /** Agent-Module eines Hosts: vorhanden, lokal gesperrt (policy.json), im Dashboard an/aus. */
 export function AgentModulesCard({ hostId, protocol, modules, onChanged }: { hostId: string; protocol: number; modules: HostModule[]; onChanged: () => void }) {
@@ -25,18 +25,19 @@ export function AgentModulesCard({ hostId, protocol, modules, onChanged }: { hos
   };
 
   return (
-    <Card mb="lg">
-      <Group justify="space-between" mb="sm" wrap="wrap">
-        <Group gap="xs">
-          <IconPuzzle size={18} />
-          <Text fw={700}>{t("modules.title")}</Text>
-        </Group>
-        <Tooltip label={protocol === 2 ? t("modules.pullHint") : protocol === 1 ? t("modules.legacyHint") : t("modules.unknownHint")} multiline w={320}>
-          <Badge leftSection={<IconArrowsDownUp size={12} />} color={protocol === 2 ? "teal" : protocol === 1 ? "orange" : "gray"} variant="light">
-            {protocol === 2 ? t("modules.pull") : protocol === 1 ? t("modules.legacy") : t("modules.unknown")}
-          </Badge>
-        </Tooltip>
-      </Group>
+    <Card>
+      <CardTitle
+        icon={<IconPuzzle size={18} />}
+        actions={
+          <Tooltip label={protocol === 2 ? t("modules.pullHint") : protocol === 1 ? t("modules.legacyHint") : t("modules.unknownHint")} multiline w={320}>
+            <Badge size="sm" leftSection={<IconArrowsDownUp size={12} />} color={protocol === 2 ? "teal" : protocol === 1 ? "orange" : "gray"}>
+              {protocol === 2 ? t("modules.pull") : protocol === 1 ? t("modules.legacy") : t("modules.unknown")}
+            </Badge>
+          </Tooltip>
+        }
+      >
+        {t("modules.title")}
+      </CardTitle>
       {modules.length === 0 ? (
         <Text size="sm" c="dimmed">{protocol === 1 ? t("modules.legacyNoModules") : t("modules.noneYet")}</Text>
       ) : (

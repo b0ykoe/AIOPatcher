@@ -7,7 +7,7 @@ import { formatDateTime, formatRelative, type OsFamily } from "../../api";
 import { useCan } from "../../App";
 import { complianceApi, type ChangeResult, type HostCompliance, type LocalUser, type UserAction } from "../../compliance";
 import { FeatureOffHint, useFeatures } from "../../features";
-import { confirmAction, EmptyState, notifyError, notifySuccess } from "../ui";
+import { CardTitle, confirmAction, EmptyState, notifyError, notifySuccess } from "../ui";
 import { BaselineResults } from "./BaselineResults";
 
 /** Host → Compliance: Firewall, SSH/RDP und lokale Benutzer, mit Änderungen (Admin, eigene Schalter). */
@@ -59,9 +59,9 @@ export function ComplianceTab({ hostId, os }: { hostId: string; os: OsFamily }) 
     });
 
   return (
-    <Stack p="md" gap="lg">
+    <Stack gap="md">
       {(canFirewall || canRemote || canUsers) && (
-        <Alert color="gray" icon={<IconInfoCircle size={18} />}>
+        <Alert color="blue" icon={<IconInfoCircle size={18} />}>
           {t("compliance.policyHint")} <Code>{os === "Windows" ? "& 'C:\\Program Files\\AIOPatcher\\aiopatcher-agent.exe' policy set allowSystemChanges true" : "sudo aiopatcher-agent policy set allowSystemChanges true"}</Code>
         </Alert>
       )}
@@ -80,49 +80,52 @@ export function ComplianceTab({ hostId, os }: { hostId: string; os: OsFamily }) 
 
       {/* --- Firewall --- */}
       <Card>
-        <Group justify="space-between" mb="sm" wrap="wrap">
-          <Group gap="sm">
-            {fw.enabled ? <IconShieldCheck size={22} color="var(--mantine-color-teal-5)" /> : <IconShieldOff size={22} color="var(--mantine-color-red-5)" />}
-            <Text fw={700}>{t("compliance.firewall")}</Text>
-            <Badge color="gray">{t(`compliance.product_${fw.product}`, { defaultValue: fw.product })}</Badge>
-            <Badge color={fw.enabled ? "teal" : "red"}>{fw.enabled ? t("compliance.on") : t("compliance.off")}</Badge>
-            {fw.incomingDefault && <Badge variant="outline" color="gray">{t("compliance.incoming")}: {policyLabel(fw.incomingDefault)}</Badge>}
-            {fw.outgoingDefault && <Badge variant="outline" color="gray">{t("compliance.outgoing")}: {policyLabel(fw.outgoingDefault)}</Badge>}
-          </Group>
-          <Group gap="xs">
-            {canFirewall && fw.manageable && (
-              <Button size="xs" variant="light" component={Link} to="/security?tab=compliance&view=firewall">{t("compliance.deployProfile")}</Button>
-            )}
-            {canFirewall && fw.hasOriginalBackup && (
-              <Button size="xs" variant="subtle" color="orange" leftSection={<IconHistory size={14} />}
-                onClick={() => confirmAction({
-                  title: t("compliance.restoreOriginal"),
-                  message: t("compliance.restoreOriginalText"),
-                  confirmLabel: t("compliance.restoreOriginal"),
-                  danger: true,
-                  onConfirm: () => run(complianceApi.restoreOriginal(hostId)),
-                })}>
-                {t("compliance.restoreOriginal")}
-              </Button>
-            )}
-          </Group>
+        <CardTitle
+          icon={fw.enabled ? <IconShieldCheck size={20} color="var(--mantine-color-teal-5)" /> : <IconShieldOff size={20} color="var(--mantine-color-red-5)" />}
+          badge={<Badge size="sm" color={fw.enabled ? "teal" : "red"}>{fw.enabled ? t("compliance.on") : t("compliance.off")}</Badge>}
+          actions={canFirewall && (fw.manageable || fw.hasOriginalBackup) && (
+            <>
+              {fw.manageable && (
+                <Button size="compact-xs" variant="light" component={Link} to="/security?tab=compliance&view=firewall">{t("compliance.deployProfile")}</Button>
+              )}
+              {fw.hasOriginalBackup && (
+                <Button size="compact-xs" variant="light" color="orange" leftSection={<IconHistory size={14} />}
+                  onClick={() => confirmAction({
+                    title: t("compliance.restoreOriginal"),
+                    message: t("compliance.restoreOriginalText"),
+                    confirmLabel: t("compliance.restoreOriginal"),
+                    danger: true,
+                    onConfirm: () => run(complianceApi.restoreOriginal(hostId)),
+                  })}>
+                  {t("compliance.restoreOriginal")}
+                </Button>
+              )}
+            </>
+          )}
+        >
+          {t("compliance.firewall")}
+        </CardTitle>
+        <Group gap="xs" wrap="wrap" mb="sm">
+          <Badge size="sm" color="gray">{t(`compliance.product_${fw.product}`, { defaultValue: fw.product })}</Badge>
+          {fw.incomingDefault && <Badge size="sm" variant="outline" color="gray">{t("compliance.incoming")}: {policyLabel(fw.incomingDefault)}</Badge>}
+          {fw.outgoingDefault && <Badge size="sm" variant="outline" color="gray">{t("compliance.outgoing")}: {policyLabel(fw.outgoingDefault)}</Badge>}
         </Group>
         {data.firewallVersion && (
           <Text size="sm" mb="xs">
             {t("compliance.activeVersion", { name: data.firewallVersion.profileName, number: data.firewallVersion.number, date: formatDateTime(data.firewallVersion.appliedAt) })}
-            {data.firewallDrift && <Badge ml="xs" color="orange">{t("compliance.drift")}</Badge>}
+            {data.firewallDrift && <Badge size="sm" ml="xs" color="orange">{t("compliance.drift")}</Badge>}
           </Text>
         )}
         {!fw.manageable && fw.product !== "none" && <Text size="sm" c="dimmed" mb="xs">{t(`compliance.notManageable_${fw.product}`, { defaultValue: t("compliance.notManageable") })}</Text>}
         {fw.product === "none" && <Text size="sm" c="red" mb="xs">{t("compliance.noFirewall")}</Text>}
         {fw.detail && <Text size="xs" c="dimmed" mb="xs" style={{ whiteSpace: "pre-wrap" }}>{fw.detail}</Text>}
         {fw.rules.length > 0 && (
-          <Table fz="sm" verticalSpacing={4}>
+          <Table>
             <Table.Tbody>
               {fw.rules.map((r, i) => (
                 <Table.Tr key={i}>
                   <Table.Td ff="monospace" style={{ wordBreak: "break-word" }}>{r.text}</Table.Td>
-                  <Table.Td w={120}>{r.managed && <Badge size="xs">AIOPatcher</Badge>}</Table.Td>
+                  <Table.Td w={120}>{r.managed && <Badge size="sm">AIOPatcher</Badge>}</Table.Td>
                 </Table.Tr>
               ))}
             </Table.Tbody>
@@ -132,139 +135,141 @@ export function ComplianceTab({ hostId, os }: { hostId: string; os: OsFamily }) 
       </Card>
 
       {/* --- SSH / RDP --- */}
-      <Card>
-        <Group justify="space-between" mb="sm" wrap="wrap">
-          <Text fw={700}>{t("compliance.remoteAccess")}</Text>
-          {canRemote && (
-            <Group gap="xs">
-              <Button size="xs" leftSection={<IconWand size={14} />} disabled={selected.length === 0}
+      <Card p={0}>
+        <CardTitle inset actions={canRemote && (
+          <>
+            <Button size="compact-xs" variant="light" leftSection={<IconWand size={14} />} disabled={selected.length === 0}
+              onClick={() => confirmAction({
+                title: t("compliance.applySelected"),
+                message: t("compliance.applySelectedText", { list: selected.map((s) => t(`compliance.setting_${s}`, { defaultValue: s })).join(", ") }),
+                confirmLabel: t("compliance.apply"),
+                onConfirm: () => run(complianceApi.fixRemoteAccess(hostId, selected)),
+              })}>
+              {t("compliance.applySelected")}
+            </Button>
+            {report.remoteAccess.some((s) => s.note === "managed") && (
+              <Button size="compact-xs" variant="light" color="orange" leftSection={<IconHistory size={14} />}
                 onClick={() => confirmAction({
-                  title: t("compliance.applySelected"),
-                  message: t("compliance.applySelectedText", { list: selected.map((s) => t(`compliance.setting_${s}`, { defaultValue: s })).join(", ") }),
-                  confirmLabel: t("compliance.apply"),
-                  onConfirm: () => run(complianceApi.fixRemoteAccess(hostId, selected)),
+                  title: t("compliance.revert"),
+                  message: t("compliance.revertText"),
+                  confirmLabel: t("compliance.revert"),
+                  onConfirm: () => run(complianceApi.revertRemoteAccess(hostId)),
                 })}>
-                {t("compliance.applySelected")}
+                {t("compliance.revert")}
               </Button>
-              {report.remoteAccess.some((s) => s.note === "managed") && (
-                <Button size="xs" variant="subtle" color="orange" leftSection={<IconHistory size={14} />}
-                  onClick={() => confirmAction({
-                    title: t("compliance.revert"),
-                    message: t("compliance.revertText"),
-                    confirmLabel: t("compliance.revert"),
-                    onConfirm: () => run(complianceApi.revertRemoteAccess(hostId)),
-                  })}>
-                  {t("compliance.revert")}
-                </Button>
-              )}
-            </Group>
-          )}
-        </Group>
+            )}
+          </>
+        )}>
+          {t("compliance.remoteAccess")}
+        </CardTitle>
         {report.remoteAccess.length === 0 ? (
-          <Text size="sm" c="dimmed">{t("compliance.noRemoteAccess")}</Text>
+          <Text size="sm" c="dimmed" px="md" pb="md">{t("compliance.noRemoteAccess")}</Text>
         ) : (
-          <Table fz="sm">
-            <Table.Thead>
-              <Table.Tr>
-                {canRemote && <Table.Th w={36} />}
-                <Table.Th>{t("compliance.setting")}</Table.Th>
-                <Table.Th>{t("compliance.current")}</Table.Th>
-                <Table.Th>{t("compliance.recommendation")}</Table.Th>
-              </Table.Tr>
-            </Table.Thead>
-            <Table.Tbody>
-              {report.remoteAccess.map((s) => (
-                <Table.Tr key={s.id}>
-                  {canRemote && (
-                    <Table.Td>
-                      {s.fixable && !s.compliant && (
-                        <Checkbox checked={selected.includes(s.id)} aria-label={s.id}
-                          onChange={(e) => setSelected(e.currentTarget.checked ? [...selected, s.id] : selected.filter((x) => x !== s.id))} />
-                      )}
-                    </Table.Td>
-                  )}
-                  <Table.Td>
-                    <Group gap={6} wrap="nowrap">
-                      <Badge size="xs" color={s.compliant ? "teal" : "orange"} style={{ flexShrink: 0 }} miw={30}>{s.compliant ? "OK" : "!"}</Badge>
-                      <Text size="sm">{t(`compliance.setting_${s.id}`, { defaultValue: s.id })}</Text>
-                      {s.note === "managed" && <Badge size="xs" variant="outline">AIOPatcher</Badge>}
-                    </Group>
-                  </Table.Td>
-                  <Table.Td ff="monospace">{s.value ?? "–"}</Table.Td>
-                  <Table.Td>
-                    <Text size="sm" c={s.compliant ? "dimmed" : undefined}>{t(`compliance.rec_${s.id}`, { defaultValue: "" })}</Text>
-                    {s.note && s.note !== "managed" && <Text size="xs" c="dimmed">{t(`compliance.note_${s.note}`, { defaultValue: s.note })}</Text>}
-                  </Table.Td>
+          <Table.ScrollContainer minWidth={600}>
+            <Table>
+              <Table.Thead>
+                <Table.Tr>
+                  {canRemote && <Table.Th w={36} />}
+                  <Table.Th>{t("compliance.setting")}</Table.Th>
+                  <Table.Th>{t("compliance.current")}</Table.Th>
+                  <Table.Th>{t("compliance.recommendation")}</Table.Th>
                 </Table.Tr>
-              ))}
-            </Table.Tbody>
-          </Table>
+              </Table.Thead>
+              <Table.Tbody>
+                {report.remoteAccess.map((s) => (
+                  <Table.Tr key={s.id}>
+                    {canRemote && (
+                      <Table.Td>
+                        {s.fixable && !s.compliant && (
+                          <Checkbox checked={selected.includes(s.id)} aria-label={s.id}
+                            onChange={(e) => setSelected(e.currentTarget.checked ? [...selected, s.id] : selected.filter((x) => x !== s.id))} />
+                        )}
+                      </Table.Td>
+                    )}
+                    <Table.Td>
+                      <Group gap="xs" wrap="nowrap">
+                        <Badge size="sm" color={s.compliant ? "teal" : "orange"} style={{ flexShrink: 0 }} miw={30}>{s.compliant ? "OK" : "!"}</Badge>
+                        <Text size="sm">{t(`compliance.setting_${s.id}`, { defaultValue: s.id })}</Text>
+                        {s.note === "managed" && <Badge size="sm" variant="outline">AIOPatcher</Badge>}
+                      </Group>
+                    </Table.Td>
+                    <Table.Td ff="monospace">{s.value ?? "–"}</Table.Td>
+                    <Table.Td>
+                      <Text size="sm" c={s.compliant ? "dimmed" : undefined}>{t(`compliance.rec_${s.id}`, { defaultValue: "" })}</Text>
+                      {s.note && s.note !== "managed" && <Text size="xs" c="dimmed">{t(`compliance.note_${s.note}`, { defaultValue: s.note })}</Text>}
+                    </Table.Td>
+                  </Table.Tr>
+                ))}
+              </Table.Tbody>
+            </Table>
+          </Table.ScrollContainer>
         )}
       </Card>
 
       {/* --- Benutzer --- */}
-      <Card>
-        <Group justify="space-between" mb="sm">
-          <Text fw={700}>{t("compliance.users")}</Text>
-          <Text size="xs" c="dimmed">{t("compliance.collected", { when: formatRelative(data.collectedAt) })}</Text>
-        </Group>
-        <Table fz="sm" striped>
-          <Table.Thead>
-            <Table.Tr>
-              <Table.Th>{t("compliance.user")}</Table.Th>
-              <Table.Th>{t("compliance.status")}</Table.Th>
-              <Table.Th>{t("compliance.password")}</Table.Th>
-              {os === "Linux" && <Table.Th>{t("compliance.sshKeys")}</Table.Th>}
-              <Table.Th>{t("compliance.lastLogon")}</Table.Th>
-              {canUsers && <Table.Th w={40} />}
-            </Table.Tr>
-          </Table.Thead>
-          <Table.Tbody>
-            {report.users.map((u) => (
-              <Table.Tr key={u.name}>
-                <Table.Td>
-                  <Group gap={6} wrap="nowrap">
-                    <Text size="sm" fw={600}>{u.name}</Text>
-                    {u.isBuiltIn && <Tooltip label={t("compliance.builtInHint")}><Badge size="xs" color="grape" leftSection={<IconFlame size={10} />} style={{ flexShrink: 0 }}>{t("compliance.builtIn")}</Badge></Tooltip>}
-                    {u.isAdmin && !u.isBuiltIn && <Badge size="xs" color="violet">{t("compliance.admin")}</Badge>}
-                  </Group>
-                  {u.fullName && <Text size="xs" c="dimmed">{u.fullName}</Text>}
-                </Table.Td>
-                <Table.Td><Badge size="sm" color={u.enabled ? "teal" : "gray"}>{u.enabled ? t("compliance.enabled") : t("compliance.disabled")}</Badge></Table.Td>
-                <Table.Td><Badge size="sm" variant="outline" color={u.passwordState === "empty" ? "red" : u.passwordState === "set" ? "gray" : "teal"}>{t(`compliance.pw_${u.passwordState}`)}</Badge></Table.Td>
-                {os === "Linux" && <Table.Td>{u.sshKeys}</Table.Td>}
-                <Table.Td>{u.lastLogonUtc ? formatRelative(u.lastLogonUtc) : "–"}</Table.Td>
-                {canUsers && (
-                  <Table.Td>
-                    <Menu position="bottom-end" withinPortal>
-                      <Menu.Target>
-                        <ActionIcon variant="subtle" aria-label={t("compliance.actions")}><IconDots size={16} /></ActionIcon>
-                      </Menu.Target>
-                      <Menu.Dropdown>
-                        {u.enabled
-                          ? <Menu.Item color="red" leftSection={<IconLock size={14} />} onClick={() => userAction(u, "UserLock")}>{t("compliance.action_UserLock")}</Menu.Item>
-                          : <Menu.Item leftSection={<IconLockOpen size={14} />} onClick={() => userAction(u, "UserUnlock")}>{t("compliance.action_UserUnlock")}</Menu.Item>}
-                        {u.isBuiltIn && u.passwordState === "locked" && os === "Linux" && (
-                          <Menu.Item leftSection={<IconLockOpen size={14} />} onClick={() => userAction(u, "UserUnlock")}>{t("compliance.action_UserUnlock")}</Menu.Item>
-                        )}
-                        {!u.isBuiltIn && (u.isAdmin
-                          ? <Menu.Item color="red" leftSection={<IconUserMinus size={14} />} onClick={() => userAction(u, "UserRevokeAdmin")}>{t("compliance.action_UserRevokeAdmin")}</Menu.Item>
-                          : <Menu.Item leftSection={<IconUserPlus size={14} />} onClick={() => userAction(u, "UserGrantAdmin")}>{t("compliance.action_UserGrantAdmin")}</Menu.Item>)}
-                        <Menu.Item leftSection={<IconKey size={14} />} onClick={() => setPasswordFor(u)}>{t("compliance.action_UserSetPassword")}</Menu.Item>
-                        {os === "Linux" && (
-                          <>
-                            <Menu.Item leftSection={<IconKey size={14} />} onClick={() => setKeyFor({ user: u, remove: false })}>{t("compliance.action_UserAddSshKey")}</Menu.Item>
-                            {u.sshKeys > 0 && <Menu.Item leftSection={<IconKey size={14} />} onClick={() => setKeyFor({ user: u, remove: true })}>{t("compliance.action_UserRemoveSshKey")}</Menu.Item>}
-                          </>
-                        )}
-                      </Menu.Dropdown>
-                    </Menu>
-                  </Table.Td>
-                )}
+      <Card p={0}>
+        <CardTitle inset actions={<Text size="xs" c="dimmed">{t("compliance.collected", { when: formatRelative(data.collectedAt) })}</Text>}>
+          {t("compliance.users")}
+        </CardTitle>
+        <Table.ScrollContainer minWidth={760}>
+          <Table>
+            <Table.Thead>
+              <Table.Tr>
+                <Table.Th>{t("compliance.user")}</Table.Th>
+                <Table.Th>{t("compliance.status")}</Table.Th>
+                <Table.Th>{t("compliance.password")}</Table.Th>
+                {os === "Linux" && <Table.Th ta="right">{t("compliance.sshKeys")}</Table.Th>}
+                <Table.Th>{t("compliance.lastLogon")}</Table.Th>
+                {canUsers && <Table.Th w={40} />}
               </Table.Tr>
-            ))}
-          </Table.Tbody>
-        </Table>
+            </Table.Thead>
+            <Table.Tbody>
+              {report.users.map((u) => (
+                <Table.Tr key={u.name}>
+                  <Table.Td>
+                    <Group gap="xs" wrap="nowrap">
+                      <Text size="sm" fw={600}>{u.name}</Text>
+                      {u.isBuiltIn && <Tooltip label={t("compliance.builtInHint")}><Badge size="sm" color="grape" leftSection={<IconFlame size={10} />} style={{ flexShrink: 0 }}>{t("compliance.builtIn")}</Badge></Tooltip>}
+                      {u.isAdmin && !u.isBuiltIn && <Badge size="sm" color="violet">{t("compliance.admin")}</Badge>}
+                    </Group>
+                    {u.fullName && <Text size="xs" c="dimmed">{u.fullName}</Text>}
+                  </Table.Td>
+                  <Table.Td><Badge size="sm" color={u.enabled ? "teal" : "gray"}>{u.enabled ? t("compliance.enabled") : t("compliance.disabled")}</Badge></Table.Td>
+                  <Table.Td><Badge size="sm" color={u.passwordState === "empty" ? "red" : u.passwordState === "set" ? "gray" : "teal"}>{t(`compliance.pw_${u.passwordState}`)}</Badge></Table.Td>
+                  {os === "Linux" && <Table.Td ta="right" style={{ fontVariantNumeric: "tabular-nums" }}>{u.sshKeys}</Table.Td>}
+                  <Table.Td>{u.lastLogonUtc ? formatRelative(u.lastLogonUtc) : "–"}</Table.Td>
+                  {canUsers && (
+                    <Table.Td>
+                      <Menu position="bottom-end" withinPortal>
+                        <Menu.Target>
+                          <ActionIcon color="gray" aria-label={t("compliance.actions")}><IconDots size={16} /></ActionIcon>
+                        </Menu.Target>
+                        <Menu.Dropdown>
+                          {u.enabled
+                            ? <Menu.Item color="red" leftSection={<IconLock size={14} />} onClick={() => userAction(u, "UserLock")}>{t("compliance.action_UserLock")}</Menu.Item>
+                            : <Menu.Item leftSection={<IconLockOpen size={14} />} onClick={() => userAction(u, "UserUnlock")}>{t("compliance.action_UserUnlock")}</Menu.Item>}
+                          {u.isBuiltIn && u.passwordState === "locked" && os === "Linux" && (
+                            <Menu.Item leftSection={<IconLockOpen size={14} />} onClick={() => userAction(u, "UserUnlock")}>{t("compliance.action_UserUnlock")}</Menu.Item>
+                          )}
+                          {!u.isBuiltIn && (u.isAdmin
+                            ? <Menu.Item color="red" leftSection={<IconUserMinus size={14} />} onClick={() => userAction(u, "UserRevokeAdmin")}>{t("compliance.action_UserRevokeAdmin")}</Menu.Item>
+                            : <Menu.Item leftSection={<IconUserPlus size={14} />} onClick={() => userAction(u, "UserGrantAdmin")}>{t("compliance.action_UserGrantAdmin")}</Menu.Item>)}
+                          <Menu.Item leftSection={<IconKey size={14} />} onClick={() => setPasswordFor(u)}>{t("compliance.action_UserSetPassword")}</Menu.Item>
+                          {os === "Linux" && (
+                            <>
+                              <Menu.Item leftSection={<IconKey size={14} />} onClick={() => setKeyFor({ user: u, remove: false })}>{t("compliance.action_UserAddSshKey")}</Menu.Item>
+                              {u.sshKeys > 0 && <Menu.Item leftSection={<IconKey size={14} />} onClick={() => setKeyFor({ user: u, remove: true })}>{t("compliance.action_UserRemoveSshKey")}</Menu.Item>}
+                            </>
+                          )}
+                        </Menu.Dropdown>
+                      </Menu>
+                    </Table.Td>
+                  )}
+                </Table.Tr>
+              ))}
+            </Table.Tbody>
+          </Table>
+        </Table.ScrollContainer>
       </Card>
 
       <PasswordModal user={passwordFor} onClose={() => setPasswordFor(null)} onSubmit={(pw) => run(complianceApi.userAction(hostId, passwordFor!.name, "UserSetPassword", { password: pw }))} />
@@ -282,7 +287,7 @@ function PasswordModal({ user, onClose, onSubmit }: { user: LocalUser | null; on
   const close = () => { setPw(""); setPw2(""); onClose(); };
   const valid = pw.length >= 12 && pw === pw2;
   return (
-    <Modal opened={user !== null} onClose={close} title={`${t("compliance.action_UserSetPassword")}: ${user?.name ?? ""}`}>
+    <Modal opened={user !== null} onClose={close} title={<Text fw={800}>{`${t("compliance.action_UserSetPassword")}: ${user?.name ?? ""}`}</Text>}>
       <Stack>
         <Text size="sm" c="dimmed">{t("compliance.passwordHint")}</Text>
         <PasswordInput label={t("compliance.newPassword")} value={pw} onChange={(e) => setPw(e.currentTarget.value)} autoComplete="new-password"
@@ -305,7 +310,7 @@ function SshKeyModal({ target, onClose, onSubmit }: { target: { user: LocalUser;
   const close = () => { setKey(""); onClose(); };
   const valid = /^(ssh-(ed25519|rsa)|ecdsa-sha2-nistp(256|384|521)|sk-\S+) [A-Za-z0-9+/]+={0,3}( .*)?$/.test(key.trim());
   return (
-    <Modal opened={target !== null} onClose={close} title={`${t(target?.remove ? "compliance.action_UserRemoveSshKey" : "compliance.action_UserAddSshKey")}: ${target?.user.name ?? ""}`} size="lg">
+    <Modal opened={target !== null} onClose={close} title={<Text fw={800}>{`${t(target?.remove ? "compliance.action_UserRemoveSshKey" : "compliance.action_UserAddSshKey")}: ${target?.user.name ?? ""}`}</Text>} size="lg">
       <Stack>
         <Textarea label={t("compliance.publicKey")} placeholder="ssh-ed25519 AAAAC3Nza... user@laptop" autosize minRows={3} value={key}
           onChange={(e) => setKey(e.currentTarget.value.replace(/\r?\n/g, " "))} styles={{ input: { fontFamily: "monospace" } }}

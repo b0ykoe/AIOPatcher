@@ -5,7 +5,7 @@ import {
 } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import { api, ApiError, formatRelative } from "../../api";
-import { notifyError, notifySuccess } from "../ui";
+import { CardTitle, notifyError, notifySuccess } from "../ui";
 import { checkCommand, hostOf, proxyConfig, proxyKinds, type ProxyKind } from "./proxyTemplates";
 
 interface ProxyContact {
@@ -109,7 +109,7 @@ export function PublicAccessSettings() {
   const dirty = (info.agentUrl ?? "") !== agentUrl.replace(/\/$/, "") || (info.dashboardUrl ?? "") !== dashboardUrl.replace(/\/$/, "") || (info.proxy ?? "nginx") !== proxy;
 
   return (
-    <Stack gap="lg">
+    <Stack gap="md">
       <Card>
         <Group gap="md" wrap="nowrap" align="flex-start">
           <ThemeIcon size={42} radius="md" variant="light" color={info.agentUrl ? "teal" : "gray"}><IconWorld size={24} /></ThemeIcon>
@@ -142,7 +142,7 @@ export function PublicAccessSettings() {
               </Alert>
             )}
             <Group>
-              <Button disabled={!agentHost} onClick={() => setStep(1)}>{t("publicAccess.next")}</Button>
+              <Button variant="gradient" className="gradient-button" disabled={!agentHost} onClick={() => setStep(1)}>{t("publicAccess.next")}</Button>
             </Group>
           </Stack>
         </Stepper.Step>
@@ -154,7 +154,7 @@ export function PublicAccessSettings() {
               {proxyKinds.map((kind) => (
                 <UnstyledButton key={kind} onClick={() => setProxy(kind)} className="template-card" data-active={proxy === kind || undefined}
                   style={proxy === kind ? { borderColor: "var(--mantine-color-violet-5)" } : undefined}>
-                  <Group gap={8} wrap="nowrap">
+                  <Group gap={6} wrap="nowrap">
                     {kind === "cloudflared" ? <IconBrandCloudflare size={18} /> : kind === "opnsense" ? <IconNetwork size={18} /> : <IconServer2 size={18} />}
                     <Text size="sm" fw={600}>{proxyLabel[kind]}</Text>
                   </Group>
@@ -174,7 +174,7 @@ export function PublicAccessSettings() {
               <CopyBlock title={proxyLabel[proxy]} text={config} />
             ) : (
               <Card>
-                <Text fw={700} mb="xs">{proxyLabel[proxy]}</Text>
+                <CardTitle>{proxyLabel[proxy]}</CardTitle>
                 <List type="ordered" size="sm" spacing={6}>
                   {(proxy === "npm" ? ["npm1", "npm2", "npm3", "npm4", "npm5"] : ["opn1", "opn2", "opn3", "opn4"]).map((key) => (
                     <List.Item key={key}>
@@ -191,7 +191,7 @@ export function PublicAccessSettings() {
 
             <Group>
               <Button variant="default" onClick={() => setStep(0)}>{t("publicAccess.back")}</Button>
-              <Button loading={busy} onClick={() => void save()}>{t("publicAccess.saveAndTest")}</Button>
+              <Button variant="gradient" className="gradient-button" loading={busy} onClick={() => void save()}>{t("publicAccess.saveAndTest")}</Button>
             </Group>
           </Stack>
         </Stepper.Step>
@@ -215,9 +215,9 @@ export function PublicAccessSettings() {
                       <Text fw={600}>{info.lastCheck ? t("publicAccess.checkSeen", { when: formatRelative(info.lastCheck.at) }) : t("publicAccess.checkWaiting")}</Text>
                       {info.lastCheck && (
                         <Group gap={6} mt={4}>
-                          {info.lastCheck.clientIp && <Badge color="gray">{t("publicAccess.from", { ip: info.lastCheck.clientIp })}</Badge>}
-                          {info.lastCheck.cloudflare && <Badge color="orange" leftSection={<IconBrandCloudflare size={12} />}>Cloudflare</Badge>}
-                          {info.lastCheck.forwardedHost && <Badge color="violet">{info.lastCheck.forwardedHost}</Badge>}
+                          {info.lastCheck.clientIp && <Badge size="sm" color="gray">{t("publicAccess.from", { ip: info.lastCheck.clientIp })}</Badge>}
+                          {info.lastCheck.cloudflare && <Badge size="sm" color="orange" leftSection={<IconBrandCloudflare size={12} />}>Cloudflare</Badge>}
+                          {info.lastCheck.forwardedHost && <Badge size="sm" color="violet">{info.lastCheck.forwardedHost}</Badge>}
                         </Group>
                       )}
                       <Text size="xs" c="dimmed" mt={4}>{t("publicAccess.checkExplain")}</Text>
@@ -235,7 +235,7 @@ export function PublicAccessSettings() {
             <Group>
               <Button variant="default" onClick={() => setStep(1)}>{t("publicAccess.back")}</Button>
               {info.agentUrl && (
-                <Button variant="subtle" color="red" loading={busy} onClick={() => void save(true)}>{t("publicAccess.turnOff")}</Button>
+                <Button variant="light" color="red" loading={busy} onClick={() => void save(true)}>{t("publicAccess.turnOff")}</Button>
               )}
             </Group>
           </Stack>

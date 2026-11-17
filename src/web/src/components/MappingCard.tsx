@@ -43,7 +43,7 @@ export function MappingCard({ host, onSaved }: { host: HostDetail; onSaved: () =
   };
 
   return (
-    <Card mb="lg">
+    <Card>
       <Group justify="space-between" wrap="wrap" gap="sm">
         <Group gap="sm" wrap="nowrap">
           <ThemeIcon variant="light" size="lg" color={host.integrationId ? "grape" : "gray"}>
@@ -57,7 +57,7 @@ export function MappingCard({ host, onSaved }: { host: HostDetail; onSaved: () =
           </div>
         </Group>
         {can.operate && !editing && (
-          <Button variant="light" onClick={() => setEditing(true)}>
+          <Button size="compact-xs" variant="light" onClick={() => setEditing(true)}>
             {host.integrationId ? t("common.edit") : t("mapping.assign")}
           </Button>
         )}
@@ -84,7 +84,7 @@ export function MappingCard({ host, onSaved }: { host: HostDetail; onSaved: () =
             error={error}
             w={300}
           />
-          <Button onClick={() => void save()} disabled={!integrationId || !externalId}>
+          <Button variant="gradient" className="gradient-button" onClick={() => void save()} disabled={!integrationId || !externalId}>
             {t("common.save")}
           </Button>
           {host.integrationId && (

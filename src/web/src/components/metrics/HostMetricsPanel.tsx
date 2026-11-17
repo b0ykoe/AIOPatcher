@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
-import { Card, Group, SegmentedControl, SimpleGrid, Stack, Table, Text } from "@mantine/core";
+import { Card, Group, Loader, SegmentedControl, SimpleGrid, Stack, Table, Text } from "@mantine/core";
 import { IconActivity, IconArrowsExchange, IconClockHour4, IconCpu, IconDatabase, IconGauge, IconStack2 } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import { api, formatRelative, formatUptime, type HostMetricsResponse } from "../../api";
-import { EmptyState } from "../ui";
+import { CardTitle, EmptyState } from "../ui";
 import { formatBytes, MetricRow, percentOf, TimeSeriesChart, UsageCell, UsageMeter } from "./charts";
 
 const ranges = { "24": 24, "168": 168 } as const;
@@ -24,7 +24,7 @@ export function HostMetricsPanel({ hostId }: { hostId: string }) {
     return () => clearInterval(timer);
   }, [load]);
 
-  if (!data) return null;
+  if (!data) return <Loader />;
   const m = data.latest;
   if (!m) {
     return <EmptyState icon={<IconGauge size={28} />} title={t("metrics.noneTitle")} text={t("metrics.noneText")} />;
@@ -47,7 +47,7 @@ export function HostMetricsPanel({ hostId }: { hostId: string }) {
       {/* Wertekarten wie bei Proxmox: Zeilen untereinander, Karten schmal (metric-grid) */}
       <div className="metric-grid">
         <Card>
-          <Text fw={700} mb="sm">{t("metrics.current")}</Text>
+          <CardTitle>{t("metrics.current")}</CardTitle>
           <Stack gap="sm">
             <UsageMeter icon={<IconCpu size={16} />} label={t("metrics.cpu")} percent={m.cpuPercent} detail={t("metrics.ofCpus", { count: m.cpuCores })} />
             <UsageMeter icon={<IconStack2 size={16} />} label={t("metrics.memory")} percent={memory} detail={`${formatBytes(m.memoryUsed)} / ${formatBytes(m.memoryTotal)}`} />
@@ -59,7 +59,7 @@ export function HostMetricsPanel({ hostId }: { hostId: string }) {
           </Stack>
         </Card>
         <Card>
-          <Text fw={700} mb="sm">{t("metrics.disks")}</Text>
+          <CardTitle>{t("metrics.disks")}</CardTitle>
           <Stack gap="sm">
             {m.disks.map((d) => (
               <UsageMeter key={d.mount} icon={<IconDatabase size={16} />} label={`${d.mount}${d.fileSystem ? ` (${d.fileSystem})` : ""}`} percent={percentOf(d.used, d.total)}
@@ -79,9 +79,9 @@ export function HostMetricsPanel({ hostId }: { hostId: string }) {
 
         {m.containers && m.containers.length > 0 && (
           <Card p={0}>
-            <Text fw={700} px="md" py="sm">{t("metrics.containers", { count: m.containers.length })}</Text>
+            <CardTitle inset>{t("metrics.containers", { count: m.containers.length })}</CardTitle>
             <Table.ScrollContainer minWidth={600}>
-              <Table fz="sm">
+              <Table>
                 <Table.Thead>
                   <Table.Tr>
                     <Table.Th>{t("sitesPage.name")}</Table.Th>

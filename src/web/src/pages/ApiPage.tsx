@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
-import { Accordion, Badge, Button, Card, Code, Group, Loader, Stack, Text, TextInput } from "@mantine/core";
+import { Accordion, Alert, Badge, Button, Card, Code, Group, Loader, Stack, Text, TextInput } from "@mantine/core";
 import { IconPlayerPlay, IconSearch } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import { api } from "../api";
 import { GuidePanel } from "../components/GuidePanel";
-import { errorText, PageHeader } from "../components/ui";
+import { CardTitle, errorText, PageHeader } from "../components/ui";
 
 interface Operation {
   method: string;
@@ -82,14 +82,15 @@ export function ApiPage() {
           </Button>
         }
       />
-      <Stack gap="lg">
+      <Stack gap="md">
         <GuidePanel topic="Api" defaultOpen />
         <Card>
-          <Group justify="space-between" mb="sm">
-            <Text fw={700}>{t("apiPage.endpoints", { count: operations?.length ?? 0 })}</Text>
-            <TextInput size="xs" placeholder={t("hostsPage.filter")} leftSection={<IconSearch size={14} />} value={query} onChange={(e) => setQuery(e.currentTarget.value)} w={220} />
-          </Group>
-          {error && <Text c="red" size="sm">{error}</Text>}
+          <CardTitle
+            actions={<TextInput size="xs" placeholder={t("hostsPage.filter")} leftSection={<IconSearch size={14} />} value={query} onChange={(e) => setQuery(e.currentTarget.value)} w={220} />}
+          >
+            {t("apiPage.endpoints", { count: operations?.length ?? 0 })}
+          </CardTitle>
+          {error && <Alert color="red">{error}</Alert>}
           {!operations && !error && <Loader size="sm" />}
           <Accordion variant="separated" multiple>
             {groups.map(([group, ops]) => (
@@ -97,7 +98,7 @@ export function ApiPage() {
                 <Accordion.Control>
                   <Group gap="xs">
                     <Text fw={600} ff="monospace">/api/{group}</Text>
-                    <Badge size="xs">{ops.length}</Badge>
+                    <Badge size="sm" color="gray">{ops.length}</Badge>
                   </Group>
                 </Accordion.Control>
                 <Accordion.Panel>
@@ -108,10 +109,10 @@ export function ApiPage() {
                       return (
                         <div key={key}>
                           <Group gap="xs" wrap="nowrap">
-                            <Badge w={64} color={methodColor[op.method] ?? "gray"}>{op.method}</Badge>
+                            <Badge size="sm" w={64} color={methodColor[op.method] ?? "gray"}>{op.method}</Badge>
                             <Text size="sm" ff="monospace" style={{ flex: 1, wordBreak: "break-all" }}>{op.path}</Text>
                             {canTry && (
-                              <Button size="compact-xs" variant="subtle" leftSection={<IconPlayerPlay size={12} />} onClick={() => void tryIt(op)}>
+                              <Button size="compact-xs" variant="light" leftSection={<IconPlayerPlay size={12} />} onClick={() => void tryIt(op)}>
                                 {t("apiPage.try")}
                               </Button>
                             )}

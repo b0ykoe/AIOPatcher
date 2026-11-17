@@ -22,7 +22,7 @@ import { IconAlertTriangle, IconBug, IconDatabase, IconExternalLink, IconInfoCir
 import { useTranslation } from "react-i18next";
 import { api, formatRelative } from "../api";
 import { useCan } from "../App";
-import { EmptyState, errorText, notifyError, PageHeader } from "../components/ui";
+import { CardTitle, EmptyState, errorText, notifyError, PageHeader } from "../components/ui";
 import { VulnHostsPanel, type VulnHost } from "../components/VulnActions";
 
 interface CveScore {
@@ -146,28 +146,30 @@ export function CveLookupPage() {
   return (
     <>
       <PageHeader title={t("cveLookup.title")} description={t("cveLookup.description")} />
-      <Card mb="lg">
-        <form onSubmit={submit}>
-          <Group gap="sm" align="flex-end" wrap="nowrap">
-            <TextInput
-              flex={1}
-              size="md"
-              autoFocus={!id && !query}
-              leftSection={<IconSearch size={18} />}
-              placeholder={t("cveLookup.placeholder")}
-              aria-label={t("cveLookup.title")}
-              value={input}
-              onChange={(e) => setInput(e.currentTarget.value)}
-            />
-            <Button type="submit" size="md">
-              {t("cveLookup.search")}
-            </Button>
-          </Group>
-        </form>
-        <MirrorStatusLine />
-      </Card>
+      <Stack gap="md">
+        <Card>
+          <form onSubmit={submit}>
+            <Group gap="sm" align="flex-end" wrap="nowrap">
+              <TextInput
+                flex={1}
+                size="md"
+                autoFocus={!id && !query}
+                leftSection={<IconSearch size={18} />}
+                placeholder={t("cveLookup.placeholder")}
+                aria-label={t("cveLookup.title")}
+                value={input}
+                onChange={(e) => setInput(e.currentTarget.value)}
+              />
+              <Button type="submit" size="md" variant="gradient" className="gradient-button">
+                {t("cveLookup.search")}
+              </Button>
+            </Group>
+          </form>
+          <MirrorStatusLine />
+        </Card>
 
-      {id ? <CveDetail id={id} /> : query ? <CveSearch query={query} /> : <StartHint />}
+        {id ? <CveDetail id={id} /> : query ? <CveSearch query={query} /> : <StartHint />}
+      </Stack>
     </>
   );
 }
@@ -216,7 +218,7 @@ export function MirrorStatusLine() {
 
   return (
     <Stack gap={6} mt="sm">
-      <Group gap="xs" wrap="wrap" align="flex-start">
+      <Group gap={6} wrap="wrap" align="flex-start">
         <IconDatabase size={16} style={{ flexShrink: 0, marginTop: 2 }} color="var(--mantine-color-dimmed)" />
         <Text size="xs" c="dimmed" style={{ flex: "1 1 220px" }}>
           {status.ready
@@ -228,7 +230,7 @@ export function MirrorStatusLine() {
           {t("cveLookup.privacyShort")}
         </Text>
         {can.operate && status.enabled && (
-          <Button size="compact-xs" variant="subtle" leftSection={<IconRefresh size={14} />} loading={status.syncing || requested} onClick={syncNow}>
+          <Button size="compact-xs" variant="light" leftSection={<IconRefresh size={14} />} loading={status.syncing || requested} onClick={syncNow}>
             {t("cveLookup.mirrorSync")}
           </Button>
         )}
@@ -259,10 +261,10 @@ function StartHint() {
     <Stack gap="md">
       {recent.length > 0 && (
         <Card>
-          <Text fw={600} mb="xs">{t("cveLookup.recent")}</Text>
+          <CardTitle>{t("cveLookup.recent")}</CardTitle>
           <Group gap="xs">
             {recent.map((r) => (
-              <Button key={r} component={Link} to={`/cves/${r}`} variant="light" size="xs" ff="monospace">
+              <Button key={r} component={Link} to={`/cves/${r}`} variant="light" size="compact-xs" ff="monospace">
                 {r}
               </Button>
             ))}
@@ -278,14 +280,14 @@ function SourceNotice({ externalDisabled, unavailable }: { externalDisabled: boo
   const { t } = useTranslation();
   if (externalDisabled) {
     return (
-      <Alert icon={<IconInfoCircle size={18} />} color="gray" mb="md">
+      <Alert icon={<IconInfoCircle size={18} />} color="blue">
         {t("cveLookup.externalOff")}
       </Alert>
     );
   }
   if (unavailable.length > 0) {
     return (
-      <Alert icon={<IconAlertTriangle size={18} />} color="orange" mb="md">
+      <Alert icon={<IconAlertTriangle size={18} />} color="orange">
         {t("cveLookup.unavailable", { sources: unavailable.join(", ") })}
       </Alert>
     );
@@ -353,7 +355,7 @@ function CveDetail({ id }: { id: string }) {
           <Title order={2} ff="monospace" fz={{ base: "h3", sm: "h2" }}>
             {data.id}
           </Title>
-          <Group gap={6} wrap="wrap">
+          <Group gap="xs" wrap="wrap">
             {main && (
               <Tooltip label={`CVSS ${main.version}${main.source ? ` · ${main.source}` : ""}`}>
                 <Badge size="md" color={severityColor(main.severity)} variant="filled">
@@ -431,7 +433,7 @@ function CveDetail({ id }: { id: string }) {
       )}
 
       <Card>
-        <Text fw={600} mb="xs">{t("security.sources")}</Text>
+        <CardTitle>{t("security.sources")}</CardTitle>
         <Group gap="md" wrap="wrap">
           {links.map((l) => (
             <Anchor key={l.label} href={l.href} target="_blank" rel="noreferrer" size="sm">
@@ -473,8 +475,8 @@ function FixTable({ title, fixes, packageLabel, versionLabel }: { title: string;
   const shown = all ? fixes : fixes.slice(0, 12);
   return (
     <Card p={0}>
-      <Text fw={600} p="md" pb="xs">{title}</Text>
-      <Table.ScrollContainer minWidth={420}>
+      <CardTitle inset>{title}</CardTitle>
+      <Table.ScrollContainer minWidth={600}>
         <Table>
           <Table.Thead>
             <Table.Tr>
@@ -500,7 +502,7 @@ function FixTable({ title, fixes, packageLabel, versionLabel }: { title: string;
                   {f.fixedIn ? (
                     <Text size="sm" ff="monospace" style={{ wordBreak: "break-all" }}>{f.fixedIn}</Text>
                   ) : f.source === "OSV" ? (
-                    <Badge color="red">{t("cveLookup.open")}</Badge>
+                    <Badge size="sm" color="red">{t("cveLookup.open")}</Badge>
                   ) : (
                     <Text size="sm" c="dimmed">–</Text>
                   )}
@@ -511,7 +513,7 @@ function FixTable({ title, fixes, packageLabel, versionLabel }: { title: string;
         </Table>
       </Table.ScrollContainer>
       {fixes.length > 12 && (
-        <Button variant="subtle" size="xs" m="xs" onClick={() => setAll(!all)}>
+        <Button variant="light" size="compact-xs" m="sm" onClick={() => setAll(!all)}>
           {all ? t("cveLookup.less") : t("cveLookup.showAll", { count: fixes.length })}
         </Button>
       )}
@@ -548,18 +550,16 @@ function CveSearch({ query }: { query: string }) {
 
       {data.local.length > 0 && (
         <Card p={0}>
-          <Text fw={600} p="md" pb={0}>{t("cveLookup.localHits")}</Text>
-          <Text size="xs" c="dimmed" px="md" pb="xs">{t("cveLookup.localHitsHint")}</Text>
+          <CardTitle inset description={t("cveLookup.localHitsHint")}>{t("cveLookup.localHits")}</CardTitle>
           <HitTable hits={data.local} date={date} showDate={data.local.some((h) => h.published)} />
         </Card>
       )}
 
       {data.nvd.length > 0 && (
         <Card p={0}>
-          <Text fw={600} p="md" pb={0}>{data.mirrorSyncedAt ? t("cveLookup.mirrorHits") : t("cveLookup.nvdHits")}</Text>
-          <Text size="xs" c="dimmed" px="md" pb="xs">
-            {t("cveLookup.nvdHitsHint", { shown: data.nvd.length, total: data.nvdTotal ?? data.nvd.length })}
-          </Text>
+          <CardTitle inset description={t("cveLookup.nvdHitsHint", { shown: data.nvd.length, total: data.nvdTotal ?? data.nvd.length })}>
+            {data.mirrorSyncedAt ? t("cveLookup.mirrorHits") : t("cveLookup.nvdHits")}
+          </CardTitle>
           <HitTable hits={data.nvd} date={date} showDate />
         </Card>
       )}
@@ -570,7 +570,7 @@ function CveSearch({ query }: { query: string }) {
 function HitTable({ hits, date, showDate }: { hits: SearchHit[]; date: (iso: string | null) => string; showDate: boolean }) {
   const { t } = useTranslation();
   return (
-    <Table.ScrollContainer minWidth={640}>
+    <Table.ScrollContainer minWidth={760}>
       <Table>
         <Table.Thead>
           <Table.Tr>
@@ -578,7 +578,7 @@ function HitTable({ hits, date, showDate }: { hits: SearchHit[]; date: (iso: str
             <Table.Th w={150}>{t("security.rating")}</Table.Th>
             <Table.Th>{t("cveLookup.descriptionCol")}</Table.Th>
             {showDate && <Table.Th w={110}>{t("cveLookup.published")}</Table.Th>}
-            <Table.Th w={90}>{t("nav.hosts")}</Table.Th>
+            <Table.Th w={90} ta="right">{t("nav.hosts")}</Table.Th>
           </Table.Tr>
         </Table.Thead>
         <Table.Tbody>
@@ -588,8 +588,8 @@ function HitTable({ hits, date, showDate }: { hits: SearchHit[]; date: (iso: str
                 <Anchor component={Link} to={`/cves/${h.id}`} ff="monospace" size="sm" fw={600} style={{ whiteSpace: "nowrap" }}>{h.id}</Anchor>
               </Table.Td>
               <Table.Td>
-                <Group gap={4} wrap="wrap">
-                  {h.score !== null && <Badge size="sm" color={severityColor(h.severity)} variant="filled">{h.score.toFixed(1)}</Badge>}
+                <Group gap="xs" wrap="wrap">
+                  {h.score !== null && <Badge size="sm" color={severityColor(h.severity)}>{h.score.toFixed(1)}</Badge>}
                   {h.isKev && <Badge size="sm" color="red" variant="filled">KEV</Badge>}
                   {h.epss !== null && <Badge size="sm" color={epssColor(h.epss)}>EPSS {pct(h.epss)}</Badge>}
                 </Group>
@@ -598,8 +598,8 @@ function HitTable({ hits, date, showDate }: { hits: SearchHit[]; date: (iso: str
                 <Text size="sm" lineClamp={2}>{h.description ?? "–"}</Text>
               </Table.Td>
               {showDate && <Table.Td><Text size="sm">{date(h.published)}</Text></Table.Td>}
-              <Table.Td>
-                {h.hosts > 0 ? <Badge color="red">{h.hosts}</Badge> : <Text size="sm" c="dimmed">–</Text>}
+              <Table.Td ta="right">
+                {h.hosts > 0 ? <Badge size="sm" color="red" style={{ fontVariantNumeric: "tabular-nums" }}>{h.hosts}</Badge> : <Text size="sm" c="dimmed">–</Text>}
               </Table.Td>
             </Table.Tr>
           ))}

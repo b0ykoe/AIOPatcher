@@ -4,7 +4,7 @@ import { IconCloud, IconHandStop, IconKey, IconLock, IconPlayerPlay, IconPlugCon
 import { useTranslation } from "react-i18next";
 import { api, formatDateTime } from "../../api";
 import { useFeatures, type Feature, type FeatureState } from "../../features";
-import { confirmAction, notifyError, notifySuccess } from "../ui";
+import { CardTitle, confirmAction, notifyError, notifySuccess } from "../ui";
 
 const riskColor = { Low: "teal", Medium: "yellow", High: "red" } as const;
 const groupIcon = { hosts: IconServer, compliance: IconShieldCheck, integrations: IconPlugConnected, access: IconKey, external: IconCloud } as const;
@@ -46,7 +46,7 @@ export function FeatureSettings() {
   const groups = (["hosts", "compliance", "integrations", "access", "external"] as const).map((g) => ({ group: g, items: list.filter((f) => f.group === g && f.feature !== "Automation") }));
 
   return (
-    <Stack>
+    <Stack gap="md">
       <Text size="sm" c="dimmed" maw={760}>{t("features.intro")}</Text>
 
       {automation && (
@@ -79,21 +79,18 @@ export function FeatureSettings() {
           const Icon = groupIcon[group];
           return (
             <Card key={group}>
-              <Group gap="xs" mb="sm">
-                <Icon size={18} />
-                <Text fw={700}>{t(`features.group_${group}`)}</Text>
-              </Group>
+              <CardTitle icon={<Icon size={18} />}>{t(`features.group_${group}`)}</CardTitle>
               <Stack gap="md">
                 {items.map((f) => (
                   <Group key={f.feature} justify="space-between" wrap="nowrap" align="flex-start">
                     <div style={{ flex: 1 }}>
                       <Group gap={6}>
                         <Text fw={600} size="sm">{t(`features.name_${f.feature}`)}</Text>
-                        <Badge size="xs" color={riskColor[f.risk]}>{t(`features.risk${f.risk}`)}</Badge>
-                        {f.enabled !== f.default && <Badge size="xs" variant="outline" color="gray">{t("features.changed")}</Badge>}
+                        <Badge size="sm" color={riskColor[f.risk]}>{t(`features.risk${f.risk}`)}</Badge>
+                        {f.enabled !== f.default && <Badge size="sm" variant="outline" color="gray">{t("features.changed")}</Badge>}
                         {f.lockedBy && (
                           <Tooltip label={t("features.lockedHint", { by: f.lockedBy })} multiline w={300}>
-                            <Badge size="xs" color="gray" leftSection={<IconLock size={10} />}>{t("features.locked")}</Badge>
+                            <Badge size="sm" color="gray" leftSection={<IconLock size={12} />}>{t("features.locked")}</Badge>
                           </Tooltip>
                         )}
                       </Group>

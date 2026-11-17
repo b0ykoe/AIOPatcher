@@ -121,6 +121,31 @@ export function PageHeader({ title, description, actions }: { title: ReactNode; 
   );
 }
 
+// --- Kartenüberschrift ---------------------------------------------------------------------------
+
+/**
+ * Überschrift einer Karte (Styleguide 5): Titel fw 700, optional Icon und Badge davor, Aktionen/Link rechts.
+ * inset: für Karten mit p={0} (Tabellen), dann mit eigenem Innenabstand statt Abstand nach unten.
+ */
+export function CardTitle({ children, icon, badge, actions, description, inset = false }: {
+  children: ReactNode; icon?: ReactNode; badge?: ReactNode; actions?: ReactNode; description?: ReactNode; inset?: boolean;
+}) {
+  return (
+    <Group justify="space-between" gap="xs" wrap="nowrap" align={description ? "flex-start" : "center"}
+      {...(inset ? { px: "md", py: "sm" } : { mb: "sm" })}>
+      <div style={{ minWidth: 0 }}>
+        <Group gap={6} wrap="nowrap">
+          {icon}
+          <Text fw={700} truncate>{children}</Text>
+          {badge}
+        </Group>
+        {description && <Text size="xs" c="dimmed" mt={2}>{description}</Text>}
+      </div>
+      {actions && <Group gap="xs" wrap="nowrap" style={{ flexShrink: 0 }}>{actions}</Group>}
+    </Group>
+  );
+}
+
 // --- Kennzahl-Kachel -----------------------------------------------------------------------------
 
 export function StatCard({ label, value, icon, color, hint }: { label: string; value: ReactNode; icon: ReactNode; color: MantineColor; hint?: ReactNode }) {
@@ -170,9 +195,10 @@ const jobStatus: Record<JobStatus, MantineColor> = {
   Cancelled: "gray",
 };
 
-export function JobStatusBadge({ status }: { status: JobStatus }) {
+/** size: sm in Tabellen und Listen, md (Standard) im Kopf einer Detailseite. */
+export function JobStatusBadge({ status, size }: { status: JobStatus; size?: "xs" | "sm" | "md" }) {
   return (
-    <Badge color={jobStatus[status]} leftSection={status === "Running" ? <span className="dot dot-live" /> : undefined}>
+    <Badge size={size} color={jobStatus[status]} leftSection={status === "Running" ? <span className="dot dot-live" /> : undefined}>
       {t(`jobStatus.${status}`)}
     </Badge>
   );

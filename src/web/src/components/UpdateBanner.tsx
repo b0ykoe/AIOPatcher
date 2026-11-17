@@ -18,11 +18,11 @@ export function UpdateBanner() {
   if (!info?.updateAvailable) return null;
 
   return (
-    <Alert mb="lg" color="violet" icon={<IconSparkles size={18} />} title={t("update.title", { version: info.latestVersion, current: info.version })}>
+    <Alert color="blue" icon={<IconSparkles size={18} />} title={t("update.title", { version: info.latestVersion, current: info.version })}>
       <Text size="sm">{t("update.text")}</Text>
-      <Code block mt={6}>docker compose pull && docker compose up -d</Code>
+      <Code block mt="xs">docker compose pull && docker compose up -d</Code>
       {info.releaseUrl && (
-        <Anchor href={info.releaseUrl} target="_blank" rel="noreferrer" size="sm" mt={6} display="inline-block">
+        <Anchor href={info.releaseUrl} target="_blank" rel="noreferrer" size="sm" mt="xs" display="inline-block">
           {t("update.notes")}
         </Anchor>
       )}

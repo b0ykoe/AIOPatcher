@@ -7,6 +7,7 @@ import {
   Card,
   Checkbox,
   Group,
+  Loader,
   Modal,
   NumberInput,
   PasswordInput,
@@ -67,8 +68,16 @@ export function NotificationSettings() {
   const [picking, setPicking] = useState(false);
   const [newType, setNewType] = useState<ChannelType>("Ntfy");
 
+  const [loadError, setLoadError] = useState<string | null>(null);
+
   const load = useCallback(() => {
-    api.get<NotificationChannel[]>("/api/notification-channels").then(setChannels).catch((e) => notifyError(e));
+    api
+      .get<NotificationChannel[]>("/api/notification-channels")
+      .then((list) => {
+        setChannels(list);
+        setLoadError(null);
+      })
+      .catch((e) => setLoadError(errorText(e)));
   }, []);
 
   useEffect(() => {
@@ -112,7 +121,7 @@ export function NotificationSettings() {
     });
 
   return (
-    <Stack>
+    <Stack gap="md">
       <Group justify="space-between">
         <Text size="sm" c="dimmed" maw={640}>
           {t("notifications.intro")}
@@ -122,6 +131,8 @@ export function NotificationSettings() {
         </Button>
       </Group>
 
+      {loadError && <Alert color="red">{loadError}</Alert>}
+      {channels === null && !loadError && <Loader size="sm" />}
       {channels && channels.length === 0 && (
         <Card>
           <EmptyState icon={<IconBell size={28} />} title={t("notifications.noneTitle")} text={t("notifications.noneText")} />
@@ -165,8 +176,8 @@ export function NotificationSettings() {
                   </Text>
                 )
               )}
-              <Group gap={4} mt="sm" justify="flex-end">
-                <Button size="compact-sm" variant="light" leftSection={<IconSend size={14} />} onClick={() => void test(c)}>
+              <Group gap="xs" mt="sm" justify="flex-end">
+                <Button size="compact-xs" variant="light" leftSection={<IconSend size={14} />} onClick={() => void test(c)}>
                   {t("notifications.test")}
                 </Button>
                 <Tooltip label={t("common.edit")}>
@@ -344,7 +355,7 @@ export function ChannelModal({ channel, sites, onClose, onSaved, initialType = "
             {t("notifications.events")}
           </Text>
           <Checkbox.Group value={events} onChange={setEvents}>
-            <SimpleGrid cols={{ base: 1, sm: 2 }} spacing={6}>
+            <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs">
               {notificationEvents.map((e) => (
                 <Checkbox key={e} value={e} label={t(`notificationEvents.${e}`)} />
               ))}

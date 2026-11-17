@@ -48,7 +48,7 @@ export function SoftwarePage() {
       />
       <Card p={0}>
         {!items ? (
-          <Loader m="lg" />
+          <Loader m="md" />
         ) : (
           <Table.ScrollContainer minWidth={760}>
             <Table>
@@ -69,14 +69,14 @@ export function SoftwarePage() {
                       <Text size="sm">{i.name}</Text>
                       {i.packageId && i.packageId !== i.name && <Text size="xs" c="dimmed" ff="monospace">{i.packageId}</Text>}
                     </Table.Td>
-                    <Table.Td ta="right"><Text size="sm">{i.hosts}</Text></Table.Td>
-                    <Table.Td ta="right">{i.outdated > 0 ? <Badge color="blue">{i.outdated}</Badge> : <Text size="sm" c="dimmed">0</Text>}</Table.Td>
+                    <Table.Td ta="right"><Text size="sm" style={{ fontVariantNumeric: "tabular-nums" }}>{i.hosts}</Text></Table.Td>
+                    <Table.Td ta="right">{i.outdated > 0 ? <Badge size="sm" color="blue">{i.outdated}</Badge> : <Text size="sm" c="dimmed">0</Text>}</Table.Td>
                     <Table.Td><Text size="xs" ff="monospace" c="dimmed" lineClamp={1}>{i.versions.join(", ")}</Text></Table.Td>
                     <Table.Td>{i.availableVersion && <Badge size="sm" color="blue">{i.availableVersion}</Badge>}</Table.Td>
                     <Table.Td>
                       {i.infoUrl && (
                         <Anchor href={i.infoUrl} target="_blank" rel="noreferrer" size="xs">
-                          <Group gap={2} wrap="nowrap">{t("software.details")} <IconExternalLink size={12} /></Group>
+                          <Group gap={4} wrap="nowrap">{t("software.details")} <IconExternalLink size={12} /></Group>
                         </Anchor>
                       )}
                     </Table.Td>

@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
-import { Anchor, Badge, Button, Card, Group, Loader, Select, SimpleGrid, Table, Text } from "@mantine/core";
-import { IconBug, IconCircleCheck, IconDownload, IconListCheck, IconPrinter, IconShieldExclamation } from "@tabler/icons-react";
+import { Alert, Anchor, Badge, Button, Card, Group, Loader, Select, SimpleGrid, Stack, Table, Text } from "@mantine/core";
+import { IconAlertTriangle, IconBug, IconCircleCheck, IconDownload, IconListCheck, IconPrinter, IconShieldExclamation } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import { api, formatDateTime, type Site } from "../api";
-import { notifyError, PageHeader, StatCard } from "../components/ui";
+import { EmptyState, errorText, notifyError, PageHeader, StatCard } from "../components/ui";
+
+const tabular = { fontVariantNumeric: "tabular-nums" } as const;
 
 interface ReportRow {
   hostId: string;
@@ -43,6 +45,7 @@ export function ReportsPage() {
   const [days, setDays] = useState("30");
   const [sla, setSla] = useState("14");
   const [report, setReport] = useState<PatchReport | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     void api.get<Site[]>("/api/sites").then(setSites).catch(() => {});
@@ -52,7 +55,11 @@ export function ReportsPage() {
 
   useEffect(() => {
     setReport(null);
-    api.get<PatchReport>(`/api/reports/patch?${query}`).then(setReport).catch((e) => notifyError(e));
+    setError(null);
+    api.get<PatchReport>(`/api/reports/patch?${query}`).then(setReport).catch((e) => {
+      notifyError(e);
+      setError(errorText(e));
+    });
   }, [query]);
 
   const s = report?.summary;
@@ -95,73 +102,81 @@ export function ReportsPage() {
         }
       />
 
-      {!report ? (
+      {error ? (
+        <Alert color="red" icon={<IconAlertTriangle size={18} />}>{error}</Alert>
+      ) : !report ? (
         <Loader />
       ) : (
-        <>
-          <Text className="print-only" fw={700} mb="md">
+        <Stack gap="md">
+          <Text className="print-only" fw={700}>
             AIOPatcher · {report.siteName ?? t("hostsPage.allSites")} · {formatDateTime(report.generatedAt)}
           </Text>
-          <SimpleGrid cols={{ base: 2, md: 4 }} spacing="md" mb="xl">
+          <SimpleGrid cols={{ base: 2, md: 4 }} spacing="md">
             <StatCard label={t("reports.compliance")} value={`${s!.compliancePercent}%`} icon={<IconCircleCheck size={20} />} color={s!.compliancePercent >= 90 ? "teal" : s!.compliancePercent >= 70 ? "yellow" : "red"} hint={t("reports.compliantOf", { compliant: s!.compliant, total: s!.hosts })} />
             <StatCard label={t("overview.securityUpdates")} value={s!.securityUpdates} icon={<IconShieldExclamation size={20} />} color="pink" />
             <StatCard label={t("overview.kev")} value={s!.kevUpdates} icon={<IconBug size={20} />} color="red" />
             <StatCard label={t("reports.patchJobs")} value={`${s!.jobsSucceeded} / ${s!.jobsFailed}`} icon={<IconListCheck size={20} />} color="violet" hint={t("reports.okFailed")} />
           </SimpleGrid>
 
-          <Card p={0}>
-            <Table.ScrollContainer minWidth={900}>
-              <Table striped>
-                <Table.Thead>
-                  <Table.Tr>
-                    <Table.Th>{t("jobs.colHost")}</Table.Th>
-                    <Table.Th>{t("hostsPage.colSystem")}</Table.Th>
-                    <Table.Th ta="right">{t("hostsPage.colUpdates")}</Table.Th>
-                    <Table.Th ta="right">Security</Table.Th>
-                    <Table.Th ta="right">{t("reports.oldest")}</Table.Th>
-                    <Table.Th>{t("reports.lastPatched")}</Table.Th>
-                    <Table.Th ta="right">{t("reports.jobs")}</Table.Th>
-                    <Table.Th>{t("reports.compliant")}</Table.Th>
-                  </Table.Tr>
-                </Table.Thead>
-                <Table.Tbody>
-                  {report.hosts.map((r) => (
-                    <Table.Tr key={r.hostId}>
-                      <Table.Td>
-                        <Anchor component={Link} to={`/hosts/${r.hostId}`} size="sm" fw={600}>{r.host}</Anchor>
-                        <Text size="xs" c="dimmed">{r.site}</Text>
-                      </Table.Td>
-                      <Table.Td><Text size="sm">{r.os}</Text></Table.Td>
-                      <Table.Td ta="right"><Text size="sm">{r.pendingUpdates}</Text></Table.Td>
-                      <Table.Td ta="right">
-                        <Group gap={4} justify="flex-end" wrap="nowrap">
-                          {r.kevUpdates > 0 && <Badge size="xs" color="red" variant="filled">KEV</Badge>}
-                          <Text size="sm">{r.securityUpdates}</Text>
-                        </Group>
-                      </Table.Td>
-                      <Table.Td ta="right">
-                        <Text size="sm" c={r.oldestSecurityDays !== null && r.oldestSecurityDays >= report.slaDays ? "red" : undefined}>
-                          {r.oldestSecurityDays === null ? "–" : t("reports.days", { count: r.oldestSecurityDays })}
-                        </Text>
-                      </Table.Td>
-                      <Table.Td><Text size="sm">{r.lastPatchedAt ? formatDateTime(r.lastPatchedAt) : t("common.never")}</Text></Table.Td>
-                      <Table.Td ta="right">
-                        <Text size="sm">
-                          {r.jobsSucceeded}
-                          {r.jobsFailed > 0 && <Text span c="red"> / {r.jobsFailed}</Text>}
-                        </Text>
-                      </Table.Td>
-                      <Table.Td>
-                        <Badge color={r.compliant ? "teal" : "red"}>{r.compliant ? t("common.yes") : t("common.no")}</Badge>
-                      </Table.Td>
+          {report.hosts.length === 0 ? (
+            <Card>
+              <EmptyState icon={<IconListCheck size={28} />} title={t("hostsPage.noMatch")} text={t("hostsPage.noMatchText")} />
+            </Card>
+          ) : (
+            <Card p={0}>
+              <Table.ScrollContainer minWidth={960}>
+                <Table>
+                  <Table.Thead>
+                    <Table.Tr>
+                      <Table.Th>{t("jobs.colHost")}</Table.Th>
+                      <Table.Th>{t("hostsPage.colSystem")}</Table.Th>
+                      <Table.Th ta="right">{t("hostsPage.colUpdates")}</Table.Th>
+                      <Table.Th ta="right">Security</Table.Th>
+                      <Table.Th ta="right">{t("reports.oldest")}</Table.Th>
+                      <Table.Th>{t("reports.lastPatched")}</Table.Th>
+                      <Table.Th ta="right">{t("reports.jobs")}</Table.Th>
+                      <Table.Th>{t("reports.compliant")}</Table.Th>
                     </Table.Tr>
-                  ))}
-                </Table.Tbody>
-              </Table>
-            </Table.ScrollContainer>
-          </Card>
-          <Text size="xs" c="dimmed" mt="sm">{t("reports.explain", { sla: report.slaDays })}</Text>
-        </>
+                  </Table.Thead>
+                  <Table.Tbody>
+                    {report.hosts.map((r) => (
+                      <Table.Tr key={r.hostId}>
+                        <Table.Td>
+                          <Anchor component={Link} to={`/hosts/${r.hostId}`} size="sm" fw={600}>{r.host}</Anchor>
+                          <Text size="xs" c="dimmed">{r.site}</Text>
+                        </Table.Td>
+                        <Table.Td><Text size="sm">{r.os}</Text></Table.Td>
+                        <Table.Td ta="right"><Text size="sm" style={tabular}>{r.pendingUpdates}</Text></Table.Td>
+                        <Table.Td ta="right">
+                          <Group gap="xs" justify="flex-end" wrap="nowrap">
+                            {r.kevUpdates > 0 && <Badge size="sm" color="red" variant="filled">KEV</Badge>}
+                            <Text size="sm" style={tabular}>{r.securityUpdates}</Text>
+                          </Group>
+                        </Table.Td>
+                        <Table.Td ta="right">
+                          <Text size="sm" style={tabular} c={r.oldestSecurityDays !== null && r.oldestSecurityDays >= report.slaDays ? "red" : undefined}>
+                            {r.oldestSecurityDays === null ? "–" : t("reports.days", { count: r.oldestSecurityDays })}
+                          </Text>
+                        </Table.Td>
+                        <Table.Td><Text size="sm">{r.lastPatchedAt ? formatDateTime(r.lastPatchedAt) : t("common.never")}</Text></Table.Td>
+                        <Table.Td ta="right">
+                          <Text size="sm" style={tabular}>
+                            {r.jobsSucceeded}
+                            {r.jobsFailed > 0 && <Text span c="red"> / {r.jobsFailed}</Text>}
+                          </Text>
+                        </Table.Td>
+                        <Table.Td>
+                          <Badge size="sm" color={r.compliant ? "teal" : "red"}>{r.compliant ? t("common.yes") : t("common.no")}</Badge>
+                        </Table.Td>
+                      </Table.Tr>
+                    ))}
+                  </Table.Tbody>
+                </Table>
+              </Table.ScrollContainer>
+            </Card>
+          )}
+          <Text size="xs" c="dimmed">{t("reports.explain", { sla: report.slaDays })}</Text>
+        </Stack>
       )}
     </>
   );

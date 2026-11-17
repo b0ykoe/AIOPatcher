@@ -22,14 +22,14 @@ export function CveCell({ update }: { update: UpdateItem }) {
   return (
     <HoverCard width={320} shadow="md" withinPortal openDelay={150}>
       <HoverCard.Target>
-        <Group gap={4} wrap="nowrap" style={{ cursor: "help" }}>
+        <Group gap="xs" wrap="nowrap" style={{ cursor: "help" }}>
           {update.isKev && (
-            <Badge size="xs" color="red" variant="filled">
+            <Badge size="sm" color="red" variant="filled">
               KEV
             </Badge>
           )}
           {epss !== null && (
-            <Badge size="xs" color={epssColor}>
+            <Badge size="sm" color={epssColor}>
               EPSS {(epss * 100).toFixed(epss < 0.01 ? 2 : 1)}%
             </Badge>
           )}
@@ -39,11 +39,11 @@ export function CveCell({ update }: { update: UpdateItem }) {
         </Group>
       </HoverCard.Target>
       <HoverCard.Dropdown>
-        <Stack gap={4}>
+        <Stack gap="xs">
           <Text size="xs" c="dimmed">
             {update.isKev ? t("security.kevHint") : t("security.cveHint")}
           </Text>
-          <Group gap={6}>
+          <Group gap="xs">
             {cves.slice(0, 40).map((cve) => (
               <Anchor key={cve} component={Link} to={`/cves/${cve}`} size="xs" ff="monospace">
                 {cve}

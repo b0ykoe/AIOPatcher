@@ -137,7 +137,7 @@ export function HostsPage() {
             icon={<IconServer size={28} />}
             title={hosts && hosts.length > 0 ? t("hostsPage.noMatch") : t("hostsPage.noneTitle")}
             text={hosts && hosts.length > 0 ? t("hostsPage.noMatchText") : t("hostsPage.noneText")}
-            action={hosts && hosts.length === 0 && can.operate ? <Button mt="sm" onClick={openAddHost}>{t("nav.addHost")}</Button> : undefined}
+            action={hosts && hosts.length === 0 && can.operate ? <Button mt="sm" variant="gradient" className="gradient-button" leftSection={<IconPlus size={16} />} onClick={openAddHost}>{t("nav.addHost")}</Button> : undefined}
           />
         ) : (
           <>
@@ -159,10 +159,10 @@ export function HostsPage() {
                       <HostStatusLabel status={h.status} />
                     </Group>
                     <Text size="xs" c="dimmed" truncate>{h.siteName} · {h.osName ?? h.osFamily} · {formatRelative(h.lastSeenAt)}</Text>
-                    <Group gap={6}>
+                    <Group gap="xs">
                       {h.lastScanAt && <Badge size="sm" color={h.securityUpdates > 0 ? "pink" : "gray"}>{h.pendingUpdates} Updates{h.securityUpdates > 0 ? ` · ${h.securityUpdates} Sec` : ""}</Badge>}
                       {h.kevUpdates > 0 && <Badge size="sm" color="red" variant="filled">KEV</Badge>}
-                      {h.containerUpdates > 0 && <ContainerUpdatesBadge hostId={h.id} count={h.containerUpdates} size="sm" />}
+                      {h.containerUpdates > 0 && <ContainerUpdatesBadge hostId={h.id} count={h.containerUpdates} />}
                       {h.rebootRequired && <Badge size="sm" color="yellow">{t("overview.rebootRequired")}</Badge>}
                       {h.scheduledRunbook && <Badge size="sm" color="violet" leftSection={<IconClock size={11} />}>{h.scheduledRunbook}</Badge>}
                     </Group>
@@ -235,14 +235,14 @@ export function HostsPage() {
                             {h.siteName}
                           </Text>
                           {splitTags(h.tags).map((tag) => (
-                            <Badge key={tag} size="xs" variant="outline" color="gray" radius="sm">
+                            <Badge key={tag} size="sm" variant="outline" color="gray" radius="sm">
                               {tag}
                             </Badge>
                           ))}
                         </Group>
                       </Table.Td>
                       <Table.Td>
-                        <Group gap={8} wrap="nowrap">
+                        <Group gap={6} wrap="nowrap">
                           <OsIcon osName={h.osName} osFamily={h.osFamily} />
                           <div>
                             <Text size="sm">{h.osName ?? h.osFamily}</Text>
@@ -259,7 +259,7 @@ export function HostsPage() {
                       <Table.Td ta="right">
                         {h.lastScanAt ? (
                           <Group gap={6} justify="flex-end" wrap="nowrap">
-                            <Text size="sm">{h.pendingUpdates}</Text>
+                            <Text size="sm" style={{ fontVariantNumeric: "tabular-nums" }}>{h.pendingUpdates}</Text>
                             {h.securityUpdates > 0 && (
                               <Badge color="pink" size="sm">
                                 {h.securityUpdates} Sec
@@ -454,11 +454,11 @@ function BulkTagsModal({ hostIds, known, opened, onClose, onSaved }: { hostIds: 
 }
 
 /** "x Container-Updates" führt direkt zum Reiter Container des Hosts (die Zeile selbst öffnet die Update-Ansicht). */
-function ContainerUpdatesBadge({ hostId, count, size }: { hostId: string; count: number; size?: "sm" }) {
+function ContainerUpdatesBadge({ hostId, count }: { hostId: string; count: number }) {
   const { t } = useTranslation();
   return (
     <Badge component={Link} to={`/hosts/${hostId}?tab=containers`} onClick={(e) => e.stopPropagation()}
-      color="blue" variant="light" size={size} style={{ cursor: "pointer" }}>
+      color="blue" size="sm" style={{ cursor: "pointer" }}>
       {t("security.containerBadge", { count })}
     </Badge>
   );
@@ -468,17 +468,17 @@ function ContainerUpdatesBadge({ hostId, count, size }: { hostId: string; count:
 function HostHints({ host: h }: { host: HostSummary }) {
   const { t } = useTranslation();
   const hints: { key: string; node: React.ReactNode; label: string }[] = [];
-  if (h.kevUpdates > 0) hints.push({ key: "kev", label: "KEV", node: <Tooltip label={t("security.kevHint")}><Badge color="red" variant="filled">KEV</Badge></Tooltip> });
-  if (h.rebootRequired) hints.push({ key: "reboot", label: t("jobType.reboot"), node: <Badge color="yellow" leftSection={<IconRefresh size={12} />}>{t("jobType.reboot")}</Badge> });
+  if (h.kevUpdates > 0) hints.push({ key: "kev", label: "KEV", node: <Tooltip label={t("security.kevHint")}><Badge size="sm" color="red" variant="filled">KEV</Badge></Tooltip> });
+  if (h.rebootRequired) hints.push({ key: "reboot", label: t("jobType.reboot"), node: <Badge size="sm" color="yellow" leftSection={<IconRefresh size={12} />}>{t("jobType.reboot")}</Badge> });
   if (h.containerUpdates > 0) hints.push({ key: "containers", label: t("security.containerBadge", { count: h.containerUpdates }), node: <ContainerUpdatesBadge hostId={h.id} count={h.containerUpdates} /> });
-  if (h.nativeAutoUpdatesEnabled) hints.push({ key: "native", label: t("hostsPage.native"), node: <Tooltip label={t("hostsPage.nativeHint")}><Badge color="yellow">{t("hostsPage.native")}</Badge></Tooltip> });
+  if (h.nativeAutoUpdatesEnabled) hints.push({ key: "native", label: t("hostsPage.native"), node: <Tooltip label={t("hostsPage.nativeHint")}><Badge size="sm" color="yellow">{t("hostsPage.native")}</Badge></Tooltip> });
   const rest = hints.slice(2);
   return (
-    <Group gap={6} wrap="nowrap">
+    <Group gap="xs" wrap="nowrap">
       {hints.slice(0, 2).map((x) => <span key={x.key}>{x.node}</span>)}
       {rest.length > 0 && (
         <Tooltip label={rest.map((x) => x.label).join(" · ")}>
-          <Badge variant="outline" color="gray">+{rest.length}</Badge>
+          <Badge size="sm" variant="outline" color="gray">+{rest.length}</Badge>
         </Tooltip>
       )}
     </Group>

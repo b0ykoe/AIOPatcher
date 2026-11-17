@@ -12,7 +12,7 @@ import {
   baselineSettings, complianceApi, emptyRules, sshFingerprint,
   type Baseline, type BaselineMember, type BaselineRules, type ChangeResult, type FirewallProfile, type SaveBaseline,
 } from "../../compliance";
-import { confirmAction, EmptyState, notifyError, notifySuccess, reportBulk } from "../ui";
+import { CardTitle, confirmAction, EmptyState, notifyError, notifySuccess, reportBulk } from "../ui";
 
 // --- Vorlagen -------------------------------------------------------------------------------------------
 
@@ -89,7 +89,7 @@ export function BaselinesPanel() {
   if (!baselines) return <Loader />;
 
   return (
-    <Stack>
+    <Stack gap="md">
       <Group justify="space-between" wrap="wrap">
         <Text size="sm" c="dimmed" maw={760}>{t("baselines.intro")}</Text>
         {can.admin && <Button variant="gradient" className="gradient-button" leftSection={<IconPlus size={16} />} onClick={() => setPicking(true)}>{t("baselines.new")}</Button>}
@@ -110,7 +110,7 @@ export function BaselinesPanel() {
           })} />)}
       </div>
 
-      <Modal opened={picking} onClose={() => setPicking(false)} title={t("baselines.chooseTemplate")} size="lg">
+      <Modal opened={picking} onClose={() => setPicking(false)} title={<Text fw={800}>{t("baselines.chooseTemplate")}</Text>} size="lg">
         <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
           {templates.map((tpl) => (
             <UnstyledButton key={tpl.key} className="template-card" onClick={() => startFrom(tpl.key)}>
@@ -144,27 +144,27 @@ function BaselineCard({ baseline: b, canEdit, onEdit, onAlign, onDelete }: { bas
   ].filter(Boolean);
   return (
     <Card>
-      <Group justify="space-between" wrap="nowrap" align="flex-start" mb="xs">
-        <div style={{ minWidth: 0 }}>
-          <Text fw={700} truncate>{b.name}</Text>
-          {b.description && <Text size="xs" c="dimmed" lineClamp={2}>{b.description}</Text>}
-        </div>
-        {canEdit && (
-          <Group gap={4} wrap="nowrap">
-            <ActionIcon variant="subtle" aria-label={t("baselines.edit")} onClick={onEdit}><IconPencil size={16} /></ActionIcon>
-            <ActionIcon variant="subtle" color="red" aria-label={t("common.delete")} onClick={onDelete}><IconTrash size={16} /></ActionIcon>
-          </Group>
-        )}
-      </Group>
+      <CardTitle description={b.description} actions={canEdit && (
+        <>
+          <Tooltip label={t("baselines.edit")}>
+            <ActionIcon aria-label={t("baselines.edit")} onClick={onEdit}><IconPencil size={16} /></ActionIcon>
+          </Tooltip>
+          <Tooltip label={t("common.delete")}>
+            <ActionIcon color="red" aria-label={t("common.delete")} onClick={onDelete}><IconTrash size={16} /></ActionIcon>
+          </Tooltip>
+        </>
+      )}>
+        {b.name}
+      </CardTitle>
       <Text size="sm">{parts.length > 0 ? parts.join(" · ") : t("baselines.noRules")}</Text>
-      <Group gap={6} mt="sm" wrap="wrap">
-        <Badge color="gray">{t("plans.hostCount", { count: b.members.length })}</Badge>
+      <Group gap="xs" mt="sm" wrap="wrap">
+        <Badge size="sm" color="gray">{t("plans.hostCount", { count: b.members.length })}</Badge>
         {b.members.length > 0 && (violating.length === 0
-          ? <Badge color="teal">{t("baselines.allCompliant")}</Badge>
+          ? <Badge size="sm" color="teal">{t("baselines.allCompliant")}</Badge>
           : <Tooltip label={violating.map((m) => `${m.hostName}: ${m.violations}`).join(", ")} multiline w={280}>
-              <Badge color="orange">{t("baselines.hostsDeviating", { count: violating.length })}</Badge>
+              <Badge size="sm" color="orange">{t("baselines.hostsDeviating", { count: violating.length })}</Badge>
             </Tooltip>)}
-        {b.includeOthers && <Badge variant="outline" color="violet">{t("plans.includeOthers")}</Badge>}
+        {b.includeOthers && <Badge size="sm" variant="outline" color="violet">{t("plans.includeOthers")}</Badge>}
       </Group>
       {b.members.length > 0 && (
         <Text size="xs" c="dimmed" mt="xs" lineClamp={2}>
@@ -172,7 +172,7 @@ function BaselineCard({ baseline: b, canEdit, onEdit, onAlign, onDelete }: { bas
         </Text>
       )}
       {canEdit && fixable > 0 && (
-        <Button mt="sm" size="xs" variant="light" leftSection={<IconWand size={14} />} onClick={onAlign}>
+        <Button mt="sm" size="compact-xs" variant="light" leftSection={<IconWand size={14} />} onClick={onAlign}>
           {t("baselines.alignAll", { count: fixable })}
         </Button>
       )}
@@ -233,8 +233,8 @@ function BaselineEditor({ baseline, initial, others, onClose, onSaved }: {
     setRules({ settings: value === null ? rules.settings.filter((s) => s.id !== id) : [...rules.settings.filter((s) => s.id !== id), { id, value }] });
 
   return (
-    <Modal opened onClose={onClose} size="xl" title={baseline ? t("baselines.editTitle", { name: baseline.name }) : t("baselines.new")}>
-      <Stack gap="lg">
+    <Modal opened onClose={onClose} size="xl" title={<Text fw={800}>{baseline ? t("baselines.editTitle", { name: baseline.name }) : t("baselines.new")}</Text>}>
+      <Stack gap="md">
         <SimpleGrid cols={{ base: 1, sm: 2 }}>
           <TextInput label={t("sitesPage.name")} required maxLength={100} value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.currentTarget.value })} />
           <TextInput label={t("sitesPage.descriptionField")} maxLength={500} value={draft.description ?? ""} onChange={(e) => setDraft({ ...draft, description: e.currentTarget.value || null })} />
@@ -292,7 +292,9 @@ function BaselineEditor({ baseline, initial, others, onClose, onSaved }: {
               <Select w={120} label={i === 0 ? t("baselines.os") : undefined} allowDeselect={false} value={u.os}
                 data={(["Any", "Linux", "Windows"] as const).map((o) => ({ value: o, label: t(`baselines.os_${o}`) }))}
                 onChange={(v) => setRules({ users: rules.users.map((x, j) => (j === i ? { ...x, os: (v ?? "Any") as typeof u.os } : x)) })} />
-              <ActionIcon variant="subtle" color="red" mb={6} aria-label={t("common.delete")} onClick={() => setRules({ users: rules.users.filter((_, j) => j !== i) })}><IconTrash size={16} /></ActionIcon>
+              <Tooltip label={t("common.delete")}>
+                <ActionIcon color="red" mb={6} aria-label={t("common.delete")} onClick={() => setRules({ users: rules.users.filter((_, j) => j !== i) })}><IconTrash size={16} /></ActionIcon>
+              </Tooltip>
             </Group>
           ))}
           <Group justify="space-between" wrap="wrap">
@@ -379,7 +381,9 @@ function KeyRow({ value, first, onChange, onRemove }: { value: { user: string; p
           error={value.publicKey.trim() && !fingerprint ? t("compliance.publicKeyInvalid") : undefined} />
         {fingerprint && <Text size="xs" c="dimmed" ff="monospace" mt={2} truncate>{fingerprint}{comment ? ` · ${comment}` : ""}</Text>}
       </div>
-      <ActionIcon variant="subtle" color="red" mt={first ? 28 : 6} aria-label={t("common.delete")} onClick={onRemove}><IconTrash size={16} /></ActionIcon>
+      <Tooltip label={t("common.delete")}>
+        <ActionIcon color="red" mt={first ? 28 : 6} aria-label={t("common.delete")} onClick={onRemove}><IconTrash size={16} /></ActionIcon>
+      </Tooltip>
     </Group>
   );
 }

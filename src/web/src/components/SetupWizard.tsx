@@ -133,7 +133,7 @@ export function SetupWizard({ autoOpen }: { autoOpen: boolean }) {
   return (
     <>
       <Modal opened={opened} onClose={close} size="xl" title={<Text fw={800}>{t("wizard.title")}</Text>} closeOnClickOutside={false}>
-        <Stepper active={step} onStepClick={setStep} size="sm" mb="lg" allowNextStepsSelect={false} completedIcon={<IconCheck size={16} />}>
+        <Stepper active={step} onStepClick={setStep} size="sm" mb="md" allowNextStepsSelect={false} completedIcon={<IconCheck size={16} />}>
           <Stepper.Step label={t("wizard.stepSite")} icon={<IconBuilding size={16} />} />
           <Stepper.Step label={t("wizard.stepHosts")} icon={<IconServer size={16} />} />
           <Stepper.Step label={t("wizard.stepPlan")} icon={<IconCalendarTime size={16} />} />
@@ -164,11 +164,11 @@ export function SetupWizard({ autoOpen }: { autoOpen: boolean }) {
             <Text size="sm" c="dimmed">{t("wizard.hostsText")}</Text>
             <Group><Button variant="gradient" className="gradient-button" leftSection={<IconServer size={16} />} onClick={() => setAddHost(true)}>{t("wizard.hostsCommand")}</Button></Group>
             {hosts.length === 0 ? (
-              <Group gap="xs"><span className="dot dot-live" /><Text size="sm">{t("wizard.hostsWaiting")}</Text></Group>
+              <Group gap={6}><span className="dot dot-live" /><Text size="sm">{t("wizard.hostsWaiting")}</Text></Group>
             ) : (
               <Stack gap={4}>
                 {hosts.map((h) => (
-                  <Group key={h.id} gap="xs">
+                  <Group key={h.id} gap={6}>
                     <IconCircleCheck size={16} color={h.status === "Online" ? "var(--mantine-color-teal-5)" : "var(--mantine-color-gray-5)"} />
                     <Text size="sm" fw={600}>{h.name}</Text>
                     <Text size="xs" c="dimmed">{h.osName ?? ""}</Text>
@@ -212,7 +212,7 @@ export function SetupWizard({ autoOpen }: { autoOpen: boolean }) {
           <Stack>
             <Text size="sm" c="dimmed">{t("wizard.notifyText")}</Text>
             {channels.length > 0 && (
-              <Group gap="xs">{channels.map((c) => <Badge key={c.id} leftSection={<IconBell size={12} />}>{c.name}</Badge>)}</Group>
+              <Group gap="xs">{channels.map((c) => <Badge key={c.id} size="sm" leftSection={<IconBell size={12} />}>{c.name}</Badge>)}</Group>
             )}
             <Group><Button variant="light" leftSection={<IconBell size={16} />} onClick={() => setPicking(true)}>{t("wizard.notifyAdd")}</Button></Group>
             <Group justify="space-between" mt="md">

@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
-import { ActionIcon, Alert, Button, Card, Code, Group, Loader, PasswordInput, Select, SimpleGrid, Stack, Switch, Table, Text, TextInput } from "@mantine/core";
+import { ActionIcon, Alert, Button, Card, Code, Group, Loader, PasswordInput, Select, SimpleGrid, Stack, Switch, Table, Text, TextInput, Tooltip } from "@mantine/core";
 import { IconInfoCircle, IconPlus, IconTrash } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import { api, ApiError, formatDateTime, type UserRole } from "../../api";
-import { notifyError, notifySuccess } from "../ui";
+import { CardTitle, notifyError, notifySuccess } from "../ui";
 
 interface RoleMapping {
   group: string;
@@ -69,12 +69,12 @@ export function SsoSettings() {
   const err = (field: string) => errors[field]?.join(" ");
 
   return (
-    <Stack>
+    <Stack gap="md">
       <Text size="sm" c="dimmed" maw={760}>{t("sso.intro")}</Text>
 
       {/* Breite Bildschirme: links Verbindung + Erweitert, rechts Gruppen → Rollen (wie Integrationen/Benachrichtigungen). */}
       <SimpleGrid cols={{ base: 1, lg: 2 }} spacing="md" style={{ alignItems: "start" }}>
-        <Stack>
+        <Stack gap="md">
           <Card>
             <Stack>
               <Switch size="md" label={t("sso.enabled")} checked={data.enabled} onChange={(e) => set({ enabled: e.currentTarget.checked })} />
@@ -93,8 +93,8 @@ export function SsoSettings() {
           </Card>
 
           <Card>
+            <CardTitle>{t("sso.advanced")}</CardTitle>
             <Stack>
-              <Text fw={700}>{t("sso.advanced")}</Text>
               <SimpleGrid cols={{ base: 1, sm: 2 }}>
                 <TextInput label={t("sso.scopes")} value={data.scopes} onChange={(e) => set({ scopes: e.currentTarget.value })} />
                 <TextInput label={t("sso.usernameClaim")} value={data.usernameClaim} onChange={(e) => set({ usernameClaim: e.currentTarget.value })} />
@@ -106,10 +106,10 @@ export function SsoSettings() {
         </Stack>
 
         <Card>
+          <CardTitle>{t("sso.mappingTitle")}</CardTitle>
           <Stack>
-            <Text fw={700}>{t("sso.mappingTitle")}</Text>
             <Text size="sm" c="dimmed">{t("sso.mappingIntro")}</Text>
-            <Table fz="sm" verticalSpacing={4}>
+            <Table>
               <Table.Thead>
                 <Table.Tr>
                   <Table.Th>{t("sso.group")}</Table.Th>
@@ -129,16 +129,18 @@ export function SsoSettings() {
                         onChange={(v) => set({ roleMappings: data.roleMappings.map((x, j) => (j === i ? { ...x, role: (v ?? "Viewer") as UserRole } : x)) })} />
                     </Table.Td>
                     <Table.Td>
-                      <ActionIcon variant="subtle" color="red" aria-label={t("common.delete")} onClick={() => set({ roleMappings: data.roleMappings.filter((_, j) => j !== i) })}>
-                        <IconTrash size={14} />
-                      </ActionIcon>
+                      <Tooltip label={t("common.delete")}>
+                        <ActionIcon color="red" aria-label={t("common.delete")} onClick={() => set({ roleMappings: data.roleMappings.filter((_, j) => j !== i) })}>
+                          <IconTrash size={14} />
+                        </ActionIcon>
+                      </Tooltip>
                     </Table.Td>
                   </Table.Tr>
                 ))}
               </Table.Tbody>
             </Table>
             <Group>
-              <Button size="xs" variant="light" leftSection={<IconPlus size={14} />} onClick={() => set({ roleMappings: [...data.roleMappings, { group: "", role: "Viewer" }] })}>
+              <Button size="compact-xs" variant="light" leftSection={<IconPlus size={14} />} onClick={() => set({ roleMappings: [...data.roleMappings, { group: "", role: "Viewer" }] })}>
                 {t("sso.addMapping")}
               </Button>
             </Group>
@@ -156,7 +158,7 @@ export function SsoSettings() {
 
       <Group justify="space-between">
         <Text size="xs" c="dimmed">{data.updatedBy ? t("sso.updated", { who: data.updatedBy, when: formatDateTime(data.updatedAt) }) : ""}</Text>
-        <Button loading={busy} onClick={() => void save()}>{t("common.save")}</Button>
+        <Button variant="gradient" className="gradient-button" loading={busy} onClick={() => void save()}>{t("common.save")}</Button>
       </Group>
     </Stack>
   );

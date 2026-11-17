@@ -94,76 +94,77 @@ export function RunPage() {
         </>}
       />
 
-      {run.message && (
-        <Alert
-          mb="md"
-          color={run.status === "Paused" || run.status === "Failed" ? "yellow" : run.status === "Succeeded" ? "teal" : "violet"}
-          icon={run.status === "Paused" ? <IconHandStop size={18} /> : undefined}
-        >
-          {run.message}
-        </Alert>
-      )}
+      <Stack gap="md">
+        {run.message && (
+          <Alert
+            color={run.status === "Paused" ? "yellow" : run.status === "Failed" ? "red" : run.status === "Succeeded" ? "teal" : "violet"}
+            icon={run.status === "Paused" ? <IconHandStop size={18} /> : undefined}
+          >
+            {run.message}
+          </Alert>
+        )}
 
-      <Card mb="lg">
-        <Group justify="space-between" mb={6}>
-          <Text size="sm" fw={600}>
-            {t("run.progress", { done, total: run.total })}
-          </Text>
-          <Text size="sm" c="dimmed">
-            {t("run.counts", { succeeded: run.succeeded, failed: run.failed, skipped: run.skipped })}
-          </Text>
-        </Group>
-        <Progress.Root size="lg" radius="xl">
-          <Progress.Section value={(run.succeeded / Math.max(run.total, 1)) * 100} color="teal" />
-          <Progress.Section value={(run.failed / Math.max(run.total, 1)) * 100} color="red" />
-          <Progress.Section value={(run.skipped / Math.max(run.total, 1)) * 100} color="orange" />
-        </Progress.Root>
-      </Card>
+        <Card>
+          <Group justify="space-between" mb="xs">
+            <Text size="sm" fw={600} style={{ fontVariantNumeric: "tabular-nums" }}>
+              {t("run.progress", { done, total: run.total })}
+            </Text>
+            <Text size="xs" c="dimmed" style={{ fontVariantNumeric: "tabular-nums" }}>
+              {t("run.counts", { succeeded: run.succeeded, failed: run.failed, skipped: run.skipped })}
+            </Text>
+          </Group>
+          <Progress.Root size="lg" radius="xl">
+            <Progress.Section value={(run.succeeded / Math.max(run.total, 1)) * 100} color="teal" />
+            <Progress.Section value={(run.failed / Math.max(run.total, 1)) * 100} color="red" />
+            <Progress.Section value={(run.skipped / Math.max(run.total, 1)) * 100} color="orange" />
+          </Progress.Root>
+        </Card>
 
-      <Timeline active={waves.findIndex((w) => w.order === run.currentWave)} bulletSize={30} lineWidth={2} color="violet">
-        {waves.map((wave) => (
-          <Timeline.Item key={wave.order} bullet={<WaveBullet wave={wave} current={wave.order === run.currentWave && isActiveRun(run.status)} />} title={<WaveTitle wave={wave} />}>
-            <Card mt="xs" p={0}>
-              <Table.ScrollContainer minWidth={600}>
-                <Table>
-                  <Table.Tbody>
-                    {wave.items.map((item) => (
-                      <Table.Tr key={item.id}>
-                        <Table.Td w={220}>
-                          {item.hostId ? (
-                            <Anchor component={Link} to={`/hosts/${item.hostId}`} fw={600} size="sm">
-                              {item.hostName}
-                            </Anchor>
-                          ) : (
-                            <Text size="sm" fw={600} c="dimmed">
-                              {t("run.deletedHost", { name: item.hostName })}
+        <Timeline active={waves.findIndex((w) => w.order === run.currentWave)} bulletSize={30} lineWidth={2} color="violet">
+          {waves.map((wave) => (
+            <Timeline.Item key={wave.order} bullet={<WaveBullet wave={wave} current={wave.order === run.currentWave && isActiveRun(run.status)} />} title={<WaveTitle wave={wave} />}>
+              <Card mt="xs" p={0}>
+                <Table.ScrollContainer minWidth={600}>
+                  <Table>
+                    <Table.Tbody>
+                      {wave.items.map((item) => (
+                        <Table.Tr key={item.id}>
+                          <Table.Td w={220}>
+                            {item.hostId ? (
+                              <Anchor component={Link} to={`/hosts/${item.hostId}`} fw={600} size="sm">
+                                {item.hostName}
+                              </Anchor>
+                            ) : (
+                              <Text size="sm" fw={600} c="dimmed">
+                                {t("run.deletedHost", { name: item.hostName })}
+                              </Text>
+                            )}
+                          </Table.Td>
+                          <Table.Td w={150} style={{ whiteSpace: "nowrap" }}>
+                            <RunItemBadge status={item.status} />
+                          </Table.Td>
+                          <Table.Td>
+                            <Text size="sm" c="dimmed">
+                              {item.message ?? ""}
                             </Text>
-                          )}
-                        </Table.Td>
-                        <Table.Td w={150} style={{ whiteSpace: "nowrap" }}>
-                          <RunItemBadge status={item.status} />
-                        </Table.Td>
-                        <Table.Td>
-                          <Text size="sm" c="dimmed">
-                            {item.message ?? ""}
-                          </Text>
-                        </Table.Td>
-                        <Table.Td w={110} ta="right">
-                          {item.jobId && (
-                            <Anchor component={Link} to={`/jobs/${item.jobId}`} size="sm">
-                              {t("run.jobLog")}
-                            </Anchor>
-                          )}
-                        </Table.Td>
-                      </Table.Tr>
-                    ))}
-                  </Table.Tbody>
-                </Table>
-              </Table.ScrollContainer>
-            </Card>
-          </Timeline.Item>
-        ))}
-      </Timeline>
+                          </Table.Td>
+                          <Table.Td w={110} ta="right">
+                            {item.jobId && (
+                              <Anchor component={Link} to={`/jobs/${item.jobId}`} size="sm">
+                                {t("run.jobLog")}
+                              </Anchor>
+                            )}
+                          </Table.Td>
+                        </Table.Tr>
+                      ))}
+                    </Table.Tbody>
+                  </Table>
+                </Table.ScrollContainer>
+              </Card>
+            </Timeline.Item>
+          ))}
+        </Timeline>
+      </Stack>
     </>
   );
 }
@@ -174,26 +175,26 @@ function WaveTitle({ wave }: { wave: RunWave }) {
       <Text fw={700}>
         {wave.order}. {wave.name}
       </Text>
-      <Badge size="sm" variant="outline">
+      <Badge size="sm" color={wave.scope === "Security" ? "pink" : "gray"}>
         {wave.scope === "Security" ? "Security" : tGlobal("jobType.all")}
       </Badge>
       {wave.allowReboot && (
-        <Badge size="sm" variant="outline" color="yellow">
+        <Badge size="sm" color="yellow">
           {tGlobal("run.rebootAllowed")}
         </Badge>
       )}
       {wave.snapshotBeforePatch && (
-        <Badge size="sm" variant="outline" color="grape">
+        <Badge size="sm" color="grape">
           {tGlobal("run.snapshot")}
         </Badge>
       )}
       {wave.requireBackupWithinHours !== null && (
-        <Badge size="sm" variant="outline" color="indigo">
+        <Badge size="sm" color="gray">
           {tGlobal("run.backupCheck", { hours: wave.requireBackupWithinHours })}
         </Badge>
       )}
       {wave.requireApproval && (
-        <Badge size="sm" variant="outline" color="violet">
+        <Badge size="sm" color={wave.approved ? "teal" : "violet"}>
           {wave.approved ? tGlobal("run.waveApproved") : tGlobal("run.approvalRequired")}
         </Badge>
       )}

@@ -4,6 +4,9 @@ import { ActionIcon, Alert, Anchor, Badge, Button, Card, Group, Loader, Menu, Se
 import {
   IconAlertTriangle,
   IconCircleCheck,
+  IconCpu,
+  IconDatabase,
+  IconStack2,
   IconLayoutDashboard,
   IconSettings,
   IconBan,
@@ -40,7 +43,7 @@ import { HostMetricsPanel } from "../components/metrics/HostMetricsPanel";
 import { SoftwareTab } from "../components/SoftwareTab";
 import { ComplianceTab } from "../components/compliance/ComplianceTab";
 import { AgentModulesCard } from "../components/AgentModulesCard";
-import { confirmAction, DetailHeader, EmptyState, errorText, HostStatusLabel, notifyError, notifySuccess } from "../components/ui";
+import { CardTitle, confirmAction, DetailHeader, EmptyState, errorText, HostStatusLabel, notifyError, notifySuccess } from "../components/ui";
 
 export function HostDetailPage() {
   const { t } = useTranslation();
@@ -161,7 +164,7 @@ export function HostDetailPage() {
       <Alert key="reboot" color="yellow" icon={<IconRefresh size={18} />}>
         <Group justify="space-between" gap="xs" wrap="wrap">
           <Text size="sm">{t("hostDetail.rebootRequired")}</Text>
-          {can.operate && isOn("Reboots") && <Button size="xs" variant="light" color="yellow" disabled={!canRun} onClick={reboot}>{t("hostsPage.reboot")}</Button>}
+          {can.operate && isOn("Reboots") && <Button size="compact-xs" variant="light" color="yellow" disabled={!canRun} onClick={reboot}>{t("hostsPage.reboot")}</Button>}
         </Group>
       </Alert>,
     );
@@ -169,10 +172,10 @@ export function HostDetailPage() {
   if (host.brokenSources && host.brokenSources.length > 0) {
     attention.push(
       <Alert key="sources" color="orange" icon={<IconAlertTriangle size={18} />} title={t("hostDetail.brokenSourcesTitle", { count: host.brokenSources.length })}>
-        <Stack gap={6}>
+        <Stack gap="xs">
           {host.brokenSources.map((b) => (
             <div key={b.source}>
-              <Group gap={6} wrap="wrap">
+              <Group gap="xs" wrap="wrap">
                 <Text size="sm" ff="monospace" style={{ wordBreak: "break-all" }}>{b.source}</Text>
                 {b.fixable && host.autoFixSources ? (
                   <Badge size="sm" color="teal">{t("hostDetail.brokenSourceAutoFix")}</Badge>
@@ -218,7 +221,7 @@ export function HostDetailPage() {
             <Text size="xs" c="dimmed" ff="monospace" style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{formatDateTime(agentUpdate.at)}: {agentUpdate.message}</Text>
           )}
           {can.operate && (
-            <Group><Button size="xs" variant="light" leftSection={<IconRefresh size={14} />} onClick={() => void retryAgentUpdate()}>{t("hostDetail.agentUpdateRetry")}</Button></Group>
+            <Group><Button size="compact-xs" variant="light" leftSection={<IconRefresh size={12} />} onClick={() => void retryAgentUpdate()}>{t("hostDetail.agentUpdateRetry")}</Button></Group>
           )}
         </Stack>
       </Alert>,
@@ -243,8 +246,8 @@ export function HostDetailPage() {
           {h.channel === "public" && ` · ${t("hostDetail.viaPublic")}`}
         </>}
         extra={splitTags(h.tags).length > 0 && (
-          <Group gap={4} mt={6}>
-            {splitTags(h.tags).map((tag) => <Badge key={tag} size="xs" variant="outline" color="gray" radius="sm">{tag}</Badge>)}
+          <Group gap="xs" mt="xs">
+            {splitTags(h.tags).map((tag) => <Badge key={tag} size="sm" variant="outline" color="gray" radius="sm">{tag}</Badge>)}
           </Group>
         )}
         actions={can.operate && <>
@@ -268,14 +271,15 @@ export function HostDetailPage() {
         </>}
       />
 
+      <HoldModal opened={holdFor !== undefined} sites={[]} hosts={[h]} initial={holdFor} onClose={() => setHoldFor(undefined)} onSaved={() => void load()} />
+
+      <Stack gap="md">
       {activeJob && (
-        <Alert mb="md" color="cyan" icon={<span className="dot dot-live" />}>
+        <Alert color="cyan" icon={<span className="dot dot-live" />}>
           {activeJob.status === "Queued" ? t("hostDetail.jobQueuedNow") : t("hostDetail.jobActiveNow")}{" "}
           <Anchor component={Link} to={`/jobs/${activeJob.id}`}>{t("hostDetail.openLog")}</Anchor>
         </Alert>
       )}
-
-      <HoldModal opened={holdFor !== undefined} sites={[]} hosts={[h]} initial={holdFor} onClose={() => setHoldFor(undefined)} onSaved={() => void load()} />
 
       <Tabs value={tab} onChange={setTab} keepMounted={false}>
         <Tabs.List mb="md" className="section-tabs">
@@ -314,32 +318,27 @@ export function HostDetailPage() {
               )}
               <PlanCard host={h} modules={host.modules} onChanged={() => void load()} />
               <Card p={0}>
-                <Group justify="space-between" p="md" pb={0}>
-                  <Text fw={700}>{t("nav.jobs")}</Text>
-                </Group>
+                <CardTitle inset>{t("nav.jobs")}</CardTitle>
                 <JobTable jobs={jobs} />
               </Card>
             </Stack>
             <Stack gap="md">
               {isOn("Metrics") && (
                 <Card>
-                  <Group justify="space-between" mb="sm">
-                    <Text fw={700}>{t("nav.utilization")}</Text>
-                    <Anchor size="sm" onClick={() => setTab("metrics")}>{t("hostDetail.details")}</Anchor>
-                  </Group>
+                  <CardTitle actions={<Anchor size="sm" onClick={() => setTab("metrics")}>{t("hostDetail.details")}</Anchor>}>{t("nav.utilization")}</CardTitle>
                   {u ? (
-                    <Stack gap="xs">
-                      <UsageMeter label="CPU" percent={u.cpu} />
-                      <UsageMeter label="RAM" percent={u.memory} />
-                      {u.disk != null && <UsageMeter label={t("metrics.diskFullest")} percent={u.disk} />}
+                    <Stack gap="sm">
+                      <UsageMeter icon={<IconCpu size={16} />} label="CPU" percent={u.cpu} />
+                      <UsageMeter icon={<IconStack2 size={16} />} label="RAM" percent={u.memory} />
+                      {u.disk != null && <UsageMeter icon={<IconDatabase size={16} />} label={t("metrics.diskFullest")} percent={u.disk} />}
                       <Text size="xs" c="dimmed">{t("metrics.measured", { when: formatRelative(u.at) })}</Text>
                     </Stack>
                   ) : <Text size="sm" c="dimmed">{t("metrics.noSampleHint")}</Text>}
                 </Card>
               )}
               <Card>
-                <Text fw={700} mb="sm">{t("hostDetail.facts")}</Text>
-                <Stack gap={6}>
+                <CardTitle>{t("hostDetail.facts")}</CardTitle>
+                <Stack gap="xs">
                   <Fact label={t("hostDetail.hostname")} value={h.hostname} />
                   <Fact label={t("hostDetail.uptime")} value={formatUptime(host.uptime)} />
                   <Fact label={t("hostDetail.lastScan")} value={formatRelative(h.lastScanAt)} />
@@ -354,12 +353,12 @@ export function HostDetailPage() {
         </Tabs.Panel>
 
         <Tabs.Panel value="updates">
-          <Card>
+          <Card p={0}>
             {!h.lastScanAt ? (
               <EmptyState icon={<IconScan size={28} />} title={t("hostDetail.noScanTitle")} text={t("hostDetail.noScanText")} />
             ) : (
-              <Stack gap="sm">
-                <Group justify="space-between">
+              <Stack gap={0}>
+                <Group justify="space-between" gap="xs" px="md" py="sm" wrap="wrap">
                   <Text size="sm" c="dimmed">{t("hostDetail.updatesSummary", { pending: h.pendingUpdates, security: h.securityUpdates, when: formatRelative(h.lastScanAt) })}</Text>
                   <SegmentedControl size="xs" value={updateFilter} onChange={setUpdateFilter}
                     data={[{ value: "all", label: t("hostsPage.selAll") }, { value: "security", label: t("hostDetail.onlySecurity") }]} />
@@ -367,7 +366,7 @@ export function HostDetailPage() {
                 {updates.length === 0 ? (
                   <EmptyState icon={<IconShieldCheck size={28} />} title={t("hostDetail.upToDate")} text={t("hostDetail.upToDateText")} />
                 ) : (
-                  <Table.ScrollContainer minWidth={700}>
+                  <Table.ScrollContainer minWidth={760}>
                     <Table>
                       <Table.Thead>
                         <Table.Tr>
@@ -385,8 +384,8 @@ export function HostDetailPage() {
                           <Table.Tr key={`${up.name}-${up.availableVersion}`}>
                             <Table.Td>
                               <Group gap={6} wrap="nowrap">
-                                {up.isSecurity && <Badge color="pink" size="xs">Security</Badge>}
-                                {up.isHeld && <Badge color="gray" size="xs" leftSection={<IconPackageOff size={10} />}>{t("rules.held")}</Badge>}
+                                {up.isSecurity && <Badge color="pink" size="sm">Security</Badge>}
+                                {up.isHeld && <Badge color="gray" size="sm" leftSection={<IconPackageOff size={12} />}>{t("rules.held")}</Badge>}
                                 <Text size="sm" fw={500}>{up.name}</Text>
                               </Group>
                             </Table.Td>
@@ -415,16 +414,17 @@ export function HostDetailPage() {
           </Card>
         </Tabs.Panel>
 
-        <Tabs.Panel value="software"><Card><SoftwareTab hostId={h.id} windows={h.osFamily === "Windows"} busy={!!activeJob} /></Card></Tabs.Panel>
-        <Tabs.Panel value="containers"><Card><ContainerTable containers={host.containers} hostId={h.id} onRechecked={() => void load()} /></Card></Tabs.Panel>
+        <Tabs.Panel value="software"><Card p={0}><SoftwareTab hostId={h.id} windows={h.osFamily === "Windows"} busy={!!activeJob} /></Card></Tabs.Panel>
+        <Tabs.Panel value="containers"><Card p={0}><ContainerTable containers={host.containers} hostId={h.id} onRechecked={() => void load()} /></Card></Tabs.Panel>
         <Tabs.Panel value="metrics">{isOn("Metrics") && <HostMetricsPanel hostId={h.id} />}</Tabs.Panel>
-        <Tabs.Panel value="compliance"><Card p={0}><ComplianceTab hostId={h.id} os={h.osFamily} /></Card></Tabs.Panel>
+        <Tabs.Panel value="compliance"><ComplianceTab hostId={h.id} os={h.osFamily} /></Tabs.Panel>
 
         <Tabs.Panel value="network">
-          <Card>
+          <Card p={0}>
             {host.addresses.length === 0 ? (
               <EmptyState icon={<IconNetwork size={28} />} title={t("hostDetail.noAddresses")} text={t("hostDetail.noAddressesText")} />
             ) : (
+              <Table.ScrollContainer minWidth={600}>
               <Table>
                 <Table.Thead>
                   <Table.Tr>
@@ -443,6 +443,7 @@ export function HostDetailPage() {
                   ))}
                 </Table.Tbody>
               </Table>
+              </Table.ScrollContainer>
             )}
           </Card>
         </Tabs.Panel>
@@ -450,12 +451,12 @@ export function HostDetailPage() {
         <Tabs.Panel value="settings">
           <Stack gap="md">
             <Card>
-              <Text fw={700} mb="xs">{t("rules.tags")}</Text>
-              <Text size="sm" c="dimmed" mb="xs">{t("hostDetail.tagsHint")}</Text>
+              <CardTitle>{t("rules.tags")}</CardTitle>
+              <Text size="sm" c="dimmed" mb="sm">{t("hostDetail.tagsHint")}</Text>
               {can.operate ? (
                 <TagsInput data={knownTags} value={splitTags(h.tags)} onChange={(tags) => void saveTags(tags)} placeholder={t("rules.tagsPlaceholder")} aria-label={t("rules.tags")} maw={520} />
               ) : (
-                <Group gap={4}>{splitTags(h.tags).map((tag) => <Badge key={tag} size="sm" variant="outline" color="gray">{tag}</Badge>)}</Group>
+                <Group gap="xs">{splitTags(h.tags).map((tag) => <Badge key={tag} size="sm" variant="outline" color="gray" radius="sm">{tag}</Badge>)}</Group>
               )}
             </Card>
             <PlanCard host={h} modules={host.modules} onChanged={() => void load()} />
@@ -463,7 +464,7 @@ export function HostDetailPage() {
             {!simple && <AgentModulesCard hostId={h.id} protocol={host.agentProtocol} modules={host.modules ?? []} onChanged={() => void load()} />}
             {can.operate && (
               <Card style={{ borderColor: "var(--mantine-color-red-9)" }}>
-                <Text fw={700} mb="xs">{t("hostDetail.dangerZone")}</Text>
+                <CardTitle>{t("hostDetail.dangerZone")}</CardTitle>
                 <Group gap="sm">
                   {h.status !== "Revoked" && <Button variant="light" color="red" leftSection={<IconBan size={16} />} onClick={revoke}>{t("hostDetail.revokeConfirm")}</Button>}
                   {can.admin && <Button variant="light" color="red" leftSection={<IconTrash size={16} />} onClick={remove}>{t("hostDetail.delete")}</Button>}
@@ -474,6 +475,7 @@ export function HostDetailPage() {
           </Stack>
         </Tabs.Panel>
       </Tabs>
+      </Stack>
     </>
   );
 }

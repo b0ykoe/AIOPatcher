@@ -10,7 +10,7 @@ import { ApiError, formatDateTime, formatRelative } from "../api";
 import { useCan } from "../App";
 import { allowsPort, complianceApi, emptyConfig, type ComplianceSummary, type FirewallConfig, type FirewallProfile, type FirewallRule, type FirewallVersion } from "../compliance";
 import { FeatureOffHint, useFeatures } from "../features";
-import { confirmAction, EmptyState, notifyError, notifySuccess, PageHeader, StatCard } from "../components/ui";
+import { CardTitle, confirmAction, EmptyState, notifyError, notifySuccess, PageHeader, StatCard } from "../components/ui";
 
 /** Compliance: Übersicht aller Hosts und Firewall-Regelsätze (mit Versionen, Ausrollen, Rollback). */
 export function CompliancePage() {
@@ -69,83 +69,89 @@ function Overview() {
   const rootActive = reported.filter((h) => h.builtInAdminActive).length;
 
   return (
-    <Stack>
-      <SimpleGrid cols={{ base: 2, md: 4 }}>
+    <Stack gap="md">
+      <SimpleGrid cols={{ base: 2, md: 4 }} spacing="md">
         <StatCard label={t("compliance.statReported")} value={`${reported.length} / ${hosts.length}`} icon={<IconShieldCheck size={20} />} color="blue" />
         <StatCard label={t("compliance.statNoFirewall")} value={noFirewall} icon={<IconShieldOff size={20} />} color={noFirewall > 0 ? "red" : "teal"} />
         <StatCard label={t("compliance.statRemote")} value={remoteIssues} icon={<IconAlertTriangle size={20} />} color={remoteIssues > 0 ? "orange" : "teal"} />
         <StatCard label={t("compliance.statRoot")} value={rootActive} icon={<IconUsers size={20} />} color={rootActive > 0 ? "yellow" : "teal"} hint={t("compliance.statRootHint")} />
       </SimpleGrid>
-      <Card p={0}>
-        <Table.ScrollContainer minWidth={900}>
-          <Table>
-            <Table.Thead>
-              <Table.Tr>
-                <Table.Th>Host</Table.Th>
-                <Table.Th>{t("baselines.column")}</Table.Th>
-                <Table.Th>{t("compliance.firewall")}</Table.Th>
-                <Table.Th>{t("compliance.ruleSet")}</Table.Th>
-                <Table.Th>{t("compliance.remoteAccess")}</Table.Th>
-                <Table.Th>{t("compliance.admins")}</Table.Th>
-                <Table.Th>{t("compliance.reportedAt")}</Table.Th>
-              </Table.Tr>
-            </Table.Thead>
-            <Table.Tbody>
-              {hosts.map((h) => (
-                <Table.Tr key={h.hostId}>
-                  <Table.Td>
-                    <Anchor component={Link} to={`/hosts/${h.hostId}?tab=compliance`} fw={600}>{h.hostName}</Anchor>
-                    <Text size="xs" c="dimmed">{h.siteName}</Text>
-                  </Table.Td>
-                  <Table.Td>
-                    {h.baselineName ? (
-                      <Group gap={6} wrap="nowrap">
-                        <Text size="sm" truncate maw={180}>{h.baselineName}</Text>
-                        {!h.collectedAt ? null : h.baselineViolations > 0
-                          ? <Badge size="xs" color="orange" style={{ flexShrink: 0 }}>{t("baselines.deviations", { count: h.baselineViolations })}</Badge>
-                          : h.baselineUnknown > 0 ? <Badge size="xs" color="gray" style={{ flexShrink: 0 }}>?</Badge>
-                            : <Badge size="xs" color="teal" style={{ flexShrink: 0 }}>OK</Badge>}
-                      </Group>
-                    ) : <Text size="sm" c="dimmed">–</Text>}
-                  </Table.Td>
-                  {!h.collectedAt ? (
-                    <Table.Td colSpan={4}><Text size="sm" c="dimmed">{t("compliance.noDataShort")}</Text></Table.Td>
-                  ) : (
-                    <>
-                      <Table.Td>
-                        <Group gap={6}>
-                          <Badge color={h.firewallEnabled ? "teal" : "red"}>{h.firewallEnabled ? t("compliance.on") : t("compliance.off")}</Badge>
-                          <Text size="sm">{t(`compliance.product_${h.firewallProduct}`, { defaultValue: h.firewallProduct ?? "" })}</Text>
-                        </Group>
-                      </Table.Td>
-                      <Table.Td>
-                        {h.firewallVersion ? (
-                          <Group gap={6}>
-                            <Text size="sm">{h.firewallVersion.profileName} v{h.firewallVersion.number}</Text>
-                            {h.firewallDrift && <Tooltip label={t("compliance.driftHint")}><Badge size="xs" color="orange">{t("compliance.drift")}</Badge></Tooltip>}
-                          </Group>
-                        ) : <Text size="sm" c="dimmed">–</Text>}
-                      </Table.Td>
-                      <Table.Td>
-                        {h.remoteAccessIssues > 0
-                          ? <Badge color="orange">{t("compliance.issues", { count: h.remoteAccessIssues })}</Badge>
-                          : <Badge color="teal">OK</Badge>}
-                      </Table.Td>
-                      <Table.Td>
-                        <Group gap={6}>
-                          <Text size="sm">{h.admins} / {h.users}</Text>
-                          {h.builtInAdminActive && <Badge size="xs" color="grape">{h.osFamily === "Linux" ? "root" : "Administrator"}</Badge>}
-                        </Group>
-                      </Table.Td>
-                    </>
-                  )}
-                  <Table.Td><Text size="sm">{formatRelative(h.collectedAt)}</Text></Table.Td>
+      {hosts.length === 0 ? (
+        <Card>
+          <EmptyState icon={<IconShieldCheck size={28} />} title={t("compliance.noData")} text={t("compliance.noDataText")} />
+        </Card>
+      ) : (
+        <Card p={0}>
+          <Table.ScrollContainer minWidth={960}>
+            <Table>
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th>Host</Table.Th>
+                  <Table.Th>{t("baselines.column")}</Table.Th>
+                  <Table.Th>{t("compliance.firewall")}</Table.Th>
+                  <Table.Th>{t("compliance.ruleSet")}</Table.Th>
+                  <Table.Th>{t("compliance.remoteAccess")}</Table.Th>
+                  <Table.Th>{t("compliance.admins")}</Table.Th>
+                  <Table.Th>{t("compliance.reportedAt")}</Table.Th>
                 </Table.Tr>
-              ))}
-            </Table.Tbody>
-          </Table>
-        </Table.ScrollContainer>
-      </Card>
+              </Table.Thead>
+              <Table.Tbody>
+                {hosts.map((h) => (
+                  <Table.Tr key={h.hostId}>
+                    <Table.Td>
+                      <Anchor component={Link} to={`/hosts/${h.hostId}?tab=compliance`} size="sm" fw={600}>{h.hostName}</Anchor>
+                      <Text size="xs" c="dimmed">{h.siteName}</Text>
+                    </Table.Td>
+                    <Table.Td>
+                      {h.baselineName ? (
+                        <Group gap="xs" wrap="nowrap">
+                          <Text size="sm" truncate maw={180}>{h.baselineName}</Text>
+                          {!h.collectedAt ? null : h.baselineViolations > 0
+                            ? <Badge size="sm" color="orange" style={{ flexShrink: 0 }}>{t("baselines.deviations", { count: h.baselineViolations })}</Badge>
+                            : h.baselineUnknown > 0 ? <Badge size="sm" color="gray" style={{ flexShrink: 0 }}>?</Badge>
+                              : <Badge size="sm" color="teal" style={{ flexShrink: 0 }}>OK</Badge>}
+                        </Group>
+                      ) : <Text size="sm" c="dimmed">–</Text>}
+                    </Table.Td>
+                    {!h.collectedAt ? (
+                      <Table.Td colSpan={4}><Text size="sm" c="dimmed">{t("compliance.noDataShort")}</Text></Table.Td>
+                    ) : (
+                      <>
+                        <Table.Td>
+                          <Group gap="xs">
+                            <Badge size="sm" color={h.firewallEnabled ? "teal" : "red"}>{h.firewallEnabled ? t("compliance.on") : t("compliance.off")}</Badge>
+                            <Text size="sm">{t(`compliance.product_${h.firewallProduct}`, { defaultValue: h.firewallProduct ?? "" })}</Text>
+                          </Group>
+                        </Table.Td>
+                        <Table.Td>
+                          {h.firewallVersion ? (
+                            <Group gap="xs">
+                              <Text size="sm">{h.firewallVersion.profileName} v{h.firewallVersion.number}</Text>
+                              {h.firewallDrift && <Tooltip label={t("compliance.driftHint")}><Badge size="sm" color="orange">{t("compliance.drift")}</Badge></Tooltip>}
+                            </Group>
+                          ) : <Text size="sm" c="dimmed">–</Text>}
+                        </Table.Td>
+                        <Table.Td>
+                          {h.remoteAccessIssues > 0
+                            ? <Badge size="sm" color="orange">{t("compliance.issues", { count: h.remoteAccessIssues })}</Badge>
+                            : <Badge size="sm" color="teal">OK</Badge>}
+                        </Table.Td>
+                        <Table.Td>
+                          <Group gap="xs">
+                            <Text size="sm" style={{ fontVariantNumeric: "tabular-nums" }}>{h.admins} / {h.users}</Text>
+                            {h.builtInAdminActive && <Badge size="sm" color="grape">{h.osFamily === "Linux" ? "root" : "Administrator"}</Badge>}
+                          </Group>
+                        </Table.Td>
+                      </>
+                    )}
+                    <Table.Td><Text size="sm">{formatRelative(h.collectedAt)}</Text></Table.Td>
+                  </Table.Tr>
+                ))}
+              </Table.Tbody>
+            </Table>
+          </Table.ScrollContainer>
+        </Card>
+      )}
     </Stack>
   );
 }
@@ -172,7 +178,7 @@ function FirewallProfiles() {
   if (!profiles) return <Loader />;
 
   return (
-    <Stack>
+    <Stack gap="md">
       <Group justify="space-between">
         <Text size="sm" c="dimmed" maw={760}>{t("compliance.profilesIntro")}</Text>
         {canEdit && <Button variant="gradient" className="gradient-button" leftSection={<IconPlus size={16} />} onClick={() => setEditing({ profile: null, config: emptyConfig() })}>{t("compliance.newProfile")}</Button>}
@@ -182,16 +188,12 @@ function FirewallProfiles() {
       {profiles.map((p) => {
         const latest = p.versions[0];
         return (
-          <Card key={p.id}>
-            <Group justify="space-between" mb="xs" wrap="wrap">
-              <div>
-                <Text fw={700}>{p.name}</Text>
-                {p.description && <Text size="sm" c="dimmed">{p.description}</Text>}
-              </div>
-              <Group gap="xs">
-                {canEdit && latest && <Button size="xs" variant="light" onClick={() => setEditing({ profile: p, config: structuredClone(latest.config) })}>{t("compliance.newVersion")}</Button>}
-                {canEdit && (
-                  <ActionIcon variant="subtle" color="red" aria-label={t("common.delete")}
+          <Card key={p.id} p={0}>
+            <CardTitle description={p.description} inset actions={canEdit && (
+              <>
+                {latest && <Button size="compact-xs" variant="light" onClick={() => setEditing({ profile: p, config: structuredClone(latest.config) })}>{t("compliance.newVersion")}</Button>}
+                <Tooltip label={t("common.delete")}>
+                  <ActionIcon color="red" aria-label={t("common.delete")}
                     onClick={() => confirmAction({
                       title: t("compliance.deleteProfile", { name: p.name }),
                       message: t("compliance.deleteProfileText"),
@@ -201,46 +203,50 @@ function FirewallProfiles() {
                     })}>
                     <IconTrash size={16} />
                   </ActionIcon>
-                )}
-              </Group>
-            </Group>
-            <Table fz="sm" verticalSpacing={6}>
-              <Table.Thead>
-                <Table.Tr>
-                  <Table.Th>{t("compliance.version")}</Table.Th>
-                  <Table.Th>{t("compliance.rules")}</Table.Th>
-                  <Table.Th>{t("compliance.note")}</Table.Th>
-                  <Table.Th>{t("compliance.activeOn")}</Table.Th>
-                  <Table.Th />
-                </Table.Tr>
-              </Table.Thead>
-              <Table.Tbody>
-                {p.versions.map((v, i) => (
-                  <Table.Tr key={v.id}>
-                    <Table.Td>
-                      <Group gap={6}>
-                        <Text fw={600}>v{v.number}</Text>
-                        {i === 0 && <Badge size="xs">{t("compliance.latest")}</Badge>}
-                      </Group>
-                      <Text size="xs" c="dimmed">{formatDateTime(v.createdAt)} · {v.createdBy}</Text>
-                    </Table.Td>
-                    <Table.Td>
-                      <Text size="sm"><ConfigSummary config={v.config} /></Text>
-                    </Table.Td>
-                    <Table.Td><Text size="sm" c="dimmed">{v.note ?? ""}</Text></Table.Td>
-                    <Table.Td>{v.hosts > 0 ? <Badge>{t("compliance.hostsCount", { count: v.hosts })}</Badge> : "–"}</Table.Td>
-                    <Table.Td>
-                      {canDeploy && (
-                        <Button size="xs" variant={i === 0 ? "filled" : "default"} leftSection={i === 0 ? <IconRocket size={14} /> : <IconHistory size={14} />}
-                          onClick={() => setDeploying({ profile: p, version: v })}>
-                          {i === 0 ? t("compliance.deploy") : t("compliance.rollbackTo")}
-                        </Button>
-                      )}
-                    </Table.Td>
+                </Tooltip>
+              </>
+            )}>
+              {p.name}
+            </CardTitle>
+            <Table.ScrollContainer minWidth={760}>
+              <Table>
+                <Table.Thead>
+                  <Table.Tr>
+                    <Table.Th>{t("compliance.version")}</Table.Th>
+                    <Table.Th>{t("compliance.rules")}</Table.Th>
+                    <Table.Th>{t("compliance.note")}</Table.Th>
+                    <Table.Th>{t("compliance.activeOn")}</Table.Th>
+                    <Table.Th />
                   </Table.Tr>
-                ))}
-              </Table.Tbody>
-            </Table>
+                </Table.Thead>
+                <Table.Tbody>
+                  {p.versions.map((v, i) => (
+                    <Table.Tr key={v.id}>
+                      <Table.Td>
+                        <Group gap="xs">
+                          <Text size="sm" fw={600}>v{v.number}</Text>
+                          {i === 0 && <Badge size="sm">{t("compliance.latest")}</Badge>}
+                        </Group>
+                        <Text size="xs" c="dimmed">{formatDateTime(v.createdAt)} · {v.createdBy}</Text>
+                      </Table.Td>
+                      <Table.Td>
+                        <Text size="sm"><ConfigSummary config={v.config} /></Text>
+                      </Table.Td>
+                      <Table.Td><Text size="sm" c="dimmed">{v.note ?? ""}</Text></Table.Td>
+                      <Table.Td>{v.hosts > 0 ? <Badge size="sm">{t("compliance.hostsCount", { count: v.hosts })}</Badge> : "–"}</Table.Td>
+                      <Table.Td>
+                        {canDeploy && (
+                          <Button size="compact-xs" variant="light" color={i === 0 ? undefined : "gray"} leftSection={i === 0 ? <IconRocket size={14} /> : <IconHistory size={14} />}
+                            onClick={() => setDeploying({ profile: p, version: v })}>
+                            {i === 0 ? t("compliance.deploy") : t("compliance.rollbackTo")}
+                          </Button>
+                        )}
+                      </Table.Td>
+                    </Table.Tr>
+                  ))}
+                </Table.Tbody>
+              </Table>
+            </Table.ScrollContainer>
           </Card>
         );
       })}
@@ -287,7 +293,7 @@ function ProfileEditor({ initial, onClose, onSaved }: { initial: { profile: Fire
   };
 
   return (
-    <Modal opened onClose={onClose} size="xl" title={initial.profile ? t("compliance.newVersionOf", { name: initial.profile.name }) : t("compliance.newProfile")}>
+    <Modal opened onClose={onClose} size="xl" title={<Text fw={800}>{initial.profile ? t("compliance.newVersionOf", { name: initial.profile.name }) : t("compliance.newProfile")}</Text>}>
       <Stack>
         {!initial.profile && (
           <Group grow>
@@ -306,7 +312,7 @@ function ProfileEditor({ initial, onClose, onSaved }: { initial: { profile: Fire
           </Tooltip>
         </Group>
 
-        <Table fz="sm" verticalSpacing={4}>
+        <Table>
           <Table.Thead>
             <Table.Tr>
               <Table.Th w={110}>{t("compliance.action")}</Table.Th>
@@ -328,7 +334,11 @@ function ProfileEditor({ initial, onClose, onSaved }: { initial: { profile: Fire
                   onChange={(e) => setRule(i, { ports: e.currentTarget.value || null })} /></Table.Td>
                 <Table.Td><TextInput size="xs" placeholder={t("compliance.sourceAny")} value={r.source ?? ""} onChange={(e) => setRule(i, { source: e.currentTarget.value || null })} /></Table.Td>
                 <Table.Td><TextInput size="xs" value={r.comment ?? ""} maxLength={60} onChange={(e) => setRule(i, { comment: e.currentTarget.value || null })} /></Table.Td>
-                <Table.Td><ActionIcon variant="subtle" color="red" aria-label={t("common.delete")} onClick={() => setConfig({ ...config, rules: config.rules.filter((_, j) => j !== i) })}><IconTrash size={14} /></ActionIcon></Table.Td>
+                <Table.Td>
+                  <Tooltip label={t("common.delete")}>
+                    <ActionIcon color="red" aria-label={t("common.delete")} onClick={() => setConfig({ ...config, rules: config.rules.filter((_, j) => j !== i) })}><IconTrash size={14} /></ActionIcon>
+                  </Tooltip>
+                </Table.Td>
               </Table.Tr>
             ))}
           </Table.Tbody>
@@ -338,7 +348,7 @@ function ProfileEditor({ initial, onClose, onSaved }: { initial: { profile: Fire
             onClick={() => setConfig({ ...config, rules: [...config.rules, { action: "Allow", protocol: "Tcp", ports: "443", source: null, comment: null }] })}>
             {t("compliance.addRule")}
           </Button>
-          <Button size="xs" variant="subtle" onClick={() => setConfig({ ...config, rules: [...config.rules, { action: "Allow", protocol: "Any", ports: null, source: "10.0.0.0/8", comment: "LAN" }] })}>
+          <Button size="xs" variant="light" onClick={() => setConfig({ ...config, rules: [...config.rules, { action: "Allow", protocol: "Any", ports: null, source: "10.0.0.0/8", comment: "LAN" }] })}>
             {t("compliance.addNetworkRule")}
           </Button>
         </Group>
@@ -392,7 +402,7 @@ function DeployModal({ target, hosts, onClose, onDone }: {
   };
 
   return (
-    <Modal opened onClose={onClose} size="lg" title={t("compliance.deployTitle", { name: target.profile.name, number: target.version.number })}>
+    <Modal opened onClose={onClose} size="lg" title={<Text fw={800}>{t("compliance.deployTitle", { name: target.profile.name, number: target.version.number })}</Text>}>
       <Stack>
         <Text size="sm"><ConfigSummary config={config} /></Text>
         <Text size="sm" c="dimmed">{t("compliance.deploySafety")}</Text>
@@ -400,9 +410,9 @@ function DeployModal({ target, hosts, onClose, onDone }: {
           data={manageable.map((h) => ({ value: h.hostId, label: `${h.hostName} (${h.siteName})` }))}
           value={selected} onChange={setSelected} nothingFoundMessage={t("compliance.noManageableHosts")} />
         <Group gap="xs">
-          <Button size="xs" variant="subtle" onClick={() => setSelected(manageable.map((h) => h.hostId))}>{t("compliance.selectAll")}</Button>
+          <Button size="compact-xs" variant="light" onClick={() => setSelected(manageable.map((h) => h.hostId))}>{t("compliance.selectAll")}</Button>
           {[...new Set(manageable.map((h) => h.siteName))].map((site) => (
-            <Button key={site} size="xs" variant="subtle" onClick={() => setSelected([...new Set([...selected, ...manageable.filter((h) => h.siteName === site).map((h) => h.hostId)])])}>
+            <Button key={site} size="compact-xs" variant="light" onClick={() => setSelected([...new Set([...selected, ...manageable.filter((h) => h.siteName === site).map((h) => h.hostId)])])}>
               + {site}
             </Button>
           ))}
@@ -415,7 +425,7 @@ function DeployModal({ target, hosts, onClose, onDone }: {
         )}
         <Group justify="flex-end">
           <Button variant="default" onClick={onClose}>{t("common.cancel")}</Button>
-          <Button color="orange" leftSection={<IconRocket size={16} />} loading={busy} disabled={selected.length === 0 || (lockout && !understood)} onClick={() => void deploy()}>
+          <Button color="red" leftSection={<IconRocket size={16} />} loading={busy} disabled={selected.length === 0 || (lockout && !understood)} onClick={() => void deploy()}>
             {t("compliance.deployTo", { count: selected.length })}
           </Button>
         </Group>

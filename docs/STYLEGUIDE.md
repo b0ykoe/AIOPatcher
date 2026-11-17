@@ -35,7 +35,7 @@ Zeile (Icon ↔ Text: `4`–`6`).
 |---|---|
 | Abschnitte einer Seite | `gap="md"` |
 | Karten-Innenabstand | Theme-Standard `md` (nicht setzen) |
-| Karte mit Tabelle | `p={0}`, Kopfzeile mit `CardHeader` (px `md`, py `sm`) |
+| Karte mit Tabelle | `p={0}`, Kopfzeile mit `CardTitle inset` (px `md`, py `sm`) |
 | Elemente in einer Zeile (Badges, Knöpfe) | `gap="xs"` |
 | Icon neben Text | `gap={6}` |
 | Kartentitel → Inhalt | `mb="sm"` |
@@ -59,7 +59,7 @@ Karten mit Wertezeilen (Abschnitt 8) sind höchstens ~560 px breit; mehr Platz w
 |---|---|
 | Seitentitel | `PageHeader` (Title order 2) |
 | Titel Detailseite | `DetailHeader` (26 px, fw 800) |
-| Kartentitel | `Text fw={700}` (Größe md), optional Aktion/Link rechts in derselben Zeile |
+| Kartentitel | `CardTitle` (Text fw 700, optional Icon/Badge, Aktionen rechts, eine Hinweiszeile per `description`, `mb="sm"`) |
 | Dialogtitel | `Text fw={800}` |
 | Zeilentext / Primärtext in Listen | `size="sm"`, wichtig `fw={600}` |
 | Hinweise, Metadaten | `size="xs" c="dimmed"` (in Fließtext-Absätzen `sm`) |
@@ -114,7 +114,7 @@ Status-Komponenten benutzen, nicht nachbauen: `HostStatusLabel`, `JobStatusBadge
 
 ## 10. Tabellen
 
-- In einer Karte mit `p={0}`, Kopfzeile per `CardHeader`, Tabelle in `Table.ScrollContainer`
+- In einer Karte mit `p={0}`, Kopfzeile per `CardTitle inset`, Tabelle in `Table.ScrollContainer`
   (`minWidth` 600 / 760 / 960 je nach Spaltenzahl).
 - Zahlen rechtsbündig; Aktionen in der letzten Spalte; Zeilen sind nicht klickbar, Navigation über Links.
 - Auf dem Handy (unter `sm`) lange Tabellen als Kartenliste (`mobile-row`), siehe Hostliste.

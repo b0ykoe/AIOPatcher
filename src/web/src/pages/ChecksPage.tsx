@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { Badge, Button, Card, Code, Group, PasswordInput, SimpleGrid, Stack, Table, Text, Tooltip } from "@mantine/core";
+import { Badge, Box, Button, Card, Code, Group, PasswordInput, SimpleGrid, Stack, Table, Text, Tooltip } from "@mantine/core";
 import { IconBell, IconCloud, IconPlayerPlay, IconPlugConnected, IconServer, IconServerCog, IconKey } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
@@ -7,7 +7,7 @@ import { api, type HostSummary, type Integration, type IntegrationTestResult, ty
 import { useCan } from "../App";
 import { FeatureOffHint, useFeatures } from "../features";
 
-import { confirmAction, errorText, PageHeader } from "../components/ui";
+import { CardTitle, confirmAction, errorText, PageHeader } from "../components/ui";
 
 type Status = "Ok" | "Warning" | "Failed";
 interface CheckResult {
@@ -21,11 +21,11 @@ const color: Record<Status, string> = { Ok: "teal", Warning: "yellow", Failed: "
 
 function ResultView({ result, running }: { result?: CheckResult; running?: boolean }) {
   const { t } = useTranslation();
-  if (running) return <Badge color="gray">{t("checks.running")}</Badge>;
+  if (running) return <Badge size="sm" color="cyan" leftSection={<span className="dot dot-live" />}>{t("checks.running")}</Badge>;
   if (!result) return <Text size="xs" c="dimmed">–</Text>;
   return (
-    <Group gap={6} wrap="nowrap" align="flex-start">
-      <Badge color={color[result.status]} variant={result.status === "Ok" ? "light" : "filled"} style={{ flexShrink: 0 }}>
+    <Group gap="xs" wrap="nowrap" align="flex-start">
+      <Badge size="sm" color={color[result.status]} style={{ flexShrink: 0 }}>
         {t(`checks.status${result.status}`)}
       </Badge>
       <Text size="xs" c="dimmed">
@@ -36,19 +36,11 @@ function ResultView({ result, running }: { result?: CheckResult; running?: boole
   );
 }
 
-function Section({ icon, title, hint, action, children }: { icon: ReactNode; title: string; hint: string; action?: ReactNode; children: ReactNode }) {
+/** Karte je Prüfbereich; table: Inhalt ist eine Tabelle (Karte ohne Innenabstand, Kopf eingerückt). */
+function Section({ icon, title, hint, action, table = false, children }: { icon: ReactNode; title: string; hint: string; action?: ReactNode; table?: boolean; children: ReactNode }) {
   return (
-    <Card>
-      <Group justify="space-between" mb="sm" wrap="wrap">
-        <Group gap="xs">
-          {icon}
-          <div>
-            <Text fw={700}>{title}</Text>
-            <Text size="xs" c="dimmed">{hint}</Text>
-          </div>
-        </Group>
-        {action}
-      </Group>
+    <Card p={table ? 0 : undefined}>
+      <CardTitle icon={icon} actions={action} inset={table} description={hint}>{title}</CardTitle>
       {children}
     </Card>
   );
@@ -181,10 +173,10 @@ export function ChecksPage() {
           </Button>
         }
       />
-      <Stack gap="lg">
+      <Stack gap="md">
         {/* Breite Bildschirme: kurze Abschnitte paarweise nebeneinander statt jeweils über die ganze Breite. */}
-        <SimpleGrid cols={{ base: 1, lg: 2 }} spacing="lg">
-          <Section icon={<IconServerCog size={20} />} title={t("checks.server")} hint={t("checks.serverHint")} action={<Button size="xs" variant="light" onClick={loadServer}>{t("checks.test")}</Button>}>
+        <SimpleGrid cols={{ base: 1, lg: 2 }} spacing="md">
+          <Section icon={<IconServerCog size={20} />} title={t("checks.server")} hint={t("checks.serverHint")} action={<Button size="compact-xs" variant="light" onClick={loadServer}>{t("checks.test")}</Button>}>
             <Stack gap="xs">
               {(server ?? Object.keys(serverLabels).map((key) => ({ key }) as CheckResult)).map((r) => (
                 <Group key={r.key} justify="space-between" wrap="nowrap" align="flex-start">
@@ -201,7 +193,7 @@ export function ChecksPage() {
             icon={<IconCloud size={20} />}
             title={t("checks.external")}
             hint={t("checks.externalHint")}
-            action={<Button size="xs" variant="light" loading={running.has("external")} onClick={() => void runExternal()}>{t("checks.test")}</Button>}
+            action={<Button size="compact-xs" variant="light" loading={running.has("external")} onClick={() => void runExternal()}>{t("checks.test")}</Button>}
           >
             <Stack gap="xs">
               {["nvd", "osv", "kev", "epss", "msrc", "dockerHub"].map((key) => (
@@ -217,7 +209,7 @@ export function ChecksPage() {
         </SimpleGrid>
 
         {can.admin && (
-          <SimpleGrid cols={{ base: 1, lg: integrations.length > 0 ? 2 : 1 }} spacing="lg">
+          <SimpleGrid cols={{ base: 1, lg: integrations.length > 0 ? 2 : 1 }} spacing="md">
             <Section icon={<IconBell size={20} />} title={t("checks.notifications")} hint={t("checks.notificationsHint")}>
               {channels.length === 0 ? (
                 <Text size="sm" c="dimmed">{t("checks.noChannels")}</Text>
@@ -227,7 +219,7 @@ export function ChecksPage() {
                     <Group key={c.id} justify="space-between" wrap="nowrap" align="flex-start">
                       <Text size="sm" w={200} style={{ flexShrink: 0 }}>{c.name}</Text>
                       <div style={{ flex: 1 }}><ResultView result={results[`channel:${c.id}`]} running={running.has(`channel:${c.id}`)} /></div>
-                      <Button size="xs" variant="light" onClick={() => void channelTest(c)}>{t("checks.sendTest")}</Button>
+                      <Button size="compact-xs" variant="light" onClick={() => void channelTest(c)}>{t("checks.sendTest")}</Button>
                     </Group>
                   ))}
                 </Stack>
@@ -241,7 +233,7 @@ export function ChecksPage() {
                     <Group key={i.id} justify="space-between" wrap="nowrap" align="flex-start">
                       <Text size="sm" w={200} style={{ flexShrink: 0 }}>{i.name}</Text>
                       <div style={{ flex: 1 }}><ResultView result={results[`integration:${i.id}`]} running={running.has(`integration:${i.id}`)} /></div>
-                      <Button size="xs" variant="light" onClick={() => void integrationTest(i)}>{t("checks.test")}</Button>
+                      <Button size="compact-xs" variant="light" onClick={() => void integrationTest(i)}>{t("checks.test")}</Button>
                     </Group>
                   ))}
                 </Stack>
@@ -250,8 +242,8 @@ export function ChecksPage() {
           </SimpleGrid>
         )}
 
-        <Section icon={<IconServer size={20} />} title={t("checks.hosts")} hint={t("checks.hostsHint")}>
-          <Table.ScrollContainer minWidth={900}>
+        <Section icon={<IconServer size={20} />} title={t("checks.hosts")} hint={t("checks.hostsHint")} table>
+          <Table.ScrollContainer minWidth={960}>
             <Table>
               <Table.Thead>
                 <Table.Tr>
@@ -300,9 +292,9 @@ export function ChecksPage() {
               {t("checks.test")}
             </Button>
           </Group>
-          <div style={{ marginTop: 8 }}><ResultView result={results.token} /></div>
+          <Box mt="xs"><ResultView result={results.token} /></Box>
           <Code block mt="sm">{`curl -H "Authorization: Bearer aiop_…" ${window.location.origin}/api/whoami`}</Code>
-          <Button component={Link} to="/developer" variant="subtle" size="xs" mt="xs">
+          <Button component={Link} to="/developer" variant="light" size="compact-xs" mt="sm">
             {t("apiPage.allEndpoints")}
           </Button>
         </Section>

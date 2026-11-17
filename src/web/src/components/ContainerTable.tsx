@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
-import { Badge, Button, Group, Table, Text, Tooltip, UnstyledButton } from "@mantine/core";
+import { Badge, Box, Button, Group, Table, Text, Tooltip, UnstyledButton } from "@mantine/core";
 import { IconChevronDown, IconChevronUp, IconDownload, IconInfoCircle, IconRefresh, IconSelector } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import { api, formatRelative, type ContainerItem } from "../api";
@@ -28,7 +28,10 @@ const compare: Record<SortKey, (a: ContainerItem, b: ContainerItem) => number> =
   registry: (a, b) => registryRank(a) - registryRank(b),
 };
 
-/** Container eines Hosts mit Hinweis auf neuere Images in der Registry. Spalten sortierbar, Standard: neue Images zuerst. */
+/**
+ * Container eines Hosts mit Hinweis auf neuere Images in der Registry. Spalten sortierbar, Standard: neue Images zuerst.
+ * Gehört in eine Karte mit p={0} (Kopfzeile und Tabelle bringen ihren Innenabstand selbst mit).
+ */
 export function ContainerTable({ containers, hostId, onRechecked }: { containers: ContainerItem[]; hostId?: string; onRechecked?: () => void }) {
   const can = useCan();
   const { isOn } = useFeatures();
@@ -99,14 +102,14 @@ export function ContainerTable({ containers, hostId, onRechecked }: { containers
   return (
     <>
     {hostId && (
-      <Group justify="space-between" gap="xs" mb="sm" wrap="wrap">
+      <Group justify="space-between" gap="xs" px="md" py="sm" wrap="wrap">
         <Text size="xs" c="dimmed">
           {tGlobal("security.freshness", { seen: formatRelative(seen), checked: formatRelative(checked) })}
         </Text>
-        {can.operate && <Button size="xs" variant="light" leftSection={<IconRefresh size={14} />} loading={busy} onClick={() => void recheck()}>{tGlobal("security.recheck")}</Button>}
+        {can.operate && <Button size="compact-xs" variant="light" leftSection={<IconRefresh size={12} />} loading={busy} onClick={() => void recheck()}>{tGlobal("security.recheck")}</Button>}
       </Group>
     )}
-    {hostId && can.operate && !isOn("AppUpdates") && containers.some((c) => c.updateAvailable && !c.updateBlocker) && <FeatureOffHint feature="AppUpdates" />}
+    {hostId && can.operate && !isOn("AppUpdates") && containers.some((c) => c.updateAvailable && !c.updateBlocker) && <Box px="md" pb="sm"><FeatureOffHint feature="AppUpdates" /></Box>}
     <Table.ScrollContainer minWidth={600}>
       <Table>
         <Table.Thead>
@@ -139,10 +142,10 @@ export function ContainerTable({ containers, hostId, onRechecked }: { containers
                     <Text size="xs" c="dimmed">{t("security.checkFailed")}</Text>
                   </Tooltip>
                 ) : c.updateAvailable ? (
-                  <Badge color="blue">{t("security.newImage")}</Badge>
+                  <Badge size="sm" color="blue">{t("security.newImage")}</Badge>
                 ) : c.checkedAt ? (
                   <Tooltip label={t("security.checked", { when: formatRelative(c.checkedAt) })}>
-                    <Badge color="teal">{t("security.upToDate")}</Badge>
+                    <Badge size="sm" color="teal">{t("security.upToDate")}</Badge>
                   </Tooltip>
                 ) : (
                   <Text size="xs" c="dimmed">…</Text>

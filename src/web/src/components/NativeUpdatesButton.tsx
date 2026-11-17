@@ -17,14 +17,14 @@ export function canControlNativeUpdates(modules: HostModule[] | null | undefined
  * Eigene Update-Automatik des Systems (unattended-upgrades bzw. Windows Update) aus- oder wieder einschalten. Legt einen
  * Job an; der Host meldet den neuen Stand danach selbst.
  */
-export function NativeUpdatesButton({ hostId, enabled, modules, isLinux, onDone, size = "xs" }: {
+export function NativeUpdatesButton({ hostId, enabled, modules, isLinux, onDone, size = "compact-xs" }: {
   hostId: string;
   /** aktueller Stand: true = das System installiert selbst Updates */
   enabled: boolean;
   modules: HostModule[] | null | undefined;
   isLinux: boolean;
   onDone: () => void;
-  size?: "xs" | "compact-sm";
+  size?: "xs" | "compact-xs" | "compact-sm";
 }) {
   const { t } = useTranslation();
   const can = useCan();
@@ -55,7 +55,7 @@ export function NativeUpdatesButton({ hostId, enabled, modules, isLinux, onDone,
 
   return (
     <Button size={size} variant="light" color={enabled ? "yellow" : "gray"} loading={busy}
-      leftSection={enabled ? <IconPlayerStop size={14} /> : <IconPlayerPlay size={14} />} onClick={click}>
+      leftSection={enabled ? <IconPlayerStop size={12} /> : <IconPlayerPlay size={12} />} onClick={click}>
       {t(enabled ? "nativeUpdates.turnOff" : "nativeUpdates.turnOn")}
     </Button>
   );

@@ -65,7 +65,7 @@ export function QuickPlanModal({ opened, onClose, onDone, hostIds = [] }: {
   };
 
   return (
-    <Modal opened={opened} onClose={onClose} title={<Group gap="xs"><IconBolt size={18} /><Text fw={800}>{t("plans.quickTitle")}</Text></Group>} size="lg">
+    <Modal opened={opened} onClose={onClose} title={<Group gap={6}><IconBolt size={18} /><Text fw={800}>{t("plans.quickTitle")}</Text></Group>} size="lg">
       <Stack gap="md">
         <Text size="sm" c="dimmed">{t("plans.quickText")}</Text>
         <MultiSelect label={t("plans.quickHosts")} searchable clearable value={selected} onChange={setSelected}

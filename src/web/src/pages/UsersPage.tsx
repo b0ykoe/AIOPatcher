@@ -8,9 +8,11 @@ import {
   Code,
   CopyButton,
   Group,
+  Loader,
   Menu,
   Modal,
   Select,
+  SimpleGrid,
   Stack,
   Table,
   Text,
@@ -22,7 +24,7 @@ import { IconCheck, IconCopy, IconDots, IconLifebuoy, IconMailForward, IconPlaye
 import { useTranslation } from "react-i18next";
 import { api, formatDateTime, formatRelative, type InviteCreated, type User, type UserRole, type UserStatus } from "../api";
 import { useMe } from "../App";
-import { confirmAction, EmptyState, errorText, notifyError, notifySuccess, PageHeader } from "../components/ui";
+import { CardTitle, confirmAction, EmptyState, errorText, notifyError, notifySuccess, PageHeader } from "../components/ui";
 
 const roles: UserRole[] = ["Admin", "Operator", "Viewer"];
 
@@ -34,9 +36,16 @@ export function UsersPage() {
   const [users, setUsers] = useState<User[] | null>(null);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [created, setCreated] = useState<InviteCreated | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const load = useCallback(() => {
-    api.get<User[]>("/api/users").then(setUsers).catch((e) => notifyError(e));
+    api
+      .get<User[]>("/api/users")
+      .then((u) => {
+        setUsers(u);
+        setLoadError(null);
+      })
+      .catch((e) => setLoadError(errorText(e)));
   }, []);
 
   useEffect(load, [load]);
@@ -124,119 +133,121 @@ export function UsersPage() {
         }
       />
 
-      <Card p={0}>
-        {users && users.length === 0 ? (
-          <EmptyState icon={<IconUsers size={28} />} title={t("users.title")} text={t("users.description")} />
-        ) : (
-          <Table.ScrollContainer minWidth={640}>
-            <Table>
-              <Table.Thead>
-                <Table.Tr>
-                  <Table.Th>{t("common.username")}</Table.Th>
-                  <Table.Th>{t("users.role")}</Table.Th>
-                  <Table.Th>{t("users.status")}</Table.Th>
-                  <Table.Th>{t("users.lastLogin")}</Table.Th>
-                  <Table.Th w={48} />
-                </Table.Tr>
-              </Table.Thead>
-              <Table.Tbody>
-                {users?.map((u) => {
-                  const self = u.id === me.id;
-                  return (
-                    <Table.Tr key={u.id}>
-                      <Table.Td>
-                        <Group gap={6} wrap="nowrap">
-                          <Text fw={600}>{u.username}</Text>
-                          {self && <Badge size="xs">{t("common.you")}</Badge>}
-                          {u.sso && <Badge size="xs" color="grape">{u.ssoOnly ? t("users.ssoOnly") : t("users.ssoLinked")}</Badge>}
-                        </Group>
-                        {u.createdBy && <Text size="xs" c="dimmed">{t("users.createdBy", { name: u.createdBy })}</Text>}
-                      </Table.Td>
-                      <Table.Td>
-                        <Select
-                          size="xs"
-                          w={150}
-                          data={roleOptions}
-                          value={u.role}
-                          allowDeselect={false}
-                          disabled={self}
-                          onChange={(v) => v && v !== u.role && void changeRole(u, v as UserRole)}
-                          aria-label={t("users.role")}
-                        />
-                      </Table.Td>
-                      <Table.Td>
-                        <Badge color={statusColor[u.status]}>
-                          {t(`users.status${u.status}`)}
-                        </Badge>
-                        {u.inviteExpiresAt && u.status === "Invited" && (
-                          <Text size="xs" c="dimmed">{formatDateTime(u.inviteExpiresAt)}</Text>
-                        )}
-                      </Table.Td>
-                      <Table.Td>
-                        <Tooltip label={formatDateTime(u.lastLoginAt)} disabled={!u.lastLoginAt}>
-                          <Text size="sm">{formatRelative(u.lastLoginAt)}</Text>
-                        </Tooltip>
-                      </Table.Td>
-                      <Table.Td>
-                        {!self && (
-                          <Menu position="bottom-end" width={240}>
-                            <Menu.Target>
-                              <ActionIcon variant="subtle" aria-label={t("common.actions")}>
-                                <IconDots size={18} />
-                              </ActionIcon>
-                            </Menu.Target>
-                            <Menu.Dropdown>
-                              <Menu.Item leftSection={<IconMailForward size={16} />} onClick={() => reinvite(u)}>
-                                <Text size="sm">{t("users.reinvite")}</Text>
-                                <Text size="xs" c="dimmed">{t("users.reinviteHint")}</Text>
-                              </Menu.Item>
-                              <Menu.Item
-                                leftSection={u.status === "Disabled" ? <IconPlayerPlay size={16} /> : <IconPlayerPause size={16} />}
-                                onClick={() => void toggleDisabled(u)}
-                              >
-                                {u.status === "Disabled" ? t("users.enable") : t("users.disable")}
-                              </Menu.Item>
-                              {u.sso && !u.ssoOnly && (
-                                <Menu.Item onClick={() => unlinkSso(u)}>{t("users.ssoUnlink")}</Menu.Item>
-                              )}
-                              <Menu.Divider />
-                              <Menu.Item color="red" leftSection={<IconTrash size={16} />} onClick={() => remove(u)}>
-                                {t("common.delete")}
-                              </Menu.Item>
-                            </Menu.Dropdown>
-                          </Menu>
-                        )}
-                      </Table.Td>
-                    </Table.Tr>
-                  );
-                })}
-              </Table.Tbody>
-            </Table>
-          </Table.ScrollContainer>
-        )}
-      </Card>
+      <Stack gap="md">
+        {loadError && <Alert color="red">{loadError}</Alert>}
+        <Card p={0}>
+          {users === null ? (
+            !loadError && <Loader size="sm" m="md" />
+          ) : users.length === 0 ? (
+            <EmptyState icon={<IconUsers size={28} />} title={t("users.title")} text={t("users.description")} />
+          ) : (
+            <Table.ScrollContainer minWidth={600}>
+              <Table>
+                <Table.Thead>
+                  <Table.Tr>
+                    <Table.Th>{t("common.username")}</Table.Th>
+                    <Table.Th>{t("users.role")}</Table.Th>
+                    <Table.Th>{t("users.status")}</Table.Th>
+                    <Table.Th>{t("users.lastLogin")}</Table.Th>
+                    <Table.Th w={48} />
+                  </Table.Tr>
+                </Table.Thead>
+                <Table.Tbody>
+                  {users.map((u) => {
+                    const self = u.id === me.id;
+                    return (
+                      <Table.Tr key={u.id}>
+                        <Table.Td>
+                          <Group gap={6} wrap="nowrap">
+                            <Text size="sm" fw={600}>{u.username}</Text>
+                            {self && <Badge size="sm">{t("common.you")}</Badge>}
+                            {u.sso && <Badge size="sm" color="grape">{u.ssoOnly ? t("users.ssoOnly") : t("users.ssoLinked")}</Badge>}
+                          </Group>
+                          {u.createdBy && <Text size="xs" c="dimmed">{t("users.createdBy", { name: u.createdBy })}</Text>}
+                        </Table.Td>
+                        <Table.Td>
+                          <Select
+                            size="xs"
+                            w={150}
+                            data={roleOptions}
+                            value={u.role}
+                            allowDeselect={false}
+                            disabled={self}
+                            onChange={(v) => v && v !== u.role && void changeRole(u, v as UserRole)}
+                            aria-label={t("users.role")}
+                          />
+                        </Table.Td>
+                        <Table.Td>
+                          <Badge size="sm" color={statusColor[u.status]}>
+                            {t(`users.status${u.status}`)}
+                          </Badge>
+                          {u.inviteExpiresAt && u.status === "Invited" && (
+                            <Text size="xs" c="dimmed">{formatDateTime(u.inviteExpiresAt)}</Text>
+                          )}
+                        </Table.Td>
+                        <Table.Td>
+                          <Tooltip label={formatDateTime(u.lastLoginAt)} disabled={!u.lastLoginAt}>
+                            <Text size="sm">{formatRelative(u.lastLoginAt)}</Text>
+                          </Tooltip>
+                        </Table.Td>
+                        <Table.Td>
+                          {!self && (
+                            <Menu position="bottom-end" width={240}>
+                              <Menu.Target>
+                                <ActionIcon aria-label={t("common.actions")}>
+                                  <IconDots size={18} />
+                                </ActionIcon>
+                              </Menu.Target>
+                              <Menu.Dropdown>
+                                <Menu.Item leftSection={<IconMailForward size={16} />} onClick={() => reinvite(u)}>
+                                  <Text size="sm">{t("users.reinvite")}</Text>
+                                  <Text size="xs" c="dimmed">{t("users.reinviteHint")}</Text>
+                                </Menu.Item>
+                                <Menu.Item
+                                  leftSection={u.status === "Disabled" ? <IconPlayerPlay size={16} /> : <IconPlayerPause size={16} />}
+                                  onClick={() => void toggleDisabled(u)}
+                                >
+                                  {u.status === "Disabled" ? t("users.enable") : t("users.disable")}
+                                </Menu.Item>
+                                {u.sso && !u.ssoOnly && (
+                                  <Menu.Item onClick={() => unlinkSso(u)}>{t("users.ssoUnlink")}</Menu.Item>
+                                )}
+                                <Menu.Divider />
+                                <Menu.Item color="red" leftSection={<IconTrash size={16} />} onClick={() => remove(u)}>
+                                  {t("common.delete")}
+                                </Menu.Item>
+                              </Menu.Dropdown>
+                            </Menu>
+                          )}
+                        </Table.Td>
+                      </Table.Tr>
+                    );
+                  })}
+                </Table.Tbody>
+              </Table>
+            </Table.ScrollContainer>
+          )}
+        </Card>
 
-      <Group grow align="stretch" mt="lg" wrap="wrap">
-        <Card miw={280}>
-          <Text fw={700} mb="xs">{t("users.role")}</Text>
-          <Stack gap={6}>
-            {roles.map((r) => (
-              <Group key={r} gap="xs" wrap="nowrap" align="flex-start">
-                <Badge w={92}>{t(`roles.${r}`)}</Badge>
-                <Text size="sm" c="dimmed">{t(`roles.${r}Hint`)}</Text>
-              </Group>
-            ))}
-          </Stack>
-        </Card>
-        <Card miw={280}>
-          <Group gap="xs" mb="xs">
-            <IconLifebuoy size={18} />
-            <Text fw={700}>{t("users.emergencyTitle")}</Text>
-          </Group>
-          <Text size="sm" c="dimmed" mb="xs">{t("users.emergencyText")}</Text>
-          <Code block>docker exec aiopatcher dotnet AIOPatcher.Server.dll admin invite {me.username}</Code>
-        </Card>
-      </Group>
+        <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
+          <Card>
+            <CardTitle>{t("users.role")}</CardTitle>
+            <Stack gap="xs">
+              {roles.map((r) => (
+                <Group key={r} gap="xs" wrap="nowrap" align="flex-start">
+                  <Badge size="sm" w={92}>{t(`roles.${r}`)}</Badge>
+                  <Text size="sm" c="dimmed">{t(`roles.${r}Hint`)}</Text>
+                </Group>
+              ))}
+            </Stack>
+          </Card>
+          <Card>
+            <CardTitle icon={<IconLifebuoy size={18} />}>{t("users.emergencyTitle")}</CardTitle>
+            <Text size="sm" c="dimmed" mb="xs">{t("users.emergencyText")}</Text>
+            <Code block>docker exec aiopatcher dotnet AIOPatcher.Server.dll admin invite {me.username}</Code>
+          </Card>
+        </SimpleGrid>
+      </Stack>
 
       <InviteModal
         opened={inviteOpen}
@@ -281,7 +292,7 @@ function InviteModal({ opened, onClose, onCreated }: { opened: boolean; onClose:
   };
 
   return (
-    <Modal opened={opened} onClose={onClose} title={<Text fw={700}>{t("users.inviteTitle")}</Text>} centered>
+    <Modal opened={opened} onClose={onClose} title={<Text fw={800}>{t("users.inviteTitle")}</Text>}>
       <Stack>
         <Text size="sm" c="dimmed">{t("users.inviteText")}</Text>
         <TextInput label={t("common.username")} value={username} onChange={(e) => setUsername(e.currentTarget.value)} data-autofocus />
@@ -307,7 +318,7 @@ function InviteModal({ opened, onClose, onCreated }: { opened: boolean; onClose:
 function InviteLinkModal({ created, onClose }: { created: InviteCreated | null; onClose: () => void }) {
   const { t } = useTranslation();
   return (
-    <Modal opened={created !== null} onClose={onClose} title={<Text fw={700}>{t("users.linkTitle")}</Text>} centered size="lg">
+    <Modal opened={created !== null} onClose={onClose} title={<Text fw={800}>{t("users.linkTitle")}</Text>} size="lg">
       {created && (
         <Stack>
           <Text size="sm" c="dimmed">
@@ -326,7 +337,7 @@ function InviteLinkModal({ created, onClose }: { created: InviteCreated | null; 
             </CopyButton>
           </Group>
           <Group justify="flex-end">
-            <Button onClick={onClose}>{t("common.close")}</Button>
+            <Button variant="default" onClick={onClose}>{t("common.close")}</Button>
           </Group>
         </Stack>
       )}

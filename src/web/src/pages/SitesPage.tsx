@@ -1,23 +1,27 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router";
-import { ActionIcon, Anchor, Button, Card, Group, Modal, Stack, Text, Textarea, TextInput, ThemeIcon, Tooltip } from "@mantine/core";
+import { ActionIcon, Alert, Anchor, Button, Card, Group, Loader, Modal, Stack, Text, Textarea, TextInput, ThemeIcon, Tooltip } from "@mantine/core";
 import { IconBuilding, IconEdit, IconPlus, IconTrash } from "@tabler/icons-react";
 import { api, type Site } from "../api";
 import { useTranslation } from "react-i18next";
 import { useCan, useShell } from "../App";
-import { confirmAction, errorText, notifyError, notifySuccess, PageHeader } from "../components/ui";
+import { confirmAction, EmptyState, errorText, notifyError, notifySuccess, PageHeader } from "../components/ui";
 
 export function SitesPage() {
   const { t } = useTranslation();
   const can = useCan();
   const { refreshOverview } = useShell();
-  const [sites, setSites] = useState<Site[]>([]);
+  const [sites, setSites] = useState<Site[] | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [editing, setEditing] = useState<Site | "new" | null>(null);
 
-  const load = useCallback(async () => setSites(await api.get<Site[]>("/api/sites")), []);
+  const load = useCallback(async () => {
+    setSites(await api.get<Site[]>("/api/sites"));
+    setLoadError(null);
+  }, []);
 
   useEffect(() => {
-    void load();
+    load().catch((e) => setLoadError(errorText(e)));
   }, [load]);
 
   const remove = (site: Site) =>
@@ -52,45 +56,54 @@ export function SitesPage() {
         }
       />
 
-      <div className="card-grid">
-        {sites.map((s) => (
-          <Card key={s.id}>
-            <Group justify="space-between" wrap="nowrap" align="flex-start">
-              <Group gap="sm" wrap="nowrap">
-                <ThemeIcon variant="light" size="lg">
-                  <IconBuilding size={20} />
-                </ThemeIcon>
-                <div>
-                  <Text fw={800}>{s.name}</Text>
-                  <Anchor component={Link} to={`/hosts?site=${s.id}`} size="sm">
-                    {t("bulk.hosts", { count: s.hostCount })}
-                  </Anchor>
-                </div>
-              </Group>
-              {can.admin && <Group gap={4} wrap="nowrap">
-                <Tooltip label={t("common.edit")}>
-                  <ActionIcon onClick={() => setEditing(s)} aria-label={t("common.edit")}>
-                    <IconEdit size={18} />
-                  </ActionIcon>
-                </Tooltip>
-                <Tooltip label={s.hostCount > 0 ? t("sitesPage.removeHostsFirst") : t("common.delete")}>
-                  <ActionIcon color="red" onClick={() => remove(s)} disabled={s.hostCount > 0} aria-label={t("common.delete")}>
-                    <IconTrash size={18} />
-                  </ActionIcon>
-                </Tooltip>
-              </Group>}
-            </Group>
-            {s.description && (
-              <Text size="sm" c="dimmed" mt="sm">
-                {s.description}
-              </Text>
-            )}
-            <Text size="xs" c="dimmed" mt="sm">
-              {t("sitesPage.allowlist")}: <Text span ff="monospace" size="xs">{s.allowedAgentCidrs ?? t("sitesPage.allowlistNone")}</Text>
-            </Text>
+      <Stack gap="md">
+        {loadError && <Alert color="red">{loadError}</Alert>}
+        {sites === null && !loadError && <Loader size="sm" />}
+        {sites?.length === 0 && (
+          <Card>
+            <EmptyState icon={<IconBuilding size={28} />} title={t("nav.sites")} text={t("sitesPage.description")} />
           </Card>
-        ))}
-      </div>
+        )}
+        <div className="card-grid">
+          {sites?.map((s) => (
+            <Card key={s.id}>
+              <Group justify="space-between" wrap="nowrap" align="flex-start">
+                <Group gap="sm" wrap="nowrap">
+                  <ThemeIcon variant="light" size="lg">
+                    <IconBuilding size={20} />
+                  </ThemeIcon>
+                  <div>
+                    <Text fw={700}>{s.name}</Text>
+                    <Anchor component={Link} to={`/hosts?site=${s.id}`} size="sm">
+                      {t("bulk.hosts", { count: s.hostCount })}
+                    </Anchor>
+                  </div>
+                </Group>
+                {can.admin && <Group gap={4} wrap="nowrap">
+                  <Tooltip label={t("common.edit")}>
+                    <ActionIcon onClick={() => setEditing(s)} aria-label={t("common.edit")}>
+                      <IconEdit size={18} />
+                    </ActionIcon>
+                  </Tooltip>
+                  <Tooltip label={s.hostCount > 0 ? t("sitesPage.removeHostsFirst") : t("common.delete")}>
+                    <ActionIcon color="red" onClick={() => remove(s)} disabled={s.hostCount > 0} aria-label={t("common.delete")}>
+                      <IconTrash size={18} />
+                    </ActionIcon>
+                  </Tooltip>
+                </Group>}
+              </Group>
+              {s.description && (
+                <Text size="sm" c="dimmed" mt="sm">
+                  {s.description}
+                </Text>
+              )}
+              <Text size="xs" c="dimmed" mt="sm">
+                {t("sitesPage.allowlist")}: <Text span ff="monospace" size="xs">{s.allowedAgentCidrs ?? t("sitesPage.allowlistNone")}</Text>
+              </Text>
+            </Card>
+          ))}
+        </div>
+      </Stack>
 
       <SiteModal site={editing} onClose={() => setEditing(null)} onSaved={() => { void load(); refreshOverview(); }} />
     </>
@@ -144,11 +157,7 @@ function SiteModal({ site, onClose, onSaved }: { site: Site | "new" | null; onCl
           autosize
           minRows={2}
         />
-        {error && (
-          <Text c="red" size="sm">
-            {error}
-          </Text>
-        )}
+        {error && <Alert color="red">{error}</Alert>}
         <Group justify="flex-end">
           <Button variant="default" onClick={onClose}>
             {t("common.cancel")}

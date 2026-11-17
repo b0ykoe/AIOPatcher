@@ -26,14 +26,14 @@ export function PlanCard({ host, modules, onChanged }: { host: HostSummary; modu
         <Group gap="sm" wrap="nowrap" align="flex-start">
           <ThemeIcon variant="light" size="lg" color={host.planId ? "violet" : "gray"}><IconCalendarTime size={20} /></ThemeIcon>
           <div>
-            <Group gap={8}>
+            <Group gap="xs">
               <Text fw={700}>{host.scheduledRunbook ?? t("overview.noPlan")}</Text>
               {host.planId && (
                 <Badge size="sm" color="gray">
                   {host.planVia === "Rule" ? t("plans.viaRule") : host.planVia === "Others" ? t("plans.viaOthers") : t("plans.viaHost")}
                 </Badge>
               )}
-              {a.enabled && a.windowOpenNow && <Badge color="cyan" leftSection={<span className="dot dot-live" />}>{t("autoPatch.windowOpen")}</Badge>}
+              {a.enabled && a.windowOpenNow && <Badge size="sm" color="cyan" leftSection={<span className="dot dot-live" />}>{t("autoPatch.windowOpen")}</Badge>}
             </Group>
             {host.planId ? (
               <Text size="sm" c="dimmed">
@@ -49,13 +49,13 @@ export function PlanCard({ host, modules, onChanged }: { host: HostSummary; modu
         </Group>
         <Group gap="xs">
           {host.planId && (
-            <Button component={Link} to={`/auto-patch/plans/${host.planId}`} variant="subtle" size="xs" leftSection={<IconSettings size={14} />}>{t("plans.openPlan")}</Button>
+            <Button component={Link} to={`/auto-patch/plans/${host.planId}`} variant="subtle" size="compact-xs" leftSection={<IconSettings size={12} />}>{t("plans.openPlan")}</Button>
           )}
           {can.operate && (
-            <Button variant="default" size="xs" leftSection={<IconBolt size={14} />} onClick={() => setQuick(true)}>{t("plans.quick")}</Button>
+            <Button variant="light" color="gray" size="compact-xs" leftSection={<IconBolt size={12} />} onClick={() => setQuick(true)}>{t("plans.quick")}</Button>
           )}
           {can.operate && (
-            <Button variant="light" size="xs" leftSection={<IconUsersGroup size={14} />} onClick={() => setAssign(true)}>
+            <Button variant="light" size="compact-xs" leftSection={<IconUsersGroup size={12} />} onClick={() => setAssign(true)}>
               {host.planId ? t("plans.changePlan") : t("plans.assign")}
             </Button>
           )}

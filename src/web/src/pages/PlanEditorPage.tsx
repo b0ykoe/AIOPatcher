@@ -10,7 +10,7 @@ import { useTranslation } from "react-i18next";
 import { api, splitTags, weekdays, type HostSummary, type PatchScope, type Runbook, type ServerInfo, type Site } from "../api";
 import { useCan } from "../App";
 import { draftToRequest, emptyGroup, emptyPlan, fromTemplate, type GroupDraft, type PlanDraft, type TemplateKey } from "../components/plans/planTemplates";
-import { confirmAction, DetailHeader, errorText, notifyError, notifySuccess } from "../components/ui";
+import { CardTitle, confirmAction, DetailHeader, errorText, notifyError, notifySuccess } from "../components/ui";
 
 /** Patch-Plan anlegen oder bearbeiten: Zeitplan oben, darunter die Gruppen in Reihenfolge. */
 export function PlanEditorPage() {
@@ -161,7 +161,7 @@ export function PlanEditorPage() {
       />
 
       <fieldset disabled={!can.operate} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
-        <Stack gap="lg">
+        <Stack gap="md">
           <div className="split-grid">
             <Card>
               <Stack gap="md">
@@ -173,10 +173,9 @@ export function PlanEditorPage() {
             </Card>
 
             <Card>
-              <Group justify="space-between" mb="sm">
-                <Text fw={700}>{t("plans.schedule")}</Text>
-                <Switch label={t("plans.scheduleAuto")} checked={draft.scheduleEnabled} onChange={(e) => set({ scheduleEnabled: e.currentTarget.checked })} />
-              </Group>
+              <CardTitle actions={<Switch label={t("plans.scheduleAuto")} checked={draft.scheduleEnabled} onChange={(e) => set({ scheduleEnabled: e.currentTarget.checked })} />}>
+                {t("plans.schedule")}
+              </CardTitle>
               {draft.scheduleEnabled ? (
                 <Stack gap="md">
                   <Chip.Group multiple value={days} onChange={(v) => set({ scheduleDays: v.reduce((sum, d) => sum + Number(d), 0) })}>
@@ -198,26 +197,28 @@ export function PlanEditorPage() {
             const members = preview.get(g.key) ?? [];
             return (
               <Card key={g.key}>
-                <Group justify="space-between" mb="md" wrap="nowrap">
-                  <Group gap="sm" wrap="nowrap">
+                <Group justify="space-between" mb="sm" wrap="nowrap">
+                  <Group gap="xs" wrap="nowrap">
                     <ThemeIcon variant="gradient" radius="xl" size="md"><Text size="sm" fw={800} c="white">{index + 1}</Text></ThemeIcon>
                     <TextInput value={g.name} onChange={(e) => update(g.key, { name: e.currentTarget.value })} aria-label={t("plans.groupName")} w={240} />
                     <Tooltip label={members.join(", ") || t("plans.noMembers")} multiline maw={360}>
-                      <Badge color={members.length ? "violet" : "gray"} leftSection={<IconUsersGroup size={12} />}>
+                      <Badge size="sm" color={members.length ? "violet" : "gray"} leftSection={<IconUsersGroup size={12} />}>
                         {t("plans.hostCount", { count: members.length })}
                       </Badge>
                     </Tooltip>
                   </Group>
                   <Group gap={4} wrap="nowrap">
-                    <ActionIcon onClick={() => move(index, -1)} disabled={index === 0} aria-label={t("runbookEditor.up")}><IconArrowUp size={18} /></ActionIcon>
-                    <ActionIcon onClick={() => move(index, 1)} disabled={index === draft.groups.length - 1} aria-label={t("runbookEditor.down")}><IconArrowDown size={18} /></ActionIcon>
-                    <ActionIcon color="red" onClick={() => set({ groups: draft.groups.filter((x) => x.key !== g.key) })} disabled={draft.groups.length === 1} aria-label={t("plans.removeGroup")}>
-                      <IconTrash size={18} />
-                    </ActionIcon>
+                    <ActionIcon onClick={() => move(index, -1)} disabled={index === 0} aria-label={t("runbookEditor.up")}><IconArrowUp size={16} /></ActionIcon>
+                    <ActionIcon onClick={() => move(index, 1)} disabled={index === draft.groups.length - 1} aria-label={t("runbookEditor.down")}><IconArrowDown size={16} /></ActionIcon>
+                    <Tooltip label={t("plans.removeGroup")}>
+                      <ActionIcon color="red" onClick={() => set({ groups: draft.groups.filter((x) => x.key !== g.key) })} disabled={draft.groups.length === 1} aria-label={t("plans.removeGroup")}>
+                        <IconTrash size={16} />
+                      </ActionIcon>
+                    </Tooltip>
                   </Group>
                 </Group>
 
-                <SimpleGrid cols={{ base: 1, lg: 2 }} spacing="lg">
+                <SimpleGrid cols={{ base: 1, lg: 2 }} spacing="md">
                   {/* Wer gehört dazu */}
                   <Stack gap="sm">
                     <Text size="sm" fw={600}>{t("plans.who")}</Text>

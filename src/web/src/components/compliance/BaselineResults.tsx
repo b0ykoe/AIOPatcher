@@ -4,7 +4,7 @@ import { Anchor, Badge, Button, Card, Group, Table, Text, ThemeIcon, Tooltip } f
 import { IconAlertTriangle, IconCircleCheck, IconHelpCircle, IconWand } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import { complianceApi, type HostBaseline, type RuleResult } from "../../compliance";
-import { confirmAction, notifyError, notifySuccess } from "../ui";
+import { CardTitle, confirmAction, notifyError, notifySuccess } from "../ui";
 
 /** Benutzer|Fingerabdruck|Kommentar → lesbar. */
 const keyParts = (subject: string) => {
@@ -86,37 +86,32 @@ export function BaselineResults({ hostId, baseline, canAlign, busyElsewhere, onA
   });
 
   return (
-    <Card>
-      <Group justify="space-between" mb="sm" wrap="wrap" gap="sm">
-        <Group gap="sm" wrap="nowrap">
-          <ThemeIcon variant="light" color={violations.length ? "orange" : unknown ? "gray" : "teal"} radius="md">
-            {violations.length ? <IconAlertTriangle size={18} /> : <IconCircleCheck size={18} />}
+    <Card p={0}>
+      <CardTitle description={<>{t(`baselines.via_${baseline.via}`)} ·{" "}
+        {violations.length === 0 ? t("baselines.compliant") : t("baselines.deviations", { count: violations.length })}
+        {unknown > 0 && ` · ${t("baselines.unknownCount", { count: unknown })}`}</>}
+        inset
+        icon={
+          <ThemeIcon variant="light" color={violations.length ? "orange" : unknown ? "gray" : "teal"} radius="md" size="sm">
+            {violations.length ? <IconAlertTriangle size={14} /> : <IconCircleCheck size={14} />}
           </ThemeIcon>
-          <div>
-            <Text fw={700}>
-              {t("baselines.hostTitle")}{" "}
-              <Anchor component={Link} to="/security?tab=compliance&view=baselines" fw={700}>{baseline.name}</Anchor>
-            </Text>
-            <Text size="xs" c="dimmed">
-              {t(`baselines.via_${baseline.via}`)} ·{" "}
-              {violations.length === 0 ? t("baselines.compliant") : t("baselines.deviations", { count: violations.length })}
-              {unknown > 0 && ` · ${t("baselines.unknownCount", { count: unknown })}`}
-            </Text>
-          </div>
-        </Group>
-        {canAlign && fixable.length > 0 && (
+        }
+        actions={canAlign && fixable.length > 0 && (
           <Tooltip label={busyElsewhere ? t("baselines.jobPending") : t("baselines.alignHint")} multiline w={300}>
-            <Button size="xs" leftSection={<IconWand size={14} />} loading={busy} disabled={busyElsewhere} onClick={align}>
+            <Button size="compact-xs" variant="light" leftSection={<IconWand size={14} />} loading={busy} disabled={busyElsewhere} onClick={align}>
               {t("baselines.alignN", { count: fixable.length })}
             </Button>
           </Tooltip>
         )}
-      </Group>
+      >
+        {t("baselines.hostTitle")}{" "}
+        <Anchor component={Link} to="/security?tab=compliance&view=baselines" fw={700}>{baseline.name}</Anchor>
+      </CardTitle>
       {results.length === 0 ? (
-        <Text size="sm" c="dimmed">{t("baselines.nothingForOs")}</Text>
+        <Text size="sm" c="dimmed" px="md" pb="md">{t("baselines.nothingForOs")}</Text>
       ) : (
-        <Table.ScrollContainer minWidth={560}>
-          <Table fz="sm" verticalSpacing={6}>
+        <Table.ScrollContainer minWidth={600}>
+          <Table>
             <Table.Thead>
               <Table.Tr>
                 <Table.Th>{t("baselines.rule")}</Table.Th>
@@ -138,9 +133,9 @@ export function BaselineResults({ hostId, baseline, canAlign, busyElsewhere, onA
                   </Table.Td>
                   <Table.Td>{text.expected(r)}</Table.Td>
                   <Table.Td>
-                    <Group gap={6} wrap="nowrap">
+                    <Group gap="xs" wrap="nowrap">
                       <Text size="sm" c={r.state === "Violation" ? "orange" : undefined}>{text.actual(r)}</Text>
-                      {r.state === "Violation" && r.fixable && <Badge size="xs" style={{ flexShrink: 0 }}>{t("baselines.fixable")}</Badge>}
+                      {r.state === "Violation" && r.fixable && <Badge size="sm" style={{ flexShrink: 0 }}>{t("baselines.fixable")}</Badge>}
                     </Group>
                   </Table.Td>
                 </Table.Tr>

@@ -9,7 +9,7 @@ import { FeatureOffHint, useFeatures } from "../features";
 
 import { confirmAction, EmptyState, notifyError } from "./ui";
 
-/** Installierte Programme eines Hosts; unter Windows mit winget-Updates per Klick. */
+/** Installierte Programme eines Hosts; unter Windows mit winget-Updates per Klick. Gehört in eine Karte mit p={0}. */
 export function SoftwareTab({ hostId, windows, busy }: { hostId: string; windows: boolean; busy: boolean }) {
   const { t } = useTranslation();
   const can = useCan();
@@ -48,12 +48,12 @@ export function SoftwareTab({ hostId, windows, busy }: { hostId: string; windows
       },
     });
 
-  if (!items) return <Loader size="sm" />;
+  if (!items) return <Loader size="sm" m="md" />;
   if (items.length === 0) return <EmptyState icon={<IconApps size={28} />} title={t("software.noneTitle")} text={t("software.noneText")} />;
 
   return (
-    <Stack gap="sm">
-      <Group justify="space-between" wrap="wrap">
+    <Stack gap={0}>
+      <Group justify="space-between" gap="xs" px="md" py="sm" wrap="wrap">
         <Group gap="sm">
           <TextInput size="xs" placeholder={t("hostsPage.filter")} leftSection={<IconSearch size={14} />} value={query} onChange={(e) => setQuery(e.currentTarget.value)} w={220} />
           <Switch size="xs" label={t("software.onlyUpdates", { count: updatable.length })} checked={onlyUpdates} onChange={(e) => setOnlyUpdates(e.currentTarget.checked)} />
@@ -71,9 +71,9 @@ export function SoftwareTab({ hostId, windows, busy }: { hostId: string; windows
         )}
       </Group>
       {windows && updatable.length === 0 && items.every((i) => i.source !== "winget" && !i.packageId) && (
-        <Text size="xs" c="dimmed">{t("software.noWinget")}</Text>
+        <Text size="xs" c="dimmed" px="md" pb="sm">{t("software.noWinget")}</Text>
       )}
-      <Table.ScrollContainer minWidth={700}>
+      <Table.ScrollContainer minWidth={760}>
         <Table>
           <Table.Thead>
             <Table.Tr>
@@ -113,12 +113,12 @@ export function SoftwareTab({ hostId, windows, busy }: { hostId: string; windows
                   <Group gap="xs" wrap="nowrap">
                     {i.infoUrl && (
                       <Anchor href={i.infoUrl} target="_blank" rel="noreferrer" size="xs">
-                        <Group gap={2} wrap="nowrap">{t("software.details")} <IconExternalLink size={12} /></Group>
+                        <Group gap={4} wrap="nowrap">{t("software.details")} <IconExternalLink size={12} /></Group>
                       </Anchor>
                     )}
                     {i.vendorUrl && (
                       <Anchor href={i.vendorUrl} target="_blank" rel="noreferrer" size="xs">
-                        <Group gap={2} wrap="nowrap">{t("software.vendor")} <IconExternalLink size={12} /></Group>
+                        <Group gap={4} wrap="nowrap">{t("software.vendor")} <IconExternalLink size={12} /></Group>
                       </Anchor>
                     )}
                   </Group>
@@ -128,7 +128,7 @@ export function SoftwareTab({ hostId, windows, busy }: { hostId: string; windows
           </Table.Tbody>
         </Table>
       </Table.ScrollContainer>
-      {shown.length > 500 && <Text size="xs" c="dimmed">{t("software.truncated", { count: shown.length })}</Text>}
+      {shown.length > 500 && <Text size="xs" c="dimmed" px="md" py="sm">{t("software.truncated", { count: shown.length })}</Text>}
     </Stack>
   );
 }

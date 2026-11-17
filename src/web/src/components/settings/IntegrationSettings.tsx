@@ -7,6 +7,7 @@ import {
   Card,
   Code,
   Group,
+  Loader,
   Modal,
   NumberInput,
   PasswordInput,
@@ -21,7 +22,7 @@ import {
 import { IconBrandUbuntu, IconCloud, IconEdit, IconFlame, IconLink, IconPlugConnected, IconPlus, IconServer2, IconTrash } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import { api, formatRelative, type Integration, type IntegrationTestResult, type IntegrationType, type Site } from "../../api";
-import { confirmAction, EmptyState, errorText, notifyError, notifySuccess } from "../ui";
+import { CardTitle, confirmAction, EmptyState, errorText, notifyError, notifySuccess } from "../ui";
 import { GuidePanel } from "../GuidePanel";
 import { FeatureOffHint, useFeatures } from "../../features";
 
@@ -38,8 +39,16 @@ export function IntegrationSettings() {
   const [results, setResults] = useState<Record<string, IntegrationTestResult>>({});
   const [busy, setBusy] = useState<string | null>(null);
 
+  const [loadError, setLoadError] = useState<string | null>(null);
+
   const load = useCallback(() => {
-    api.get<Integration[]>("/api/integrations").then(setItems).catch((e) => notifyError(e));
+    api
+      .get<Integration[]>("/api/integrations")
+      .then((list) => {
+        setItems(list);
+        setLoadError(null);
+      })
+      .catch((e) => setLoadError(errorText(e)));
   }, []);
 
   useEffect(() => {
@@ -127,7 +136,7 @@ export function IntegrationSettings() {
     });
 
   return (
-    <Stack>
+    <Stack gap="md">
       <Group justify="space-between">
         <Text size="sm" c="dimmed" maw={680}>
           {t("integrations.intro")}
@@ -137,6 +146,8 @@ export function IntegrationSettings() {
         </Button>
       </Group>
 
+      {loadError && <Alert color="red">{loadError}</Alert>}
+      {items === null && !loadError && <Loader size="sm" />}
       {items && items.length === 0 && (
         <Card>
           <EmptyState icon={<IconPlugConnected size={28} />} title={t("integrations.noneTitle")} text={t("integrations.noneText")} />
@@ -161,7 +172,7 @@ export function IntegrationSettings() {
                     </Text>
                   </div>
                 </Group>
-                {i.type !== "Opnsense" && <Badge>{t("integrations.mapped", { count: i.mappedHosts })}</Badge>}
+                {i.type !== "Opnsense" && <Badge size="sm">{t("integrations.mapped", { count: i.mappedHosts })}</Badge>}
               </Group>
 
               {result ? (
@@ -181,39 +192,39 @@ export function IntegrationSettings() {
 
               {i.type === "Opnsense" && i.firmware && (
                 <Group gap={6} mt="sm">
-                  <Badge color="gray">{t("opnsense.version", { version: i.firmware.productVersion ?? "?" })}</Badge>
+                  <Badge size="sm" color="gray">{t("opnsense.version", { version: i.firmware.productVersion ?? "?" })}</Badge>
                   {i.firmware.updatesAvailable ? (
-                    <Badge color="blue">{t("opnsense.updateAvailable", { latest: i.firmware.latestVersion ?? "?", count: i.firmware.packageUpdates })}</Badge>
+                    <Badge size="sm" color="blue">{t("opnsense.updateAvailable", { latest: i.firmware.latestVersion ?? "?", count: i.firmware.packageUpdates })}</Badge>
                   ) : (
-                    <Badge color="teal">{t("opnsense.upToDate")}</Badge>
+                    <Badge size="sm" color="teal">{t("opnsense.upToDate")}</Badge>
                   )}
-                  {i.firmware.rebootRequired && <Badge color="yellow">{t("opnsense.reboot")}</Badge>}
+                  {i.firmware.rebootRequired && <Badge size="sm" color="yellow">{t("opnsense.reboot")}</Badge>}
                 </Group>
               )}
               {i.type === "Opnsense" && (
                 <Text size="xs" c="dimmed" mt={4}>{i.siteId ? t("opnsense.arpHint") : ""}</Text>
               )}
 
-              <Group gap={4} mt="sm" justify="flex-end">
+              <Group gap="xs" mt="sm" justify="flex-end">
                 {i.type === "Opnsense" && (
                   <>
-                    <Button size="compact-sm" variant="light" loading={busy === i.id} onClick={() => void refreshOpnsense(i)}>
+                    <Button size="compact-xs" variant="light" loading={busy === i.id} onClick={() => void refreshOpnsense(i)}>
                       {t("opnsense.refresh")}
                     </Button>
                     {i.firmware?.updatesAvailable && !isOn("OpnsenseUpdates") && <FeatureOffHint feature="OpnsenseUpdates" />}
                     {i.firmware?.updatesAvailable && isOn("OpnsenseUpdates") && (
-                      <Button size="compact-sm" variant="light" color="orange" onClick={() => updateOpnsense(i)}>
+                      <Button size="compact-xs" variant="light" color="orange" onClick={() => updateOpnsense(i)}>
                         {t("opnsense.update")}
                       </Button>
                     )}
                   </>
                 )}
-                <Button size="compact-sm" variant="light" leftSection={<IconPlugConnected size={14} />} loading={busy === i.id} onClick={() => void test(i)}>
+                <Button size="compact-xs" variant="light" leftSection={<IconPlugConnected size={14} />} loading={busy === i.id} onClick={() => void test(i)}>
                   {t("integrations.test")}
                 </Button>
                 {i.type !== "Opnsense" && (
                   <Tooltip label={t("integrations.autoMapHint")}>
-                    <Button size="compact-sm" variant="light" leftSection={<IconLink size={14} />} disabled={busy === i.id} onClick={() => void autoMap(i)}>
+                    <Button size="compact-xs" variant="light" leftSection={<IconLink size={14} />} disabled={busy === i.id} onClick={() => void autoMap(i)}>
                       {t("integrations.autoMap")}
                     </Button>
                   </Tooltip>
@@ -235,11 +246,8 @@ export function IntegrationSettings() {
       </div>
 
       <Card>
-        <Group gap="xs" mb="xs">
-          <IconBrandUbuntu size={18} />
-          <Text fw={700}>{t("integrations.permissionsTitle")}</Text>
-        </Group>
-        <Stack gap={6}>
+        <CardTitle icon={<IconBrandUbuntu size={18} />}>{t("integrations.permissionsTitle")}</CardTitle>
+        <Stack gap="xs">
           <Text size="sm">
             <b>Proxmox:</b> {t("integrations.proxmoxPerms")} <Code>VM.Audit, VM.Snapshot, Datastore.Audit, Sys.Audit</Code>
           </Text>

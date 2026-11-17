@@ -24,7 +24,7 @@ export function JobList({ jobs }: { jobs: Job[] }) {
             </Text>
           </div>
           <div style={{ flexShrink: 0 }}>
-            <JobStatusBadge status={j.status} />
+            <JobStatusBadge status={j.status} size="sm" />
           </div>
         </Group>
       ))}
@@ -38,7 +38,7 @@ export function JobTable({ jobs, showHost }: { jobs: Job[]; showHost?: boolean }
   }
 
   return (
-    <Table.ScrollContainer minWidth={640}>
+    <Table.ScrollContainer minWidth={showHost ? 760 : 600}>
       <Table>
         <Table.Thead>
           <Table.Tr>
@@ -69,7 +69,7 @@ export function JobTable({ jobs, showHost }: { jobs: Job[]; showHost?: boolean }
                 </Table.Td>
               )}
               <Table.Td style={{ whiteSpace: "nowrap" }}>
-                <JobStatusBadge status={j.status} />
+                <JobStatusBadge status={j.status} size="sm" />
               </Table.Td>
               <Table.Td>
                 <Text size="sm" lineClamp={2}>

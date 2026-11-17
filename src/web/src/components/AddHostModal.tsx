@@ -122,7 +122,7 @@ export function AddHostModal({ opened, onClose }: { opened: boolean; onClose: ()
         </Stack>
       ) : (
         <Stack gap="md">
-          <Alert color="violet" icon={<IconInfoCircle size={18} />}>
+          <Alert color="blue" icon={<IconInfoCircle size={18} />}>
             {t("addHost.tokenInfo", { date: formatDateTime(created.expiresAt) })}
           </Alert>
           {missing.length > 0 && (
@@ -181,10 +181,10 @@ export function AddHostModal({ opened, onClose }: { opened: boolean; onClose: ()
             {t("addHost.caFingerprint")}: <Code>{created.caFingerprintSha256}</Code>
           </Text>
           <Group justify="space-between">
-            <Button variant="subtle" onClick={() => setCreated(null)}>
+            <Button variant="light" onClick={() => setCreated(null)}>
               {t("addHost.another")}
             </Button>
-            <Button onClick={onClose}>{t("addHost.done")}</Button>
+            <Button variant="gradient" className="gradient-button" onClick={onClose}>{t("addHost.done")}</Button>
           </Group>
         </Stack>
       )}

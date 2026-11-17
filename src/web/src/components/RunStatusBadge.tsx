@@ -1,4 +1,4 @@
-import { Badge, type MantineColor } from "@mantine/core";
+import { Badge, type MantineColor, type MantineSize } from "@mantine/core";
 import type { RunItemStatus, RunStatus } from "../api";
 import { t } from "../i18n";
 
@@ -21,9 +21,10 @@ const itemColors: Record<RunItemStatus, MantineColor> = {
   Skipped: "orange",
 };
 
-export function RunStatusBadge({ status }: { status: RunStatus }) {
+/** size: Styleguide 7 – "sm" in Tabellen und Listen, Standard (md) nur im Kopf der Detailseite. */
+export function RunStatusBadge({ status, size }: { status: RunStatus; size?: MantineSize }) {
   return (
-    <Badge color={runColors[status]} leftSection={status === "Running" ? <span className="dot dot-live" /> : undefined}>
+    <Badge size={size} color={runColors[status]} leftSection={status === "Running" ? <span className="dot dot-live" /> : undefined}>
       {t(`runStatus.${status}`)}
     </Badge>
   );

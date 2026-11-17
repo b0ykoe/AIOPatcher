@@ -13,7 +13,7 @@ import { levelColor, levelOf } from "../components/metrics/charts";
 import { AssignPlanModal } from "../components/plans/AssignPlanModal";
 import { openSetupWizard } from "../components/SetupWizard";
 import { UpdateBanner } from "../components/UpdateBanner";
-import { confirmAction, HostStatusLabel, JobStatusBadge, notifyError, reportBulk, StatCard } from "../components/ui";
+import { CardTitle, confirmAction, HostStatusLabel, JobStatusBadge, notifyError, reportBulk, StatCard } from "../components/ui";
 import { TemplatePicker } from "./PlansPage";
 
 interface Todo {
@@ -59,7 +59,7 @@ export function OverviewPage() {
 
   if (o && o.hosts === 0) {
     return (
-      <Card p={40} maw={760} mx="auto" mt="xl">
+      <Card p="xl" maw={760} mx="auto" mt="xl">
         <Stack align="center" gap="sm">
           <ThemeIcon size={72} radius="xl" variant="gradient"><IconServer size={38} /></ThemeIcon>
           <Title order={2} ta="center">{t("overview.welcomeTitle")}</Title>
@@ -131,7 +131,7 @@ export function OverviewPage() {
   if (offline.length > 0) {
     todos.push({
       key: "offline", color: "gray", icon: <IconPlugConnectedX size={14} />, title: t("simple.offlineTitle", { count: offline.length }), text: `${names(offline)}. ${t("simple.offlineText")}`,
-      action: <Button size="compact-xs" component={Link} to="/hosts" variant="default">{t("overview.allHosts")}</Button>,
+      action: <Button size="compact-xs" component={Link} to="/hosts" variant="light" color="gray">{t("overview.allHosts")}</Button>,
     });
   }
   if (unplanned.length > 0) {
@@ -157,7 +157,7 @@ export function OverviewPage() {
     .slice(0, 4);
 
   return (
-    <Stack gap="lg">
+    <Stack gap="md">
       <UpdateBanner />
       {o?.activeFreeze && (
         <Alert color="orange" icon={<IconHandStop size={18} />}>
@@ -178,7 +178,7 @@ export function OverviewPage() {
           {todos.slice(0, 3).map((todo) => (
             <Group key={todo.key} gap="xs" wrap="nowrap" justify="space-between">
               <Tooltip label={todo.text} multiline w={300} openDelay={300}>
-                <Group gap={8} wrap="nowrap" style={{ minWidth: 0 }}>
+                <Group gap={6} wrap="nowrap" style={{ minWidth: 0 }}>
                   <ThemeIcon size={22} radius="sm" variant="light" color={todo.color}>{todo.icon}</ThemeIcon>
                   <Text size="sm" truncate>{todo.title}</Text>
                 </Group>
@@ -237,10 +237,7 @@ export function OverviewPage() {
       )}
 
       <section>
-        <Group justify="space-between" mb="sm">
-          <Text fw={700}>{t("nav.hosts")}</Text>
-          <Anchor component={Link} to="/hosts" size="sm">{t("overview.allHosts")}</Anchor>
-        </Group>
+        <CardTitle actions={<Anchor component={Link} to="/hosts" size="sm">{t("overview.allHosts")}</Anchor>}>{t("nav.hosts")}</CardTitle>
         <div className="host-grid">
           {active.slice(0, simple ? 16 : 32).map((h) => <HostTile key={h.id} host={h} />)}
         </div>
@@ -268,7 +265,7 @@ function InfoCard({ color, icon, title, subtitle, link, children }: {
         </Group>
         {link && <div style={{ flexShrink: 0, whiteSpace: "nowrap" }}>{link}</div>}
       </Group>
-      <Stack gap={8} mt="md">{children}</Stack>
+      <Stack gap="xs" mt="md">{children}</Stack>
     </Card>
   );
 }
@@ -285,14 +282,14 @@ function HostTile({ host: h }: { host: HostSummary }) {
         <Anchor component={Link} to={`/hosts/${h.id}`} fw={700} size="sm" truncate>{h.name}</Anchor>
         <HostStatusLabel status={h.status} />
       </Group>
-      <Group gap={4} mt={6} wrap="wrap">
+      <Group gap="xs" mt="xs" wrap="wrap">
         {h.pendingUpdates > 0
           ? <Badge size="xs" color={h.kevUpdates > 0 ? "red" : h.securityUpdates > 0 ? "pink" : "gray"}>{h.pendingUpdates} Updates{h.securityUpdates > 0 ? ` · ${h.securityUpdates} Sec` : ""}</Badge>
           : <Badge size="xs" color="teal">{t("overview.upToDate")}</Badge>}
         {h.rebootRequired && <Badge size="xs" color="yellow">{t("overview.rebootRequired")}</Badge>}
       </Group>
       <Tooltip label={u ? t("metrics.measured", { when: formatRelative(u.at) }) : t("overview.noUsage")}>
-        <SimpleGrid cols={3} spacing={8} mt="sm" style={{ opacity: fresh ? 1 : 0.4 }}>
+        <SimpleGrid cols={3} spacing="xs" mt="sm" style={{ opacity: fresh ? 1 : 0.4 }}>
           {meters.map(([label, value]) => {
             const level = value == null ? "ok" : levelOf(value);
             return (

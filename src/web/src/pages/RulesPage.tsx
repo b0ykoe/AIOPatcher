@@ -4,7 +4,7 @@ import { IconHandStop, IconPackageOff, IconPlus, IconTrash } from "@tabler/icons
 import { useTranslation } from "react-i18next";
 import { api, formatDateTime, type HostSummary, type PackageHold, type PatchFreeze, type Site } from "../api";
 import { useCan } from "../App";
-import { confirmAction, EmptyState, errorText, notifyError, notifySuccess, PageHeader } from "../components/ui";
+import { CardTitle, confirmAction, EmptyState, errorText, notifyError, notifySuccess, PageHeader } from "../components/ui";
 
 /** "2026-12-20T08:00" (Ortszeit des Browsers) ↔ ISO-UTC */
 const toLocalInput = (d: Date) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
@@ -68,21 +68,17 @@ export function RulesPage() {
       <PageHeader title={t("nav.rules")} description={t("rules.description")} />
       <div className="split-grid">
         <Card p={0}>
-          <Group justify="space-between" p="md" pb="xs">
-            <div>
-              <Text fw={700}>{t("rules.freezes")}</Text>
-              <Text size="sm" c="dimmed">{t("rules.freezesHint")}</Text>
-            </div>
-            {can.operate && (
-              <Button variant="light" leftSection={<IconPlus size={16} />} onClick={() => setFreezeOpen(true)}>
-                {t("rules.addFreeze")}
-              </Button>
-            )}
-          </Group>
+          <CardTitle inset actions={can.operate && (
+            <Button size="compact-xs" variant="light" leftSection={<IconPlus size={12} />} onClick={() => setFreezeOpen(true)}>
+              {t("rules.addFreeze")}
+            </Button>
+          )} description={t("rules.freezesHint")}>
+            {t("rules.freezes")}
+          </CardTitle>
           {freezes && freezes.length === 0 ? (
             <EmptyState icon={<IconHandStop size={28} />} title={t("rules.noFreezes")} text={t("rules.noFreezesText")} />
           ) : (
-            <Table.ScrollContainer minWidth={640}>
+            <Table.ScrollContainer minWidth={600}>
               <Table>
                 <Table.Thead>
                   <Table.Tr>
@@ -106,17 +102,17 @@ export function RulesPage() {
                       </Table.Td>
                       <Table.Td>
                         {f.active ? (
-                          <Badge color="orange">{t("rules.active")}</Badge>
+                          <Badge size="sm" color="orange">{t("rules.active")}</Badge>
                         ) : new Date(f.endsAt) < new Date() ? (
-                          <Badge color="gray">{t("rules.past")}</Badge>
+                          <Badge size="sm" color="gray">{t("rules.past")}</Badge>
                         ) : (
-                          <Badge color="blue">{t("rules.planned")}</Badge>
+                          <Badge size="sm" color="gray">{t("rules.planned")}</Badge>
                         )}
                       </Table.Td>
                       <Table.Td>
                         {can.operate && (
                           <Tooltip label={t("common.delete")}>
-                            <ActionIcon color="red" variant="subtle" onClick={() => removeFreeze(f)} aria-label={t("common.delete")}>
+                            <ActionIcon color="red" onClick={() => removeFreeze(f)} aria-label={t("common.delete")}>
                               <IconTrash size={16} />
                             </ActionIcon>
                           </Tooltip>
@@ -131,21 +127,17 @@ export function RulesPage() {
         </Card>
 
         <Card p={0}>
-          <Group justify="space-between" p="md" pb="xs">
-            <div>
-              <Text fw={700}>{t("rules.holds")}</Text>
-              <Text size="sm" c="dimmed">{t("rules.holdsHint")}</Text>
-            </div>
-            {can.operate && (
-              <Button variant="light" leftSection={<IconPlus size={16} />} onClick={() => setHoldOpen(true)}>
-                {t("rules.addHold")}
-              </Button>
-            )}
-          </Group>
+          <CardTitle inset actions={can.operate && (
+            <Button size="compact-xs" variant="light" leftSection={<IconPlus size={12} />} onClick={() => setHoldOpen(true)}>
+              {t("rules.addHold")}
+            </Button>
+          )} description={t("rules.holdsHint")}>
+            {t("rules.holds")}
+          </CardTitle>
           {holds && holds.length === 0 ? (
             <EmptyState icon={<IconPackageOff size={28} />} title={t("rules.noHolds")} text={t("rules.noHoldsText")} />
           ) : (
-            <Table.ScrollContainer minWidth={640}>
+            <Table.ScrollContainer minWidth={600}>
               <Table>
                 <Table.Thead>
                   <Table.Tr>
@@ -171,7 +163,7 @@ export function RulesPage() {
                       <Table.Td>
                         {can.operate && (
                           <Tooltip label={t("common.delete")}>
-                            <ActionIcon color="red" variant="subtle" onClick={() => removeHold(h)} aria-label={t("common.delete")}>
+                            <ActionIcon color="red" onClick={() => removeHold(h)} aria-label={t("common.delete")}>
                               <IconTrash size={16} />
                             </ActionIcon>
                           </Tooltip>
