@@ -30,8 +30,12 @@ public enum PatchPermission
 /// Dauerhaft kaputte Fremd-Paketquellen (404, Repo eingestellt) vor dem Patchen nach /etc/apt/aiopatcher-disabled
 /// verschieben (zusätzlich muss der Schalter im Dashboard an sein). Distributions-Quellen fasst der Agent nie an.
 /// </param>
+/// <param name="AllowAutoUpdateChanges">
+/// Die eigene Update-Automatik (unattended-upgrades, Windows Update) auf Wunsch aus dem Dashboard an- oder abschalten.
+/// </param>
 public sealed record AgentPolicy(PatchPermission AllowPatch = PatchPermission.All, bool AllowReboot = true, bool AllowSelfUpdate = true, bool AllowAppUpdates = true, bool TrustServerUpdates = true,
-    bool AllowSystemChanges = false, IReadOnlyList<string>? DisabledModules = null, bool AllowSourceFixes = true)
+    bool AllowSystemChanges = false, IReadOnlyList<string>? DisabledModules = null, bool AllowSourceFixes = true,
+    bool AllowAutoUpdateChanges = true)
 {
     /// <summary>Modul auf diesem Host gesperrt? (system und agent lassen sich nicht sperren.)</summary>
     public bool IsModuleDisabled(string module) =>
@@ -51,6 +55,7 @@ public sealed record AgentPolicy(PatchPermission AllowPatch = PatchPermission.Al
             "trustserverupdates" => policy with { TrustServerUpdates = Bool() },
             "allowsystemchanges" => policy with { AllowSystemChanges = Bool() },
             "allowsourcefixes" => policy with { AllowSourceFixes = Bool() },
+            "allowautoupdatechanges" => policy with { AllowAutoUpdateChanges = Bool() },
             "disabledmodules" => policy with { DisabledModules = value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) is var list && list.All(m => AIOPatcher.Contracts.AgentModules.All.Contains(m)) ? list : throw new ArgumentException($"disabledModules: comma-separated list of {string.Join(", ", AIOPatcher.Contracts.AgentModules.All)}.") },
             _ => throw new ArgumentException($"Unknown policy key '{key}'."),
         };

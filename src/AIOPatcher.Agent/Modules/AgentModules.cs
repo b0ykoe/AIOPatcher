@@ -1,6 +1,7 @@
 using System.Net;
 using AIOPatcher.Agent.Compliance;
 using AIOPatcher.Agent.Inventory;
+using AIOPatcher.Agent.Platforms;
 using AIOPatcher.Agent.Jobs;
 using AIOPatcher.Agent.Maintenance;
 using AIOPatcher.Agent.Platforms.Docker;
@@ -42,15 +43,23 @@ public sealed class SystemModule(IPlatformInventory inventory, SelfMaintenance m
     }
 }
 
-/// <summary>updates.scan / install / reboot über die bestehende Job-Logik (Policy-Prüfung inklusive).</summary>
+/// <summary>updates.scan / install / reboot / change (eigene Update-Automatik) über die bestehende Job-Logik (Policy-Prüfung inklusive).</summary>
 public sealed class UpdatesModule(JobExecutor executor) : IAgentModule
 {
     public string Id => AgentModules.Updates;
     public bool Available => true;
-    public IReadOnlyList<string> Actions { get; } = [ModuleActions.Scan, ModuleActions.Install, ModuleActions.Reboot];
+    public IReadOnlyList<string> Actions { get; } = [ModuleActions.Scan, ModuleActions.Install, ModuleActions.Reboot, ModuleActions.Change];
 
     public async Task<TaskOutcome> ExecuteAsync(AgentTask task, TaskContext context, CancellationToken ct)
     {
+        if (task.Action == ModuleActions.Change)
+        {
+            var change = PullJsonContext.FromElement(task.Payload, PullJsonContext.Default.SystemChange);
+            return NativeAutoUpdates.IsChange(change)
+                ? Json.From(await executor.ExecuteAsync(new AgentJob(task.TaskId, JobType.SystemChange, PatchScope.Security, false, Change: change), context.Policy, context.Log, ct))
+                : TaskOutcome.Rejected("Change does not belong to module updates.");
+        }
+
         var job = task.Action switch
         {
             ModuleActions.Scan => new AgentJob(task.TaskId, JobType.Scan, PatchScope.Security, false),

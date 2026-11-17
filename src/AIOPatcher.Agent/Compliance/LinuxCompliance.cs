@@ -158,7 +158,7 @@ public sealed class LinuxCompliance(ComplianceStore store) : IComplianceProvider
             SystemChangeKind.FirewallRestoreOriginal => RestoreOriginalAsync(log, ct),
             SystemChangeKind.RemoteAccessFix => SshFixAsync(change.Settings ?? [], log, ct),
             SystemChangeKind.RemoteAccessRevert => SshRevertAsync(log, ct),
-            >= SystemChangeKind.UserLock => UserChangeAsync(change, log, ct),
+            >= SystemChangeKind.UserLock and <= SystemChangeKind.UserRemoveSshKey => UserChangeAsync(change, log, ct),
             _ => Task.FromResult(Rejected("Change is incomplete.")),
         };
 

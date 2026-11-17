@@ -202,7 +202,7 @@ public sealed class WindowsCompliance(ComplianceStore store) : IComplianceProvid
             SystemChangeKind.RemoteAccessRevert => Task.FromResult(RdpRevert(log)),
             SystemChangeKind.UserAddSshKey or SystemChangeKind.UserRemoveSshKey =>
                 Task.FromResult(Rejected("SSH keys are managed on Linux hosts only.")),
-            >= SystemChangeKind.UserLock => UserChangeAsync(change, log, ct),
+            >= SystemChangeKind.UserLock and <= SystemChangeKind.UserRemoveSshKey => UserChangeAsync(change, log, ct),
             _ => Task.FromResult(Rejected("Change is incomplete.")),
         };
 

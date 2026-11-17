@@ -23,7 +23,8 @@ export type Feature =
   | "UserManagement"
   | "LegacyAgentProtocol"
   | "AptSourceFixes"
-  | "RebootCheck";
+  | "RebootCheck"
+  | "AutoUpdateControl";
 
 export interface FeatureState {
   feature: Feature;

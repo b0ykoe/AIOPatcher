@@ -95,7 +95,7 @@ public sealed class WindowsInventory : IPlatformInventory
     /// true, wenn Windows Updates selbst installieren könnte. Nur explizit per Richtlinie abgeschaltet
     /// (NoAutoUpdate=1) oder auf "nur benachrichtigen/herunterladen" gesetzt gilt als aus.
     /// </summary>
-    private static bool AreNativeAutoUpdatesEnabled()
+    public static bool AreNativeAutoUpdatesEnabled()
     {
         using var au = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU");
         if (au is null)

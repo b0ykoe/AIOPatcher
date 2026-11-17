@@ -2,18 +2,25 @@ import { useEffect, useState } from "react";
 import { Alert, Badge, Button, Card, Chip, Group, Modal, SegmentedControl, Select, Stack, Switch, Text, ThemeIcon } from "@mantine/core";
 import { TimeInput } from "@mantine/dates";
 import { IconAlertTriangle, IconClockPlay, IconSettings } from "@tabler/icons-react";
-import { api, describeWindow, formatWindowStart, weekdays, type AutoPatch, type BulkAutoPatchResult, type HostSummary, type PatchScope, type ServerInfo } from "../api";
+import { api, describeWindow, formatWindowStart, weekdays, type AutoPatch, type BulkAutoPatchResult, type HostModule, type HostSummary, type PatchScope, type ServerInfo } from "../api";
 import { useTranslation } from "react-i18next";
 import { useCan } from "../App";
 import { t as tGlobal } from "../i18n";
+import { canControlNativeUpdates, NativeUpdatesButton } from "./NativeUpdatesButton";
+import { useFeatures } from "../features";
 import { errorText, reportBulk } from "./ui";
 
 /** Auto-Patch eines Hosts: Zusammenfassung als Karte, Einstellungen im Dialog. */
-export function AutoPatchCard({ host, onSaved }: { host: HostSummary; onSaved: () => void }) {
+export function AutoPatchCard({ host, modules, onSaved }: { host: HostSummary; modules?: HostModule[] | null; onSaved: () => void }) {
   const { t } = useTranslation();
   const can = useCan();
+  const { isOn } = useFeatures();
   const a = host.autoPatch;
   const [open, setOpen] = useState(false);
+  const isLinux = host.osFamily === "Linux";
+  const nativeButton = (
+    <NativeUpdatesButton hostId={host.id} enabled={host.nativeAutoUpdatesEnabled} modules={modules} isLinux={isLinux} onDone={onSaved} />
+  );
 
   return (
     <Card mb="lg">
@@ -67,8 +74,24 @@ export function AutoPatchCard({ host, onSaved }: { host: HostSummary; onSaved: (
       )}
       {a.enabled && host.nativeAutoUpdatesEnabled && (
         <Alert mt="sm" color="yellow" variant="light" icon={<IconAlertTriangle size={18} />}>
-          {t("autoPatch.nativeConflict")}
+          <Group justify="space-between" gap="xs" wrap="wrap">
+            <Text size="sm">{t("autoPatch.nativeConflict")}</Text>
+            {nativeButton}
+          </Group>
         </Alert>
+      )}
+
+      {/* Eigene Update-Automatik des Systems: Stand und Schalter (nur wenn der Agent das kann) */}
+      {canControlNativeUpdates(modules, isOn("AutoUpdateControl")) && !(a.enabled && host.nativeAutoUpdatesEnabled) && (
+        <Group mt="sm" pt="sm" justify="space-between" gap="xs" wrap="wrap" style={{ borderTop: "1px solid var(--mantine-color-default-border)" }}>
+          <Group gap={6}>
+            <Text size="sm">{t(isLinux ? "nativeUpdates.labelLinux" : "nativeUpdates.labelWindows")}</Text>
+            <Badge size="sm" variant="light" color={host.nativeAutoUpdatesEnabled ? "yellow" : "gray"}>
+              {host.nativeAutoUpdatesEnabled ? t("nativeUpdates.active") : t("nativeUpdates.inactive")}
+            </Badge>
+          </Group>
+          {nativeButton}
+        </Group>
       )}
 
       <AutoPatchModal hostIds={[host.id]} initial={a} opened={open} onClose={() => setOpen(false)} onSaved={onSaved} />

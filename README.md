@@ -257,6 +257,17 @@ Neustart im Fenster erlaubt ist. Zeiten gelten in der Zeitzone des Servers (`TZ`
 - Fenster dürfen über Mitternacht gehen und gehören zum Tag, an dem sie beginnen. Sommerzeit wird berücksichtigt.
 - Die lokale `policy.json` hat weiterhin Vorrang.
 
+**Eigene Update-Automatik des Hosts:** Installiert der Host zusätzlich selbst Updates (unattended-upgrades bzw. Windows
+Update), zeigt die Host-Seite das an. Mit *Abschalten* (Auto-Patch-Karte) patcht danach nur noch AIOPatcher, *Einschalten*
+nimmt es zurück:
+
+- Linux: Der Agent schreibt `/etc/apt/apt.conf.d/99aiopatcher-auto-upgrades` mit `APT::Periodic::Unattended-Upgrade "0"`
+  (übersteuert `20auto-upgrades`). Datei löschen = wieder die Einstellung der Distribution.
+- Windows: Richtlinie *Herunterladen, Installation manuell* (`AUOptions` 3 unter
+  `HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU`); Einschalten entfernt die Werte wieder. Eine Domänen-GPO
+  hat Vorrang.
+- Schalter *Update-Automatik der Hosts steuern*; pro Host sperren mit `aiopatcher-agent policy set allowAutoUpdateChanges false`.
+
 ## Anmeldung per SSO (Keycloak & Co.)
 
 Unter *Einstellungen → Anmeldung (SSO)* lässt sich ein Identity-Provider per OpenID Connect anbinden: Keycloak,
@@ -302,6 +313,7 @@ jeden Schalter selbst durch, auch für API-Tokens, Auto-Patch und Abläufe; ausg
 | Programm-Updates per winget | **aus** | Programm-Updates werden abgelehnt. |
 | Agent-Self-Update | an | Agents bekommen keine Updates angeboten. |
 | Alter Agent-Check-in | an | Agents vor dem Pull-Protokoll werden abgewiesen (erst abschalten, wenn alle aktualisiert sind). |
+| Update-Automatik der Hosts steuern | an | Kein Ab-/Einschalten von unattended-upgrades bzw. Windows Update aus dem Dashboard. |
 | Dienste nach Neustart prüfen | an | Kein Vergleich vor/nach Neustarts, keine Liste laufender Dienste. |
 | Kaputte Paketquellen deaktivieren | an | Dauerhaft kaputte Fremdquellen bleiben, wo sie sind; gepatcht wird trotzdem, mit Warnung. |
 | Test-Snapshots | an | Kein Test-Snapshot auf der Prüfen-Seite. |
@@ -337,7 +349,7 @@ Jede Funktion ist ein **Modul** mit festen Aktionen. Andere Aufträge lehnt der 
 | Modul | Aktionen |
 |---|---|
 | `system` | `describe`: OS, IPs, Neustart nötig, Module, Ergebnis des letzten Self-Updates |
-| `updates` | `scan`, `install`, `reboot` (apt bzw. Windows Update) |
+| `updates` | `scan`, `install`, `reboot` (apt bzw. Windows Update), `change` (eigene Update-Automatik an/aus) |
 | `software` | `inventory`, `appupdate` (winget) |
 | `docker` | `inventory` |
 | `services` | `list`: laufende Autostart-Dienste und Container (Vergleich vor/nach Neustart) |
@@ -441,6 +453,7 @@ Der Server kann sie nicht ändern; sie wird bei jedem Job neu gelesen.
   "allowAppUpdates": true,
   "allowSystemChanges": false,
   "allowSourceFixes": true,
+  "allowAutoUpdateChanges": true,
   "disabledModules": []
 }
 ```
@@ -449,7 +462,7 @@ Der Server kann sie nicht ändern; sie wird bei jedem Job neu gelesen.
 z. B. auf dem Proxmox-Host selbst oder der OPNsense-VM. `"allowSelfUpdate": false` verhindert, dass der Agent
 signierte Updates selbst installiert. `"trustServerUpdates": false` lässt nur Updates mit Release-Signatur zu
 (siehe [Agent-Updates](#agent-updates)). `"allowSystemChanges": true` erlaubt Änderungen an Firewall, SSH/RDP und
-Benutzern (siehe [Compliance](#compliance-firewall-sshrdp-benutzer), ab Werk aus). `"allowSourceFixes": false` verhindert, dass der Agent kaputte Paketquellen deaktiviert (siehe [Kaputte Paketquellen](#kaputte-paketquellen-apt)). `"allowAppUpdates": false` verbietet Programm-Updates per winget auf diesem Host
+Benutzern (siehe [Compliance](#compliance-firewall-sshrdp-benutzer), ab Werk aus). `"allowSourceFixes": false` verhindert, dass der Agent kaputte Paketquellen deaktiviert (siehe [Kaputte Paketquellen](#kaputte-paketquellen-apt)). `"allowAutoUpdateChanges": false` verhindert, dass das Dashboard unattended-upgrades bzw. Windows Update ab- oder einschaltet (siehe [Auto-Patch](#auto-patch)). `"allowAppUpdates": false` verbietet Programm-Updates per winget auf diesem Host
 (diese brauchen außerdem `allowPatch: All`). Die Policy gilt zusätzlich zu den Schaltern im Dashboard: ausgeführt wird nur,
 was beide erlauben.
 

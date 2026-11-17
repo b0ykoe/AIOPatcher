@@ -33,6 +33,7 @@ import { MappingCard } from "../components/MappingCard";
 import { CveCell } from "../components/CveCell";
 import { ContainerTable } from "../components/ContainerTable";
 import { RebootCheckAlert } from "../components/RebootCheckAlert";
+import { NativeUpdatesButton } from "../components/NativeUpdatesButton";
 import { SoftwareTab } from "../components/SoftwareTab";
 import { ComplianceTab } from "../components/compliance/ComplianceTab";
 import { AgentModulesCard } from "../components/AgentModulesCard";
@@ -287,9 +288,10 @@ export function HostDetailPage() {
       <RebootCheckAlert hostId={host.summary.id} check={host.rebootCheck} onChanged={() => void load()} />
       {h.nativeAutoUpdatesEnabled && !h.autoPatch.enabled && (
         <Alert mb="md" color="blue" variant="light" icon={<IconInfoCircle size={18} />}>
-          {h.osFamily === "Linux"
-            ? t("hostDetail.nativeLinux")
-            : t("hostDetail.nativeWindows")}
+          <Group justify="space-between" gap="xs" wrap="wrap">
+            <Text size="sm">{h.osFamily === "Linux" ? t("hostDetail.nativeLinux") : t("hostDetail.nativeWindows")}</Text>
+            <NativeUpdatesButton hostId={h.id} enabled modules={host.modules} isLinux={h.osFamily === "Linux"} onDone={() => void load()} />
+          </Group>
         </Alert>
       )}
 
@@ -319,7 +321,7 @@ export function HostDetailPage() {
         </Alert>
       )}
 
-      <AutoPatchCard host={h} onSaved={() => void load()} />
+      <AutoPatchCard host={h} modules={host.modules} onSaved={() => void load()} />
       {!simple && <MappingCard host={host} onSaved={() => void load()} />}
       <HoldModal opened={holdFor !== undefined} sites={[]} hosts={[h]} initial={holdFor} onClose={() => setHoldFor(undefined)} onSaved={() => void load()} />
 

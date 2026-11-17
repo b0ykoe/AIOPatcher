@@ -87,7 +87,9 @@ public sealed class SystemServerModule : ServerModule
     {
         var versionChanged = polledVersion is not null && polledVersion != host.AgentVersion;
         var restarted = host.AgentRestartedAt is { } at && !(context.LastRequested(Id, ModuleActions.Describe) >= at);
-        return context.Older(Id, ModuleActions.Describe, Interval) || restarted || versionChanged && context.Older(Id, ModuleActions.Describe, TimeSpan.FromMinutes(1))
+        // Update-Automatik umgestellt: Stand gleich neu melden lassen
+        var autoUpdatesChanged = context.LastRequested(AgentModules.Updates, ModuleActions.Change) > context.LastRequested(Id, ModuleActions.Describe);
+        return context.Older(Id, ModuleActions.Describe, Interval) || restarted || autoUpdatesChanged || versionChanged && context.Older(Id, ModuleActions.Describe, TimeSpan.FromMinutes(1))
             ? new PlannedTask(ModuleActions.Describe)
             : null;
     }

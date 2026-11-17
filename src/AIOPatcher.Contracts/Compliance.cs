@@ -73,6 +73,12 @@ public enum SystemChangeKind
     UserSetPassword,
     UserAddSshKey,
     UserRemoveSshKey,
+
+    /// <summary>Eigene Update-Automatik des Systems abschalten (unattended-upgrades bzw. Windows: nur herunterladen).</summary>
+    AutoUpdatesOff,
+
+    /// <summary>Eigene Update-Automatik wieder einschalten (Linux: an; Windows: Standard).</summary>
+    AutoUpdatesOn,
 }
 
 /// <param name="Secret">Nur UserSetPassword. Liegt auf dem Server nur verschlüsselt bis zur Übergabe, wird nie geloggt.</param>

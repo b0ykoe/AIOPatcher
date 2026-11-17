@@ -31,7 +31,7 @@ public static class AgentModules
     /// <summary>describe: Systemdaten, IPs, Module, Ergebnis des letzten Self-Updates.</summary>
     public const string System = "system";
 
-    /// <summary>scan, install, reboot (apt bzw. Windows Update).</summary>
+    /// <summary>scan, install, reboot (apt bzw. Windows Update), change (eigene Update-Automatik des Systems an/aus).</summary>
     public const string Updates = "updates";
 
     /// <summary>inventory, appupdate (winget).</summary>
@@ -65,6 +65,7 @@ public static class AgentModules
     {
         SystemChangeKind.FirewallApply or SystemChangeKind.FirewallRestoreOriginal => Firewall,
         SystemChangeKind.RemoteAccessFix or SystemChangeKind.RemoteAccessRevert => RemoteAccess,
+        SystemChangeKind.AutoUpdatesOff or SystemChangeKind.AutoUpdatesOn => Updates,
         _ => Users,
     };
 }

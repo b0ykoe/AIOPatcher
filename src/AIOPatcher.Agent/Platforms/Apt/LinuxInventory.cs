@@ -121,7 +121,7 @@ public sealed class LinuxInventory(ILogger<LinuxInventory> logger) : IPlatformIn
         }
     }
 
-    private static async Task<bool> IsUnattendedUpgradesEnabledAsync(CancellationToken ct)
+    public static async Task<bool> IsUnattendedUpgradesEnabledAsync(CancellationToken ct)
     {
         if (!File.Exists("/usr/bin/unattended-upgrade"))
         {

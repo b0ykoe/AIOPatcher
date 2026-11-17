@@ -73,7 +73,17 @@ public static class ComplianceEndpoints
             CreateChangeAsync(db, audit, features, user, id, new SystemChange(SystemChangeKind.RemoteAccessRevert), null, null,
                 L.T("SSH/RDP: Einstellungen von AIOPatcher zurücknehmen", "SSH/RDP: revert AIOPatcher settings"), ct));
         admin.MapPost("/hosts/{id:guid}/users/action", UserAction);
+
+        // Eigene Update-Automatik des Hosts: gehört zum Patchen, daher schon für Operatoren
+        var op = api.MapGroup("").RequireAuthorization(UserAccounts.OperatorPolicy);
+        op.MapPost("/hosts/{id:guid}/auto-updates", (Guid id, AutoUpdatesRequest request, ClaimsPrincipal user, AppDbContext db, AuditLog audit, FeatureFlags features, CancellationToken ct) =>
+            CreateChangeAsync(db, audit, features, user, id, new SystemChange(request.Enabled ? SystemChangeKind.AutoUpdatesOn : SystemChangeKind.AutoUpdatesOff), null, null,
+                request.Enabled
+                    ? L.T("Update-Automatik des Systems einschalten", "Turn on the system's automatic updates")
+                    : L.T("Update-Automatik des Systems abschalten (nur AIOPatcher patcht)", "Turn off the system's automatic updates (only AIOPatcher patches)"), ct));
     }
+
+    public sealed record AutoUpdatesRequest(bool Enabled);
 
     // --- Hilfen für die Agent-API ---------------------------------------------------------------------
 
@@ -84,6 +94,7 @@ public static class ComplianceEndpoints
         null => null,
         SystemChangeKind.FirewallApply or SystemChangeKind.FirewallRestoreOriginal => Feature.FirewallManagement,
         SystemChangeKind.RemoteAccessFix or SystemChangeKind.RemoteAccessRevert => Feature.RemoteAccessFixes,
+        SystemChangeKind.AutoUpdatesOff or SystemChangeKind.AutoUpdatesOn => Feature.AutoUpdateControl,
         _ => Feature.UserManagement,
     };
 
@@ -396,7 +407,7 @@ public static class ComplianceEndpoints
     {
         IResult Bad(string field, string de, string en) => Results.ValidationProblem(new Dictionary<string, string[]> { [field] = [L.T(de, en)] });
 
-        if (request.Action < SystemChangeKind.UserLock || string.IsNullOrWhiteSpace(request.UserName) || request.UserName.Length > 32)
+        if (request.Action is < SystemChangeKind.UserLock or > SystemChangeKind.UserRemoveSshKey || string.IsNullOrWhiteSpace(request.UserName) || request.UserName.Length > 32)
         {
             return Task.FromResult(Bad("action", "Ungültige Aktion oder Benutzer.", "Invalid action or user."));
         }

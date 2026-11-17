@@ -1,4 +1,5 @@
 using AIOPatcher.Agent.Inventory;
+using AIOPatcher.Agent.Platforms;
 using AIOPatcher.Contracts;
 using Microsoft.Extensions.Logging;
 
@@ -58,7 +59,10 @@ public sealed class JobExecutor(
             new JobExecutionResult(JobOutcome.Rejected, "Local policy does not allow program updates (needs allowPatch: All)."),
         JobType.Reboot when !policy.AllowReboot =>
             new JobExecutionResult(JobOutcome.Rejected, "Local policy forbids reboots."),
-        JobType.SystemChange when !policy.AllowSystemChanges =>
+        JobType.SystemChange when NativeAutoUpdates.IsChange(job.Change) && !policy.AllowAutoUpdateChanges =>
+            new JobExecutionResult(JobOutcome.Rejected,
+                "Local policy forbids changing the system's automatic updates (allowAutoUpdateChanges: false)."),
+        JobType.SystemChange when !NativeAutoUpdates.IsChange(job.Change) && !policy.AllowSystemChanges =>
             new JobExecutionResult(JobOutcome.Rejected,
                 "Local policy forbids system changes. To allow firewall, SSH/RDP and user changes on this host: aiopatcher-agent policy set allowSystemChanges true"),
         _ => null,
@@ -71,6 +75,12 @@ public sealed class JobExecutor(
         {
             log($"[agent] Rejected: {rejected.Summary}");
             return rejected;
+        }
+
+        if (NativeAutoUpdates.IsChange(job.Change))
+        {
+            log($"[agent] Change: {job.Change!.Kind}");
+            return await NativeAutoUpdates.SetAsync(job.Change.Kind == SystemChangeKind.AutoUpdatesOn, log, ct);
         }
 
         if (job.Change is not { } change || compliance is null || state is null)
