@@ -8,8 +8,9 @@ Linux- (Ubuntu/Debian/Proxmox VE/PBS) und Windows-Server patchen, mehrere Sites,
 
 ## Schnellstart (Setup-Skript, ca. 15 Minuten)
 
-Voraussetzungen: ein Debian/Ubuntu-Server mit x64 (z. B. Hetzner CX22 oder eine VM im Homelab, 2–4 GB RAM) und ein
-DNS-Name für ihn. Ohne eigene Domain geht `<ip-mit-bindestrichen>.nip.io`, z. B. `1-2-3-4.nip.io`.
+Voraussetzungen: ein Debian/Ubuntu-Server mit x64 (z. B. Hetzner CX22 oder eine VM im Homelab, 2–4 GB RAM) und
+einen Namen oder eine feste IP für ihn: einen DNS-Namen (intern z. B. per Override in der OPNsense: `patch.home.arpa`)
+oder einfach die IP. Let's Encrypt braucht einen öffentlichen Namen; ohne eigene Domain geht `<ip-mit-bindestrichen>.nip.io`, z. B. `1-2-3-4.nip.io`.
 
 **1. Code auf den Server bringen** (vom eigenen Rechner aus dem Repo, IP anpassen):
 
@@ -37,7 +38,7 @@ Das Skript fragt:
 
 | Frage | Auswahl |
 |---|---|
-| DNS-Name | Vorschlag aus dem Rechnernamen bzw. `<ip>.nip.io` |
+| Name oder IP | Vorschlag aus dem Rechnernamen bzw. `<ip>.nip.io`; eine IP geht auch (dann ohne Let's Encrypt) |
 | Dashboard-Zugang | **direkt** auf 9443 · **Traefik** auf 443 · **nginx** auf 443 · **vorhandener Proxy** (Nginx Proxy Manager o. ä.) |
 | Zertifikat (bei Traefik/nginx) | **Let's Encrypt** (öffentlich erreichbar) · **intern** (AIOPatcher-CA, fürs Homelab) · **eigene Dateien** |
 | Netze fürs Dashboard | private Netze plus die IP, von der du per SSH kommst |

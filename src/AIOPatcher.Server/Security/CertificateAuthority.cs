@@ -169,8 +169,24 @@ public sealed class CertificateAuthority
         }
 
         var expiresSoon = cert.NotAfter.ToUniversalTime() - DateTime.UtcNow < ServerCertRenewBefore;
-        var hostnameChanged = !string.Equals(cert.GetNameInfo(X509NameType.DnsName, false), _hostname, StringComparison.OrdinalIgnoreCase);
-        return expiresSoon || hostnameChanged;
+        return expiresSoon || !Covers(cert, _hostname);
+    }
+
+    /// <summary>
+    /// Steht der Servername so im Zertifikat, dass Clients ihn akzeptieren? Name als DNS-Eintrag, IP-Adresse als
+    /// IP-Eintrag (ältere Zertifikate hatten eine IP nur als DNS-Eintrag: dann neu ausstellen).
+    /// </summary>
+    public static bool Covers(X509Certificate2 cert, string hostname)
+    {
+        var san = cert.Extensions.OfType<X509SubjectAlternativeNameExtension>().FirstOrDefault();
+        if (san is null)
+        {
+            return false;
+        }
+
+        return IPAddress.TryParse(hostname, out var ip)
+            ? san.EnumerateIPAddresses().Any(a => a.Equals(ip))
+            : san.EnumerateDnsNames().Any(n => string.Equals(n, hostname, StringComparison.OrdinalIgnoreCase));
     }
 
     private void RenewServerCertificate(ILogger? logger)
@@ -186,7 +202,15 @@ public sealed class CertificateAuthority
         request.CertificateExtensions.Add(X509AuthorityKeyIdentifierExtension.CreateFromCertificate(_caWithKey, true, false));
 
         var san = new SubjectAlternativeNameBuilder();
-        san.AddDnsName(_hostname);
+        if (IPAddress.TryParse(_hostname, out var publicIp))
+        {
+            san.AddIpAddress(publicIp); // Server ohne DNS-Namen: Agents verbinden sich per IP
+        }
+        else
+        {
+            san.AddDnsName(_hostname);
+        }
+
         if (!string.Equals(_hostname, "localhost", StringComparison.OrdinalIgnoreCase))
         {
             san.AddDnsName("localhost");

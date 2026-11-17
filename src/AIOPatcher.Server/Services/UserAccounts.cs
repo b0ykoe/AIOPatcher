@@ -35,7 +35,7 @@ public static class UserAccounts
     }
 
     public static string InviteUrl(AIOPatcherOptions options, string token) =>
-        $"https://{options.PublicHostname}:{options.DashboardPort}/invite/{token}";
+        $"https://{options.UrlHost}:{options.DashboardPort}/invite/{token}";
 
     public static async Task<UserAccount?> FindByInviteAsync(AppDbContext db, string token, DateTime now, CancellationToken ct)
     {

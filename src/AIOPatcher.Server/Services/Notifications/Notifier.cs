@@ -95,5 +95,5 @@ public sealed class NotificationDispatcher(
 public static class NotificationTexts
 {
     public static string DashboardUrl(AIOPatcherOptions options, string? path) =>
-        $"https://{options.PublicHostname}:{options.DashboardPort}{path ?? "/"}";
+        $"https://{options.UrlHost}:{options.DashboardPort}{path ?? "/"}";
 }

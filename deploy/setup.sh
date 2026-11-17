@@ -136,10 +136,15 @@ IP="$(local_ip || true)"
 DEFAULT_HOST="$(hostname -f 2>/dev/null || hostname)"
 if [[ "$DEFAULT_HOST" != *.* ]] && [ -n "$IP" ]; then DEFAULT_HOST="${IP//./-}.nip.io"; fi
 echo
-echo "Agents und Browser erreichen den Server unter einem DNS-Namen (eine nackte IP reicht nicht)."
-echo "Ohne eigene Domain geht <ip-mit-bindestrichen>.nip.io, z. B. ${IP:-1.2.3.4}.nip.io mit Bindestrichen."
+echo "Agents und Browser erreichen den Server unter einem Namen (patch.example.com, intern z. B. patch.home.arpa)"
+echo "oder direkt unter seiner IP (${IP:-1.2.3.4}). Ohne eigene Domain, aber mit Let's Encrypt: <ip-mit-bindestrichen>.nip.io."
 ask HOSTNAME_ARG "DNS-Name des Servers" "$DEFAULT_HOST"
-[[ "$HOSTNAME_ARG" =~ ^[A-Za-z0-9.-]+$ ]] || die "Ungültiger Name: $HOSTNAME_ARG"
+[[ "$HOSTNAME_ARG" =~ ^[A-Za-z0-9.:-]+$ ]] || die "Ungültiger Name: $HOSTNAME_ARG"
+# IP statt Name: kein Let's Encrypt; IPv6 in URLs in eckigen Klammern
+IS_IP=0
+URL_HOST="$HOSTNAME_ARG"
+if [[ "$HOSTNAME_ARG" =~ ^[0-9.]+$ ]]; then IS_IP=1; fi
+if [[ "$HOSTNAME_ARG" == *:* ]]; then IS_IP=1; URL_HOST="[$HOSTNAME_ARG]"; fi
 
 INTERNAL_DEFAULT=0
 if [ -n "$IP" ] && is_private "$IP"; then INTERNAL_DEFAULT=1; fi
@@ -152,6 +157,12 @@ choose PROXY "Wie soll das Dashboard erreichbar sein?" "$([ "$INTERNAL_DEFAULT" 
 case "$PROXY" in none|traefik|nginx|external) ;; *) die "--proxy: none, traefik, nginx oder external" ;; esac
 
 if [ "$PROXY" = traefik ] || [ "$PROXY" = nginx ]; then
+  if [ "$IS_IP" -eq 1 ]; then
+    [ "$TLS" != letsencrypt ] || die "Let's Encrypt braucht einen Namen, keine IP (--tls internal oder custom)."
+    choose TLS "Zertifikat fürs Dashboard (IP-Adresse: ohne Let's Encrypt)?" internal \
+      internal "Intern: Zertifikat der AIOPatcher-CA (enthält die IP)" \
+      custom "Eigene Zertifikatsdateien"
+  fi
   choose TLS "Zertifikat fürs Dashboard?" "$([ "$INTERNAL_DEFAULT" -eq 1 ] && echo internal || echo letsencrypt)" \
     letsencrypt "Let's Encrypt (Server muss aus dem Internet auf Port 80/443 erreichbar sein)" \
     internal "Intern: Zertifikat der AIOPatcher-CA (Homelab; CA einmal im Browser/System hinterlegen)" \
@@ -195,16 +206,16 @@ ask TIMEZONE "Zeitzone" "$(cat /etc/timezone 2>/dev/null || timedatectl show -p 
 
 # --- Übersicht ---------------------------------------------------------------------------------------
 case "$PROXY" in
-  none) DASHBOARD_URL="https://$HOSTNAME_ARG:9443" ;;
-  external) DASHBOARD_URL="https://$HOSTNAME_ARG (über deinen Proxy) bzw. https://$HOSTNAME_ARG:9443" ;;
-  *) DASHBOARD_URL="https://$HOSTNAME_ARG" ;;
+  none) DASHBOARD_URL="https://$URL_HOST:9443" ;;
+  external) DASHBOARD_URL="https://$URL_HOST (über deinen Proxy) bzw. https://$URL_HOST:9443" ;;
+  *) DASHBOARD_URL="https://$URL_HOST" ;;
 esac
 echo
 info "Zusammenfassung"
 cat <<EOF
     Name:          $HOSTNAME_ARG
     Dashboard:     $DASHBOARD_URL  ($PROXY, Zertifikat: $TLS)
-    Agents:        https://$HOSTNAME_ARG:8443
+    Agents:        https://$URL_HOST:8443
     Erlaubt:       ${ALLOW_LIST[*]}
     Firewall:      $UFW
     Ordner:        $BASE
@@ -491,7 +502,7 @@ cat <<EOF
     Dashboard:      $DASHBOARD_URL
     Setup-Token:    ${TOKEN:-"(schon eingerichtet)"}
     CA-Fingerprint: ${FINGERPRINT:-?}
-    Agents:         https://$HOSTNAME_ARG:8443
+    Agents:         https://$URL_HOST:8443
 
 EOF
 case "$PROXY:$TLS" in

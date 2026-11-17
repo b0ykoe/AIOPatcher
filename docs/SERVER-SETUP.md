@@ -7,7 +7,7 @@ Alle Befehle sind zum Abarbeiten von oben nach unten gedacht.
 
 | Platzhalter | Bedeutung | Beispiel |
 |---|---|---|
-| `patch.example.com` | Fester DNS-Name des Servers (steht im Zertifikat, später nicht mehr ändern!) | `patch.meinedomain.de` |
+| `patch.example.com` | Fester DNS-Name oder feste IP des Servers (steht im Zertifikat; bei einem Wechsel wird das Server-Zertifikat neu ausgestellt, Agents mit der alten Adresse erreichen ihn dann nicht mehr) | `patch.meinedomain.de` oder `192.168.20.2` |
 | `admin` | Dein Login-User auf der VM | `max` |
 | `10.10.0.0/24` | Management-Subnetz | |
 | `10.99.0.0/24` | VPN-Subnetz (von dort greifst du aufs Dashboard zu) | |

@@ -64,7 +64,12 @@ public sealed class AIOPatcherOptions
     /// <summary>Gültigkeit eines Enrollment-Tokens.</summary>
     public int EnrollmentTokenLifetimeMinutes { get; set; } = 15;
 
-    public string AgentApiUrl => $"https://{PublicHostname}:{AgentPort}";
+    /// <summary>Servername für URLs: IPv6-Adressen in eckigen Klammern.</summary>
+    public string UrlHost => System.Net.IPAddress.TryParse(PublicHostname, out var ip) && ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6
+        ? $"[{ip}]"
+        : PublicHostname;
+
+    public string AgentApiUrl => $"https://{UrlHost}:{AgentPort}";
     public TimeSpan OfflineAfter => TimeSpan.FromSeconds(AgentCheckinIntervalSeconds * 3);
 
     /// <summary>Aufbewahrung von Job-Logs in Tagen.</summary>
