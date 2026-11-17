@@ -445,95 +445,133 @@ public sealed class CveService(
 
         foreach (var host in hosts)
         {
-            if (CveMapping.EcosystemForHost(host.OsName, host.OsVersion) is not { } ecosystem)
-            {
-                continue;
-            }
-
-            var packages = await db.InstalledApps
-                .Where(a => a.HostId == host.Id && a.Source == "dpkg" && a.PackageId != null && a.Version != null)
-                .Select(a => new { Package = a.PackageId!, Version = a.Version! })
-                .Distinct()
-                .ToListAsync(ct);
-            if (packages.Count == 0)
-            {
-                continue;
-            }
-
-            var keys = packages.ToDictionary(p => $"osvinst|{ecosystem}|{p.Package}|{p.Version}", p => p);
-            var cached = await db.VulnLookups.Where(l => keys.Keys.Contains(l.Key)).ToDictionaryAsync(l => l.Key, ct);
-            var missing = keys.Keys.Where(k => !cached.TryGetValue(k, out var c) || now - c.FetchedAt > TimeSpan.FromDays(1)).ToList();
-
             try
             {
-                foreach (var chunk in missing.Chunk(500))
-                {
-                    var queries = new JsonArray();
-                    foreach (var key in chunk)
-                    {
-                        queries.Add(new JsonObject { ["package"] = new JsonObject { ["name"] = keys[key].Package, ["ecosystem"] = ecosystem }, ["version"] = keys[key].Version });
-                    }
-
-                    using var response = await Http.PostAsJsonAsync("https://api.osv.dev/v1/querybatch", new JsonObject { ["queries"] = queries }, ct);
-                    response.EnsureSuccessStatusCode();
-                    var results = (await response.Content.ReadFromJsonAsync<JsonObject>(ct))?["results"] as JsonArray ?? [];
-                    for (var i = 0; i < chunk.Length; i++)
-                    {
-                        var ids = (results.ElementAtOrDefault(i)?["vulns"] as JsonArray ?? []).Select(v => (string?)v?["id"]).OfType<string>();
-                        var cves = new HashSet<string>();
-                        foreach (var id in ids)
-                        {
-                            var direct = CveMapping.ExtractCves(id).ToList();
-                            if (direct.Count > 0)
-                            {
-                                cves.UnionWith(direct);
-                            }
-                            else if (aliasBudget-- > 0)
-                            {
-                                cves.UnionWith(await OsvAliasesAsync(db, id, now, ct));
-                            }
-                        }
-
-                        // Kernel & Co. haben tausende Einträge: nur die relevanten aufbewahren.
-                        var relevant = cves.Where(c => kev.Contains(c) || EpssOf(c)?.Epss >= UnfixedEpssThreshold);
-                        if (cached.TryGetValue(chunk[i], out var lookup))
-                        {
-                            lookup.Cves = CveMapping.Join(relevant);
-                            lookup.FetchedAt = now;
-                        }
-                        else
-                        {
-                            db.VulnLookups.Add(cached[chunk[i]] = new VulnLookup { Key = chunk[i], Cves = CveMapping.Join(relevant), FetchedAt = now });
-                        }
-                    }
-                }
+                aliasBudget = await ScanInstalledHostAsync(db, host, kev, aliasBudget, refresh: null, now, ct);
             }
             catch (HttpRequestException ex)
             {
                 logger.LogWarning("OSV unreachable for installed packages: {Message}", ex.Message);
+            }
+        }
+    }
+
+    /// <summary>
+    /// "Prüfen, ob behebbar": installierte Pakete eines Hosts sofort neu abgleichen; Abfragen, die diese CVE enthielten,
+    /// werden frisch bei OSV gestellt (Debian kann inzwischen einen Fix eingetragen haben).
+    /// </summary>
+    public async Task RescanInstalledAsync(AppDbContext db, Guid hostId, string cve, CancellationToken ct)
+    {
+        var host = await db.Hosts.FirstOrDefaultAsync(h => h.Id == hostId && !h.IsRevoked && h.OsFamily == OsFamily.Linux, ct);
+        if (host is null)
+        {
+            return;
+        }
+
+        var kev = (await db.CveInfos.Where(c => c.IsKev).Select(c => c.Id).ToListAsync(ct)).ToHashSet();
+        await ScanInstalledHostAsync(db, host, kev, MaxAliasFetchesPerRun, lookup => CveMapping.Split(lookup.Cves).Contains(cve, StringComparer.OrdinalIgnoreCase), DateTime.UtcNow, ct);
+    }
+
+    /// <summary>
+    /// Installierte dpkg-Pakete als (Quellpaket, Quellversion). OSV kennt für Debian/Ubuntu nur Quellpakete und deren Versionen;
+    /// Bibliotheken wie libldb2 ("2:2.11.0+samba4.22.11…" aus samba 2:4.22.11) mit der eigenen Version abzufragen, ergibt
+    /// lauter Fehlalarme. Ältere Agents melden keine Quellversion: dann die höchste Version unter den Paketen derselben Quelle
+    /// (bzw. die des gleichnamigen Pakets), denn Bibliotheken tragen meist eine kleinere eigene Nummer.
+    /// </summary>
+    public static List<(string Package, string Version)> SourcePackages(IEnumerable<(string Name, string Package, string Version, string? SourceVersion)> installed) =>
+        installed
+            .GroupBy(p => p.Package)
+            .SelectMany(g =>
+            {
+                var fallback = g.Where(p => p.Name == g.Key).Select(p => p.Version).FirstOrDefault() ?? DebianVersion.Max(g.Select(p => p.Version))!;
+                return g.Select(p => (g.Key, string.IsNullOrWhiteSpace(p.SourceVersion) ? fallback : p.SourceVersion!));
+            })
+            .Distinct()
+            .ToList();
+
+    private async Task<int> ScanInstalledHostAsync(AppDbContext db, ManagedHost host, HashSet<string> kev, int aliasBudget, Func<VulnLookup, bool>? refresh, DateTime now, CancellationToken ct)
+    {
+        if (CveMapping.EcosystemForHost(host.OsName, host.OsVersion) is not { } ecosystem)
+        {
+            return aliasBudget;
+        }
+
+        var installed = await db.InstalledApps
+            .Where(a => a.HostId == host.Id && a.Source == "dpkg" && a.PackageId != null && a.Version != null)
+            .Select(a => new { a.Name, Package = a.PackageId!, Version = a.Version!, a.SourceVersion })
+            .ToListAsync(ct);
+        var packages = SourcePackages(installed.Select(a => (a.Name, a.Package, a.Version, a.SourceVersion)));
+        if (packages.Count == 0)
+        {
+            return aliasBudget;
+        }
+
+        var keys = packages.ToDictionary(p => $"osvinst|{ecosystem}|{p.Package}|{p.Version}", p => p);
+        var cached = await db.VulnLookups.Where(l => keys.Keys.Contains(l.Key)).ToDictionaryAsync(l => l.Key, ct);
+        var missing = keys.Keys.Where(k => !cached.TryGetValue(k, out var c) || now - c.FetchedAt > TimeSpan.FromDays(1) || refresh?.Invoke(c) == true).ToList();
+
+        foreach (var chunk in missing.Chunk(500))
+        {
+            var queries = new JsonArray();
+            foreach (var key in chunk)
+            {
+                queries.Add(new JsonObject { ["package"] = new JsonObject { ["name"] = keys[key].Package, ["ecosystem"] = ecosystem }, ["version"] = keys[key].Version });
+            }
+
+            using var response = await Http.PostAsJsonAsync("https://api.osv.dev/v1/querybatch", new JsonObject { ["queries"] = queries }, ct);
+            response.EnsureSuccessStatusCode();
+            var results = (await response.Content.ReadFromJsonAsync<JsonObject>(ct))?["results"] as JsonArray ?? [];
+            for (var i = 0; i < chunk.Length; i++)
+            {
+                var ids = (results.ElementAtOrDefault(i)?["vulns"] as JsonArray ?? []).Select(v => (string?)v?["id"]).OfType<string>();
+                var cves = new HashSet<string>();
+                foreach (var id in ids)
+                {
+                    var direct = CveMapping.ExtractCves(id).ToList();
+                    if (direct.Count > 0)
+                    {
+                        cves.UnionWith(direct);
+                    }
+                    else if (aliasBudget-- > 0)
+                    {
+                        cves.UnionWith(await OsvAliasesAsync(db, id, now, ct));
+                    }
+                }
+
+                // Kernel & Co. haben tausende Einträge: nur die relevanten aufbewahren.
+                var relevant = cves.Where(c => kev.Contains(c) || EpssOf(c)?.Epss >= UnfixedEpssThreshold);
+                if (cached.TryGetValue(chunk[i], out var lookup))
+                {
+                    lookup.Cves = CveMapping.Join(relevant);
+                    lookup.FetchedAt = now;
+                }
+                else
+                {
+                    db.VulnLookups.Add(cached[chunk[i]] = new VulnLookup { Key = chunk[i], Cves = CveMapping.Join(relevant), FetchedAt = now });
+                }
+            }
+        }
+
+        var fixable = (await db.PendingUpdates.Where(u => u.HostId == host.Id && u.Cves != null && u.Cves != "").Select(u => u.Cves).ToListAsync(ct))
+            .SelectMany(CveMapping.Split)
+            .ToHashSet();
+
+        await db.HostVulnerabilities.Where(v => v.HostId == host.Id).ExecuteDeleteAsync(ct);
+        foreach (var (key, package) in keys)
+        {
+            if (!cached.TryGetValue(key, out var lookup))
+            {
                 continue;
             }
 
-            var fixable = (await db.PendingUpdates.Where(u => u.HostId == host.Id && u.Cves != null && u.Cves != "").Select(u => u.Cves).ToListAsync(ct))
-                .SelectMany(CveMapping.Split)
-                .ToHashSet();
-
-            await db.HostVulnerabilities.Where(v => v.HostId == host.Id).ExecuteDeleteAsync(ct);
-            foreach (var (key, package) in keys)
+            foreach (var cve in CveMapping.Split(lookup.Cves).Where(c => !fixable.Contains(c)))
             {
-                if (!cached.TryGetValue(key, out var lookup))
-                {
-                    continue;
-                }
-
-                foreach (var cve in CveMapping.Split(lookup.Cves).Where(c => !fixable.Contains(c)))
-                {
-                    db.HostVulnerabilities.Add(new HostVulnerability { HostId = host.Id, CveId = cve, Package = package.Package, InstalledVersion = package.Version, FoundAt = now });
-                }
+                db.HostVulnerabilities.Add(new HostVulnerability { HostId = host.Id, CveId = cve, Package = package.Package, InstalledVersion = package.Version, FoundAt = now });
             }
-
-            await db.SaveChangesAsync(ct);
         }
+
+        await db.SaveChangesAsync(ct);
+        return aliasBudget;
     }
 
     // --- 4) Bewertung übernehmen und neue KEV-Treffer melden ------------------------------------------

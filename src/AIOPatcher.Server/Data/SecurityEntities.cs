@@ -70,8 +70,28 @@ public sealed class HostVulnerability
 
     /// <summary>Quellpaket, z. B. "openssl".</summary>
     public required string Package { get; set; }
+
+    /// <summary>Version des Quellpakets.</summary>
     public string? InstalledVersion { get; set; }
     public DateTime FoundAt { get; set; }
+}
+
+/// <summary>
+/// Bewusst hingenommene Lücke: wird auf der Sicherheitsseite ausgeblendet. HostId null = auf allen Hosts (auch künftigen).
+/// ExpiresAt: danach wieder sichtbar (z. B. "in 30 Tagen nachsehen, ob es einen Fix gibt").
+/// </summary>
+public sealed class VulnerabilityAck
+{
+    public long Id { get; set; }
+    public required string CveId { get; set; }
+    public Guid? HostId { get; set; }
+    public ManagedHost? Host { get; set; }
+    public string? Note { get; set; }
+    public required string CreatedBy { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public DateTime? ExpiresAt { get; set; }
+
+    public bool Covers(Guid hostId, DateTime now) => (HostId is null || HostId == hostId) && (ExpiresAt is null || ExpiresAt > now);
 }
 
 /// <summary>Installiertes Programm bzw. Paket eines Hosts (vom Agent, ersetzt bei jedem Inventar-Scan).</summary>
@@ -91,6 +111,9 @@ public sealed class InstalledApp
     /// <summary>Debian-Quellpaket bzw. winget-ID.</summary>
     public string? PackageId { get; set; }
     public string? AvailableVersion { get; set; }
+
+    /// <summary>Version des Debian-Quellpakets (null bei älteren Agents und anderen Quellen).</summary>
+    public string? SourceVersion { get; set; }
 
     /// <summary>Herstellerseite laut Windows-Registry.</summary>
     public string? Url { get; set; }

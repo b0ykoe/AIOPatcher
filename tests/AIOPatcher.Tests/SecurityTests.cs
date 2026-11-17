@@ -220,6 +220,38 @@ public sealed class VulnerabilityListTests : IDisposable
         var unfixed = list.Single(v => v.Cve == "CVE-2025-9999");
         Assert.False(unfixed.FixAvailable);
         Assert.Equal("sudo 1.9.15", Assert.Single(unfixed.Hosts).Package);
+        Assert.False(unfixed.Acknowledged);
+    }
+
+    [Fact]
+    public async Task List_Acknowledged_PerHostGlobalAndExpiry()
+    {
+        var site = new Site { Name = "Homelab" };
+        var pve = new ManagedHost { Site = site, Name = "pve", Hostname = "pve", CertificateThumbprint = "a", OsFamily = OsFamily.Linux };
+        var nas = new ManagedHost { Site = site, Name = "nas", Hostname = "nas", CertificateThumbprint = "b", OsFamily = OsFamily.Linux };
+        _db.Hosts.AddRange(pve, nas);
+        foreach (var host in new[] { pve, nas })
+        {
+            _db.HostVulnerabilities.Add(new HostVulnerability { Host = host, CveId = "CVE-2020-1472", Package = "samba", InstalledVersion = "2:4.22.11", FoundAt = DateTime.UtcNow });
+            _db.HostVulnerabilities.Add(new HostVulnerability { Host = host, CveId = "CVE-2017-7494", Package = "samba", InstalledVersion = "2:4.22.11", FoundAt = DateTime.UtcNow });
+        }
+
+        _db.HostVulnerabilities.Add(new HostVulnerability { Host = pve, CveId = "CVE-2015-0240", Package = "samba", InstalledVersion = "2:4.22.11", FoundAt = DateTime.UtcNow });
+        await _db.SaveChangesAsync();
+        _db.VulnerabilityAcks.AddRange(
+            new VulnerabilityAck { CveId = "CVE-2020-1472", HostId = pve.Id, CreatedBy = "admin", CreatedAt = DateTime.UtcNow },
+            new VulnerabilityAck { CveId = "CVE-2017-7494", CreatedBy = "admin", CreatedAt = DateTime.UtcNow },
+            new VulnerabilityAck { CveId = "CVE-2015-0240", HostId = pve.Id, CreatedBy = "admin", CreatedAt = DateTime.UtcNow.AddDays(-40), ExpiresAt = DateTime.UtcNow.AddDays(-10) });
+        await _db.SaveChangesAsync();
+        var cves = new CveService(null!, null!, new AIOPatcher.Server.Options.AIOPatcherOptions(), new Notifier(), Microsoft.Extensions.Logging.Abstractions.NullLogger<CveService>.Instance);
+
+        var list = await AIOPatcher.Server.Endpoints.VulnerabilityEndpoints.ListAsync(null, _db, cves, CancellationToken.None);
+
+        var perHost = list.Single(v => v.Cve == "CVE-2020-1472");
+        Assert.False(perHost.Acknowledged); // nas weiterhin offen
+        Assert.Equal([true, false], perHost.Hosts.OrderByDescending(h => h.HostName == "pve").Select(h => h.Acknowledged));
+        Assert.True(list.Single(v => v.Cve == "CVE-2017-7494").Acknowledged); // überall
+        Assert.False(list.Single(v => v.Cve == "CVE-2015-0240").Acknowledged); // abgelaufen
     }
 
     public void Dispose()

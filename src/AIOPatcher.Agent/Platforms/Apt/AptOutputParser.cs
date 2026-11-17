@@ -34,7 +34,7 @@ public static partial class AptOutputParser
         return map;
     }
 
-    /// <summary>dpkg-query mit Status, Paket, Version, Quellpaket, Maintainer (Tab-getrennt). Nur installierte ("ii").</summary>
+    /// <summary>dpkg-query mit Status, Paket, Version, Quellpaket, Maintainer, Quellversion (Tab-getrennt). Nur installierte ("ii").</summary>
     public static List<InstalledSoftware> ParseInstalled(string output)
     {
         var result = new List<InstalledSoftware>();
@@ -47,8 +47,10 @@ public static partial class AptOutputParser
             }
 
             var maintainer = parts.Length > 4 ? parts[4].Split('<')[0].Trim() : null;
+            var sourceVersion = parts.Length > 5 ? parts[5].Trim() : "";
             result.Add(new InstalledSoftware(parts[1], parts[2], string.IsNullOrEmpty(maintainer) ? null : maintainer, "dpkg",
-                PackageId: string.IsNullOrEmpty(parts[3]) ? parts[1] : parts[3]));
+                PackageId: string.IsNullOrEmpty(parts[3]) ? parts[1] : parts[3],
+                SourceVersion: sourceVersion.Length == 0 ? null : sourceVersion));
         }
 
         return result;

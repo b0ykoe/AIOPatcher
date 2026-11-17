@@ -1,17 +1,13 @@
-import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router";
-import { Anchor, Badge, Card, Group, HoverCard, Loader, SegmentedControl, SimpleGrid, Stack, Switch, Table, Text, TextInput, Tooltip } from "@mantine/core";
-import { IconBug, IconFlame, IconSearch, IconShieldCheck, IconShieldOff } from "@tabler/icons-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link, useNavigate } from "react-router";
+import { ActionIcon, Anchor, Badge, Card, Group, HoverCard, Loader, Menu, SegmentedControl, SimpleGrid, Stack, Switch, Table, Text, TextInput, Tooltip } from "@mantine/core";
+import { IconBug, IconDots, IconEye, IconEyeOff, IconFlame, IconSearch, IconShieldCheck, IconShieldOff, IconShieldSearch } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import { api, formatDateTime } from "../api";
+import { useCan } from "../App";
 import { PageHeader, StatCard } from "../components/ui";
+import { AckModal, type VulnHost } from "../components/VulnActions";
 
-interface AffectedHost {
-  hostId: string;
-  hostName: string;
-  fix: string | null;
-  package: string | null;
-}
 
 interface Vulnerability {
   cve: string;
@@ -23,7 +19,8 @@ interface Vulnerability {
   epssPercentile: number | null;
   fixAvailable: boolean;
   sources: string[];
-  hosts: AffectedHost[];
+  hosts: VulnHost[];
+  acknowledged: boolean;
 }
 
 /** Links zu den Quellen einer CVE. */
@@ -49,22 +46,30 @@ export function SecurityPage() {
   const [fixFilter, setFixFilter] = useState("all");
   const [onlyKev, setOnlyKev] = useState(false);
   const [query, setQuery] = useState("");
+  const [showAcked, setShowAcked] = useState(false);
+  const [ackFor, setAckFor] = useState<Vulnerability | null>(null);
+  const can = useCan();
+  const navigate = useNavigate();
 
-  useEffect(() => {
+  const load = useCallback(() => {
     api.get<Vulnerability[]>("/api/vulnerabilities").then(setItems).catch(() => setItems([]));
   }, []);
+  useEffect(load, [load]);
 
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();
     return (items ?? []).filter(
       (v) =>
+        (showAcked || !v.acknowledged) &&
         (!onlyKev || v.isKev) &&
         (fixFilter === "all" || (fixFilter === "fix" ? v.fixAvailable : !v.fixAvailable)) &&
         (!q || v.cve.toLowerCase().includes(q) || v.hosts.some((h) => h.hostName.toLowerCase().includes(q) || (h.fix ?? h.package ?? "").toLowerCase().includes(q))),
     );
-  }, [items, fixFilter, onlyKev, query]);
+  }, [items, fixFilter, onlyKev, query, showAcked]);
 
-  const all = items ?? [];
+  // Kennzahlen ohne akzeptierte Lücken
+  const all = (items ?? []).filter((v) => !v.acknowledged);
+  const ackedCount = (items ?? []).length - all.length;
   const kev = all.filter((v) => v.isKev).length;
   const high = all.filter((v) => (v.epss ?? 0) >= 0.1).length;
   const noFix = all.filter((v) => !v.fixAvailable).length;
@@ -93,11 +98,14 @@ export function SecurityPage() {
             ]}
           />
           <Switch size="xs" label={t("security.onlyKev")} checked={onlyKev} onChange={(e) => setOnlyKev(e.currentTarget.checked)} />
+          {ackedCount > 0 && (
+            <Switch size="xs" label={t("vulns.showAcked", { count: ackedCount })} checked={showAcked} onChange={(e) => setShowAcked(e.currentTarget.checked)} />
+          )}
         </Group>
         {!items ? (
           <Loader m="lg" />
         ) : shown.length === 0 ? (
-          <Text p="md" c="dimmed" size="sm">{all.length === 0 ? t("security.empty") : t("hostsPage.noMatchText")}</Text>
+          <Text p="md" c="dimmed" size="sm">{(items ?? []).length === 0 ? t("security.empty") : all.length === 0 ? t("vulns.allAcked") : t("hostsPage.noMatchText")}</Text>
         ) : (
           <Table.ScrollContainer minWidth={900}>
             <Table verticalSpacing="sm">
@@ -108,11 +116,12 @@ export function SecurityPage() {
                   <Table.Th>{t("nav.hosts")}</Table.Th>
                   <Table.Th>{t("security.fix")}</Table.Th>
                   <Table.Th>{t("security.sources")}</Table.Th>
+                  <Table.Th w={40} />
                 </Table.Tr>
               </Table.Thead>
               <Table.Tbody>
                 {shown.slice(0, 500).map((v) => (
-                  <Table.Tr key={v.cve}>
+                  <Table.Tr key={v.cve} style={v.acknowledged ? { opacity: 0.55 } : undefined}>
                     <Table.Td>
                       <Anchor component={Link} to={`/cves/${v.cve}`} ff="monospace" size="sm" fw={600}>
                         {v.cve}
@@ -149,6 +158,7 @@ export function SecurityPage() {
                                 <Anchor component={Link} to={`/hosts/${h.hostId}`} size="xs">{h.hostName}</Anchor>
                                 {" · "}
                                 {h.fix ?? `${t("security.noFix")}: ${h.package}`}
+                                {h.acknowledged && ` · ${t("vulns.acknowledged")}`}
                               </Text>
                             ))}
                           </Stack>
@@ -156,7 +166,9 @@ export function SecurityPage() {
                       </HoverCard>
                     </Table.Td>
                     <Table.Td>
-                      {v.fixAvailable ? (
+                      {v.acknowledged ? (
+                        <Badge color="gray" variant="outline" leftSection={<IconEyeOff size={10} />}>{t("vulns.acknowledged")}</Badge>
+                      ) : v.fixAvailable ? (
                         <Badge color="teal" variant="light">{t("security.fixAvailable")}</Badge>
                       ) : (
                         <Tooltip label={t("security.noFixHint")} multiline w={280}>
@@ -171,6 +183,22 @@ export function SecurityPage() {
                         ))}
                       </Group>
                     </Table.Td>
+                    <Table.Td>
+                      <Menu position="bottom-end" withinPortal>
+                        <Menu.Target>
+                          <ActionIcon variant="subtle" color="gray" aria-label={t("vulns.actions")}><IconDots size={16} /></ActionIcon>
+                        </Menu.Target>
+                        <Menu.Dropdown>
+                          {!v.fixAvailable && can.operate && (
+                            <Menu.Item leftSection={<IconShieldSearch size={14} />} onClick={() => navigate(`/cves/${v.cve}?check=1`)}>{t("vulns.check")}</Menu.Item>
+                          )}
+                          {can.operate && !v.acknowledged && (
+                            <Menu.Item leftSection={<IconEyeOff size={14} />} onClick={() => setAckFor(v)}>{t("vulns.ack")}…</Menu.Item>
+                          )}
+                          <Menu.Item leftSection={<IconEye size={14} />} component={Link} to={`/cves/${v.cve}`}>{t("vulns.details")}</Menu.Item>
+                        </Menu.Dropdown>
+                      </Menu>
+                    </Table.Td>
                   </Table.Tr>
                 ))}
               </Table.Tbody>
@@ -179,6 +207,7 @@ export function SecurityPage() {
         )}
       </Card>
       <Text size="xs" c="dimmed" mt="sm">{t("security.explain")}</Text>
+      {ackFor && <AckModal cve={ackFor.cve} hosts={ackFor.hosts} opened onClose={() => setAckFor(null)} onDone={load} />}
     </>
   );
 }

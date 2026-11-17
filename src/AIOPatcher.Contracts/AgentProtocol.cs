@@ -130,6 +130,7 @@ public static class UpdateSigners
 /// <summary>
 /// Installiertes Programm bzw. Paket. Source: "dpkg", "snap", "registry" (Windows-Programme), "winget".
 /// PackageId: Debian-Quellpaket bzw. winget-ID. AvailableVersion: laut winget verfügbare neuere Version.
+/// SourceVersion: Version des Debian-Quellpakets (weicht bei Bibliotheken ab, z. B. libldb2 "2:2.11.0+samba4.22.11…" aus samba 2:4.22.11).
 /// </summary>
 public sealed record InstalledSoftware(
     string Name,
@@ -138,7 +139,8 @@ public sealed record InstalledSoftware(
     string Source,
     string? PackageId = null,
     string? AvailableVersion = null,
-    string? Url = null);
+    string? Url = null,
+    string? SourceVersion = null);
 
 /// <summary>Laufender Docker-Container. RepoDigests: "repo@sha256:…" des lokalen Images (leer bei selbst gebauten Images).</summary>
 public sealed record ContainerReport(string Name, string Image, string? ImageId, IReadOnlyList<string>? RepoDigests, string? State);

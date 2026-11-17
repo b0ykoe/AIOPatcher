@@ -18,11 +18,12 @@ import {
   Title,
   Tooltip,
 } from "@mantine/core";
-import { IconAlertTriangle, IconBug, IconDatabase, IconExternalLink, IconInfoCircle, IconRefresh, IconSearch, IconServer, IconShieldCheck } from "@tabler/icons-react";
+import { IconAlertTriangle, IconBug, IconDatabase, IconExternalLink, IconInfoCircle, IconRefresh, IconSearch } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import { api, formatRelative } from "../api";
 import { useCan } from "../App";
 import { EmptyState, errorText, notifyError, PageHeader } from "../components/ui";
+import { VulnHostsPanel, type VulnHost } from "../components/VulnActions";
 
 interface CveScore {
   version: string;
@@ -39,12 +40,6 @@ interface SystemFix {
   source: string;
 }
 
-interface AffectedHost {
-  hostId: string;
-  hostName: string;
-  fix: string | null;
-  package: string | null;
-}
 
 interface CveDetails {
   id: string;
@@ -64,7 +59,7 @@ interface CveDetails {
   epss: number | null;
   epssPercentile: number | null;
   fixes: SystemFix[];
-  hosts: AffectedHost[];
+  hosts: VulnHost[];
   externalDisabled: boolean;
   unavailable: string[];
   mirrorSyncedAt: string | null;
@@ -304,6 +299,8 @@ function CveDetail({ id }: { id: string }) {
   const { t, i18n } = useTranslation();
   const [data, setData] = useState<CveDetails | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [params] = useSearchParams();
+  const autoCheck = params.get("check") === "1";
 
   useEffect(() => {
     setData(null);
@@ -315,6 +312,11 @@ function CveDetail({ id }: { id: string }) {
         if (d.found) rememberRecent(d.id);
       })
       .catch((e) => setError(errorText(e)));
+  }, [id]);
+
+  // nach Prüfen/Akzeptieren: betroffene Hosts neu laden, ohne die Seite zu leeren
+  const reload = useCallback(() => {
+    api.get<CveDetails>(`/api/cves/${encodeURIComponent(id)}`).then(setData).catch(() => undefined);
   }, [id]);
 
   const date = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString(i18n.language) : "–");
@@ -419,52 +421,7 @@ function CveDetail({ id }: { id: string }) {
         </Alert>
       )}
 
-      <Card p={0}>
-        <Group p="md" pb="xs" gap="xs">
-          <IconServer size={18} />
-          <Text fw={600}>{t("cveLookup.yourHosts")}</Text>
-          <Badge variant="light" color={data.hosts.length ? "red" : "teal"}>{data.hosts.length}</Badge>
-        </Group>
-        {data.hosts.length === 0 ? (
-          <Group p="md" pt={0} gap="xs" wrap="nowrap" align="flex-start">
-            <IconShieldCheck size={18} color="var(--mantine-color-teal-6)" style={{ flexShrink: 0 }} />
-            <Text size="sm" c="dimmed">{t("cveLookup.noHosts")}</Text>
-          </Group>
-        ) : (
-          <Table.ScrollContainer minWidth={480}>
-            <Table verticalSpacing="sm">
-              <Table.Thead>
-                <Table.Tr>
-                  <Table.Th>{t("cveLookup.host")}</Table.Th>
-                  <Table.Th>{t("cveLookup.state")}</Table.Th>
-                </Table.Tr>
-              </Table.Thead>
-              <Table.Tbody>
-                {data.hosts.map((h) => (
-                  <Table.Tr key={`${h.hostId}-${h.fix ?? h.package}`}>
-                    <Table.Td>
-                      <Anchor component={Link} to={`/hosts/${h.hostId}`} fw={600} size="sm">{h.hostName}</Anchor>
-                    </Table.Td>
-                    <Table.Td>
-                      {h.fix ? (
-                        <Group gap={6} wrap="nowrap">
-                          <Badge color="teal" variant="light">{t("security.fixAvailable")}</Badge>
-                          <Text size="sm" lineClamp={1}>{h.fix}</Text>
-                        </Group>
-                      ) : (
-                        <Group gap={6} wrap="nowrap">
-                          <Badge color="gray" variant="light">{t("security.noFix")}</Badge>
-                          <Text size="sm" ff="monospace">{h.package}</Text>
-                        </Group>
-                      )}
-                    </Table.Td>
-                  </Table.Tr>
-                ))}
-              </Table.Tbody>
-            </Table>
-          </Table.ScrollContainer>
-        )}
-      </Card>
+      <VulnHostsPanel cve={data.id} hosts={data.hosts} autoCheck={autoCheck} onChanged={reload} />
 
       {data.found && (linuxFixes.length > 0 || windowsFixes.length > 0) && (
         <SimpleGrid cols={{ base: 1, lg: linuxFixes.length && windowsFixes.length ? 2 : 1 }} spacing="md">

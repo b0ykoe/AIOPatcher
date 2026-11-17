@@ -500,6 +500,10 @@ namespace AIOPatcher.Server.Data.Migrations
                         .HasMaxLength(16)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("SourceVersion")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Url")
                         .HasMaxLength(500)
                         .HasColumnType("TEXT");
@@ -1630,6 +1634,44 @@ namespace AIOPatcher.Server.Data.Migrations
                     b.ToTable("VulnLookups");
                 });
 
+            modelBuilder.Entity("AIOPatcher.Server.Data.VulnerabilityAck", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CveId")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("ExpiresAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("HostId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CveId");
+
+                    b.HasIndex("HostId");
+
+                    b.ToTable("VulnerabilityAcks");
+                });
+
             modelBuilder.Entity("AIOPatcher.Server.Services.FeatureToggle", b =>
                 {
                     b.Property<string>("Key")
@@ -1941,6 +1983,16 @@ namespace AIOPatcher.Server.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("Site");
+                });
+
+            modelBuilder.Entity("AIOPatcher.Server.Data.VulnerabilityAck", b =>
+                {
+                    b.HasOne("AIOPatcher.Server.Data.ManagedHost", "Host")
+                        .WithMany()
+                        .HasForeignKey("HostId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.Navigation("Host");
                 });
 
             modelBuilder.Entity("AIOPatcher.Server.Data.FirewallProfile", b =>

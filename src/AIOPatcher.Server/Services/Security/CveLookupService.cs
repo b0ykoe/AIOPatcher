@@ -29,7 +29,7 @@ public sealed partial class CveLookupService(
     /// <summary>Fix je System: Debian/Ubuntu (Paket, behoben in Version; null = noch offen) bzw. Windows (KB, Build).</summary>
     public sealed record SystemFix(string System, string Package, string? FixedIn, string Source);
 
-    public sealed record AffectedHost(Guid HostId, string HostName, string? Fix, string? Package);
+    public sealed record AffectedHost(Guid HostId, string HostName, string? Fix, string? Package, bool Acknowledged = false);
 
     public sealed record CveDetails(
         string Id,
@@ -237,10 +237,13 @@ public sealed partial class CveLookupService(
             .Select(v => new { v.HostId, HostName = v.Host!.Name, v.Package, v.InstalledVersion })
             .ToListAsync(ct);
 
+        var now = DateTime.UtcNow;
+        var acks = await db.VulnerabilityAcks.AsNoTracking().Where(a => a.CveId == id).ToListAsync(ct);
         return withUpdate
             .Where(u => CveMapping.Split(u.Cves).Contains(id, StringComparer.OrdinalIgnoreCase)) // "CVE-2024-1" steckt auch in "CVE-2024-12"
             .Select(u => new AffectedHost(u.HostId, u.HostName, u.Name, null))
             .Concat(withoutUpdate.Select(v => new AffectedHost(v.HostId, v.HostName, null, $"{v.Package} {v.InstalledVersion}".Trim())))
+            .Select(h => h with { Acknowledged = acks.Any(a => a.Covers(h.HostId, now)) })
             .DistinctBy(h => (h.HostId, h.Fix, h.Package))
             .OrderBy(h => h.HostName, StringComparer.OrdinalIgnoreCase)
             .ToList();

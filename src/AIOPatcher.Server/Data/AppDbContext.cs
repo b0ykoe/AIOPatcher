@@ -31,6 +31,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<ApiToken> ApiTokens => Set<ApiToken>();
     public DbSet<InstalledApp> InstalledApps => Set<InstalledApp>();
     public DbSet<HostVulnerability> HostVulnerabilities => Set<HostVulnerability>();
+    public DbSet<VulnerabilityAck> VulnerabilityAcks => Set<VulnerabilityAck>();
     public DbSet<AIOPatcher.Server.Services.FeatureToggle> FeatureToggles => Set<AIOPatcher.Server.Services.FeatureToggle>();
     public DbSet<HostCompliance> HostCompliance => Set<HostCompliance>();
     public DbSet<AgentTaskRecord> AgentTasks => Set<AgentTaskRecord>();
@@ -287,6 +288,15 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             e.HasIndex(x => x.CveId);
         });
 
+        b.Entity<VulnerabilityAck>(e =>
+        {
+            e.Property(x => x.CveId).HasMaxLength(40);
+            e.Property(x => x.Note).HasMaxLength(500);
+            e.Property(x => x.CreatedBy).HasMaxLength(200);
+            e.HasOne(x => x.Host).WithMany().HasForeignKey(x => x.HostId).OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(x => x.CveId);
+        });
+
         b.Entity<InstalledApp>(e =>
         {
             e.Property(x => x.Name).HasMaxLength(300);
@@ -295,6 +305,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             e.Property(x => x.Source).HasMaxLength(16);
             e.Property(x => x.PackageId).HasMaxLength(200);
             e.Property(x => x.AvailableVersion).HasMaxLength(100);
+            e.Property(x => x.SourceVersion).HasMaxLength(100);
             e.Property(x => x.Url).HasMaxLength(500);
             e.HasOne(x => x.Host).WithMany(h => h.Apps).HasForeignKey(x => x.HostId).OnDelete(DeleteBehavior.Cascade);
             e.HasIndex(x => x.HostId);

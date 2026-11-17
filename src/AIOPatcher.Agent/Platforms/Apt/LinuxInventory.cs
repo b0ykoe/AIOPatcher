@@ -61,7 +61,7 @@ public sealed class LinuxInventory(ILogger<LinuxInventory> logger) : IPlatformIn
     /// <summary>Alle installierten Pakete (dpkg) und Snaps. Grundlage für das Programm-Inventar und CVE-Abgleich.</summary>
     public async Task<IReadOnlyList<InstalledSoftware>?> ScanSoftwareAsync(CancellationToken ct)
     {
-        var dpkg = await ProcessRunner.RunAsync("dpkg-query", ["-W", "-f=${db:Status-Abbrev}\t${Package}\t${Version}\t${source:Package}\t${Maintainer}\n"], ShortTimeout, ct);
+        var dpkg = await ProcessRunner.RunAsync("dpkg-query", ["-W", "-f=${db:Status-Abbrev}\t${Package}\t${Version}\t${source:Package}\t${Maintainer}\t${source:Version}\n"], ShortTimeout, ct);
         var software = AptOutputParser.ParseInstalled(dpkg.StandardOutput);
 
         try

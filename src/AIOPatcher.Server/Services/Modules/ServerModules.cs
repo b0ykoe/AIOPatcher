@@ -167,8 +167,10 @@ public sealed class SoftwareServerModule : ServerModule
 
     public override PlannedTask? Due(ManagedHost host, ModuleContext context, string? polledVersion)
     {
+        // auch nach jedem Update-Scan: installierte Versionen sind Grundlage für den CVE-Abgleich ohne Update
         var last = context.LastRequested(Id, ModuleActions.Inventory);
         return last is null || context.Now - last >= InventoryInterval || context.LastRequested(Id, ModuleActions.AppUpdate) > last
+               || context.LastRequested(AgentModules.Updates, ModuleActions.Scan) > last
             ? new PlannedTask(ModuleActions.Inventory)
             : null;
     }

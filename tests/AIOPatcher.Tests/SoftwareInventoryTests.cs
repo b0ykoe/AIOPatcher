@@ -49,6 +49,48 @@ public sealed class SoftwareInventoryTests
         Assert.Equal("openssl", installed[0].PackageId);
         Assert.Equal("Ubuntu Developers", installed[0].Publisher);
         Assert.Equal("curl", installed[1].PackageId); // ohne Quellpaket = Paketname
+        Assert.Null(installed[0].SourceVersion); // altes Format ohne Quellversion
+    }
+
+    [Fact]
+    public void Dpkg_SourceVersion_FromSixthField()
+    {
+        var installed = AptOutputParser.ParseInstalled(
+            "ii \tlibldb2:amd64\t2:2.11.0+samba4.22.11+dfsg-0+deb13u1\tsamba\tDebian Samba Maintainers <x@y>\t2:4.22.11+dfsg-0+deb13u1\n");
+        Assert.Equal(("samba", "2:4.22.11+dfsg-0+deb13u1"), (installed[0].PackageId, installed[0].SourceVersion));
+    }
+
+    [Theory]
+    [InlineData("1.0", "1.0", 0)]
+    [InlineData("1.0~rc1", "1.0", -1)]
+    [InlineData("1.0", "1.0+b1", -1)]
+    [InlineData("1:0.9", "2.0", 1)]
+    [InlineData("2:2.11.0+samba4.22.11+dfsg-0+deb13u1", "2:4.13.2+dfsg-2", -1)]
+    [InlineData("2:4.22.11+dfsg-0+deb13u1", "2:4.13.2+dfsg-2", 1)]
+    [InlineData("3.0.13-0ubuntu3.4", "3.0.13-0ubuntu3.10", -1)]
+    [InlineData("1.2a", "1.2-1", 1)]
+    [InlineData("1.0-1", "1.0-1~bpo1", 1)]
+    [InlineData("010", "10", 0)]
+    public void DebianVersion_ComparesLikeDpkg(string a, string b, int expected)
+    {
+        Assert.Equal(expected, Math.Sign(AIOPatcher.Server.Services.Security.DebianVersion.Compare(a, b)));
+        Assert.Equal(-expected, Math.Sign(AIOPatcher.Server.Services.Security.DebianVersion.Compare(b, a)));
+    }
+
+    [Fact]
+    public void SourcePackages_UseSourceVersion_ElseBestGuess()
+    {
+        var packages = AIOPatcher.Server.Services.Security.CveService.SourcePackages([
+            ("libldb2", "samba", "2:2.11.0+samba4.22.11+dfsg-0+deb13u1", "2:4.22.11+dfsg-0+deb13u1"),
+            ("samba-libs", "samba", "2:4.22.11+dfsg-0+deb13u1", "2:4.22.11+dfsg-0+deb13u1"),
+            // älterer Agent ohne Quellversion: höchste Version derselben Quelle
+            ("libtalloc2", "talloc-old", "2.4.3-1", null),
+            ("libtalloc-tools", "talloc-old", "2.4.4-1", null),
+            // gleichnamiges Paket gewinnt
+            ("libssl3", "openssl", "3.5.1-1", null),
+            ("openssl", "openssl", "3.5.0-1", null),
+        ]);
+        Assert.Equal([("samba", "2:4.22.11+dfsg-0+deb13u1"), ("talloc-old", "2.4.4-1"), ("openssl", "3.5.0-1")], packages);
     }
 
     [Fact]

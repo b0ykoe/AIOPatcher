@@ -147,6 +147,7 @@ public static class SoftwareEndpoints
                 Source = Cut(item.Source, 16) ?? "?",
                 PackageId = Cut(item.PackageId, 200),
                 AvailableVersion = Cut(item.AvailableVersion, 100),
+                SourceVersion = item.Source == "dpkg" ? Cut(item.SourceVersion, 100) : null,
                 Url = item.Url is { } u && Uri.TryCreate(u, UriKind.Absolute, out var uri) && uri.Scheme is "https" or "http" ? Cut(u, 500) : null,
             });
         }
