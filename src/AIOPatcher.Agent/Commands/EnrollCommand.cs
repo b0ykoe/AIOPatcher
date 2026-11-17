@@ -112,6 +112,7 @@ public static class EnrollCommand
 
         AgentPolicy.WriteDefaultIfMissing(stateDir);
         AIOPatcher.Agent.Maintenance.UpdateState.Reset(stateDir); // evtl. anderer Server: Update-Schlüssel neu lernen
+        AIOPatcher.Agent.Jobs.PendingResult.Delete(stateDir); // Antwort an einen früheren Server ist hier wertlos
         Console.WriteLine($"Enrolled. Host ID {response.HostId}, data in {stateDir}");
         Console.WriteLine($"Local policy: {Path.Combine(stateDir, AgentPolicy.FileName)} (restrict patching and reboots here).");
         return 0;

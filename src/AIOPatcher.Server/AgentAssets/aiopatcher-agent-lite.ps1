@@ -418,6 +418,8 @@ function Invoke-Enroll {
     if (-not (Test-Path (Join-Path $StateDir 'policy.json'))) {
         Write-Json (Join-Path $StateDir 'policy.json') @{ allowPatch = 'All'; allowReboot = $true; disabledModules = @() }
     }
+    # Offene Antwort an einen frueheren Server ist nach dem Neu-Registrieren wertlos
+    Remove-Item (Join-Path $StateDir 'pending-result.json') -Force -ErrorAction SilentlyContinue
     Write-Host "Enrolled. Host ID $($data.hostId), data in $StateDir"
 }
 

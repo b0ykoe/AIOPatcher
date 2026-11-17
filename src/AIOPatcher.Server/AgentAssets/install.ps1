@@ -118,11 +118,12 @@ function Install-LiteAgent {
     Copy-Item -Path $file -Destination $liteFile -Force
 
     if ((Test-Path (Join-Path $StateDir 'agent.json')) -and -not $Force) {
-        Info 'Agent ist bereits registriert, nur Programm aktualisiert.'
+        Info 'Agent ist bereits bei diesem Server registriert, nur Programm aktualisiert (neu registrieren: -Force).'
     } else {
         if (-not $Token) { Fail '-Token fehlt (noetig fuer die Erstregistrierung).' }
         $enrollArgs = @('enroll', '-Server', $Server, '-Token', $Token, '-Fingerprint', $Fingerprint, '-StateDir', $StateDir)
         if ($Force) { $enrollArgs += '-Force' }
+        if ($Force) { Remove-Item (Join-Path $StateDir 'pending-result.json') -Force -ErrorAction SilentlyContinue }
         & $ps -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $liteFile @enrollArgs
         if ($LASTEXITCODE -ne 0) { Fail 'Registrierung fehlgeschlagen.' }
     }
@@ -265,6 +266,25 @@ try {
     $caPath = Join-Path $tmp 'ca.crt'
     Set-Content -Path $caPath -Value $caPem -Encoding Ascii
 
+    # Schon registriert, aber bei einem anderen Server (andere CA, z. B. neu aufgesetzte Instanz)? Dann mit dem Token
+    # aus dem neuen Dashboard neu registrieren: neuer Schluessel, neues Zertifikat, neue CA. policy.json bleibt.
+    if ((Test-Path (Join-Path $StateDir 'agent.json')) -and -not $Force) {
+        $oldFingerprint = 'none'
+        $oldCaPath = Join-Path $StateDir 'ca.crt'
+        if (Test-Path $oldCaPath) {
+            try {
+                $oldBase64 = ((Get-Content -Path $oldCaPath -Raw) -replace '-----[A-Z ]+-----', '') -replace '\s', ''
+                $oldCa = New-Object Security.Cryptography.X509Certificates.X509Certificate2 -ArgumentList (, [Convert]::FromBase64String($oldBase64))
+                $oldFingerprint = [BitConverter]::ToString($sha256.ComputeHash($oldCa.RawData)) -replace '-', ''
+            } catch { $oldFingerprint = 'unreadable' }
+        }
+        if ($oldFingerprint -ne $Fingerprint) {
+            if (-not $Token) { Fail 'Dieser Host ist bei einem anderen AIOPatcher-Server registriert. Zum Wechseln den Installationsbefehl (mit Token) aus dem neuen Dashboard verwenden.' }
+            Info "Bisher bei einem anderen Server registriert: registriere neu bei $Server (policy.json bleibt erhalten)."
+            $Force = $true
+        }
+    }
+
     $pinnedValidator = {
         param($sender, $certificate, $chain, $sslErrors)
         if ($null -eq $certificate) { return $false }
@@ -333,12 +353,13 @@ try {
 
     # --- 4. Registrieren (nur wenn noetig) --------------------------------------------------------
     if ((Test-Path (Join-Path $StateDir 'agent.json')) -and -not $Force) {
-        Info 'Agent ist bereits registriert, nur Programm aktualisiert.'
+        Info 'Agent ist bereits bei diesem Server registriert, nur Programm aktualisiert (neu registrieren: -Force).'
     } else {
         if (-not $Token) { Fail '-Token fehlt (noetig fuer die Erstregistrierung).' }
         $enrollArgs = @('enroll', '--server', $Server, '--token', $Token, '--fingerprint', $Fingerprint, '--state-dir', $StateDir)
         if ($PublicUrl) { $enrollArgs += @('--public-url', $PublicUrl) }
         if ($Force) { $enrollArgs += '--force' }
+        if ($Force) { Remove-Item (Join-Path $StateDir 'pending-result.json') -Force -ErrorAction SilentlyContinue }
         & $Exe @enrollArgs
         if ($LASTEXITCODE -ne 0) { Fail 'Registrierung fehlgeschlagen.' }
     }

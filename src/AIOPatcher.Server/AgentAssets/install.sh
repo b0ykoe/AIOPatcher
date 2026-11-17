@@ -148,8 +148,22 @@ if ! curl -fsS --insecure --connect-timeout 8 --max-time 30 "$SERVER/agent/ca" -
     || die "Auch $PUBLIC nicht erreichbar (Reverse Proxy und DNS prüfen, Einstellungen → Öffentlicher Zugang)."
   VIA_PUBLIC=1
 fi
-ACTUAL="$(sed -e '/-----BEGIN/d' -e '/-----END/d' "$TMP/ca.crt" | tr -d '\r\n' | base64 -d | sha256sum | cut -c1-64 | tr 'a-f' 'A-F')"
+# SHA-256 einer CA-Datei (PEM), wie im Dashboard angezeigt
+ca_fingerprint() { sed -e '/-----BEGIN/d' -e '/-----END/d' "$1" | tr -d '\r\n' | base64 -d | sha256sum | cut -c1-64 | tr 'a-f' 'A-F'; }
+ACTUAL="$(ca_fingerprint "$TMP/ca.crt")"
 [ "$ACTUAL" = "$FINGERPRINT" ] || die "CA-Fingerprint stimmt nicht! Erwartet $FINGERPRINT, Server liefert $ACTUAL. Abbruch."
+
+# Schon registriert, aber bei einem anderen Server (andere CA, z. B. neu aufgesetzte Instanz)? Dann mit dem Token aus
+# dem neuen Dashboard neu registrieren: neuer Schlüssel, neues Zertifikat, neue CA. Die lokale policy.json bleibt.
+if [ -f "$STATE/agent.json" ] && [ "$FORCE" -eq 0 ]; then
+  OLD_CA="none"
+  [ -f "$STATE/ca.crt" ] && OLD_CA="$(ca_fingerprint "$STATE/ca.crt" 2>/dev/null || echo unreadable)"
+  if [ "$OLD_CA" != "$FINGERPRINT" ]; then
+    [ -n "$TOKEN" ] || die "Dieser Host ist bei einem anderen AIOPatcher-Server registriert. Zum Wechseln den Installationsbefehl (mit Token) aus dem neuen Dashboard verwenden."
+    info "Bisher bei einem anderen Server registriert: registriere neu bei $SERVER (policy.json bleibt erhalten)."
+    FORCE=1
+  fi
+fi
 
 pinned_curl() { curl -fsS --cacert "$TMP/ca.crt" "$@"; }
 
@@ -224,12 +238,14 @@ rm -f "$STATE/update-pending.json" "$BIN.bak" "$BIN.new"
 
 # --- 4. Registrieren (nur wenn nötig) --------------------------------------------------------------
 if [ -f "$STATE/agent.json" ] && [ "$FORCE" -eq 0 ]; then
-  info "Agent ist bereits registriert, nur Programm aktualisiert."
+  info "Agent ist bereits bei diesem Server registriert, nur Programm aktualisiert (neu registrieren: --force)."
 else
   [ -n "$TOKEN" ] || die "--token fehlt (nötig für die Erstregistrierung)."
   ARGS=(enroll --server "$SERVER" --token "$TOKEN" --fingerprint "$FINGERPRINT" --state-dir "$STATE")
   [ -n "$PUBLIC" ] && [ "$LITE" -eq 0 ] && ARGS+=(--public-url "$PUBLIC")
   [ "$FORCE" -eq 1 ] && ARGS+=(--force)
+  # Eine offene Antwort auf einen Auftrag des bisherigen Servers ist nach dem Neu-Registrieren wertlos
+  [ "$FORCE" -eq 1 ] && rm -f "$STATE/pending-result.json"
   agent "${ARGS[@]}"
 fi
 

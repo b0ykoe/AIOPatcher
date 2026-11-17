@@ -8,6 +8,16 @@ Geschrieben für Anwender, nicht als Commit-Liste.
 
 ## [Unveröffentlicht]
 
+### Verbessert
+- **Agent auf neuen Server umziehen:** Den Installationsbefehl aus dem neuen Dashboard auf einem Host ausführen, der noch
+  bei einem anderen AIOPatcher-Server registriert ist, registriert ihn jetzt automatisch neu (neuer Schlüssel, neues
+  Zertifikat, neue CA) statt still mit dem alten Server verbunden zu bleiben. Die lokale `policy.json` bleibt erhalten,
+  eine offene Job-Antwort an den alten Server wird verworfen. Gilt für Linux und Windows, auch für den Lite-Agent.
+
+### Hinweise zum Update
+- Die Erkennung steckt im Installationsskript, das der Server ausliefert: Sie greift, sobald der neue Server diese
+  Version hat; auf den Hosts muss vorher nichts aktualisiert werden.
+
 ## [0.8.1] - 2026-11-17
 
 ### Verbessert

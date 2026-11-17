@@ -200,7 +200,11 @@ journalctl -u aiopatcher-agent -f
 ```
 
 **Update:** automatisch (siehe [Agent-Updates](#agent-updates)) oder denselben Befehl erneut ausführen. Ist der Host
-registriert, wird nur das Programm ersetzt.
+bei diesem Server registriert, wird nur das Programm ersetzt.
+**Neuer Server (neu aufgesetzte Instanz):** einfach den Installationsbefehl aus dem neuen Dashboard ausführen. Das
+Skript erkennt an der CA, dass es ein anderer Server ist, und registriert den Host neu (neuer Schlüssel, neues
+Zertifikat, neue CA). Die lokale `policy.json` bleibt, eine offene Job-Antwort an den alten Server wird verworfen.
+Gegen denselben Server erzwingt `--force` eine neue Registrierung.
 **Selbsttest von Hand:** `sudo aiopatcher-agent selftest`
 **Entfernen:** `install.sh --uninstall` (mit `--purge` auch Zertifikate und Policy löschen); den Host danach im Dashboard löschen.
 
@@ -218,7 +222,9 @@ kopieren und in **Windows PowerShell als Administrator** einfügen. Er
    meldet. Bei einem Absturz zeigt es die passenden Einträge aus der Ereignisanzeige.
 
 Logs: Ereignisanzeige → Windows-Protokolle → Anwendung, Quelle `AIOPatcherAgent`.
-Update: automatisch (siehe [Agent-Updates](#agent-updates)) oder denselben Befehl erneut ausführen. Entfernen: `install.ps1 -Uninstall` (mit `-Purge` inkl. Registrierung).
+Update: automatisch (siehe [Agent-Updates](#agent-updates)) oder denselben Befehl erneut ausführen. Neuer Server: den
+Befehl aus dem neuen Dashboard ausführen, der Host wird automatisch neu registriert (wie unter Linux; `-Force` erzwingt
+es gegen denselben Server). Entfernen: `install.ps1 -Uninstall` (mit `-Purge` inkl. Registrierung).
 
 Windows installiert Updates standardmäßig auch selbst. Für Hosts, die AIOPatcher patchen soll, per GPO
 „Automatische Updates konfigurieren“ auf „Herunterladen und benachrichtigen“ stellen; das Dashboard zeigt einen Hinweis,
