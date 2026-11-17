@@ -455,7 +455,20 @@
   background: var(--mantine-color-violet-light);
 }
 
-/* Startseite: Hosts links (breit), Wartungsfenster und Jobs rechts */
+/* Startseite: nächste Wartungsfenster rechts im Stand-Kasten (auf schmalen Bildschirmen darunter) */
+.overview-windows {
+  min-width: min(100%, 340px);
+  max-width: 100%;
+}
+
+@media (min-width: 62em) {
+  .overview-windows {
+    padding-left: var(--mantine-spacing-xl);
+    border-left: 1px solid var(--mantine-color-default-border);
+  }
+}
+
+/* Host-Seite (Überblick): Inhalt links breit, Auslastung und Steckbrief rechts */
 .overview-grid {
   display: grid;
   gap: var(--mantine-spacing-lg);

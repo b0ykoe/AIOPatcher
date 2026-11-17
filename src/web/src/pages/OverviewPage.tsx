@@ -9,7 +9,7 @@ import { useTranslation } from "react-i18next";
 import { api, formatDateTime, formatRelative, formatWindowStart, type BulkJobResult, type HostSummary, type Job, type Runbook } from "../api";
 import { useCan, useShell, useSimple } from "../App";
 import { useFeatures } from "../features";
-import { JobList } from "../components/JobTable";
+import { JobTable } from "../components/JobTable";
 import { UsageMeter } from "../components/metrics/charts";
 import { AssignPlanModal } from "../components/plans/AssignPlanModal";
 import { openSetupWizard } from "../components/SetupWizard";
@@ -169,14 +169,36 @@ export function OverviewPage() {
       )}
 
       <Card p="xl">
-        <Group gap="lg" wrap="nowrap">
-          <ThemeIcon size={64} radius="xl" variant={todos.length === 0 ? "gradient" : "light"} color={todos.length === 0 ? "teal" : todos[0].color}>
-            {todos.length === 0 ? <IconCircleCheck size={36} /> : todos[0].icon}
-          </ThemeIcon>
-          <div>
-            <Title order={2}>{todos.length === 0 ? t("simple.allGood") : t("simple.needsYou", { count: todos.length })}</Title>
-            <Text c="dimmed">{t("simple.status", { online: o?.online ?? 0, hosts: o?.hosts ?? 0, updates: o?.pendingUpdates ?? 0 })}</Text>
-          </div>
+        <Group justify="space-between" gap="xl" wrap="wrap" align="center">
+          <Group gap="lg" wrap="nowrap">
+            <ThemeIcon size={64} radius="xl" variant={todos.length === 0 ? "gradient" : "light"} color={todos.length === 0 ? "teal" : todos[0].color}>
+              {todos.length === 0 ? <IconCircleCheck size={36} /> : todos[0].icon}
+            </ThemeIcon>
+            <div>
+              <Title order={2}>{todos.length === 0 ? t("simple.allGood") : t("simple.needsYou", { count: todos.length })}</Title>
+              <Text c="dimmed">{t("simple.status", { online: o?.online ?? 0, hosts: o?.hosts ?? 0, updates: o?.pendingUpdates ?? 0 })}</Text>
+            </div>
+          </Group>
+
+          <Stack gap={6} className="overview-windows">
+            <Group justify="space-between" gap="md">
+              <Text size="xs" fw={700} c="dimmed" tt="uppercase" style={{ letterSpacing: 0.6 }}>{t("overview.nextWindows")}</Text>
+              <Anchor component={Link} to="/auto-patch" size="xs">{t("nav.autoPatch")}</Anchor>
+            </Group>
+            {windows.length === 0 ? (
+              <Text size="sm" c="dimmed">{t("overview.noWindows")}</Text>
+            ) : windows.slice(0, 3).map((p) => (
+              <Group key={p.id} gap="sm" wrap="nowrap" justify="space-between">
+                <Group gap={6} wrap="nowrap">
+                  <IconClock size={14} color="var(--mantine-color-violet-4)" />
+                  <Text size="sm" fw={600} style={{ whiteSpace: "nowrap" }}>{formatWindowStart(p.schedule.nextWindowStart)}</Text>
+                </Group>
+                <Text size="sm" c="dimmed" truncate>
+                  {p.name} · {t("plans.hostCount", { count: p.waves.reduce((n, w) => n + w.members.length, 0) })}
+                </Text>
+              </Group>
+            ))}
+          </Stack>
         </Group>
       </Card>
 
@@ -206,51 +228,25 @@ export function OverviewPage() {
         </Card>
       ))}
 
-      <div className="overview-grid">
-        <section>
-          <Group justify="space-between" mb="sm">
-            <Text fw={700}>{t("nav.hosts")}</Text>
-            <Anchor component={Link} to="/hosts" size="sm">{t("overview.allHosts")}</Anchor>
-          </Group>
-          <div className="card-grid">
-            {active.slice(0, simple ? 12 : 24).map((h) => <HostTile key={h.id} host={h} />)}
-          </div>
-        </section>
+      <section>
+        <Group justify="space-between" mb="sm">
+          <Text fw={700}>{t("nav.hosts")}</Text>
+          <Anchor component={Link} to="/hosts" size="sm">{t("overview.allHosts")}</Anchor>
+        </Group>
+        <div className="card-grid">
+          {active.slice(0, simple ? 12 : 24).map((h) => <HostTile key={h.id} host={h} />)}
+        </div>
+      </section>
 
-        <Stack gap="lg">
-          <Card>
-            <Group justify="space-between" mb="sm">
-              <Text fw={700}>{t("overview.nextWindows")}</Text>
-              <Anchor component={Link} to="/auto-patch" size="sm">{t("nav.autoPatch")}</Anchor>
-            </Group>
-            {windows.length === 0 ? (
-              <Text size="sm" c="dimmed">{t("overview.noWindows")}</Text>
-            ) : (
-              <Stack gap="sm">
-                {windows.map((p) => (
-                  <Group key={p.id} justify="space-between" wrap="nowrap" gap="xs">
-                    <div style={{ minWidth: 0 }}>
-                      <Text size="sm" fw={600} truncate>{p.name}</Text>
-                      <Text size="xs" c="dimmed">{t("plans.hostCount", { count: p.waves.reduce((n, w) => n + w.members.length, 0) })}</Text>
-                    </div>
-                    <Group gap={4} wrap="nowrap">
-                      <IconClock size={14} opacity={0.6} />
-                      <Text size="sm" style={{ whiteSpace: "nowrap" }}>{formatWindowStart(p.schedule.nextWindowStart)}</Text>
-                    </Group>
-                  </Group>
-                ))}
-              </Stack>
-            )}
-          </Card>
-          <Card>
-            <Group justify="space-between" mb="sm">
-              <Text fw={700}>{t("overview.recentJobs")}</Text>
-              <Anchor component={Link} to="/auto-patch?tab=jobs" size="sm">{t("overview.allJobs")}</Anchor>
-            </Group>
-            <JobList jobs={jobs} />
-          </Card>
-        </Stack>
-      </div>
+      <section>
+        <Group justify="space-between" mb="sm">
+          <Text fw={700}>{t("overview.recentJobs")}</Text>
+          <Anchor component={Link} to="/auto-patch?tab=jobs" size="sm">{t("overview.allJobs")}</Anchor>
+        </Group>
+        <Card p={0}>
+          <JobTable jobs={jobs} showHost />
+        </Card>
+      </section>
 
       <AssignPlanModal opened={assignOpen} onClose={() => setAssignOpen(false)} onDone={load} hostIds={unplanned.map((h) => h.id)} hosts={unplanned} />
       <TemplatePicker opened={templateOpen} onClose={() => setTemplateOpen(false)} />
