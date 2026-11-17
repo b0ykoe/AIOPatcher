@@ -37,6 +37,12 @@ public sealed class AIOPatcherOptions
     /// </summary>
     public bool CveLookupEnabled { get; set; } = true;
 
+    /// <summary>
+    /// Optionaler NVD-API-Schlüssel für die CVE-Suche (kostenlos bei nvd.nist.gov). Ohne Schlüssel erlaubt NVD
+    /// 5 Abfragen je 30 Sekunden, das reicht für gelegentliches Nachschlagen.
+    /// </summary>
+    public string? NvdApiKey { get; set; }
+
     /// <summary>Docker-Images gegen ihre Registry prüfen (anonym, nur öffentliche Images).</summary>
     public bool ContainerUpdateCheckEnabled { get; set; } = true;
 

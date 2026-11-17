@@ -167,6 +167,7 @@ builder.Services.AddHttpClient(CveService.HttpClientName, c =>
 });
 builder.Services.AddSingleton<CveService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<CveService>());
+builder.Services.AddSingleton<CveLookupService>();
 builder.Services.AddHostedService<ContainerUpdateService>();
 builder.Services.AddSingleton<ReleaseCheck>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<ReleaseCheck>());
@@ -231,6 +232,7 @@ app.MapComplianceEndpoints();
 app.MapSsoEndpoints();
 app.MapSoftwareEndpoints();
 app.MapVulnerabilityEndpoints();
+app.MapCveLookupEndpoints();
 app.MapFeatureEndpoints();
 app.MapOpenApi("/api/openapi/{documentName}.json").RequireAuthorization();
 app.MapAgentEndpoints();

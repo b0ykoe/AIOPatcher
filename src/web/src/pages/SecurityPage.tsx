@@ -114,7 +114,7 @@ export function SecurityPage() {
                 {shown.slice(0, 500).map((v) => (
                   <Table.Tr key={v.cve}>
                     <Table.Td>
-                      <Anchor href={`https://nvd.nist.gov/vuln/detail/${v.cve}`} target="_blank" rel="noreferrer" ff="monospace" size="sm" fw={600}>
+                      <Anchor component={Link} to={`/cves/${v.cve}`} ff="monospace" size="sm" fw={600}>
                         {v.cve}
                       </Anchor>
                       {v.kevName && <Text size="xs" c="dimmed" lineClamp={1} maw={320}>{v.kevName}</Text>}

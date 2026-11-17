@@ -43,6 +43,7 @@ import {
   IconShieldLock,
   IconSettings,
   IconSearch,
+  IconBug,
   IconServer,
   IconShieldBolt,
   IconShieldCheck,
@@ -72,6 +73,7 @@ import { ChecksPage } from "./pages/ChecksPage";
 import { ApiPage } from "./pages/ApiPage";
 import { SoftwarePage } from "./pages/SoftwarePage";
 import { SecurityPage } from "./pages/SecurityPage";
+import { CveLookupPage, normalizeCveId } from "./pages/CveLookupPage";
 import { CompliancePage } from "./pages/CompliancePage";
 import { RulesPage } from "./pages/RulesPage";
 import { RunPage } from "./pages/RunPage";
@@ -199,6 +201,7 @@ function Shell({ me, onMeChanged, onLoggedOut }: { me: Me; onMeChanged: (me: Me)
     { to: "/", label: t("nav.overview"), icon: IconLayoutDashboard, end: true, simple: true },
     { to: "/hosts", label: t("nav.hosts"), icon: IconServer, simple: true },
     { to: "/security", label: t("nav.security"), icon: IconShieldHalfFilled, simple: true },
+    { to: "/cves", label: t("nav.cveLookup"), icon: IconBug, simple: true },
     { to: "/compliance", label: t("nav.compliance"), icon: IconShieldCheck },
     { to: "/checks", label: t("nav.checks"), icon: IconStethoscope, simple: true },
     { to: "/jobs", label: t("nav.jobs"), icon: IconListCheck },
@@ -238,6 +241,7 @@ function Shell({ me, onMeChanged, onLoggedOut }: { me: Me; onMeChanged: (me: Me)
   useEffect(() => nav.close(), [location.pathname]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Hosts für die Befehlspalette, beim Öffnen frisch laden
+  const [spotlightQuery, setSpotlightQuery] = useState("");
   const loadHostsForSearch = () => void api.get<HostSummary[]>("/api/hosts").then(setHosts).catch(() => {});
 
   const logout = async () => {
@@ -255,12 +259,24 @@ function Shell({ me, onMeChanged, onLoggedOut }: { me: Me; onMeChanged: (me: Me)
     }
   };
 
+  // Befehlspalette: CVE-Nummer direkt öffnen, sonst Begriff in der CVE-Suche suchen
+  const spotlightCve = normalizeCveId(spotlightQuery);
+  const cveActions: SpotlightActionData[] =
+    spotlightQuery.trim().length < 3
+      ? []
+      : [
+          spotlightCve
+            ? { id: "cve-open", label: spotlightCve, description: t("nav.cveOpen"), group: t("nav.actions"), keywords: [spotlightQuery], leftSection: <IconBug size={18} />, onClick: () => navigate(`/cves/${spotlightCve}`) }
+            : { id: "cve-search", label: t("nav.cveSearchFor", { query: spotlightQuery.trim() }), description: t("nav.cveLookup"), group: t("nav.actions"), keywords: [spotlightQuery], leftSection: <IconBug size={18} />, onClick: () => navigate(`/cves?q=${encodeURIComponent(spotlightQuery.trim())}`) },
+        ];
+
   const actions: SpotlightActionData[] = [
     ...navItems.map((n) => ({ id: `nav-${n.to}`, label: n.label, description: t("nav.openPage"), group: t("nav.pages"), leftSection: <n.icon size={18} />, onClick: () => navigate(n.to) })),
     { id: "nav-account", label: t("nav.account"), description: t("nav.openPage"), group: t("nav.pages"), leftSection: <IconUserCog size={18} />, onClick: () => navigate("/account") },
     ...(canOperate
       ? [{ id: "add-host", label: t("nav.addHost"), description: t("nav.addHostHint"), group: t("nav.actions"), leftSection: <IconPlus size={18} />, onClick: addHost.open }]
       : []),
+    ...cveActions,
     ...hosts.map((h) => ({
       id: `host-${h.id}`,
       label: h.name,
@@ -387,6 +403,8 @@ function Shell({ me, onMeChanged, onLoggedOut }: { me: Me; onMeChanged: (me: Me)
               <Route path="/developer" element={<ApiPage />} />
               <Route path="/software" element={<SoftwarePage />} />
               <Route path="/security" element={<SecurityPage />} />
+              <Route path="/cves" element={<CveLookupPage />} />
+              <Route path="/cves/:id" element={<CveLookupPage />} />
               <Route path="/compliance" element={<CompliancePage />} />
               <Route path="/ipam" element={<IpamPage />} />
               <Route path="/account" element={<AccountPage onMeChanged={onMeChanged} />} />
@@ -400,6 +418,8 @@ function Shell({ me, onMeChanged, onLoggedOut }: { me: Me; onMeChanged: (me: Me)
         {canOperate && <AddHostModal opened={addHostOpen} onClose={() => { addHost.close(); refreshOverview(); }} />}
         <Spotlight
           actions={actions}
+          query={spotlightQuery}
+          onQueryChange={setSpotlightQuery}
           nothingFound={t("nav.nothingFound")}
           highlightQuery
           limit={12}

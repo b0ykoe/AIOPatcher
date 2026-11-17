@@ -1,8 +1,7 @@
 import { Anchor, Badge, Group, HoverCard, Stack, Text } from "@mantine/core";
 import { useTranslation } from "react-i18next";
+import { Link } from "react-router";
 import type { UpdateItem } from "../api";
-
-const nvd = (cve: string) => `https://nvd.nist.gov/vuln/detail/${cve}`;
 
 /** KEV-Markierung, höchster EPSS-Wert und die CVE-Liste (beim Überfahren) für ein Update. */
 export function CveCell({ update }: { update: UpdateItem }) {
@@ -46,7 +45,7 @@ export function CveCell({ update }: { update: UpdateItem }) {
           </Text>
           <Group gap={6}>
             {cves.slice(0, 40).map((cve) => (
-              <Anchor key={cve} href={nvd(cve)} target="_blank" rel="noreferrer" size="xs" ff="monospace">
+              <Anchor key={cve} component={Link} to={`/cves/${cve}`} size="xs" ff="monospace">
                 {cve}
               </Anchor>
             ))}

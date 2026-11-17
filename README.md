@@ -114,6 +114,9 @@ gegen echte Systeme getestet, sondern gegen nachgebaute APIs und Unit-Tests):
 - **CVE-Zuordnung** für offene Updates (OSV.dev für Debian/Ubuntu, Microsoft MSRC für Windows-KBs),
   Bewertung mit **CISA KEV** (aktiv ausgenutzt) und **EPSS**; dazu **Lücken ohne Update** in installierten Paketen
   (nur KEV oder EPSS ≥ 5 %, sonst wäre allein der Kernel tausende Einträge)
+- **CVE-Suche**: CVE-Nummer oder Stichwort (Hersteller, Produkt, Paket) nachschlagen: Beschreibung und CVSS (NVD),
+  behoben in welcher Paketversion je Debian/Ubuntu-Release (OSV.dev) bzw. durch welches KB je Windows-Version
+  (Microsoft), KEV/EPSS und welche eigenen Hosts betroffen sind. Auch per Strg+K und CVE-Nummer.
 - **Programm-Inventar**: dpkg/snap und Windows-Programme, mit verfügbarer Version und Links (winget-Manifest,
   Debian-Tracker, Launchpad, Hersteller); unter Windows **Programm-Updates per winget** (Windows 10/11, Server 2025)
 - **Docker-Container**: erkennt neuere Images in der Registry (nur Anzeige/Meldung, aktualisiert nichts)
