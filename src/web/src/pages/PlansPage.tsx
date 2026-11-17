@@ -2,13 +2,14 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { Alert, Anchor, Badge, Button, Card, Group, Modal, SimpleGrid, Stack, Table, Text, ThemeIcon, Tooltip, UnstyledButton } from "@mantine/core";
 import {
-  IconCalendarTime, IconCamera, IconClock, IconFlask, IconHandStop, IconHomeCog, IconHourglass, IconPlayerPlay, IconPlus, IconRefresh,
+  IconBolt, IconCalendarTime, IconCamera, IconClock, IconFlask, IconHandStop, IconHomeCog, IconHourglass, IconPlayerPlay, IconPlus, IconRefresh,
   IconServer2, IconSettings, IconShieldCheck, IconTemplate, IconUsersGroup,
 } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import { api, describeRequester, describeWindow, formatRelative, formatWindowStart, isActiveRun, type HostSummary, type Runbook, type RunSummary } from "../api";
 import { useCan } from "../App";
 import { AssignPlanModal } from "../components/plans/AssignPlanModal";
+import { QuickPlanModal } from "../components/plans/QuickPlanModal";
 import type { TemplateKey } from "../components/plans/planTemplates";
 import { RunStatusBadge } from "../components/RunStatusBadge";
 import { confirmAction, EmptyState, notifyError, notifySuccess, PageHeader } from "../components/ui";
@@ -30,6 +31,7 @@ export function PlansPage() {
   const [hosts, setHosts] = useState<HostSummary[]>([]);
   const [templateOpen, setTemplateOpen] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
+  const [quickOpen, setQuickOpen] = useState(false);
 
   const load = useCallback(async () => {
     const [p, r, h] = await Promise.all([api.get<Runbook[]>("/api/runbooks"), api.get<RunSummary[]>("/api/runbook-runs?limit=15"), api.get<HostSummary[]>("/api/hosts")]);
@@ -68,9 +70,12 @@ export function PlansPage() {
         title={t("hubs.plans")}
         description={t("plans.description")}
         actions={can.operate && (
-          <Button variant="gradient" className="gradient-button" leftSection={<IconPlus size={16} />} onClick={() => setTemplateOpen(true)}>
-            {t("plans.new")}
-          </Button>
+          <Group gap="xs">
+            <Button variant="default" leftSection={<IconBolt size={16} />} onClick={() => setQuickOpen(true)}>{t("plans.quick")}</Button>
+            <Button variant="gradient" className="gradient-button" leftSection={<IconPlus size={16} />} onClick={() => setTemplateOpen(true)}>
+              {t("plans.new")}
+            </Button>
+          </Group>
         )}
       />
 
@@ -86,7 +91,12 @@ export function PlansPage() {
       {plans && plans.length === 0 ? (
         <Card>
           <EmptyState icon={<IconCalendarTime size={28} />} title={t("plans.noneTitle")} text={t("plans.noneText")}
-            action={can.operate && <Button mt="sm" variant="gradient" className="gradient-button" onClick={() => setTemplateOpen(true)}>{t("plans.chooseTemplate")}</Button>} />
+            action={can.operate && (
+              <Group mt="sm" gap="xs" justify="center">
+                <Button variant="default" leftSection={<IconBolt size={16} />} onClick={() => setQuickOpen(true)}>{t("plans.quick")}</Button>
+                <Button variant="gradient" className="gradient-button" onClick={() => setTemplateOpen(true)}>{t("plans.chooseTemplate")}</Button>
+              </Group>
+            )} />
         </Card>
       ) : (
         <div className="card-grid card-grid-wide" style={{ marginBottom: "var(--mantine-spacing-xl)" }}>
@@ -193,6 +203,7 @@ export function PlansPage() {
       )}
 
       <TemplatePicker opened={templateOpen} onClose={() => setTemplateOpen(false)} />
+      <QuickPlanModal opened={quickOpen} onClose={() => setQuickOpen(false)} onDone={() => void load()} hostIds={unplanned.map((h) => h.id)} />
       <AssignPlanModal opened={assignOpen} onClose={() => setAssignOpen(false)} onDone={() => void load()} hostIds={unplanned.map((h) => h.id)} hosts={unplanned} />
     </>
   );
@@ -211,12 +222,23 @@ function Flag({ icon: Icon, label }: { icon: typeof IconRefresh; label: string }
 export function TemplatePicker({ opened, onClose }: { opened: boolean; onClose: () => void }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const [quick, setQuick] = useState(false);
   const pick = (key: TemplateKey | null) => {
     onClose();
     navigate(key ? `/auto-patch/plans/new?template=${key}` : "/auto-patch/plans/new");
   };
   return (
+    <>
     <Modal opened={opened} onClose={onClose} title={<Text fw={800}>{t("plans.chooseTemplate")}</Text>} size="xl">
+      <UnstyledButton onClick={() => { onClose(); setQuick(true); }} className="template-card" mb="md" w="100%">
+        <Group gap="sm" wrap="nowrap" align="flex-start">
+          <ThemeIcon size={40} radius="md" variant="gradient"><IconBolt size={22} /></ThemeIcon>
+          <div>
+            <Text fw={700}>{t("plans.quickTitle")}</Text>
+            <Text size="sm" c="dimmed">{t("plans.quickCard")}</Text>
+          </div>
+        </Group>
+      </UnstyledButton>
       <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
         {templates.map(({ key, icon: Icon, color }) => (
           <UnstyledButton key={key} onClick={() => pick(key)} className="template-card">
@@ -234,5 +256,7 @@ export function TemplatePicker({ opened, onClose }: { opened: boolean; onClose: 
         <Button variant="subtle" leftSection={<IconTemplate size={16} />} onClick={() => pick(null)}>{t("plans.startEmpty")}</Button>
       </Group>
     </Modal>
+    <QuickPlanModal opened={quick} onClose={() => setQuick(false)} onDone={() => navigate("/auto-patch")} />
+    </>
   );
 }

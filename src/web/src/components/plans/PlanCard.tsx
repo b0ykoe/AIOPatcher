@@ -1,13 +1,14 @@
 import { useState } from "react";
 import { Link } from "react-router";
 import { Alert, Badge, Button, Card, Group, Stack, Text, ThemeIcon } from "@mantine/core";
-import { IconAlertTriangle, IconCalendarTime, IconSettings, IconUsersGroup } from "@tabler/icons-react";
+import { IconAlertTriangle, IconBolt, IconCalendarTime, IconSettings, IconUsersGroup } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import { describeWindow, formatWindowStart, type HostModule, type HostSummary } from "../../api";
 import { useCan } from "../../App";
 import { useFeatures } from "../../features";
 import { canControlNativeUpdates, NativeUpdatesButton } from "../NativeUpdatesButton";
 import { AssignPlanModal } from "./AssignPlanModal";
+import { QuickPlanModal } from "./QuickPlanModal";
 
 /** Patch-Plan eines Hosts: welcher Plan, welche Gruppe, wann als Nächstes; zuordnen und Update-Automatik des Systems. */
 export function PlanCard({ host, modules, onChanged }: { host: HostSummary; modules?: HostModule[] | null; onChanged: () => void }) {
@@ -15,6 +16,7 @@ export function PlanCard({ host, modules, onChanged }: { host: HostSummary; modu
   const can = useCan();
   const { isOn } = useFeatures();
   const [assign, setAssign] = useState(false);
+  const [quick, setQuick] = useState(false);
   const a = host.autoPatch;
   const isLinux = host.osFamily === "Linux";
 
@@ -50,6 +52,9 @@ export function PlanCard({ host, modules, onChanged }: { host: HostSummary; modu
             <Button component={Link} to={`/auto-patch/plans/${host.planId}`} variant="subtle" size="xs" leftSection={<IconSettings size={14} />}>{t("plans.openPlan")}</Button>
           )}
           {can.operate && (
+            <Button variant="default" size="xs" leftSection={<IconBolt size={14} />} onClick={() => setQuick(true)}>{t("plans.quick")}</Button>
+          )}
+          {can.operate && (
             <Button variant="light" size="xs" leftSection={<IconUsersGroup size={14} />} onClick={() => setAssign(true)}>
               {host.planId ? t("plans.changePlan") : t("plans.assign")}
             </Button>
@@ -81,6 +86,7 @@ export function PlanCard({ host, modules, onChanged }: { host: HostSummary; modu
       )}
 
       <AssignPlanModal opened={assign} onClose={() => setAssign(false)} onDone={onChanged} hostIds={[host.id]} />
+      <QuickPlanModal opened={quick} onClose={() => setQuick(false)} onDone={onChanged} hostIds={[host.id]} />
     </Card>
   );
 }

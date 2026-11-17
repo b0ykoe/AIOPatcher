@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Box, Card, Group, SegmentedControl, SimpleGrid, Stack, Table, Text } from "@mantine/core";
+import { Card, Group, SegmentedControl, SimpleGrid, Stack, Table, Text } from "@mantine/core";
 import { IconGauge } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import { api, formatRelative, formatUptime, type HostMetricsResponse } from "../../api";
@@ -47,24 +47,21 @@ export function HostMetricsPanel({ hostId }: { hostId: string }) {
           data={[{ value: "24", label: t("metrics.range24h") }, { value: "168", label: t("metrics.range7d") }]} />
       </Group>
 
-      <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="md">
-        <UsageMeter label={t("metrics.cpuCores", { cores: m.cpuCores })} percent={m.cpuPercent} />
-        <UsageMeter label={t("metrics.memory")} percent={memory} detail={`${formatBytes(m.memoryUsed)} / ${formatBytes(m.memoryTotal)}`} />
-        {m.swapTotal ? (
-          <UsageMeter label={t("metrics.swap")} percent={percentOf(m.swapUsed, m.swapTotal)} detail={`${formatBytes(m.swapUsed)} / ${formatBytes(m.swapTotal)}`} />
-        ) : <Box />}
-      </SimpleGrid>
-
-      <div className="card-grid">
-        <Card withBorder><TimeSeriesChart title={t("metrics.cpu")} points={series("cpu")} from={from} to={to} /></Card>
-        <Card withBorder><TimeSeriesChart title={t("metrics.memory")} points={series("memory")} from={from} to={to} /></Card>
-        <Card withBorder><TimeSeriesChart title={t("metrics.diskFullest")} points={series("disk")} from={from} to={to} /></Card>
-      </div>
-
-      <div className="split-grid">
+      {/* Oben zwei halbe Karten: aktuelle Werte untereinander (wie Proxmox) und die Datenträger */}
+      <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
         <Card withBorder>
-          <Text fw={700} mb="sm">{t("metrics.disks")}</Text>
-          <Stack gap="sm">
+          <Text fw={700} mb="md">{t("metrics.current")}</Text>
+          <Stack gap="md">
+            <UsageMeter label={t("metrics.cpuCores", { cores: m.cpuCores })} percent={m.cpuPercent} />
+            <UsageMeter label={t("metrics.memory")} percent={memory} detail={`${formatBytes(m.memoryUsed)} / ${formatBytes(m.memoryTotal)}`} />
+            {m.swapTotal ? (
+              <UsageMeter label={t("metrics.swap")} percent={percentOf(m.swapUsed, m.swapTotal)} detail={`${formatBytes(m.swapUsed)} / ${formatBytes(m.swapTotal)}`} />
+            ) : null}
+          </Stack>
+        </Card>
+        <Card withBorder>
+          <Text fw={700} mb="md">{t("metrics.disks")}</Text>
+          <Stack gap="md">
             {m.disks.map((d) => (
               <UsageMeter key={d.mount} label={`${d.mount}${d.fileSystem ? ` (${d.fileSystem})` : ""}`} percent={percentOf(d.used, d.total)}
                 detail={`${formatBytes(d.used)} / ${formatBytes(d.total)}`} />
@@ -72,6 +69,14 @@ export function HostMetricsPanel({ hostId }: { hostId: string }) {
             {m.disks.length === 0 && <Text size="sm" c="dimmed">–</Text>}
           </Stack>
         </Card>
+      </SimpleGrid>
+
+      {/* Verlauf: drei gleich breite Diagramme über die volle Breite */}
+      <SimpleGrid cols={{ base: 1, md: 3 }} spacing="md">
+        <Card withBorder><TimeSeriesChart title={t("metrics.cpu")} points={series("cpu")} from={from} to={to} /></Card>
+        <Card withBorder><TimeSeriesChart title={t("metrics.memory")} points={series("memory")} from={from} to={to} /></Card>
+        <Card withBorder><TimeSeriesChart title={t("metrics.diskFullest")} points={series("disk")} from={from} to={to} /></Card>
+      </SimpleGrid>
 
         {m.containers && m.containers.length > 0 && (
           <Card withBorder p={0}>
@@ -102,7 +107,6 @@ export function HostMetricsPanel({ hostId }: { hostId: string }) {
             </Table.ScrollContainer>
           </Card>
         )}
-      </div>
     </Stack>
   );
 }
