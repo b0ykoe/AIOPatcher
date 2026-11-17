@@ -86,7 +86,8 @@ public sealed class ContainerUpdateService(
     IHttpClientFactory httpFactory,
     AIOPatcherOptions options,
     Notifier notifier,
-    ILogger<ContainerUpdateService> logger) : BackgroundService
+    ILogger<ContainerUpdateService> logger,
+    FeatureFlags features) : BackgroundService
 {
     private static readonly TimeSpan Interval = TimeSpan.FromMinutes(30);
     private static readonly TimeSpan RecheckAfter = TimeSpan.FromHours(6);
@@ -101,17 +102,18 @@ public sealed class ContainerUpdateService(
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        if (!options.ContainerUpdateCheckEnabled)
-        {
-            return;
-        }
-
+        _ = options;
         await Task.Delay(TimeSpan.FromMinutes(1), stoppingToken);
         using var timer = new PeriodicTimer(Interval);
         do
         {
             try
             {
+                if (!features.IsOn(Feature.ContainerChecks))
+                {
+                    continue;
+                }
+
                 using var scope = scopes.CreateScope();
                 await RunOnceAsync(scope.ServiceProvider.GetRequiredService<AppDbContext>(), DateTime.UtcNow, stoppingToken);
             }

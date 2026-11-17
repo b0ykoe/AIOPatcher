@@ -6,6 +6,57 @@ Linux- (Ubuntu/Debian/Proxmox VE/PBS) und Windows-Server patchen, mehrere Sites,
 - Architektur & Entscheidungen: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 - Server aufsetzen (VM, Docker, Backups, Updates): [docs/SERVER-SETUP.md](docs/SERVER-SETUP.md)
 
+## Schnellstart (Docker, ca. 10 Minuten)
+
+Voraussetzungen: ein Linux-Server mit Docker (z. B. eine kleine VM, 2 GB RAM), ein DNS-Name für ihn
+(z. B. `patch.example.com`) und offene Ports 8443 (Agents) und 9443 (Dashboard, nur intern/VPN).
+Für eine gehärtete Installation mit Firewall und Backups: [docs/SERVER-SETUP.md](docs/SERVER-SETUP.md).
+
+**1. Ordner anlegen** (UID 1654 = Benutzer im Container, der Server läuft nicht als root):
+
+```bash
+sudo mkdir -p /opt/aiopatcher/data && sudo chown 1654:1654 /opt/aiopatcher/data && cd /opt/aiopatcher
+```
+
+**2. Compose-Datei holen und anpassen** (`PublicHostname`, Image-Name, Zeitzone):
+
+```bash
+sudo curl -fsSL -o docker-compose.yml https://raw.githubusercontent.com/OWNER/AIOPatcher/main/deploy/docker-compose.yml
+```
+
+```bash
+sudo nano docker-compose.yml
+```
+
+**3. Starten:**
+
+```bash
+sudo docker compose up -d
+```
+
+**4. Setup-Token aus dem Log holen:**
+
+```bash
+sudo docker compose logs aiopatcher | grep -i "setup token"
+```
+
+**5. Dashboard öffnen**, `https://patch.example.com:9443`, Token eingeben, Konto und Authenticator einrichten.
+Danach führt das Dashboard weiter: *Host hinzufügen* (ein Befehl pro Host), *Patch-Plan einrichten*, *Prüfen*.
+
+**Updates von AIOPatcher:** Das Dashboard meldet neue Versionen (`AIOPatcher__UpdateCheckRepository`). Dann:
+
+```bash
+sudo docker compose pull && sudo docker compose up -d
+```
+
+Vor jeder Datenbank-Migration legt AIOPatcher selbst eine Sicherung unter `/opt/aiopatcher/data/backups` an.
+Der Container hat einen eingebauten Healthcheck (`docker ps` zeigt `healthy`). In der Compose-Datei stehen
+auskommentiert: **autoheal** (startet bei dauerhaftem „unhealthy“ neu), **Diun** (meldet neue Images, ändert nichts,
+empfohlen) und **Watchtower** (aktualisiert automatisch, nur wenn du das wirklich willst).
+
+> Noch kein veröffentlichtes Image? Selbst bauen (x64-Maschine): `docker build -t aiopatcher-server:local .`
+> und in der Compose-Datei `image: aiopatcher-server:local` eintragen.
+
 ## Stand
 
 v0.2 (alles lauffähig und getestet; Linux-Agent, Docker-Image und echte Proxmox/Hetzner/OPNsense-APIs sind noch nicht
@@ -17,6 +68,13 @@ gegen echte Systeme getestet, sondern gegen nachgebaute APIs und Unit-Tests):
 - Jobs (Scan, Patch, Neustart) mit Live-Log, Ergebnis auch nach Neustart; lokale `policy.json` hat Vorrang
 
 **Bedienung**
+- **Einfacher und erweiterter Modus** pro Benutzer: Einfach zeigt nur Übersicht, Hosts, Sicherheit und Prüfen,
+  die Übersicht ist eine To-do-Liste mit Ein-Klick-Aktionen; der **Patch-Plan-Assistent** richtet Auto-Patch für alle
+  Hosts auf einmal ein (Vorlagen, Proxmox-Hosts automatisch ohne Neustart)
+- **Prüfen-Seite**: Server, externe Dienste, Benachrichtigungen, Integrationen, pro Host Agent, Backup,
+  Wiederherstellbarkeit (PBS-Verify) und Test-Snapshot, API-Token
+- Anleitungen direkt im Dashboard (Proxmox, Hetzner, OPNsense, alle Benachrichtigungskanäle) und **API-Seite**
+  mit allen Endpunkten (OpenAPI unter `/api/openapi/v1.json`)
 - Dashboard (Mantine, dunkel/hell), Deutsch und Englisch (Browsersprache, umstellbar pro Benutzer)
 - Mehrfachauswahl, Tags mit Filter, Befehlspalette (Strg+K), geführte Ersteinrichtung
 
@@ -31,8 +89,12 @@ gegen echte Systeme getestet, sondern gegen nachgebaute APIs und Unit-Tests):
 - **Patchpausen** (z. B. Jahreswechsel) und **zurückgehaltene Updates** (Paket/KB, global, pro Site oder Host)
 
 **Sicherheit & Überblick**
+- **Sicherheitsseite**: alle Lücken über alle Hosts mit Quellen-Links (NVD, OSV, Debian/Ubuntu, MSRC, KEV, EPSS)
 - **CVE-Zuordnung** für offene Updates (OSV.dev für Debian/Ubuntu, Microsoft MSRC für Windows-KBs),
-  Bewertung mit **CISA KEV** (aktiv ausgenutzt) und **EPSS**
+  Bewertung mit **CISA KEV** (aktiv ausgenutzt) und **EPSS**; dazu **Lücken ohne Update** in installierten Paketen
+  (nur KEV oder EPSS ≥ 5 %, sonst wäre allein der Kernel tausende Einträge)
+- **Programm-Inventar**: dpkg/snap und Windows-Programme, mit verfügbarer Version und Links (winget-Manifest,
+  Debian-Tracker, Launchpad, Hersteller); unter Windows **Programm-Updates per winget** (Windows 10/11, Server 2025)
 - **Docker-Container**: erkennt neuere Images in der Registry (nur Anzeige/Meldung, aktualisiert nichts)
 - **Benachrichtigungen**: ntfy, E-Mail, Discord, Slack, Telegram, Webhook (HMAC-signiert)
 - **Berichte**: Konformität pro Site und Zeitraum, CSV und Druck/PDF
@@ -40,6 +102,7 @@ gegen echte Systeme getestet, sondern gegen nachgebaute APIs und Unit-Tests):
 - **OPNsense**: Firmware-Stand, Update-Hinweis, Update per Klick
 
 **Betrieb**
+- Docker-Image mit eingebautem Healthcheck, Hinweis im Dashboard bei neuer AIOPatcher-Version
 - **API-Tokens** (Betrachter/Operator) für Skripte, z. B. `curl -H "Authorization: Bearer aiop_…" …/api/overview`
 - **Agent-Self-Update** mit signierten Binaries (Release-Schlüssel), **automatische Erneuerung** der Agent-Zertifikate
 - CI (Build, Tests) und Release-Workflow (Docker-Image nach ghcr.io, signierte Agents am GitHub-Release)
@@ -96,6 +159,39 @@ Neustart im Fenster erlaubt ist. Zeiten gelten in der Zeitzone des Servers (`TZ`
 - Fenster dürfen über Mitternacht gehen und gehören zum Tag, an dem sie beginnen. Sommerzeit wird berücksichtigt.
 - Die lokale `policy.json` hat weiterhin Vorrang.
 
+## Reverse Proxy (Traefik, nginx, Nginx Proxy Manager)
+
+Das Dashboard kann hinter einem Reverse Proxy laufen (Port 443, Let's-Encrypt-Zertifikat), die Agents bleiben direkt auf 8443.
+Anleitung: [docs/REVERSE-PROXY.md](docs/REVERSE-PROXY.md), fertiges Traefik-Beispiel:
+[deploy/docker-compose.traefik.yml](deploy/docker-compose.traefik.yml). Wichtig: den Proxy in `AIOPatcher__TrustedProxies`
+eintragen. Die Prüfen-Seite zeigt, ob das stimmt.
+
+## Funktionen & Sicherheit
+
+Unter *Einstellungen → Funktionen & Sicherheit* legt ein Admin fest, was AIOPatcher überhaupt darf. Der Server setzt
+jeden Schalter selbst durch, auch für API-Tokens, Auto-Patch und Abläufe; ausgeblendete Knöpfe sind nur Komfort.
+
+| Schalter | Ab Werk | Wirkung, wenn aus |
+|---|---|---|
+| Automatisch patchen | an | **Notaus**: keine Auto-Patch-Jobs, Abläufe bleiben stehen, wartende Auto-Jobs bleiben liegen. Manuelle Jobs gehen weiter. |
+| Updates installieren | an | Patch-Jobs werden abgelehnt, AIOPatcher zeigt nur an. |
+| Neustarts | an | Neustart-Jobs werden abgelehnt, Patches laufen ohne Neustart. |
+| Programm-Updates per winget | **aus** | Programm-Updates werden abgelehnt. |
+| Agent-Self-Update | an | Agents bekommen keine Updates angeboten. |
+| Test-Snapshots | an | Kein Test-Snapshot auf der Prüfen-Seite. |
+| OPNsense-Firmware-Update per Klick | **aus** | Firmware-Updates nur in der OPNsense selbst. |
+| API-Tokens | an | Jeder Token wird abgewiesen (bleibt gespeichert). |
+| CVE-Abgleich, Container-Prüfung, Versionsprüfung | an | Keine Verbindungen zu den jeweiligen Diensten. |
+
+Jede Änderung landet im Audit-Log. Schalter ändern geht nur mit Browser-Login als Admin, nicht per API-Token.
+Was nie eingeschaltet werden soll, sperrst du auf dem Server, z. B. in `docker-compose.yml`:
+
+```yaml
+AIOPatcher__LockedFeatures: "AppUpdates,OpnsenseUpdates"
+```
+
+Gesperrte Funktionen sind aus und lassen sich im Dashboard nicht einschalten, auch nicht von einem Admin.
+
 ## Lokale Policy auf dem Host
 
 Beim Registrieren legt der Agent `policy.json` neben seinen Zertifikaten an
@@ -105,13 +201,17 @@ Der Server kann sie nicht ändern; sie wird bei jedem Job neu gelesen.
 ```json
 {
   "allowPatch": "All",
-  "allowReboot": true
+  "allowReboot": true,
+  "allowSelfUpdate": true,
+  "allowAppUpdates": true
 }
 ```
 
 `allowPatch`: `None`, `Security` oder `All`. `allowReboot: false` verhindert jeden Neustart durch AIOPatcher,
 z. B. auf dem Proxmox-Host selbst oder der OPNsense-VM. `"allowSelfUpdate": false` verhindert, dass der Agent
-signierte Updates selbst installiert.
+signierte Updates selbst installiert. `"allowAppUpdates": false` verbietet Programm-Updates per winget auf diesem Host
+(diese brauchen außerdem `allowPatch: All`). Die Policy gilt zusätzlich zu den Schaltern im Dashboard: ausgeführt wird nur,
+was beide erlauben.
 
 ## Agent (Entwicklung)
 

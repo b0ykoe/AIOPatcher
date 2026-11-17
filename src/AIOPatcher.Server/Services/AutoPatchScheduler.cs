@@ -9,7 +9,7 @@ namespace AIOPatcher.Server.Services;
 /// deren Fenster abgelaufen ist (z. B. weil der Host offline war). Außerhalb des Fensters wird nie
 /// ein Auto-Job vergeben.
 /// </summary>
-public sealed class AutoPatchScheduler(IServiceScopeFactory scopes, ServerClock clock, ILogger<AutoPatchScheduler> logger) : BackgroundService
+public sealed class AutoPatchScheduler(IServiceScopeFactory scopes, ServerClock clock, ILogger<AutoPatchScheduler> logger, FeatureFlags features) : BackgroundService
 {
     public const string Actor = "scheduler";
     private static readonly TimeSpan Interval = TimeSpan.FromMinutes(1);
@@ -22,6 +22,11 @@ public sealed class AutoPatchScheduler(IServiceScopeFactory scopes, ServerClock 
         using var timer = new PeriodicTimer(Interval);
         do
         {
+            if (!features.IsOn(Feature.Automation))
+            {
+                continue; // Notaus: keine automatischen Jobs
+            }
+
             try
             {
                 using var scope = scopes.CreateScope();

@@ -16,7 +16,8 @@ public enum PatchPermission
 /// Selbst ein kompromittierter Server kann nicht mehr anstoßen, als hier erlaubt ist.
 /// </summary>
 /// <param name="AllowSelfUpdate">Signierte Agent-Updates vom Server automatisch installieren.</param>
-public sealed record AgentPolicy(PatchPermission AllowPatch = PatchPermission.All, bool AllowReboot = true, bool AllowSelfUpdate = true)
+/// <param name="AllowAppUpdates">Programm-Updates per winget erlauben (zusätzlich muss der Server sie freigeben).</param>
+public sealed record AgentPolicy(PatchPermission AllowPatch = PatchPermission.All, bool AllowReboot = true, bool AllowSelfUpdate = true, bool AllowAppUpdates = true)
 {
     public const string FileName = "policy.json";
 

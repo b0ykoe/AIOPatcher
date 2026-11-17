@@ -27,6 +27,7 @@ public sealed class JobExecutor(IPlatformInventory inventory, IPatchPlatform pat
                 JobType.Scan => await ScanAsync(log, ct),
                 JobType.Patch => await PatchAsync(job, policy, log, ct),
                 JobType.Reboot => Reboot(policy, log),
+                JobType.AppUpdate => await AppUpdateAsync(job, policy, log, ct),
                 _ => new JobExecutionResult(JobOutcome.Rejected, $"Unknown job type {job.Type}."),
             };
         }
@@ -44,6 +45,10 @@ public sealed class JobExecutor(IPlatformInventory inventory, IPatchPlatform pat
             new JobExecutionResult(JobOutcome.Rejected, "Local policy forbids patching."),
         JobType.Patch when policy.AllowPatch == PatchPermission.Security && job.Scope == PatchScope.All =>
             new JobExecutionResult(JobOutcome.Rejected, "Local policy only allows security updates."),
+        JobType.AppUpdate when !policy.AllowAppUpdates =>
+            new JobExecutionResult(JobOutcome.Rejected, "Local policy forbids program updates (allowAppUpdates: false)."),
+        JobType.AppUpdate when policy.AllowPatch != PatchPermission.All =>
+            new JobExecutionResult(JobOutcome.Rejected, "Local policy does not allow program updates (needs allowPatch: All)."),
         JobType.Reboot when !policy.AllowReboot =>
             new JobExecutionResult(JobOutcome.Rejected, "Local policy forbids reboots."),
         _ => null,
@@ -60,6 +65,46 @@ public sealed class JobExecutor(IPlatformInventory inventory, IPatchPlatform pat
         var summary = $"{updates.Count} updates available, {updates.Count(u => u.IsSecurity)} of them security.";
         log($"[agent] {summary}");
         return new JobExecutionResult(JobOutcome.Succeeded, summary, ScannedUpdates: updates);
+    }
+
+    /// <summary>Programme per winget aktualisieren, eins nach dem anderen; ein Fehler bricht die übrigen nicht ab.</summary>
+    private static async Task<JobExecutionResult> AppUpdateAsync(AgentJob job, AgentPolicy policy, Action<string> log, CancellationToken ct)
+    {
+        if (CheckPolicy(job, policy) is { } rejected)
+        {
+            log($"[agent] Rejected: {rejected.Summary}");
+            return rejected;
+        }
+
+        if (!OperatingSystem.IsWindows() || Platforms.Windows.WingetClient.FindExecutable() is not { } winget)
+        {
+            return new JobExecutionResult(JobOutcome.Rejected, "winget is not available on this host.");
+        }
+
+        var packages = (job.Packages ?? []).Where(p => p.Length is > 0 and <= 200 && !p.Any(char.IsWhiteSpace)).Distinct().ToList();
+        if (packages.Count == 0)
+        {
+            return new JobExecutionResult(JobOutcome.Succeeded, "Nothing to update.");
+        }
+
+        var failed = new List<string>();
+        foreach (var id in packages)
+        {
+            var exit = await Platforms.Windows.WingetClient.UpgradeAsync(winget, id, log, ct);
+            if (exit != 0)
+            {
+                failed.Add(id);
+                log($"[agent] ERROR {id}: winget exited with code {exit}.");
+            }
+            else
+            {
+                log($"[agent] OK: {id} updated.");
+            }
+        }
+
+        return failed.Count == 0
+            ? new JobExecutionResult(JobOutcome.Succeeded, $"{packages.Count} program(s) updated.")
+            : new JobExecutionResult(JobOutcome.Failed, $"{packages.Count - failed.Count} of {packages.Count} updated; failed: {string.Join(", ", failed)}.");
     }
 
     private async Task<JobExecutionResult> PatchAsync(AgentJob job, AgentPolicy policy, Action<string> log, CancellationToken ct)

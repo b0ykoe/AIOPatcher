@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Alert, Button, Card, Group, PasswordInput, PinInput, SegmentedControl, SimpleGrid, Stack, Text } from "@mantine/core";
-import { IconDeviceMobile, IconKey, IconLanguage } from "@tabler/icons-react";
+import { IconDeviceMobile, IconKey, IconLanguage, IconLayoutDashboard } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import { api, type Me } from "../api";
 import { useMe } from "../App";
@@ -42,6 +42,22 @@ export function AccountPage({ onMeChanged }: { onMeChanged: (me: Me) => void }) 
               ]}
             />
             <Text size="xs" c="dimmed" mt="xs">{t("account.languageHint")}</Text>
+          </Card>
+          <Card>
+            <Group gap="xs" mb="sm">
+              <IconLayoutDashboard size={18} />
+              <Text fw={700}>{t("account.view")}</Text>
+            </Group>
+            <SegmentedControl
+              fullWidth
+              value={me.uiMode}
+              onChange={(v) => void api.put<Me>("/api/me/ui-mode", { mode: v }).then(onMeChanged).catch(() => {})}
+              data={[
+                { value: "Simple", label: t("nav.modeSimple") },
+                { value: "Advanced", label: t("nav.modeAdvanced") },
+              ]}
+            />
+            <Text size="xs" c="dimmed" mt="xs">{t("nav.modeHint")}</Text>
           </Card>
           <Card>
             <Group gap="xs" mb="sm">

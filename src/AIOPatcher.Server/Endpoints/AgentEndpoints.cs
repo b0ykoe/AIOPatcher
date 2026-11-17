@@ -171,6 +171,7 @@ public static class AgentEndpoints
         AIOPatcherOptions options,
         Notifier notifier,
         AgentDownloads downloads,
+        FeatureFlags features,
         CancellationToken ct)
     {
         var host = (ManagedHost)http.Items[HostItemKey]!;
@@ -208,17 +209,22 @@ public static class AgentEndpoints
             }
         }
 
+        if (request.Software is not null)
+        {
+            await SoftwareEndpoints.ReplaceAsync(db, host, request.Software, ct);
+        }
+
         if (request.Containers is not null)
         {
             await ContainerUpdateService.ReplaceContainersAsync(db, host, request.Containers, now, ct);
         }
 
         await ReplaceAddressesAsync(db, host, request.Addresses ?? [], now, ct);
-        var job = await DispatchJobAsync(db, host, request.RunningJobId, now, ct);
+        var job = await DispatchJobAsync(db, host, request.RunningJobId, now, ct, features);
         await db.SaveChangesAsync(ct);
 
         var renew = host.CertificateExpiresAt - now < CertificateRenewBefore;
-        var update = job is null && options.AgentAutoUpdate ? downloads.OfferFor(host.OsFamily, request.Architecture, host.AgentVersion) : null;
+        var update = job is null && features.IsOn(Feature.AgentSelfUpdate) ? downloads.OfferFor(host.OsFamily, request.Architecture, host.AgentVersion) : null;
         return Results.Ok(new CheckinResponse(options.AgentCheckinIntervalSeconds, job, update, renew));
     }
 
@@ -255,7 +261,11 @@ public static class AgentEndpoints
     /// hat er ihn verloren (Absturz, Neustart ohne Ergebnis). Ergebnisse nach einem Neustart liefert der Agent
     /// immer vor dem Check-in ab, daher ist das eindeutig.
     /// </summary>
-    private static async Task<AgentJob?> DispatchJobAsync(AppDbContext db, ManagedHost host, Guid? runningJobId, DateTime now, CancellationToken ct)
+    /// <remarks>
+    /// Letzte Kontrolle vor dem Agent: abgeschaltete Funktionen werden hier durchgesetzt, egal wie der Job entstanden ist
+    /// (Dashboard, API-Token, Planer, Ablauf). Automatische Jobs warten bei Notaus, statt zu scheitern.
+    /// </remarks>
+    public static async Task<AgentJob?> DispatchJobAsync(AppDbContext db, ManagedHost host, Guid? runningJobId, DateTime now, CancellationToken ct, FeatureFlags? features = null)
     {
         if (runningJobId is not null)
         {
@@ -282,7 +292,45 @@ public static class AgentEndpoints
             AutoPatchScheduler.ExpireJob(expired, now);
         }
 
-        var next = queued.FirstOrDefault(j => j.NotAfter is null || j.NotAfter > now);
+        PatchJob? next = null;
+        foreach (var candidate in queued.Where(j => j.NotAfter is null || j.NotAfter > now))
+        {
+            if (features is null)
+            {
+                next = candidate;
+                break;
+            }
+
+            var automated = candidate.RequestedBy == AutoPatchScheduler.Actor || candidate.RequestedBy.StartsWith("runbook:", StringComparison.Ordinal);
+            if (automated && !features.IsOn(Feature.Automation))
+            {
+                continue; // Notaus: liegen lassen, verfällt ggf. am Fensterende
+            }
+
+            Feature? blocked = candidate.Type switch
+            {
+                JobType.Patch when !features.IsOn(Feature.PatchJobs) => Feature.PatchJobs,
+                JobType.Reboot when !features.IsOn(Feature.Reboots) => Feature.Reboots,
+                JobType.AppUpdate when !features.IsOn(Feature.AppUpdates) => Feature.AppUpdates,
+                _ => null,
+            };
+            if (blocked is { } feature)
+            {
+                candidate.Status = JobStatus.Rejected;
+                candidate.FinishedAt = now;
+                candidate.Summary = FeatureFlags.DisabledMessage(feature);
+                continue;
+            }
+
+            if (candidate.AllowReboot && candidate.Type == JobType.Patch && !features.IsOn(Feature.Reboots))
+            {
+                candidate.AllowReboot = false; // patchen ja, neu starten nein
+            }
+
+            next = candidate;
+            break;
+        }
+
         if (next is null)
         {
             return null;
@@ -291,7 +339,8 @@ public static class AgentEndpoints
         next.Status = JobStatus.Running;
         next.StartedAt = now;
         var holds = next.Type == JobType.Patch ? await PatchRules.HoldsForHostAsync(db, host, now, ct) : null;
-        return new AgentJob(next.Id, next.Type, next.Scope, next.AllowReboot, holds is { Count: > 0 } ? holds : null);
+        var packages = next.Type == JobType.AppUpdate ? next.Packages?.Split(',', StringSplitOptions.RemoveEmptyEntries) : null;
+        return new AgentJob(next.Id, next.Type, next.Scope, next.AllowReboot, holds is { Count: > 0 } ? holds : null, packages);
     }
 
     private static async Task<IResult> AppendJobLog(Guid jobId, JobLogRequest request, HttpContext http, AppDbContext db, CancellationToken ct)

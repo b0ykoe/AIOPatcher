@@ -16,6 +16,12 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Server.Kestrel.Https;
 using Microsoft.EntityFrameworkCore;
 
+// Docker-HEALTHCHECK: sofort beenden, ohne den ganzen Server zu starten.
+if (HealthCheckCommand.IsInvocation(args))
+{
+    return await HealthCheckCommand.RunAsync();
+}
+
 // "admin ..." ist ein CLI-Befehl (Notfallzugang) und gehört nicht in die Konfiguration.
 var cliArgs = AdminCli.IsCliInvocation(args) ? args : null;
 var builder = WebApplication.CreateBuilder(cliArgs is null ? args : []);
@@ -114,10 +120,13 @@ builder.Services.ConfigureHttpJsonOptions(json =>
 });
 
 builder.Services.AddProblemDetails();
+// API-Beschreibung für die API-Seite im Dashboard (/api/openapi/v1.json, nur angemeldet).
+builder.Services.AddOpenApi();
 // Ungültige Requests (kaputtes JSON usw.) immer als 400 beantworten, auch in Development (dort sonst 500).
 builder.Services.Configure<RouteHandlerOptions>(o => o.ThrowOnBadRequest = false);
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddSingleton<SetupTokenService>();
+builder.Services.AddSingleton<FeatureFlags>();
 builder.Services.AddSingleton<IPasswordHasher<UserAccount>, PasswordHasher<UserAccount>>();
 builder.Services.AddScoped<AuditLog>();
 builder.Services.AddHostedService<JobJanitor>();
@@ -144,6 +153,8 @@ builder.Services.AddHttpClient(CveService.HttpClientName, c =>
 builder.Services.AddSingleton<CveService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<CveService>());
 builder.Services.AddHostedService<ContainerUpdateService>();
+builder.Services.AddSingleton<ReleaseCheck>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<ReleaseCheck>());
 
 var app = builder.Build();
 
@@ -158,10 +169,12 @@ using (var scope = app.Services.CreateScope())
     }
 
     await app.Services.GetRequiredService<SetupTokenService>().InitializeAsync(db, app.Logger, CancellationToken.None);
+    await app.Services.GetRequiredService<FeatureFlags>().LoadAsync(db, CancellationToken.None);
 }
 
 // --- Pipeline -------------------------------------------------------------------------------------
 app.UseExceptionHandler();
+app.UseTrustedProxies(options);
 app.UsePortIsolation(options);
 
 app.Use(async (ctx, next) =>
@@ -197,6 +210,11 @@ app.MapIntegrationEndpoints();
 app.MapApiTokenEndpoints();
 app.MapReportEndpoints();
 app.MapIpamEndpoints();
+app.MapCheckEndpoints();
+app.MapSoftwareEndpoints();
+app.MapVulnerabilityEndpoints();
+app.MapFeatureEndpoints();
+app.MapOpenApi("/api/openapi/{documentName}.json").RequireAuthorization();
 app.MapAgentEndpoints();
 app.MapAgentDownloadEndpoints();
 

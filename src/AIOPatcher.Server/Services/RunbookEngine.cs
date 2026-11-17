@@ -11,7 +11,7 @@ namespace AIOPatcher.Server.Services;
 /// danach wieder, Neustart erledigt), bei Fehlern je nach Strategie anhalten. Startet geplante Abläufe im Fenster.
 /// Die Logik ist statisch und bekommt die Zeit übergeben, damit sie testbar ist.
 /// </summary>
-public sealed class RunbookEngine(IServiceScopeFactory scopes, ServerClock clock, Notifier notifier, ILogger<RunbookEngine> logger) : BackgroundService
+public sealed class RunbookEngine(IServiceScopeFactory scopes, ServerClock clock, Notifier notifier, ILogger<RunbookEngine> logger, FeatureFlags features) : BackgroundService
 {
     private static readonly TimeSpan Interval = TimeSpan.FromSeconds(10);
 
@@ -23,6 +23,11 @@ public sealed class RunbookEngine(IServiceScopeFactory scopes, ServerClock clock
         using var timer = new PeriodicTimer(Interval);
         do
         {
+            if (!features.IsOn(Feature.Automation))
+            {
+                continue; // Notaus: Abläufe stehen, bis wieder eingeschaltet wird
+            }
+
             try
             {
                 using var scope = scopes.CreateScope();

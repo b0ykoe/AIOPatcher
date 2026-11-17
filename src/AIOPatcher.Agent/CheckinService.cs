@@ -89,9 +89,18 @@ public sealed class CheckinService(
     {
         var updates = _freshUpdates;
         IReadOnlyList<ContainerReport>? containers = null;
+        IReadOnlyList<InstalledSoftware>? software = null;
         if (updates is null && DateTime.UtcNow >= _nextScan)
         {
             containers = await DockerInventory.CollectAsync(ct);
+            try
+            {
+                software = await inventory.ScanSoftwareAsync(ct);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                logger.LogWarning("Software inventory failed: {Message}", ex.Message);
+            }
             logger.LogInformation("Scanning for updates …");
             updates = await inventory.ScanUpdatesAsync(ct);
             if (updates is not null)
@@ -102,7 +111,7 @@ public sealed class CheckinService(
             _nextScan = DateTime.UtcNow + ScanInterval;
         }
 
-        var request = await BuildRequestAsync(inventory, updates, ct) with { RunningJobId = runningJobId, Containers = containers };
+        var request = await BuildRequestAsync(inventory, updates, ct) with { RunningJobId = runningJobId, Containers = containers, Software = software };
         var response = await client.CheckinAsync(request, ct);
         _freshUpdates = null;
         logger.LogDebug("Check-in ok, next in {Seconds}s", response.CheckinIntervalSeconds);

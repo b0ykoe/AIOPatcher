@@ -23,12 +23,16 @@ import { IconBrandUbuntu, IconCloud, IconEdit, IconFlame, IconLink, IconPlugConn
 import { useTranslation } from "react-i18next";
 import { api, formatRelative, type Integration, type IntegrationTestResult, type IntegrationType, type Site } from "../../api";
 import { confirmAction, EmptyState, errorText, notifyError, notifySuccess } from "../ui";
+import { GuidePanel } from "../GuidePanel";
+import { FeatureOffHint, useFeatures } from "../../features";
+
 
 const types: IntegrationType[] = ["Proxmox", "HetznerCloud", "Opnsense"];
 const typeIcon: Record<IntegrationType, typeof IconServer2> = { Proxmox: IconServer2, HetznerCloud: IconCloud, Opnsense: IconFlame };
 
 export function IntegrationSettings() {
   const { t } = useTranslation();
+  const { isOn } = useFeatures();
   const [items, setItems] = useState<Integration[] | null>(null);
   const [sites, setSites] = useState<Site[]>([]);
   const [editing, setEditing] = useState<Integration | "new" | null>(null);
@@ -197,7 +201,8 @@ export function IntegrationSettings() {
                     <Button size="compact-sm" variant="light" loading={busy === i.id} onClick={() => void refreshOpnsense(i)}>
                       {t("opnsense.refresh")}
                     </Button>
-                    {i.firmware?.updatesAvailable && (
+                    {i.firmware?.updatesAvailable && !isOn("OpnsenseUpdates") && <FeatureOffHint feature="OpnsenseUpdates" />}
+                    {i.firmware?.updatesAvailable && isOn("OpnsenseUpdates") && (
                       <Button size="compact-sm" variant="light" color="orange" onClick={() => updateOpnsense(i)}>
                         {t("opnsense.update")}
                       </Button>
@@ -339,6 +344,7 @@ function IntegrationModal({ integration, sites, onClose, onSaved }: { integratio
           )}
         </Group>
         <Switch label={t("notifications.enabled")} checked={enabled} onChange={(e) => setEnabled(e.currentTarget.checked)} />
+        <GuidePanel topic={type} defaultOpen={integration === "new"} />
         {error && <Alert color="red" variant="light">{error}</Alert>}
         <Group justify="flex-end">
           <Button variant="default" onClick={onClose}>{t("common.cancel")}</Button>

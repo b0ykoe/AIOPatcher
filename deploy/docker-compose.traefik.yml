@@ -1,0 +1,68 @@
+# AIOPatcher hinter Traefik (v3): Dashboard per HTTPS auf 443 mit Let's-Encrypt-Zertifikat.
+# Anleitung, nginx und Nginx Proxy Manager: docs/REVERSE-PROXY.md
+#
+# Aufbau:
+#   Browser ──HTTPS 443──> Traefik ──HTTPS (CA geprüft)──> AIOPatcher-Dashboard 127.0.0.1:9443
+#   Agents  ──mTLS 8443───────────────────────────────────> AIOPatcher-Agent-API (direkt, NICHT über Traefik)
+#
+# Beide Container laufen mit network_mode: host, damit ufw weiter für alle Ports gilt (wie in docs/SERVER-SETUP.md).
+# Traefik erreicht das Dashboard über 127.0.0.1, also ist 127.0.0.1 der einzige vertraute Proxy.
+#
+# Start:
+#   mkdir -p /opt/aiopatcher/data /opt/aiopatcher/traefik/letsencrypt && chown 1654:1654 /opt/aiopatcher/data
+#   cp deploy/traefik/dynamic.yml /opt/aiopatcher/traefik/   # Hostname und Netze darin anpassen
+#   docker compose -f docker-compose.traefik.yml up -d aiopatcher   # zuerst: legt die CA an (data/ca/ca.crt)
+#   docker compose -f docker-compose.traefik.yml up -d
+#   ufw allow 80,443/tcp   # 80 nur für die HTTP→HTTPS-Umleitung und die Let's-Encrypt-Prüfung
+#   ufw delete allow from 10.99.0.0/24 to any port 9443 proto tcp   # 9443 braucht jetzt nur noch Traefik (lokal)
+services:
+  aiopatcher:
+    image: ghcr.io/OWNER/aiopatcher-server:latest # für Produktion feste Version, z. B. :0.3.0
+    container_name: aiopatcher
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - /opt/aiopatcher/data:/data
+    environment:
+      AIOPatcher__PublicHostname: patch.example.com # Agents: https://patch.example.com:8443, Dashboard: https://patch.example.com
+      AIOPatcher__DataDirectory: /data
+      AIOPatcher__DashboardPort: "9443"
+      AIOPatcher__AgentPort: "8443"
+      AIOPatcher__TrustedProxies: "127.0.0.1" # nur Traefik darf die Client-IP weitergeben (Login-Bremse, Audit-Log)
+      AIOPatcher__Language: de
+      AIOPatcher__UpdateCheckRepository: OWNER/AIOPatcher
+      TZ: Europe/Berlin
+
+  traefik:
+    image: traefik:v3.4 # aktuelle v3-Version eintragen
+    container_name: traefik
+    restart: unless-stopped
+    network_mode: host
+    command:
+      - --entrypoints.web.address=:80
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+      - --entrypoints.websecure.address=:443
+      - --entrypoints.websecure.http.tls=true
+      - --providers.file.filename=/etc/traefik/dynamic.yml
+      - --providers.file.watch=true
+      - --certificatesresolvers.le.acme.email=admin@example.com
+      - --certificatesresolvers.le.acme.storage=/letsencrypt/acme.json
+      # Dashboard öffentlich erreichbar (443 offen): TLS-Challenge reicht.
+      - --certificatesresolvers.le.acme.tlschallenge=true
+      # Dashboard nur intern/VPN (empfohlen): stattdessen DNS-Challenge, z. B. Hetzner DNS oder Cloudflare.
+      # - --certificatesresolvers.le.acme.dnschallenge.provider=hetzner
+      # (dazu unter environment: HETZNER_API_KEY bzw. CF_DNS_API_TOKEN)
+      - --log.level=WARN
+      - --accesslog=true
+    volumes:
+      - /opt/aiopatcher/traefik/dynamic.yml:/etc/traefik/dynamic.yml:ro
+      - /opt/aiopatcher/traefik/letsencrypt:/letsencrypt
+      # Nur das CA-Zertifikat (nicht den Schlüssel!), damit Traefik das Dashboard-Zertifikat prüfen kann.
+      # create_host_path: false: Fehlt die Datei noch, bricht der Start ab, statt einen leeren Ordner anzulegen.
+      - type: bind
+        source: /opt/aiopatcher/data/ca/ca.crt
+        target: /etc/traefik/aiopatcher-ca.crt
+        read_only: true
+        bind:
+          create_host_path: false

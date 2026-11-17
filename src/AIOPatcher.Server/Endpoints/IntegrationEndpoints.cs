@@ -62,8 +62,13 @@ public static class IntegrationEndpoints
     }
 
     /// <summary>Firmware-Update starten. Die Firewall installiert und startet ggf. selbst neu (kurze Unterbrechung!).</summary>
-    private static async Task<IResult> UpdateOpnsense(Guid id, AppDbContext db, OpnsenseClientFactory clients, AuditLog audit, CancellationToken ct)
+    private static async Task<IResult> UpdateOpnsense(Guid id, AppDbContext db, OpnsenseClientFactory clients, AuditLog audit, FeatureFlags features, CancellationToken ct)
     {
+        if (!features.IsOn(Feature.OpnsenseUpdates))
+        {
+            return Results.Problem(FeatureFlags.DisabledMessage(Feature.OpnsenseUpdates), statusCode: StatusCodes.Status403Forbidden);
+        }
+
         var integration = await db.Integrations.FindAsync([id], ct);
         if (integration is not { Type: IntegrationType.Opnsense })
         {

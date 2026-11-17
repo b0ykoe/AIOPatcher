@@ -147,3 +147,71 @@ public sealed class KevNotificationTests : IDisposable
         _connection.Dispose();
     }
 }
+
+public sealed class InstalledVulnerabilityTests
+{
+    [Theory]
+    [InlineData("Ubuntu 24.04.1 LTS", "24.04", "Ubuntu:24.04:LTS")]
+    [InlineData("Proxmox VE", "8.3.0 (Debian GNU/Linux 12 (bookworm))", "Debian:12")]
+    [InlineData("Proxmox Backup Server", "3.3.2 (Debian GNU/Linux 12 (bookworm))", "Debian:12")]
+    [InlineData("Debian GNU/Linux 12 (bookworm)", "12", "Debian:12")]
+    [InlineData("Windows 11 Pro", "23H2", null)]
+    public void EcosystemForHost(string osName, string osVersion, string? expected) =>
+        Assert.Equal(expected, CveMapping.EcosystemForHost(osName, osVersion));
+
+    [Fact]
+    public void EpssCsv_ParsesAndSkipsHeader()
+    {
+        var csv = "#model_version:v2026.06.15,score_date:2026-11-16T12:03:16Z\ncve,epss,percentile\nCVE-1999-0001,0.04753,0.92025\nCVE-2024-3094,0.909,0.9981\n";
+        var map = CveMapping.ParseEpssCsv(new StringReader(csv));
+
+        Assert.Equal(2, map.Count);
+        Assert.Equal(0.909f, map[CveMapping.CveKey("CVE-2024-3094")!.Value].Epss, 3);
+        Assert.Null(CveMapping.CveKey("GHSA-xxxx"));
+    }
+}
+
+public sealed class VulnerabilityListTests : IDisposable
+{
+    private readonly SqliteConnection _connection = new("Data Source=:memory:");
+    private readonly AppDbContext _db;
+
+    public VulnerabilityListTests()
+    {
+        _connection.Open();
+        _db = new AppDbContext(new DbContextOptionsBuilder<AppDbContext>().UseSqlite(_connection).Options);
+        _db.Database.Migrate();
+    }
+
+    [Fact]
+    public async Task List_MergesFixedAndUnfixed_KevFirst()
+    {
+        var site = new Site { Name = "Homelab" };
+        var linux = new ManagedHost { Site = site, Name = "web01", Hostname = "web01", CertificateThumbprint = "a", OsFamily = OsFamily.Linux };
+        var win = new ManagedHost { Site = site, Name = "dc01", Hostname = "dc01", CertificateThumbprint = "b", OsFamily = OsFamily.Windows };
+        _db.Hosts.AddRange(linux, win);
+        _db.PendingUpdates.Add(new PendingUpdate { Host = linux, Name = "openssl", Cves = "CVE-2024-0001,CVE-2024-3094" });
+        _db.PendingUpdates.Add(new PendingUpdate { Host = win, Name = "2026-11 Cumulative Update (KB5050001)", Cves = "CVE-2026-1001" });
+        _db.HostVulnerabilities.Add(new HostVulnerability { Host = linux, CveId = "CVE-2025-9999", Package = "sudo", InstalledVersion = "1.9.15", FoundAt = DateTime.UtcNow });
+        _db.CveInfos.Add(new CveInfo { Id = "CVE-2024-3094", IsKev = true, Epss = 0.9 });
+        _db.CveInfos.Add(new CveInfo { Id = "CVE-2026-1001", Epss = 0.3 });
+        await _db.SaveChangesAsync();
+        var cves = new CveService(null!, null!, new AIOPatcher.Server.Options.AIOPatcherOptions(), new Notifier(), Microsoft.Extensions.Logging.Abstractions.NullLogger<CveService>.Instance);
+
+        var list = await AIOPatcher.Server.Endpoints.VulnerabilityEndpoints.ListAsync(null, _db, cves, CancellationToken.None);
+
+        Assert.Equal(4, list.Count);
+        Assert.Equal("CVE-2024-3094", list[0].Cve); // KEV zuerst
+        Assert.Contains("KEV", list[0].Sources);
+        Assert.Contains("MSRC", list.Single(v => v.Cve == "CVE-2026-1001").Sources);
+        var unfixed = list.Single(v => v.Cve == "CVE-2025-9999");
+        Assert.False(unfixed.FixAvailable);
+        Assert.Equal("sudo 1.9.15", Assert.Single(unfixed.Hosts).Package);
+    }
+
+    public void Dispose()
+    {
+        _db.Dispose();
+        _connection.Dispose();
+    }
+}

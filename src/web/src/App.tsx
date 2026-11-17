@@ -1,3 +1,4 @@
+import { EmergencyBanner, FeaturesProvider } from "./features";
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import { Navigate, NavLink as RouterLink, Route, Routes, useLocation, useNavigate } from "react-router";
 import {
@@ -13,6 +14,7 @@ import {
   Menu,
   NavLink,
   Progress,
+  SegmentedControl,
   Stack,
   Text,
   Tooltip,
@@ -33,6 +35,9 @@ import {
   IconMoon,
   IconPlus,
   IconRoute,
+  IconShieldHalfFilled,
+  IconApps,
+  IconStethoscope,
   IconNetwork,
   IconReportAnalytics,
   IconShieldLock,
@@ -46,7 +51,7 @@ import {
   IconUserCog,
 } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
-import { api, ApiError, type HostSummary, type Me, type Overview, type SetupStatus, type UserRole } from "./api";
+import { api, ApiError, type HostSummary, type Me, type Overview, type SetupStatus, type UiMode, type UserRole } from "./api";
 import { AddHostModal } from "./components/AddHostModal";
 import { errorText } from "./components/ui";
 import { currentLanguage, setLanguage } from "./i18n";
@@ -62,6 +67,10 @@ import { RunbookEditorPage } from "./pages/RunbookEditorPage";
 import { RunbooksPage } from "./pages/RunbooksPage";
 import { IpamPage } from "./pages/IpamPage";
 import { ReportsPage } from "./pages/ReportsPage";
+import { ChecksPage } from "./pages/ChecksPage";
+import { ApiPage } from "./pages/ApiPage";
+import { SoftwarePage } from "./pages/SoftwarePage";
+import { SecurityPage } from "./pages/SecurityPage";
 import { RulesPage } from "./pages/RulesPage";
 import { RunPage } from "./pages/RunPage";
 import { SettingsPage } from "./pages/SettingsPage";
@@ -146,10 +155,13 @@ export function App() {
 
 // --- Angemeldeter Benutzer und Rechte -------------------------------------------------------------
 
-const MeContext = createContext<Me>({ id: "", username: "", role: "Viewer", language: null });
+const MeContext = createContext<Me>({ id: "", username: "", role: "Viewer", language: null, uiMode: "Simple" });
 export const useMe = () => useContext(MeContext);
 
 /** Rechte im UI spiegeln die Server-Policies; der Server prüft trotzdem jede Anfrage. */
+/** Einfacher Modus: weniger Seiten und Knöpfe, geführte Abläufe. Pro Benutzer umschaltbar. */
+export const useSimple = () => useMe().uiMode === "Simple";
+
 export function useCan() {
   const { role } = useMe();
   return { operate: role === "Admin" || role === "Operator", admin: role === "Admin" };
@@ -179,10 +191,15 @@ function Shell({ me, onMeChanged, onLoggedOut }: { me: Me; onMeChanged: (me: Me)
   const canOperate = roleAtLeast(me.role, "Operator");
   const isAdmin = me.role === "Admin";
 
-  const navItems = [
-    { to: "/", label: t("nav.overview"), icon: IconLayoutDashboard, end: true },
-    { to: "/hosts", label: t("nav.hosts"), icon: IconServer },
+  const simple = me.uiMode === "Simple";
+  // simple: auch im einfachen Modus sichtbar. Alle Seiten bleiben per URL erreichbar.
+  const allNavItems = [
+    { to: "/", label: t("nav.overview"), icon: IconLayoutDashboard, end: true, simple: true },
+    { to: "/hosts", label: t("nav.hosts"), icon: IconServer, simple: true },
+    { to: "/security", label: t("nav.security"), icon: IconShieldHalfFilled, simple: true },
+    { to: "/checks", label: t("nav.checks"), icon: IconStethoscope, simple: true },
     { to: "/jobs", label: t("nav.jobs"), icon: IconListCheck },
+    { to: "/software", label: t("nav.software"), icon: IconApps },
     { to: "/runbooks", label: t("nav.runbooks"), icon: IconRoute },
     { to: "/rules", label: t("nav.rules"), icon: IconShieldLock },
     { to: "/reports", label: t("nav.reports"), icon: IconReportAnalytics },
@@ -191,10 +208,19 @@ function Shell({ me, onMeChanged, onLoggedOut }: { me: Me; onMeChanged: (me: Me)
     ...(isAdmin
       ? [
           { to: "/users", label: t("nav.users"), icon: IconUsers },
-          { to: "/settings", label: t("nav.settings"), icon: IconSettings },
+          { to: "/settings", label: t("nav.settings"), icon: IconSettings, simple: true },
         ]
       : []),
   ];
+  const navItems = allNavItems.filter((n) => !simple || n.simple);
+
+  const switchMode = async (mode: UiMode) => {
+    try {
+      onMeChanged(await api.put<Me>("/api/me/ui-mode", { mode }));
+    } catch {
+      // bleibt beim alten Modus
+    }
+  };
 
   const refreshOverview = useCallback(() => {
     void api.get<Overview>("/api/overview").then(setOverview).catch(() => {});
@@ -247,6 +273,7 @@ function Shell({ me, onMeChanged, onLoggedOut }: { me: Me; onMeChanged: (me: Me)
 
   return (
     <MeContext.Provider value={me}>
+      <FeaturesProvider>
       <ShellContext.Provider value={{ openAddHost: addHost.open, overview, refreshOverview }}>
         <AppShell
           header={{ height: 64 }}
@@ -277,6 +304,18 @@ function Shell({ me, onMeChanged, onLoggedOut }: { me: Me; onMeChanged: (me: Me)
                   {t("nav.addHost")}
                 </Button>
               )}
+              <Tooltip label={t("nav.modeHint")} multiline w={260}>
+                <SegmentedControl
+                  size="xs"
+                  visibleFrom="sm"
+                  value={me.uiMode}
+                  onChange={(v) => void switchMode(v as UiMode)}
+                  data={[
+                    { value: "Simple", label: t("nav.modeSimple") },
+                    { value: "Advanced", label: t("nav.modeAdvanced") },
+                  ]}
+                />
+              </Tooltip>
               <ColorSchemeToggle />
               <Menu position="bottom-end" width={220}>
                 <Menu.Target>
@@ -328,6 +367,7 @@ function Shell({ me, onMeChanged, onLoggedOut }: { me: Me; onMeChanged: (me: Me)
           </AppShell.Navbar>
 
           <AppShell.Main>
+            <EmergencyBanner />
             <Routes>
               <Route path="/" element={<OverviewPage />} />
               <Route path="/hosts" element={<HostsPage />} />
@@ -340,6 +380,10 @@ function Shell({ me, onMeChanged, onLoggedOut }: { me: Me; onMeChanged: (me: Me)
               <Route path="/sites" element={<SitesPage />} />
               <Route path="/rules" element={<RulesPage />} />
               <Route path="/reports" element={<ReportsPage />} />
+              <Route path="/checks" element={<ChecksPage />} />
+              <Route path="/developer" element={<ApiPage />} />
+              <Route path="/software" element={<SoftwarePage />} />
+              <Route path="/security" element={<SecurityPage />} />
               <Route path="/ipam" element={<IpamPage />} />
               <Route path="/account" element={<AccountPage onMeChanged={onMeChanged} />} />
               {isAdmin && <Route path="/users" element={<UsersPage />} />}
@@ -358,6 +402,7 @@ function Shell({ me, onMeChanged, onLoggedOut }: { me: Me; onMeChanged: (me: Me)
           searchProps={{ leftSection: <IconSearch size={18} />, placeholder: t("nav.searchPlaceholder") }}
         />
       </ShellContext.Provider>
+      </FeaturesProvider>
     </MeContext.Provider>
   );
 }

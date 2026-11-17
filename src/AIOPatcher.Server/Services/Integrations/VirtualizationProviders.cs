@@ -17,6 +17,9 @@ public enum ProviderTaskState
 
 public sealed record ProviderTaskStatus(ProviderTaskState State, string? Error = null);
 
+/// <summary>Jüngstes Backup. VerifyState: PBS-Prüfung ("ok", "failed") oder null, wenn nie geprüft bzw. unbekannt.</summary>
+public sealed record BackupInfo(DateTime CreatedAt, string? Location, long? SizeBytes, string? VerifyState);
+
 /// <summary>Was Abläufe von einem Hypervisor bzw. Cloud-Anbieter brauchen.</summary>
 public interface IVirtualizationProvider
 {
@@ -30,8 +33,11 @@ public interface IVirtualizationProvider
 
     Task<ProviderTaskStatus> GetTaskAsync(string externalId, string taskRef, CancellationToken ct);
 
-    /// <summary>Zeitpunkt des jüngsten Backups (Proxmox: vzdump auf PBS/Storage; Hetzner: Server-Backup). null = keins gefunden.</summary>
-    Task<DateTime?> LastBackupAsync(string externalId, CancellationToken ct);
+    /// <summary>Jüngstes Backup (Proxmox: vzdump auf PBS/Storage; Hetzner: Server-Backup). null = keins gefunden.</summary>
+    Task<BackupInfo?> LatestBackupAsync(string externalId, CancellationToken ct);
+
+    /// <summary>Löscht einen bestimmten Snapshot. Gibt eine Aufgaben-Referenz zurück (oder null, wenn sofort erledigt).</summary>
+    Task<string?> DeleteSnapshotAsync(string externalId, string name, CancellationToken ct);
 
     /// <summary>Löscht alte AIOPatcher-Snapshots über <paramref name="keep"/> hinaus. Gibt die Anzahl gelöschter zurück.</summary>
     Task<int> PruneSnapshotsAsync(string externalId, int keep, CancellationToken ct);
@@ -135,11 +141,11 @@ public sealed class ProxmoxProvider(Integration integration, IntegrationHttp htt
         return exit == "OK" ? new ProviderTaskStatus(ProviderTaskState.Succeeded) : new ProviderTaskStatus(ProviderTaskState.Failed, $"Proxmox: {exit}");
     }
 
-    public async Task<DateTime?> LastBackupAsync(string externalId, CancellationToken ct)
+    public async Task<BackupInfo?> LatestBackupAsync(string externalId, CancellationToken ct)
     {
         var (node, _, vmid) = Parse(externalId);
         var storages = await SendAsync(HttpMethod.Get, $"nodes/{node}/storage?content=backup&enabled=1", null, ct) as JsonArray ?? [];
-        DateTime? newest = null;
+        BackupInfo? newest = null;
         foreach (var storage in storages.OfType<JsonObject>())
         {
             var name = (string?)storage["storage"];
@@ -156,7 +162,10 @@ public sealed class ProxmoxProvider(Integration integration, IntegrationHttp htt
                     if (item["ctime"]?.GetValue<long>() is { } ctime)
                     {
                         var at = DateTimeOffset.FromUnixTimeSeconds(ctime).UtcDateTime;
-                        newest = newest is null || at > newest ? at : newest;
+                        if (newest is null || at > newest.CreatedAt)
+                        {
+                            newest = new BackupInfo(at, (string?)item["volid"], item["size"]?.GetValue<long>(), (string?)item["verification"]?["state"]);
+                        }
                     }
                 }
             }
@@ -167,6 +176,12 @@ public sealed class ProxmoxProvider(Integration integration, IntegrationHttp htt
         }
 
         return newest;
+    }
+
+    public async Task<string?> DeleteSnapshotAsync(string externalId, string name, CancellationToken ct)
+    {
+        var (node, type, vmid) = Parse(externalId);
+        return (string?)await SendAsync(HttpMethod.Delete, $"nodes/{node}/{type}/{vmid}/snapshot/{Uri.EscapeDataString(name)}", null, ct);
     }
 
     public async Task<int> PruneSnapshotsAsync(string externalId, int keep, CancellationToken ct)
@@ -290,11 +305,35 @@ public sealed class HetznerCloudProvider(Integration integration, IntegrationHtt
         };
     }
 
-    public async Task<DateTime?> LastBackupAsync(string externalId, CancellationToken ct)
+    public async Task<BackupInfo?> LatestBackupAsync(string externalId, CancellationToken ct)
     {
         var json = await SendAsync(HttpMethod.Get, $"images?type=backup&bound_to={ServerId(externalId)}&sort=created:desc&per_page=1", null, ct);
-        var created = (string?)(json?["images"] as JsonArray)?.FirstOrDefault()?["created"];
-        return created is null ? null : DateTime.Parse(created, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal);
+        var image = (json?["images"] as JsonArray)?.FirstOrDefault();
+        var created = (string?)image?["created"];
+        if (created is null)
+        {
+            return null;
+        }
+
+        var sizeGb = image?["image_size"]?.GetValue<double?>();
+        return new BackupInfo(
+            DateTime.Parse(created, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal),
+            (string?)image?["description"],
+            sizeGb is { } gb ? (long)(gb * 1024 * 1024 * 1024) : null,
+            (string?)image?["status"] == "available" ? "ok" : (string?)image?["status"]);
+    }
+
+    public async Task<string?> DeleteSnapshotAsync(string externalId, string name, CancellationToken ct)
+    {
+        var serverId = ServerId(externalId);
+        var json = await SendAsync(HttpMethod.Get, $"images?type=snapshot&label_selector={Label}%3Dtrue&per_page=50", null, ct);
+        foreach (var image in (json?["images"] as JsonArray ?? []).OfType<JsonObject>()
+                     .Where(i => i["created_from"]?["id"]?.ToString() == serverId && ((string?)i["description"])?.StartsWith(name, StringComparison.Ordinal) == true))
+        {
+            await SendAsync(HttpMethod.Delete, $"images/{image["id"]}", null, ct);
+        }
+
+        return null;
     }
 
     public async Task<int> PruneSnapshotsAsync(string externalId, int keep, CancellationToken ct)

@@ -43,6 +43,13 @@ public static class ProcessRunner
             psi.ArgumentList.Add(arg);
         }
 
+        if (OperatingSystem.IsWindows())
+        {
+            // winget und moderne Tools schreiben UTF-8 (sonst werden Umlaute in Programmnamen zerstört).
+            psi.StandardOutputEncoding = System.Text.Encoding.UTF8;
+            psi.StandardErrorEncoding = System.Text.Encoding.UTF8;
+        }
+
         // Stabile, parsebare Ausgabe und keine interaktiven Rückfragen.
         psi.Environment["LANG"] = "C";
         psi.Environment["LC_ALL"] = "C";

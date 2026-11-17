@@ -48,8 +48,25 @@ public static class JobEndpoints
             j.Id, j.HostId, j.Host!.Name, j.Host.Site!.Name, j.Type, j.Scope, j.AllowReboot, j.Status,
             j.RequestedBy, j.CreatedAt, j.StartedAt, j.FinishedAt, j.Summary, j.RebootPerformed, j.NotAfter));
 
-    private static async Task<IResult> CreateJob(Guid hostId, CreateJobRequest request, ClaimsPrincipal user, AppDbContext db, AuditLog audit, CancellationToken ct)
+    private static IResult? CheckFeature(JobType type, FeatureFlags features) => type switch
     {
+        JobType.Patch when !features.IsOn(Feature.PatchJobs) => Results.Problem(FeatureFlags.DisabledMessage(Feature.PatchJobs), statusCode: StatusCodes.Status403Forbidden),
+        JobType.Reboot when !features.IsOn(Feature.Reboots) => Results.Problem(FeatureFlags.DisabledMessage(Feature.Reboots), statusCode: StatusCodes.Status403Forbidden),
+        _ => null,
+    };
+
+    private static async Task<IResult> CreateJob(Guid hostId, CreateJobRequest request, ClaimsPrincipal user, AppDbContext db, AuditLog audit, FeatureFlags features, CancellationToken ct)
+    {
+        if (CheckFeature(request.Type, features) is { } disabled)
+        {
+            return disabled;
+        }
+
+        if (request.Type is not (JobType.Scan or JobType.Patch or JobType.Reboot))
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]> { ["type"] = [L.T("Programm-Updates über /app-updates starten.", "Start program updates via /app-updates.")] });
+        }
+
         var plan = await JobPlanner.PlanAsync(db, [hostId], request.Type, request.Scope, request.AllowReboot, $"admin:{user.Identity!.Name}", ct);
         if (plan.Skipped.Count > 0)
         {
@@ -70,11 +87,21 @@ public static class JobEndpoints
 
     public sealed record BulkJobResult(int Created, IReadOnlyList<JobPlanner.Skip> Skipped);
 
-    private static async Task<IResult> CreateJobsBulk(BulkJobRequest request, ClaimsPrincipal user, AppDbContext db, AuditLog audit, CancellationToken ct)
+    private static async Task<IResult> CreateJobsBulk(BulkJobRequest request, ClaimsPrincipal user, AppDbContext db, AuditLog audit, FeatureFlags features, CancellationToken ct)
     {
+        if (CheckFeature(request.Type, features) is { } disabled)
+        {
+            return disabled;
+        }
+
         if (request.HostIds is null || request.HostIds.Length == 0 || request.HostIds.Length > JobPlanner.MaxHostsPerRequest)
         {
             return Results.ValidationProblem(new Dictionary<string, string[]> { ["hostIds"] = [L.T($"1 bis {JobPlanner.MaxHostsPerRequest} Hosts auswählen.", $"Select 1 to {JobPlanner.MaxHostsPerRequest} hosts.")] });
+        }
+
+        if (request.Type is not (JobType.Scan or JobType.Patch or JobType.Reboot))
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]> { ["type"] = [L.T("Programm-Updates über /app-updates starten.", "Start program updates via /app-updates.")] });
         }
 
         var plan = await JobPlanner.PlanAsync(db, request.HostIds, request.Type, request.Scope, request.AllowReboot, $"admin:{user.Identity!.Name}", ct);

@@ -40,7 +40,8 @@ public static class HostEndpoints
         string? ScheduledRunbook,
         string? Tags,
         int KevUpdates,
-        int ContainerUpdates);
+        int ContainerUpdates,
+        bool Mapped);
 
     /// <summary>Days: Bitmaske Mo=1, Di=2, Mi=4, Do=8, Fr=16, Sa=32, So=64. Start in Ortszeit des Servers.</summary>
     public sealed record AutoPatchDto(
@@ -57,7 +58,7 @@ public static class HostEndpoints
         bool WindowOpenNow = false);
 
 
-    public sealed record ServerInfoDto(string Version, string TimeZone, DateTime NowUtc);
+    public sealed record ServerInfoDto(string Version, string TimeZone, DateTime NowUtc, string? LatestVersion, string? ReleaseUrl, bool UpdateAvailable);
 
     public sealed record UpdateDto(string Name, string? CurrentVersion, string? AvailableVersion, bool IsSecurity, string? Classification, DateTime FirstSeenAt, bool IsHeld,
         string? Cves, bool IsKev, double? MaxEpss);
@@ -119,8 +120,9 @@ public static class HostEndpoints
         api.MapGet("/hosts/{id:guid}", GetHost);
         op.MapPut("/hosts/{id:guid}/auto-patch", UpdateAutoPatch);
         op.MapPut("/hosts/auto-patch", UpdateAutoPatchBulk);
-        api.MapGet("/server-info", (ServerClock clock) =>
-            new ServerInfoDto(typeof(HostEndpoints).Assembly.GetName().Version?.ToString(3) ?? "0.0.0", clock.ZoneName, DateTime.UtcNow));
+        api.MapGet("/server-info", (ServerClock clock, ReleaseCheck releases) =>
+            new ServerInfoDto(AgentDownloads.AgentVersion, clock.ZoneName, DateTime.UtcNow,
+                releases.Latest?.Version, releases.Latest?.Url, releases.UpdateAvailable));
         op.MapPost("/hosts/{id:guid}/revoke", RevokeHost);
         op.MapDelete("/hosts/{id:guid}", DeleteHost).RequireAuthorization(UserAccounts.AdminPolicy);
 
@@ -154,7 +156,8 @@ public static class HostEndpoints
             h.RunbookMemberships.Where(m => m.Wave!.Runbook!.ScheduleEnabled).Select(m => m.Wave!.Runbook!.Name).FirstOrDefault(),
             h.Tags,
             h.PendingUpdates.Count(u => u.IsKev),
-            h.Containers.Count(c => c.LocalDigest != null && images.Any(i => i.Reference == c.Reference && i.RemoteDigest != null && i.RemoteDigest != c.LocalDigest))));
+            h.Containers.Count(c => c.LocalDigest != null && images.Any(i => i.Reference == c.Reference && i.RemoteDigest != null && i.RemoteDigest != c.LocalDigest)),
+            h.IntegrationId != null && h.ExternalId != null));
 
     /// <summary>Nächstes Wartungsfenster lässt sich nicht in SQL berechnen: nach dem Laden ergänzen.</summary>
     private static HostSummaryDto WithNextWindow(HostSummaryDto summary, ServerClock clock)

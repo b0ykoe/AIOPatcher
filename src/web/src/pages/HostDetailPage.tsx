@@ -11,6 +11,7 @@ import {
   IconListCheck,
   IconNetwork,
   IconBrandDocker,
+  IconApps,
   IconPackage,
   IconPackageOff,
   IconPower,
@@ -21,7 +22,9 @@ import {
 } from "@tabler/icons-react";
 import { api, ApiError, formatDateTime, kbOf, splitTags, formatRelative, formatUptime, isActiveJob, type HostDetail, type Job, type JobType, type PatchScope } from "../api";
 import { useTranslation } from "react-i18next";
-import { useCan } from "../App";
+import { useCan, useSimple } from "../App";
+import { useFeatures } from "../features";
+
 import { AutoPatchCard } from "../components/AutoPatchCard";
 import { JobTable } from "../components/JobTable";
 import { OsIcon } from "../components/OsIcon";
@@ -29,11 +32,14 @@ import { HoldModal } from "./RulesPage";
 import { MappingCard } from "../components/MappingCard";
 import { CveCell } from "../components/CveCell";
 import { ContainerTable } from "../components/ContainerTable";
+import { SoftwareTab } from "../components/SoftwareTab";
 import { confirmAction, EmptyState, errorText, HostStatusLabel, notifyError, notifySuccess } from "../components/ui";
 
 export function HostDetailPage() {
   const { t } = useTranslation();
   const can = useCan();
+  const { isOn } = useFeatures();
+  const simple = useSimple();
   const { id } = useParams();
   const navigate = useNavigate();
   const [host, setHost] = useState<HostDetail | null>(null);
@@ -147,7 +153,7 @@ export function HostDetailPage() {
             <Text size="sm" c="dimmed">
               {h.siteName} · {h.osName ?? h.osFamily} {h.osVersion}
             </Text>
-            {can.operate ? (
+            {simple ? null : can.operate ? (
               <TagsInput
                 mt={6}
                 size="xs"
@@ -172,7 +178,7 @@ export function HostDetailPage() {
         </Group>
 
         {can.operate && <Group gap="sm" wrap="wrap">
-          <Menu position="bottom-end" width={270} closeOnItemClick>
+          {isOn("PatchJobs") && <Menu position="bottom-end" width={270} closeOnItemClick>
             <Menu.Target>
               <Button variant="gradient" className="gradient-button" rightSection={<IconChevronDown size={16} />} disabled={!canRun} leftSection={<IconShieldCheck size={16} />}>
                 {t("hostsPage.install")}
@@ -185,18 +191,20 @@ export function HostDetailPage() {
               <Menu.Item onClick={() => void startJob("Patch", "All")} leftSection={<IconPackage size={16} />}>
                 {t("jobType.all")}
               </Menu.Item>
+              {isOn("Reboots") && <>
               <Menu.Divider />
               <Menu.Label>
                 <Switch size="xs" label={t("hostsPage.rebootAfter")} checked={allowReboot} onChange={(e) => setAllowReboot(e.currentTarget.checked)} />
               </Menu.Label>
+              </>}
             </Menu.Dropdown>
-          </Menu>
+          </Menu>}
           <Button variant="light" leftSection={<IconScan size={16} />} disabled={!canRun} onClick={() => void startJob("Scan")}>
             {t("hostsPage.scan")}
           </Button>
-          <Button variant="light" color="red" leftSection={<IconPower size={16} />} disabled={!canRun} onClick={reboot}>
+          {isOn("Reboots") && <Button variant="light" color="red" leftSection={<IconPower size={16} />} disabled={!canRun} onClick={reboot}>
             {t("hostsPage.reboot")}
-          </Button>
+          </Button>}
           <Menu position="bottom-end">
             <Menu.Target>
               <Button variant="subtle" color="gray" px="xs" aria-label={t("hostDetail.moreActions")}>
@@ -241,7 +249,7 @@ export function HostDetailPage() {
       )}
 
       <AutoPatchCard host={h} onSaved={() => void load()} />
-      <MappingCard host={host} onSaved={() => void load()} />
+      {!simple && <MappingCard host={host} onSaved={() => void load()} />}
       <HoldModal opened={holdFor !== undefined} sites={[]} hosts={[h]} initial={holdFor} onClose={() => setHoldFor(undefined)} onSaved={() => void load()} />
 
       <SimpleGrid cols={{ base: 2, sm: 3, lg: 5 }} spacing="md" mb="lg">
@@ -265,6 +273,9 @@ export function HostDetailPage() {
             </Tabs.Tab>
             <Tabs.Tab value="jobs" leftSection={<IconListCheck size={16} />}>
               {t("nav.jobs")}
+            </Tabs.Tab>
+            <Tabs.Tab value="software" leftSection={<IconApps size={16} />}>
+              {t("software.tab")}
             </Tabs.Tab>
             {host.containers.length > 0 && (
               <Tabs.Tab value="containers" leftSection={<IconBrandDocker size={16} />}>
@@ -360,7 +371,7 @@ export function HostDetailPage() {
                               </Text>
                             </Table.Td>
                             <Table.Td w={40}>
-                              {can.operate && !u.isHeld && (
+                              {can.operate && !simple && !u.isHeld && (
                                 <Tooltip label={t("rules.holdThis")}>
                                   <ActionIcon size="sm" variant="subtle" color="gray" onClick={() => setHoldFor({ pattern: kbOf(u.name) ?? u.name, hostId: h.id })} aria-label={t("rules.holdThis")}>
                                     <IconPackageOff size={14} />
@@ -380,6 +391,10 @@ export function HostDetailPage() {
 
           <Tabs.Panel value="jobs" p="md">
             <JobTable jobs={jobs} />
+          </Tabs.Panel>
+
+          <Tabs.Panel value="software" p="md">
+            <SoftwareTab hostId={h.id} windows={h.osFamily === "Windows"} busy={!!activeJob} />
           </Tabs.Panel>
 
           <Tabs.Panel value="containers" p="md">

@@ -1,32 +1,74 @@
-# Siehe docs/SERVER-SETUP.md, Abschnitt 8.
+# AIOPatcher: Server + Dashboard in einem Container.
+# Schnellstart: README.md → "Schnellstart". Ausführlich (VM, Firewall, Backups): docs/SERVER-SETUP.md.
+#
+#   mkdir -p /opt/aiopatcher/data && chown 1654:1654 /opt/aiopatcher/data
+#   docker compose up -d && docker compose logs aiopatcher | grep -i "setup token"
+#
+# Mit Traefik: deploy/docker-compose.traefik.yml. nginx / Nginx Proxy Manager: docs/REVERSE-PROXY.md.
+#
+# Updates von AIOPatcher selbst: Das Dashboard zeigt an, wenn eine neue Version da ist (UpdateCheckRepository).
+# Aktualisieren dann mit:  docker compose pull && docker compose up -d
 services:
   aiopatcher:
-    image: ghcr.io/OWNER/aiopatcher-server:latest
+    image: ghcr.io/OWNER/aiopatcher-server:latest # für Produktion besser eine feste Version, z. B. :0.3.0
     container_name: aiopatcher
     restart: unless-stopped
     network_mode: host # damit ufw-Regeln greifen (Docker-Port-Mappings würden ufw umgehen)
     volumes:
       - /opt/aiopatcher/data:/data
     environment:
-      AIOPatcher__PublicHostname: patch.example.com
+      AIOPatcher__PublicHostname: patch.example.com # DNS-Name, unter dem Agents den Server erreichen
       AIOPatcher__DataDirectory: /data
-      AIOPatcher__DashboardPort: "9443"
-      AIOPatcher__AgentPort: "8443"
+      AIOPatcher__DashboardPort: "9443" # nur intern/VPN freigeben
+      AIOPatcher__AgentPort: "8443" # darf öffentlich erreichbar sein (mTLS)
       AIOPatcher__Language: de
+      # AIOPatcher__TrustedProxies: "127.0.0.1" # nur mit Reverse Proxy vor dem Dashboard, siehe docs/REVERSE-PROXY.md
+      # AIOPatcher__LockedFeatures: "AppUpdates,OpnsenseUpdates" # nie einschaltbar, auch nicht im Dashboard
+      AIOPatcher__UpdateCheckRepository: OWNER/AIOPatcher # Hinweis auf neue Versionen; leer lassen = aus
       TZ: Europe/Berlin
+    # Healthcheck ist im Image eingebaut (/healthz). "docker ps" zeigt "healthy".
     labels:
-      - com.centurylinklabs.watchtower.enable=true
+      - autoheal=true # nur relevant, wenn der autoheal-Container unten aktiv ist
 
-  # Meldet neue Images nur (Monitor-Only), aktualisiert nichts selbst.
-  watchtower:
-    image: nickfedor/watchtower:latest # für Produktion feste Version eintragen
-    container_name: watchtower
-    restart: unless-stopped
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    environment:
-      WATCHTOWER_MONITOR_ONLY: "true"
-      WATCHTOWER_LABEL_ENABLE: "true"
-      WATCHTOWER_SCHEDULE: "0 0 7 * * *"
-      WATCHTOWER_NOTIFICATION_URL: "ntfy://ntfy.sh/DEIN-GEHEIMES-TOPIC"
-      TZ: Europe/Berlin
+  # --- Optional: Watchdog --------------------------------------------------------------------------
+  # Docker startet abgestürzte Container selbst neu (restart: unless-stopped), aber keine, die nur "unhealthy" sind.
+  # autoheal startet Container mit Label autoheal=true neu, wenn der Healthcheck dauerhaft fehlschlägt.
+  # autoheal:
+  #   image: willfarrell/autoheal:latest # für Produktion feste Version eintragen
+  #   container_name: autoheal
+  #   restart: unless-stopped
+  #   environment:
+  #     AUTOHEAL_CONTAINER_LABEL: autoheal
+  #   volumes:
+  #     - /var/run/docker.sock:/var/run/docker.sock
+
+  # --- Optional: über neue Images benachrichtigen (empfohlen: Diun) ---------------------------------
+  # Diun meldet neue Images nur (ntfy, Mail, Telegram …) und aktualisiert nichts. Passt zu "nichts passiert unbeaufsichtigt".
+  # diun:
+  #   image: crazymax/diun:latest # für Produktion feste Version eintragen
+  #   container_name: diun
+  #   restart: unless-stopped
+  #   volumes:
+  #     - /var/run/docker.sock:/var/run/docker.sock:ro
+  #     - /opt/aiopatcher/diun:/data
+  #   environment:
+  #     TZ: Europe/Berlin
+  #     DIUN_WATCH_SCHEDULE: "0 7 * * *"
+  #     DIUN_PROVIDERS_DOCKER: "true"
+  #     DIUN_NOTIF_NTFY_ENDPOINT: "https://ntfy.sh"
+  #     DIUN_NOTIF_NTFY_TOPIC: "DEIN-GEHEIMES-TOPIC"
+
+  # --- Optional: automatisch aktualisieren (nur wenn du das wirklich willst) ------------------------
+  # Watchtower (gepflegter Fork) zieht neue Images und startet neu. Ein Patch-Tool, das sich nachts selbst
+  # aktualisiert, ist bequem, aber riskant. WATCHTOWER_MONITOR_ONLY=true = nur melden.
+  # watchtower:
+  #   image: nickfedor/watchtower:latest
+  #   container_name: watchtower
+  #   restart: unless-stopped
+  #   volumes:
+  #     - /var/run/docker.sock:/var/run/docker.sock
+  #   environment:
+  #     WATCHTOWER_MONITOR_ONLY: "true"
+  #     WATCHTOWER_SCHEDULE: "0 0 7 * * *"
+  #     WATCHTOWER_NOTIFICATION_URL: "ntfy://ntfy.sh/DEIN-GEHEIMES-TOPIC"
+  #     TZ: Europe/Berlin

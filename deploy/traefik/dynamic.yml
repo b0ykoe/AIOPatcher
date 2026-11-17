@@ -1,0 +1,52 @@
+# Traefik-Routing für das AIOPatcher-Dashboard (File-Provider). Gehört zu deploy/docker-compose.traefik.yml.
+# Anpassen: Hostname (Host-Regel) und die erlaubten Netze.
+http:
+  routers:
+    aiopatcher:
+      rule: Host(`patch.example.com`)
+      entryPoints: [websecure]
+      service: aiopatcher
+      middlewares: [aiopatcher-intern]
+      tls:
+        certResolver: le
+
+  middlewares:
+    # Das Dashboard gehört nicht ins offene Internet: nur LAN und VPN durchlassen.
+    aiopatcher-intern:
+      ipAllowList:
+        sourceRange:
+          - 10.99.0.0/24 # VPN
+          - 192.168.0.0/16 # LAN
+          - 127.0.0.1/32
+
+  services:
+    aiopatcher:
+      loadBalancer:
+        serversTransport: aiopatcher
+        servers:
+          - url: https://127.0.0.1:9443
+
+  serversTransports:
+    # AIOPatcher spricht selbst HTTPS mit einem Zertifikat seiner eigenen CA. "localhost" steht immer im Zertifikat.
+    aiopatcher:
+      serverName: localhost
+      rootCAs:
+        - /etc/traefik/aiopatcher-ca.crt
+
+# Optional, nur wenn Agents NICHT direkt auf 8443 kommen können (z. B. AIOPatcher auf einer internen VM):
+# TCP-Passthrough, Traefik reicht die verschlüsselte Verbindung unverändert durch (mTLS bleibt Ende-zu-Ende).
+# Dazu im Compose-File: --entrypoints.agents.address=:8443 und AIOPatcher auf der internen VM laufen lassen.
+# Nachteil: AIOPatcher sieht dann die IP von Traefik statt die der Agents (Netzfreigabe pro Standort greift nicht).
+# tcp:
+#   routers:
+#     aiopatcher-agents:
+#       rule: HostSNI(`*`)
+#       entryPoints: [agents]
+#       service: aiopatcher-agents
+#       tls:
+#         passthrough: true
+#   services:
+#     aiopatcher-agents:
+#       loadBalancer:
+#         servers:
+#           - address: 10.10.0.20:8443

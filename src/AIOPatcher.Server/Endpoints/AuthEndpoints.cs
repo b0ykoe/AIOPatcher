@@ -26,12 +26,13 @@ public static class AuthEndpoints
     public sealed record TotpSetupResponse(string TotpSecret, string OtpAuthUri);
     public sealed record SetupCompleteRequest(string SetupToken, string Code);
     public sealed record LoginRequest(string Username, string Password, string Code);
-    public sealed record MeResponse(Guid Id, string Username, UserRole Role, string? Language);
+    public sealed record MeResponse(Guid Id, string Username, UserRole Role, string? Language, UiMode UiMode);
     public sealed record InviteInfoResponse(string Username, UserRole Role, DateTime ExpiresAt);
     public sealed record InviteStartRequest(string Token, string Password);
     public sealed record InviteCompleteRequest(string Token, string Code);
     public sealed record ChangePasswordRequest(string CurrentPassword, string NewPassword, string Code);
     public sealed record PreferencesRequest(string? Language);
+    public sealed record UiModeRequest(UiMode Mode);
 
     public static void MapAuthEndpoints(this IEndpointRouteBuilder app)
     {
@@ -54,6 +55,7 @@ public static class AuthEndpoints
         var me = app.MapGroup("/api/me").RequireAuthorization();
         me.MapPut("/password", ChangePassword).RequireRateLimiting(RateLimitPolicy);
         me.MapPut("/preferences", UpdatePreferences);
+        me.MapPut("/ui-mode", UpdateUiMode);
     }
 
     // --- Ersteinrichtung --------------------------------------------------------------------------
@@ -318,12 +320,30 @@ public static class AuthEndpoints
         return Results.Ok(ToMe(user));
     }
 
+    private static async Task<IResult> UpdateUiMode(UiModeRequest request, ClaimsPrincipal principal, AppDbContext db, CancellationToken ct)
+    {
+        var user = await CurrentAsync(principal, db, ct);
+        if (user is null)
+        {
+            return Results.Unauthorized();
+        }
+
+        if (!Enum.IsDefined(request.Mode))
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]> { ["mode"] = [L.T("Unbekannter Modus.", "Unknown mode.")] });
+        }
+
+        user.UiMode = request.Mode;
+        await db.SaveChangesAsync(ct);
+        return Results.Ok(ToMe(user));
+    }
+
     // --- Hilfen -------------------------------------------------------------------------------------
 
     public static async Task<UserAccount?> CurrentAsync(ClaimsPrincipal principal, AppDbContext db, CancellationToken ct) =>
         Guid.TryParse(principal.FindFirstValue(ClaimTypes.NameIdentifier), out var id) ? await db.Users.FindAsync([id], ct) : null;
 
-    private static MeResponse ToMe(UserAccount u) => new(u.Id, u.Username, u.Role, u.Language);
+    private static MeResponse ToMe(UserAccount u) => new(u.Id, u.Username, u.Role, u.Language, u.UiMode);
 
     private static byte[] NewTotpSecret(IDataProtectionProvider dataProtection, UserAccount user)
     {

@@ -14,7 +14,8 @@ public sealed class ApiTokenAuthenticationHandler(
     IOptionsMonitor<AuthenticationSchemeOptions> options,
     ILoggerFactory logger,
     UrlEncoder encoder,
-    AppDbContext db) : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
+    AppDbContext db,
+    AIOPatcher.Server.Services.FeatureFlags features) : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
 {
     public const string SchemeName = "ApiToken";
     public const string TokenPrefix = "aiop_";
@@ -34,6 +35,11 @@ public sealed class ApiTokenAuthenticationHandler(
         if (!HasToken(Context))
         {
             return AuthenticateResult.NoResult();
+        }
+
+        if (!features.IsOn(AIOPatcher.Server.Services.Feature.ApiTokens))
+        {
+            return AuthenticateResult.Fail("API tokens are disabled");
         }
 
         var token = Context.Request.Headers.Authorization.ToString()["Bearer ".Length..].Trim();

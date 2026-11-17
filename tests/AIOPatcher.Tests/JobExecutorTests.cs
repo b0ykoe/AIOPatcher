@@ -71,6 +71,20 @@ public class JobExecutorTests
         Assert.Contains("not requested", result.Summary);
     }
 
+    [Theory]
+    [InlineData(false, PatchPermission.All, "allowAppUpdates")]
+    [InlineData(true, PatchPermission.Security, "allowPatch")]
+    public void AppUpdate_LocalPolicyVeto(bool allowAppUpdates, PatchPermission allowPatch, string hint)
+    {
+        var job = new AgentJob(Guid.NewGuid(), JobType.AppUpdate, PatchScope.All, false, Packages: ["7zip.7zip"]);
+
+        var rejected = JobExecutor.CheckPolicy(job, new AgentPolicy(allowPatch, AllowAppUpdates: allowAppUpdates));
+
+        Assert.Equal(JobOutcome.Rejected, rejected?.Outcome);
+        Assert.Contains(hint, rejected!.Summary);
+        Assert.Null(JobExecutor.CheckPolicy(job, new AgentPolicy()));
+    }
+
     [Fact]
     public async Task Patch_AllUpdatesWithSecurityOnlyPolicy_IsRejectedWithoutTouchingSystem()
     {

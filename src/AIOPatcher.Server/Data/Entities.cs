@@ -85,6 +85,7 @@ public sealed class ManagedHost
     public string? NotifiedKevCves { get; set; }
 
     public List<ContainerInfo> Containers { get; set; } = [];
+    public List<InstalledApp> Apps { get; set; } = [];
 
     /// <summary>Frei vergebene Schlagworte, normalisiert (klein, sortiert, kommagetrennt), z. B. "db,prod".</summary>
     public string? Tags { get; set; }
@@ -159,6 +160,9 @@ public sealed class PatchJob
     public DateTime? FinishedAt { get; set; }
     public string? Summary { get; set; }
     public bool RebootPerformed { get; set; }
+
+    /// <summary>AppUpdate: winget-IDs (kommagetrennt).</summary>
+    public string? Packages { get; set; }
 
     /// <summary>Auto-Patch: spätester Start (Ende des Wartungsfensters). Danach wird der Job nicht mehr vergeben.</summary>
     public DateTime? NotAfter { get; set; }
@@ -246,6 +250,13 @@ public enum UserRole
     Viewer,
 }
 
+/// <summary>Einfach: wenige Seiten, geführte Abläufe. Erweitert: alle Funktionen.</summary>
+public enum UiMode
+{
+    Simple,
+    Advanced,
+}
+
 /// <summary>Benutzerkonto (Tabelle heißt aus historischen Gründen "AdminUsers").</summary>
 public sealed class UserAccount
 {
@@ -266,6 +277,8 @@ public sealed class UserAccount
 
     /// <summary>"de", "en" oder null (Browsersprache).</summary>
     public string? Language { get; set; }
+
+    public UiMode UiMode { get; set; } = UiMode.Simple;
 
     /// <summary>Ändert sich bei Passwort-, Rollen- und Statuswechsel: alte Sitzungen werden dadurch ungültig.</summary>
     public string SecurityStamp { get; set; } = Guid.NewGuid().ToString("N");

@@ -29,6 +29,9 @@ public enum JobType
     Scan,
     Patch,
     Reboot,
+
+    /// <summary>Programme per winget aktualisieren (Windows). Nur an Agents ab Protokoll mit Software-Inventar senden.</summary>
+    AppUpdate,
 }
 
 [JsonConverter(typeof(JsonStringEnumConverter<PatchScope>))]
@@ -86,13 +89,28 @@ public sealed record CheckinRequest(
     IReadOnlyList<AvailableUpdate>? Updates, // null = in diesem Check-in nicht gescannt
     Guid? RunningJobId,
     IReadOnlyList<ContainerReport>? Containers = null, // null = nicht erfasst (kein Docker oder kein Scan)
-    string? Architecture = null); // "x64" oder "arm64", für das passende Update-Binary
+    string? Architecture = null, // "x64" oder "arm64", für das passende Update-Binary
+    IReadOnlyList<InstalledSoftware>? Software = null); // null = in diesem Check-in nicht erfasst
+
+/// <summary>
+/// Installiertes Programm bzw. Paket. Source: "dpkg", "snap", "registry" (Windows-Programme), "winget".
+/// PackageId: Debian-Quellpaket bzw. winget-ID. AvailableVersion: laut winget verfügbare neuere Version.
+/// </summary>
+public sealed record InstalledSoftware(
+    string Name,
+    string? Version,
+    string? Publisher,
+    string Source,
+    string? PackageId = null,
+    string? AvailableVersion = null,
+    string? Url = null);
 
 /// <summary>Laufender Docker-Container. RepoDigests: "repo@sha256:…" des lokalen Images (leer bei selbst gebauten Images).</summary>
 public sealed record ContainerReport(string Name, string Image, string? ImageId, IReadOnlyList<string>? RepoDigests, string? State);
 
 /// <param name="Holds">Muster zurückgehaltener Updates (siehe <see cref="HoldPatterns"/>). Ältere Server senden nichts.</param>
-public sealed record AgentJob(Guid JobId, JobType Type, PatchScope Scope, bool AllowReboot, IReadOnlyList<string>? Holds = null);
+/// <param name="Packages">AppUpdate: winget-IDs der zu aktualisierenden Programme.</param>
+public sealed record AgentJob(Guid JobId, JobType Type, PatchScope Scope, bool AllowReboot, IReadOnlyList<string>? Holds = null, IReadOnlyList<string>? Packages = null);
 
 /// <param name="Update">Neuere, signierte Agent-Version verfügbar.</param>
 /// <param name="RenewCertificate">Client-Zertifikat läuft bald ab: neues per /agent/renew anfordern.</param>

@@ -41,6 +41,58 @@ public static partial class CveMapping
         return lts ? $"Ubuntu:{version}:LTS" : $"Ubuntu:{version}";
     }
 
+    [GeneratedRegex(@"Debian GNU/Linux (?<major>\d+)")]
+    private static partial Regex DebianPrettyName();
+
+    /// <summary>OSV-Ökosystem eines Hosts für installierte Pakete (dort gibt es keine apt-Herkunft).</summary>
+    public static string? EcosystemForHost(string? osName, string? osVersion)
+    {
+        if (osName?.Contains("Ubuntu", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            return OsvEcosystem($"Ubuntu:{osVersion?.Trim()}");
+        }
+
+        // Proxmox VE/PBS: "8.3.0 (Debian GNU/Linux 12 (bookworm))"
+        if (DebianPrettyName().Match($"{osName} {osVersion}") is { Success: true } debian)
+        {
+            return $"Debian:{debian.Groups["major"].Value}";
+        }
+
+        return osName?.Contains("Debian", StringComparison.OrdinalIgnoreCase) == true && int.TryParse(osVersion?.Split('.')[0], out var major)
+            ? $"Debian:{major}"
+            : null;
+    }
+
+    /// <summary>"CVE-2024-3094" → 2024 * 10^8 + 3094 (kompakter Schlüssel für die EPSS-Tabelle).</summary>
+    public static long? CveKey(string cve)
+    {
+        var parts = cve.Split('-');
+        return parts.Length == 3 && int.TryParse(parts[1], out var year) && long.TryParse(parts[2], out var number) ? year * 100_000_000L + number : null;
+    }
+
+    /// <summary>EPSS-Gesamtdatei (CSV, nach Kommentar- und Kopfzeile: cve,epss,percentile).</summary>
+    public static Dictionary<long, (float Epss, float Percentile)> ParseEpssCsv(TextReader reader)
+    {
+        var map = new Dictionary<long, (float, float)>(450_000);
+        while (reader.ReadLine() is { } line)
+        {
+            if (line.Length == 0 || line[0] != 'C')
+            {
+                continue; // Kommentar "#model_version…" und Kopfzeile "cve,…"
+            }
+
+            var parts = line.Split(',');
+            if (parts.Length >= 3 && CveKey(parts[0]) is { } key
+                && float.TryParse(parts[1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var epss)
+                && float.TryParse(parts[2], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var percentile))
+            {
+                map[key] = (epss, percentile);
+            }
+        }
+
+        return map;
+    }
+
     public static string? KbNumber(string? value)
     {
         var match = KbPattern().Match(value?.Trim() ?? "");

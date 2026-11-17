@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router";
 import { Alert, Anchor, Button, Card, Group, SimpleGrid, Stack, Text, ThemeIcon, Title } from "@mantine/core";
 import {
@@ -15,7 +15,9 @@ import {
 } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import { api, formatDateTime, type HostSummary, type Job } from "../api";
-import { useCan, useShell } from "../App";
+import { useCan, useShell, useSimple } from "../App";
+import { SimpleOverview } from "../components/SimpleOverview";
+import { UpdateBanner } from "../components/UpdateBanner";
 import { JobList } from "../components/JobTable";
 import { HostStatusLabel, PageHeader, StatCard } from "../components/ui";
 
@@ -26,16 +28,18 @@ export function OverviewPage() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [hosts, setHosts] = useState<HostSummary[]>([]);
 
+  const simple = useSimple();
+  const load = useCallback(() => {
+    refreshOverview();
+    void api.get<Job[]>("/api/jobs?limit=6").then(setJobs).catch(() => {});
+    void api.get<HostSummary[]>("/api/hosts").then(setHosts).catch(() => {});
+  }, [refreshOverview]);
+
   useEffect(() => {
-    const load = () => {
-      refreshOverview();
-      void api.get<Job[]>("/api/jobs?limit=6").then(setJobs).catch(() => {});
-      void api.get<HostSummary[]>("/api/hosts").then(setHosts).catch(() => {});
-    };
     load();
     const timer = setInterval(load, 15000);
     return () => clearInterval(timer);
-  }, [refreshOverview]);
+  }, [load]);
 
   // Hosts, die Aufmerksamkeit brauchen: offline, Security-Updates offen oder Neustart nötig
   const attention = hosts
@@ -64,9 +68,14 @@ export function OverviewPage() {
     );
   }
 
+  if (simple) {
+    return <SimpleOverview overview={o} hosts={hosts} jobs={jobs} onChanged={load} />;
+  }
+
   return (
     <>
       <PageHeader title={t("nav.overview")} description={t("overview.description")} />
+      <UpdateBanner />
       {o?.activeFreeze && (
         <Alert mb="lg" color="orange" variant="light" icon={<IconHandStop size={18} />}>
           <Anchor component={Link} to="/rules" c="inherit">

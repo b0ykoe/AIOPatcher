@@ -52,6 +52,28 @@ public sealed class LinuxInventory(ILogger<LinuxInventory> logger) : IPlatformIn
         return await AddSourcePackagesAsync(updates, ct);
     }
 
+    /// <summary>Alle installierten Pakete (dpkg) und Snaps. Grundlage für das Programm-Inventar und CVE-Abgleich.</summary>
+    public async Task<IReadOnlyList<InstalledSoftware>?> ScanSoftwareAsync(CancellationToken ct)
+    {
+        var dpkg = await ProcessRunner.RunAsync("dpkg-query", ["-W", "-f=${db:Status-Abbrev}\t${Package}\t${Version}\t${source:Package}\t${Maintainer}\n"], ShortTimeout, ct);
+        var software = AptOutputParser.ParseInstalled(dpkg.StandardOutput);
+
+        try
+        {
+            var snap = await ProcessRunner.RunAsync("snap", ["list"], ShortTimeout, ct);
+            if (snap.Success)
+            {
+                software.AddRange(AptOutputParser.ParseSnapList(snap.StandardOutput));
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // kein snapd: egal
+        }
+
+        return software;
+    }
+
     /// <summary>Quellpaket je Update (für die CVE-Zuordnung auf dem Server). Fehler sind egal: dann ohne.</summary>
     private static async Task<IReadOnlyList<AvailableUpdate>> AddSourcePackagesAsync(IReadOnlyList<AvailableUpdate> updates, CancellationToken ct)
     {

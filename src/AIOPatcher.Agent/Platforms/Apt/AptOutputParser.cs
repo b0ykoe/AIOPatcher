@@ -34,6 +34,34 @@ public static partial class AptOutputParser
         return map;
     }
 
+    /// <summary>dpkg-query mit Status, Paket, Version, Quellpaket, Maintainer (Tab-getrennt). Nur installierte ("ii").</summary>
+    public static List<InstalledSoftware> ParseInstalled(string output)
+    {
+        var result = new List<InstalledSoftware>();
+        foreach (var rawLine in output.Split('\n'))
+        {
+            var parts = rawLine.TrimEnd('\r').Split('\t');
+            if (parts.Length < 4 || !parts[0].StartsWith("ii", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var maintainer = parts.Length > 4 ? parts[4].Split('<')[0].Trim() : null;
+            result.Add(new InstalledSoftware(parts[1], parts[2], string.IsNullOrEmpty(maintainer) ? null : maintainer, "dpkg",
+                PackageId: string.IsNullOrEmpty(parts[3]) ? parts[1] : parts[3]));
+        }
+
+        return result;
+    }
+
+    /// <summary>"snap list": Name Version Rev Tracking Publisher Notes</summary>
+    public static IEnumerable<InstalledSoftware> ParseSnapList(string output) =>
+        output.Split('\n')
+            .Skip(1)
+            .Select(l => l.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+            .Where(p => p.Length >= 5)
+            .Select(p => new InstalledSoftware(p[0], p[1], p[4].TrimEnd('✓', '*', '✪'), "snap"));
+
     public static IReadOnlyList<AvailableUpdate> Parse(string simulationOutput)
     {
         var updates = new List<AvailableUpdate>();

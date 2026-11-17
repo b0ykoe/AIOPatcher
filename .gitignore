@@ -13,3 +13,5 @@ src/AIOPatcher.Server/runtime-data/
 *.db-wal
 TestResults/
 agent-dev/
+*.tsbuildinfo
+.claude/

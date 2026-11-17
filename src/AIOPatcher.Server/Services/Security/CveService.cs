@@ -20,7 +20,8 @@ public sealed class CveService(
     IHttpClientFactory httpFactory,
     AIOPatcherOptions options,
     Notifier notifier,
-    ILogger<CveService> logger) : BackgroundService
+    ILogger<CveService> logger,
+    FeatureFlags? features = null) : BackgroundService
 {
     public const string HttpClientName = "cve";
 
@@ -32,24 +33,34 @@ public sealed class CveService(
 
     private DateTime _kevRefreshedAt;
     private DateTime _msrcRefreshedAt;
+    private DateTime _epssLoadedAt;
+    private DateTime _installedScannedAt;
+    private Dictionary<long, (float Epss, float Percentile)> _epss = [];
+
+    /// <summary>Ungepatchte Lücken nur speichern, wenn KEV oder EPSS mindestens so hoch (5 %).</summary>
+    public const double UnfixedEpssThreshold = 0.05;
+
+    /// <summary>EPSS aus der täglich geladenen Gesamttabelle (null = unbekannt).</summary>
+    public (double Epss, double Percentile)? EpssOf(string cve) =>
+        CveMapping.CveKey(cve) is { } key && _epss.TryGetValue(key, out var v) ? (v.Epss, v.Percentile) : null;
     private Dictionary<string, HashSet<string>> _msrc = [];
 
     private HttpClient Http => httpFactory.CreateClient(HttpClientName);
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        if (!options.CveLookupEnabled)
-        {
-            logger.LogInformation("CVE lookup disabled");
-            return;
-        }
-
+        _ = options;
         await Task.Delay(TimeSpan.FromSeconds(30), stoppingToken);
         using var timer = new PeriodicTimer(Interval);
         do
         {
             try
             {
+                if (features?.IsOn(Feature.CveLookup) == false)
+                {
+                    continue; // abgeschaltet: nächster Versuch beim nächsten Takt
+                }
+
                 using var scope = scopes.CreateScope();
                 await RunOnceAsync(scope.ServiceProvider.GetRequiredService<AppDbContext>(), stoppingToken);
             }
@@ -70,8 +81,20 @@ public sealed class CveService(
             _kevRefreshedAt = now;
         }
 
+        if (now - _epssLoadedAt > EpssMaxAge)
+        {
+            await LoadEpssTableAsync(ct);
+            _epssLoadedAt = now;
+        }
+
         await ResolvePendingAsync(db, now, ct);
         await RefreshEpssAsync(db, now, ct);
+
+        if (now - _installedScannedAt > TimeSpan.FromHours(12))
+        {
+            await ScanInstalledAsync(db, now, ct);
+            _installedScannedAt = now;
+        }
         await ApplyScoresAsync(db, notifier, ct);
     }
 
@@ -331,6 +354,28 @@ public sealed class CveService(
         var known = await db.CveInfos.Where(c => all.Contains(c.Id)).ToDictionaryAsync(c => c.Id, ct);
         var stale = all.Where(id => !known.TryGetValue(id, out var c) || c.EpssUpdatedAt is null || now - c.EpssUpdatedAt > EpssMaxAge).ToList();
 
+        // Gesamttabelle vorhanden: daraus übernehmen statt einzeln zu fragen.
+        if (_epss.Count > 0)
+        {
+            foreach (var id in stale)
+            {
+                if (!known.TryGetValue(id, out var info))
+                {
+                    db.CveInfos.Add(known[id] = info = new CveInfo { Id = id });
+                }
+
+                info.EpssUpdatedAt = now;
+                if (EpssOf(id) is { } score)
+                {
+                    info.Epss = score.Epss;
+                    info.EpssPercentile = score.Percentile;
+                }
+            }
+
+            await db.SaveChangesAsync(ct);
+            return;
+        }
+
         try
         {
             foreach (var chunk in stale.Chunk(80))
@@ -363,6 +408,132 @@ public sealed class CveService(
 
         static double? ParseDouble(JsonNode? node) =>
             double.TryParse(node?.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture, out var v) ? v : null;
+    }
+
+    /// <summary>EPSS-Gesamttabelle (~3 MB gzip, ~400 000 CVEs), einmal täglich.</summary>
+    private async Task LoadEpssTableAsync(CancellationToken ct)
+    {
+        try
+        {
+            await using var stream = await Http.GetStreamAsync("https://epss.empiricalsecurity.com/epss_scores-current.csv.gz", ct);
+            await using var gzip = new System.IO.Compression.GZipStream(stream, System.IO.Compression.CompressionMode.Decompress);
+            using var reader = new StreamReader(gzip);
+            var table = CveMapping.ParseEpssCsv(reader);
+            if (table.Count > 0)
+            {
+                _epss = table;
+                logger.LogInformation("EPSS table: {Count} CVEs", table.Count);
+            }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or IOException or InvalidDataException)
+        {
+            logger.LogWarning("EPSS table download failed: {Message}", ex.Message);
+        }
+    }
+
+    // --- 5) Lücken in installierten Paketen ohne verfügbares Update -----------------------------------
+
+    /// <summary>
+    /// Fragt OSV für alle installierten Debian/Ubuntu-Quellpakete ab. Gespeichert werden nur Lücken, die kein
+    /// verfügbares Update schließt und die relevant sind (KEV oder EPSS ≥ 5 %).
+    /// </summary>
+    private async Task ScanInstalledAsync(AppDbContext db, DateTime now, CancellationToken ct)
+    {
+        var hosts = await db.Hosts.Where(h => !h.IsRevoked && h.OsFamily == OsFamily.Linux).ToListAsync(ct);
+        var kev = (await db.CveInfos.Where(c => c.IsKev).Select(c => c.Id).ToListAsync(ct)).ToHashSet();
+        var aliasBudget = MaxAliasFetchesPerRun;
+
+        foreach (var host in hosts)
+        {
+            if (CveMapping.EcosystemForHost(host.OsName, host.OsVersion) is not { } ecosystem)
+            {
+                continue;
+            }
+
+            var packages = await db.InstalledApps
+                .Where(a => a.HostId == host.Id && a.Source == "dpkg" && a.PackageId != null && a.Version != null)
+                .Select(a => new { Package = a.PackageId!, Version = a.Version! })
+                .Distinct()
+                .ToListAsync(ct);
+            if (packages.Count == 0)
+            {
+                continue;
+            }
+
+            var keys = packages.ToDictionary(p => $"osvinst|{ecosystem}|{p.Package}|{p.Version}", p => p);
+            var cached = await db.VulnLookups.Where(l => keys.Keys.Contains(l.Key)).ToDictionaryAsync(l => l.Key, ct);
+            var missing = keys.Keys.Where(k => !cached.TryGetValue(k, out var c) || now - c.FetchedAt > TimeSpan.FromDays(1)).ToList();
+
+            try
+            {
+                foreach (var chunk in missing.Chunk(500))
+                {
+                    var queries = new JsonArray();
+                    foreach (var key in chunk)
+                    {
+                        queries.Add(new JsonObject { ["package"] = new JsonObject { ["name"] = keys[key].Package, ["ecosystem"] = ecosystem }, ["version"] = keys[key].Version });
+                    }
+
+                    using var response = await Http.PostAsJsonAsync("https://api.osv.dev/v1/querybatch", new JsonObject { ["queries"] = queries }, ct);
+                    response.EnsureSuccessStatusCode();
+                    var results = (await response.Content.ReadFromJsonAsync<JsonObject>(ct))?["results"] as JsonArray ?? [];
+                    for (var i = 0; i < chunk.Length; i++)
+                    {
+                        var ids = (results.ElementAtOrDefault(i)?["vulns"] as JsonArray ?? []).Select(v => (string?)v?["id"]).OfType<string>();
+                        var cves = new HashSet<string>();
+                        foreach (var id in ids)
+                        {
+                            var direct = CveMapping.ExtractCves(id).ToList();
+                            if (direct.Count > 0)
+                            {
+                                cves.UnionWith(direct);
+                            }
+                            else if (aliasBudget-- > 0)
+                            {
+                                cves.UnionWith(await OsvAliasesAsync(db, id, now, ct));
+                            }
+                        }
+
+                        // Kernel & Co. haben tausende Einträge: nur die relevanten aufbewahren.
+                        var relevant = cves.Where(c => kev.Contains(c) || EpssOf(c)?.Epss >= UnfixedEpssThreshold);
+                        if (cached.TryGetValue(chunk[i], out var lookup))
+                        {
+                            lookup.Cves = CveMapping.Join(relevant);
+                            lookup.FetchedAt = now;
+                        }
+                        else
+                        {
+                            db.VulnLookups.Add(cached[chunk[i]] = new VulnLookup { Key = chunk[i], Cves = CveMapping.Join(relevant), FetchedAt = now });
+                        }
+                    }
+                }
+            }
+            catch (HttpRequestException ex)
+            {
+                logger.LogWarning("OSV unreachable for installed packages: {Message}", ex.Message);
+                continue;
+            }
+
+            var fixable = (await db.PendingUpdates.Where(u => u.HostId == host.Id && u.Cves != null && u.Cves != "").Select(u => u.Cves).ToListAsync(ct))
+                .SelectMany(CveMapping.Split)
+                .ToHashSet();
+
+            await db.HostVulnerabilities.Where(v => v.HostId == host.Id).ExecuteDeleteAsync(ct);
+            foreach (var (key, package) in keys)
+            {
+                if (!cached.TryGetValue(key, out var lookup))
+                {
+                    continue;
+                }
+
+                foreach (var cve in CveMapping.Split(lookup.Cves).Where(c => !fixable.Contains(c)))
+                {
+                    db.HostVulnerabilities.Add(new HostVulnerability { HostId = host.Id, CveId = cve, Package = package.Package, InstalledVersion = package.Version, FoundAt = now });
+                }
+            }
+
+            await db.SaveChangesAsync(ct);
+        }
     }
 
     // --- 4) Bewertung übernehmen und neue KEV-Treffer melden ------------------------------------------

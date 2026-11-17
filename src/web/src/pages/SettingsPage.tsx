@@ -1,7 +1,8 @@
 import { useNavigate, useParams } from "react-router";
 import { Tabs } from "@mantine/core";
-import { IconBell, IconKey, IconPlugConnected } from "@tabler/icons-react";
+import { IconBell, IconKey, IconPlugConnected, IconShieldLock } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
+import { FeatureSettings } from "../components/settings/FeatureSettings";
 import { ApiTokenSettings } from "../components/settings/ApiTokenSettings";
 import { IntegrationSettings } from "../components/settings/IntegrationSettings";
 import { NotificationSettings } from "../components/settings/NotificationSettings";
@@ -10,10 +11,11 @@ import { PageHeader } from "../components/ui";
 /** Admin-Einstellungen: ein Tab pro Bereich, der aktive Tab steht in der URL. */
 export function SettingsPage() {
   const { t } = useTranslation();
-  const { tab = "notifications" } = useParams();
+  const { tab = "features" } = useParams();
   const navigate = useNavigate();
 
   const tabs = [
+    { value: "features", label: t("settings.features"), icon: IconShieldLock, element: <FeatureSettings /> },
     { value: "notifications", label: t("settings.notifications"), icon: IconBell, element: <NotificationSettings /> },
     { value: "integrations", label: t("settings.integrations"), icon: IconPlugConnected, element: <IntegrationSettings /> },
     { value: "api-tokens", label: t("settings.apiTokens"), icon: IconKey, element: <ApiTokenSettings /> },

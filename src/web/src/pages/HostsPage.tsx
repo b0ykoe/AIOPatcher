@@ -18,7 +18,10 @@ import {
 } from "@tabler/icons-react";
 import { api, formatRelative, formatWindowStart, splitTags, type BulkJobResult, type HostSummary, type JobType, type PatchScope, type Site } from "../api";
 import { useTranslation } from "react-i18next";
-import { useCan, useShell } from "../App";
+import { useCan, useShell, useSimple } from "../App";
+import { useFeatures } from "../features";
+
+import { PatchPlanWizard } from "../components/PatchPlanWizard";
 import { autoPatchLabel, AutoPatchModal } from "../components/AutoPatchCard";
 import { OsIcon } from "../components/OsIcon";
 import { confirmAction, EmptyState, HostStatusLabel, notifyError, notifySuccess, PageHeader, reportBulk } from "../components/ui";
@@ -26,6 +29,9 @@ import { confirmAction, EmptyState, HostStatusLabel, notifyError, notifySuccess,
 export function HostsPage() {
   const { t } = useTranslation();
   const can = useCan();
+  const { isOn } = useFeatures();
+  const simple = useSimple();
+  const [planOpen, setPlanOpen] = useState(false);
   const { openAddHost } = useShell();
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
@@ -106,7 +112,12 @@ export function HostsPage() {
         actions={
           <>
             <TextInput placeholder={t("hostsPage.filter")} leftSection={<IconSearch size={16} />} value={query} onChange={(e) => setQuery(e.currentTarget.value)} w={200} />
-            {allTags.length > 0 && (
+            {can.operate && (
+              <Button variant="light" leftSection={<IconClockPlay size={16} />} onClick={() => setPlanOpen(true)}>
+                {t("simple.planButton")}
+              </Button>
+            )}
+            {!simple && allTags.length > 0 && (
               <MultiSelect placeholder={tagFilter.length === 0 ? t("rules.tagFilter") : undefined} data={allTags} value={tagFilter} onChange={setTagFilter} clearable w={200} leftSection={<IconTags size={16} />} />
             )}
             <Select
@@ -139,7 +150,7 @@ export function HostsPage() {
             <Table>
               <Table.Thead>
                 <Table.Tr>
-                  {can.operate && <Table.Th w={70}>
+                  {can.operate && !simple && <Table.Th w={70}>
                     <Group gap={2} wrap="nowrap">
                       <Checkbox
                         aria-label={t("hostsPage.selectAll")}
@@ -185,7 +196,7 @@ export function HostsPage() {
                       style={{ cursor: "pointer" }}
                       bg={isSelected ? "var(--mantine-color-violet-light)" : undefined}
                     >
-                      {can.operate && (
+                      {can.operate && !simple && (
                         <Table.Td onClick={(e) => e.stopPropagation()}>
                           <Checkbox aria-label={t("hostsPage.selectHost", { name: h.name })} checked={isSelected} onChange={() => toggle(h.id)} />
                         </Table.Td>
@@ -287,7 +298,7 @@ export function HostsPage() {
 
       {/* Aktionsleiste für die Auswahl */}
       <Affix position={{ bottom: 20, left: 0, right: 0 }} zIndex={150}>
-        <Transition transition="slide-up" mounted={can.operate && selection.length > 0}>
+        <Transition transition="slide-up" mounted={can.operate && !simple && selection.length > 0}>
           {(styles) => (
             <Group justify="center" style={styles} px="md">
               <Paper className="glass" p="sm" radius="xl" shadow="xl" withBorder style={{ maxWidth: "100%" }}>
@@ -298,7 +309,7 @@ export function HostsPage() {
                   <Button size="sm" variant="light" leftSection={<IconClockPlay size={16} />} onClick={() => setAutoPatchOpen(true)}>
                     Auto-Patch
                   </Button>
-                  <Menu position="top" width={270}>
+                  {isOn("PatchJobs") && <Menu position="top" width={270}>
                     <Menu.Target>
                       <Button size="sm" variant="light" leftSection={<IconShieldCheck size={16} />} rightSection={<IconChevronDown size={14} />}>
                         {t("hostsPage.install")}
@@ -331,19 +342,21 @@ export function HostsPage() {
                       >
                         {t("jobType.all")}
                       </Menu.Item>
+                      {isOn("Reboots") && <>
                       <Menu.Divider />
                       <Menu.Label>
                         <Switch size="xs" label={t("hostsPage.rebootAfter")} checked={allowReboot} onChange={(e) => setAllowReboot(e.currentTarget.checked)} />
                       </Menu.Label>
+                      </>}
                     </Menu.Dropdown>
-                  </Menu>
+                  </Menu>}
                   <Button size="sm" variant="light" leftSection={<IconTags size={16} />} onClick={() => setTagsOpen(true)}>
                     {t("rules.bulkTags")}
                   </Button>
                   <Button size="sm" variant="light" leftSection={<IconScan size={16} />} onClick={() => void runBulk("Scan")}>
                     {t("hostsPage.scan")}
                   </Button>
-                  <Button
+                  {isOn("Reboots") && <Button
                     size="sm"
                     variant="light"
                     color="red"
@@ -353,7 +366,7 @@ export function HostsPage() {
                     }
                   >
                     {t("hostsPage.reboot")}
-                  </Button>
+                  </Button>}
                   <Tooltip label={t("hostsPage.clearSelection")}>
                     <ActionIcon variant="subtle" color="gray" radius="xl" onClick={() => setSelected(new Set())} aria-label={t("hostsPage.clearSelection")}>
                       <IconX size={18} />
@@ -366,6 +379,7 @@ export function HostsPage() {
         </Transition>
       </Affix>
 
+      <PatchPlanWizard opened={planOpen} onClose={() => setPlanOpen(false)} onSaved={() => void load()} />
       <BulkTagsModal
         hostIds={selection}
         known={allTags}

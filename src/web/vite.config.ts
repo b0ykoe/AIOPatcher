@@ -17,7 +17,8 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      "/api": { target: backend, secure: false },
+      // Mit Schrägstrich: sonst landen auch Seiten wie /api-irgendwas beim Server.
+      "/api/": { target: backend, secure: false },
       "/healthz": { target: backend, secure: false },
     },
   },

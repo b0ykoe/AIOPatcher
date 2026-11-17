@@ -2,8 +2,10 @@ import { useCallback, useEffect, useState } from "react";
 import { ActionIcon, Alert, Badge, Button, Card, Code, CopyButton, Group, Modal, NumberInput, Select, Stack, Table, Text, TextInput, Tooltip } from "@mantine/core";
 import { IconCheck, IconCopy, IconKey, IconPlus, IconTrash } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
+import { Link } from "react-router";
 import { api, formatDateTime, formatRelative, type UserRole } from "../../api";
 import { confirmAction, EmptyState, errorText, notifyError } from "../ui";
+import { FeatureOffHint, useFeatures } from "../../features";
 
 interface ApiToken {
   id: string;
@@ -19,6 +21,7 @@ interface ApiToken {
 export function ApiTokenSettings() {
   const { t } = useTranslation();
   const [tokens, setTokens] = useState<ApiToken[] | null>(null);
+  const { isOn } = useFeatures();
   const [open, setOpen] = useState(false);
   const [secret, setSecret] = useState<string | null>(null);
 
@@ -48,6 +51,12 @@ export function ApiTokenSettings() {
 
   return (
     <Stack>
+      {!isOn("ApiTokens") && (
+        <Alert color="yellow" variant="light">
+          <Text size="sm">{t("features.tokensOff")}</Text>
+          <FeatureOffHint feature="ApiTokens" />
+        </Alert>
+      )}
       <Group justify="space-between">
         <Text size="sm" c="dimmed" maw={680}>{t("apiTokens.intro")}</Text>
         <Button variant="gradient" className="gradient-button" leftSection={<IconPlus size={16} />} onClick={() => setOpen(true)}>
@@ -99,6 +108,7 @@ export function ApiTokenSettings() {
         <Text fw={700} mb="xs">{t("apiTokens.example")}</Text>
         <Code block>{`curl -H "Authorization: Bearer aiop_…" ${origin}/api/overview\ncurl -H "Authorization: Bearer aiop_…" "${origin}/api/reports/patch.csv?days=30" -o report.csv`}</Code>
         <Text size="xs" c="dimmed" mt="xs">{t("apiTokens.webhookHint")}</Text>
+        <Button component={Link} to="/developer" variant="light" size="xs" mt="sm">{t("apiPage.allEndpoints")}</Button>
       </Card>
 
       <CreateTokenModal opened={open} onClose={() => setOpen(false)} onCreated={(s) => { setOpen(false); setSecret(s); load(); }} />

@@ -219,6 +219,41 @@ namespace AIOPatcher.Server.Data.Migrations
                     b.ToTable("EnrollmentTokens");
                 });
 
+            modelBuilder.Entity("AIOPatcher.Server.Data.HostVulnerability", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("CveId")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("FoundAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("HostId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("InstalledVersion")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Package")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CveId");
+
+                    b.HasIndex("HostId");
+
+                    b.ToTable("HostVulnerabilities");
+                });
+
             modelBuilder.Entity("AIOPatcher.Server.Data.ImageCheck", b =>
                 {
                     b.Property<string>("Reference")
@@ -243,6 +278,54 @@ namespace AIOPatcher.Server.Data.Migrations
                     b.HasKey("Reference");
 
                     b.ToTable("ImageChecks");
+                });
+
+            modelBuilder.Entity("AIOPatcher.Server.Data.InstalledApp", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("AvailableVersion")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("HostId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PackageId")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Publisher")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Url")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Version")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("HostId");
+
+                    b.HasIndex("PackageId");
+
+                    b.ToTable("InstalledApps");
                 });
 
             modelBuilder.Entity("AIOPatcher.Server.Data.Integration", b =>
@@ -662,6 +745,10 @@ namespace AIOPatcher.Server.Data.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<DateTime?>("NotAfter")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Packages")
+                        .HasMaxLength(4000)
                         .HasColumnType("TEXT");
 
                     b.Property<bool>("RebootPerformed")
@@ -1136,6 +1223,11 @@ namespace AIOPatcher.Server.Data.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("UiMode")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Username")
                         .IsRequired()
                         .HasMaxLength(64)
@@ -1169,6 +1261,27 @@ namespace AIOPatcher.Server.Data.Migrations
                     b.ToTable("VulnLookups");
                 });
 
+            modelBuilder.Entity("AIOPatcher.Server.Services.FeatureToggle", b =>
+                {
+                    b.Property<string>("Key")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("ChangedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ChangedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("Enabled")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Key");
+
+                    b.ToTable("FeatureToggles");
+                });
+
             modelBuilder.Entity("AIOPatcher.Server.Data.ContainerInfo", b =>
                 {
                     b.HasOne("AIOPatcher.Server.Data.ManagedHost", "Host")
@@ -1189,6 +1302,28 @@ namespace AIOPatcher.Server.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("Site");
+                });
+
+            modelBuilder.Entity("AIOPatcher.Server.Data.HostVulnerability", b =>
+                {
+                    b.HasOne("AIOPatcher.Server.Data.ManagedHost", "Host")
+                        .WithMany()
+                        .HasForeignKey("HostId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Host");
+                });
+
+            modelBuilder.Entity("AIOPatcher.Server.Data.InstalledApp", b =>
+                {
+                    b.HasOne("AIOPatcher.Server.Data.ManagedHost", "Host")
+                        .WithMany("Apps")
+                        .HasForeignKey("HostId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Host");
                 });
 
             modelBuilder.Entity("AIOPatcher.Server.Data.Integration", b =>
@@ -1397,6 +1532,8 @@ namespace AIOPatcher.Server.Data.Migrations
 
             modelBuilder.Entity("AIOPatcher.Server.Data.ManagedHost", b =>
                 {
+                    b.Navigation("Apps");
+
                     b.Navigation("Containers");
 
                     b.Navigation("Jobs");

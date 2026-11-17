@@ -60,11 +60,14 @@ export interface SetupStartResponse {
 export type UserRole = "Admin" | "Operator" | "Viewer";
 export type UserStatus = "Active" | "Invited" | "InviteExpired" | "Disabled";
 
+export type UiMode = "Simple" | "Advanced";
+
 export interface Me {
   id: string;
   username: string;
   role: UserRole;
   language: "de" | "en" | null;
+  uiMode: UiMode;
 }
 
 export interface User {
@@ -116,6 +119,8 @@ export interface HostSummary {
   tags: string | null;
   kevUpdates: number;
   containerUpdates: number;
+  /** mit Proxmox-VM bzw. Hetzner-Server verknüpft */
+  mapped: boolean;
 }
 
 export const splitTags = (tags: string | null | undefined) => (tags ? tags.split(",") : []);
@@ -181,6 +186,8 @@ export interface Overview {
   kevHosts: number;
   kevUpdates: number;
   containerUpdates: number;
+  /** mit Proxmox-VM bzw. Hetzner-Server verknüpft */
+  mapped: boolean;
 }
 
 export interface EnrollmentTokenCreated {
@@ -200,7 +207,7 @@ export interface EnrollmentToken {
   expiresAt: string;
 }
 
-export type JobType = "Scan" | "Patch" | "Reboot";
+export type JobType = "Scan" | "Patch" | "Reboot" | "AppUpdate";
 export type PatchScope = "Security" | "All";
 export type JobStatus = "Queued" | "Running" | "Succeeded" | "Failed" | "Rejected" | "Cancelled";
 
@@ -241,6 +248,8 @@ export function describeJob(job: Pick<Job, "type" | "scope" | "allowReboot">): s
       return t("jobType.scan");
     case "Reboot":
       return t("jobType.reboot");
+    case "AppUpdate":
+      return t("jobType.appUpdate");
     case "Patch":
       return `${job.scope === "Security" ? t("jobType.security") : t("jobType.all")}${job.allowReboot ? t("jobType.plusReboot") : ""}`;
   }
@@ -304,6 +313,9 @@ export interface ServerInfo {
   version: string;
   timeZone: string;
   nowUtc: string;
+  latestVersion: string | null;
+  releaseUrl: string | null;
+  updateAvailable: boolean;
 }
 
 const weekdayKeys = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const;
@@ -566,4 +578,29 @@ export interface MachineInfo {
   name: string;
   status: string | null;
   addresses: string[];
+}
+
+// --- Programme -----------------------------------------------------------------------------------
+
+export interface SoftwareItem {
+  id: number;
+  name: string;
+  version: string | null;
+  publisher: string | null;
+  source: "dpkg" | "snap" | "registry" | "winget";
+  packageId: string | null;
+  availableVersion: string | null;
+  vendorUrl: string | null;
+  infoUrl: string | null;
+}
+
+export interface SoftwareSummary {
+  name: string;
+  source: string;
+  packageId: string | null;
+  hosts: number;
+  outdated: number;
+  versions: string[];
+  availableVersion: string | null;
+  infoUrl: string | null;
 }

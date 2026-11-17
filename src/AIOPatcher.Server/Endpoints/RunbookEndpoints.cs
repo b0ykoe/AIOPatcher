@@ -73,7 +73,10 @@ public static class RunbookEndpoints
         op.MapPost("/runbooks", CreateRunbook);
         op.MapPut("/runbooks/{id:guid}", UpdateRunbook);
         op.MapDelete("/runbooks/{id:guid}", DeleteRunbook);
-        op.MapPost("/runbooks/{id:guid}/runs", StartRun);
+        op.MapPost("/runbooks/{id:guid}/runs", StartRun).AddEndpointFilter(async (context, next) =>
+            context.HttpContext.RequestServices.GetRequiredService<FeatureFlags>() is var f && (!f.IsOn(Feature.PatchJobs) || !f.IsOn(Feature.Automation))
+                ? Results.Problem(FeatureFlags.DisabledMessage(!f.IsOn(Feature.PatchJobs) ? Feature.PatchJobs : Feature.Automation), statusCode: StatusCodes.Status403Forbidden)
+                : await next(context));
 
         api.MapGet("/runbook-runs", ListRuns);
         api.MapGet("/runbook-runs/{id:guid}", GetRun);

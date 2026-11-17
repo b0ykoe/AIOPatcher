@@ -29,6 +29,9 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<ContainerInfo> Containers => Set<ContainerInfo>();
     public DbSet<ImageCheck> ImageChecks => Set<ImageCheck>();
     public DbSet<ApiToken> ApiTokens => Set<ApiToken>();
+    public DbSet<InstalledApp> InstalledApps => Set<InstalledApp>();
+    public DbSet<HostVulnerability> HostVulnerabilities => Set<HostVulnerability>();
+    public DbSet<AIOPatcher.Server.Services.FeatureToggle> FeatureToggles => Set<AIOPatcher.Server.Services.FeatureToggle>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
@@ -84,6 +87,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             e.HasOne(x => x.Host).WithMany(h => h.Jobs).HasForeignKey(x => x.HostId).OnDelete(DeleteBehavior.Cascade);
             e.HasIndex(x => new { x.HostId, x.Status });
             e.HasIndex(x => x.CreatedAt);
+            e.Property(x => x.Packages).HasMaxLength(4000);
         });
 
         b.Entity<JobLogEntry>(e =>
@@ -185,6 +189,37 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             e.Property(x => x.State).HasMaxLength(32);
             e.HasOne(x => x.Host).WithMany(h => h.Containers).HasForeignKey(x => x.HostId).OnDelete(DeleteBehavior.Cascade);
             e.HasIndex(x => x.HostId);
+        });
+
+        b.Entity<AIOPatcher.Server.Services.FeatureToggle>(e =>
+        {
+            e.HasKey(x => x.Key);
+            e.Property(x => x.Key).HasMaxLength(64);
+            e.Property(x => x.ChangedBy).HasMaxLength(100);
+        });
+
+        b.Entity<HostVulnerability>(e =>
+        {
+            e.Property(x => x.CveId).HasMaxLength(32);
+            e.Property(x => x.Package).HasMaxLength(200);
+            e.Property(x => x.InstalledVersion).HasMaxLength(100);
+            e.HasOne(x => x.Host).WithMany().HasForeignKey(x => x.HostId).OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(x => x.HostId);
+            e.HasIndex(x => x.CveId);
+        });
+
+        b.Entity<InstalledApp>(e =>
+        {
+            e.Property(x => x.Name).HasMaxLength(300);
+            e.Property(x => x.Version).HasMaxLength(100);
+            e.Property(x => x.Publisher).HasMaxLength(200);
+            e.Property(x => x.Source).HasMaxLength(16);
+            e.Property(x => x.PackageId).HasMaxLength(200);
+            e.Property(x => x.AvailableVersion).HasMaxLength(100);
+            e.Property(x => x.Url).HasMaxLength(500);
+            e.HasOne(x => x.Host).WithMany(h => h.Apps).HasForeignKey(x => x.HostId).OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(x => x.HostId);
+            e.HasIndex(x => x.PackageId);
         });
 
         b.Entity<ImageCheck>(e =>

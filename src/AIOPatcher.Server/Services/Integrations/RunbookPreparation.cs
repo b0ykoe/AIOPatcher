@@ -24,7 +24,7 @@ public sealed class RunbookPreparation(VirtualizationProviderFactory providers, 
                ?? throw new IntegrationException(L.T("Diese Integration kann keine Snapshots.", "This integration cannot take snapshots."));
     }
 
-    public Task<DateTime?> LastBackupAsync(ManagedHost host, CancellationToken ct) => Provider(host).LastBackupAsync(host.ExternalId!, ct);
+    public async Task<DateTime?> LastBackupAsync(ManagedHost host, CancellationToken ct) => (await Provider(host).LatestBackupAsync(host.ExternalId!, ct))?.CreatedAt;
 
     public Task<string> StartSnapshotAsync(ManagedHost host, string name, CancellationToken ct) =>
         Provider(host).StartSnapshotAsync(host.ExternalId!, name, $"AIOPatcher before patch ({host.Name})", ct);

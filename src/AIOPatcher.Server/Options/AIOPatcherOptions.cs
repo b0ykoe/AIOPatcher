@@ -43,6 +43,24 @@ public sealed class AIOPatcherOptions
     /// <summary>Signierte Agent-Updates an ältere Agents verteilen (der Agent prüft die Signatur selbst).</summary>
     public bool AgentAutoUpdate { get; set; } = true;
 
+    /// <summary>
+    /// GitHub-Repository ("owner/name"), dessen Releases auf neue AIOPatcher-Versionen geprüft werden.
+    /// Leer = keine Prüfung. Es wird nichts automatisch installiert.
+    /// </summary>
+    public string? UpdateCheckRepository { get; set; }
+
+    /// <summary>
+    /// Funktionen, die im Dashboard nicht eingeschaltet werden können (kommagetrennt), z. B. "AppUpdates,OpnsenseUpdates".
+    /// Namen siehe Einstellungen → Funktionen &amp; Sicherheit. Schutz auch gegen einen kompromittierten Admin-Login.
+    /// </summary>
+    public string? LockedFeatures { get; set; }
+
+    /// <summary>
+    /// Reverse Proxys vor dem Dashboard (IPs oder Netze, kommagetrennt), z. B. "127.0.0.1" oder "172.30.0.0/24".
+    /// Nur von diesen wird X-Forwarded-For übernommen (echte Client-IP für Login-Bremse und Audit-Log). Leer = kein Proxy.
+    /// </summary>
+    public string? TrustedProxies { get; set; }
+
     /// <summary>Gültigkeit eines Enrollment-Tokens.</summary>
     public int EnrollmentTokenLifetimeMinutes { get; set; } = 15;
 

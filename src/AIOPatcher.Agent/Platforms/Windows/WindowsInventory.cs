@@ -40,6 +40,45 @@ public sealed class WindowsInventory : IPlatformInventory
             .ToList();
     }
 
+    /// <summary>Programme aus der Registry (64 und 32 Bit), ergänzt um verfügbare Updates laut winget.</summary>
+    public async Task<IReadOnlyList<InstalledSoftware>?> ScanSoftwareAsync(CancellationToken ct)
+    {
+        var programs = new Dictionary<string, InstalledSoftware>(StringComparer.OrdinalIgnoreCase);
+        foreach (var path in new[] { @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall", @"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall" })
+        {
+            using var root = Registry.LocalMachine.OpenSubKey(path);
+            foreach (var name in root?.GetSubKeyNames() ?? [])
+            {
+                using var key = root!.OpenSubKey(name);
+                if (key?.GetValue("DisplayName") is not string display || string.IsNullOrWhiteSpace(display)
+                    || key.GetValue("SystemComponent") is 1 || key.GetValue("ParentKeyName") is not null)
+                {
+                    continue; // Systemkomponenten und einzelne Patches nicht als Programm zählen
+                }
+
+                var url = key.GetValue("URLInfoAbout") as string ?? key.GetValue("HelpLink") as string;
+                programs.TryAdd(display.Trim(), new InstalledSoftware(display.Trim(), key.GetValue("DisplayVersion") as string, key.GetValue("Publisher") as string, "registry",
+                    Url: url is not null && url.StartsWith("http", StringComparison.OrdinalIgnoreCase) ? url : null));
+            }
+        }
+
+        try
+        {
+            foreach (var upgrade in await WingetClient.ListUpgradesAsync(ct) ?? [])
+            {
+                programs[upgrade.Name] = programs.TryGetValue(upgrade.Name, out var known)
+                    ? known with { PackageId = upgrade.Id, AvailableVersion = upgrade.Available }
+                    : new InstalledSoftware(upgrade.Name, upgrade.Version, null, "winget", upgrade.Id, upgrade.Available);
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // winget fehlt oder streikt: Inventar trotzdem melden
+        }
+
+        return programs.Values.OrderBy(p => p.Name, StringComparer.OrdinalIgnoreCase).ToList();
+    }
+
     private static bool IsRebootPending()
     {
         if (KeyExists(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending")

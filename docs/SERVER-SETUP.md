@@ -275,12 +275,17 @@ Alle als Umgebungsvariable in `docker-compose.yml` (Standardwerte in Klammern):
 
 | Variable | Bedeutung |
 |---|---|
-| `AIOPatcher__CveLookupEnabled` (`true`) | CVE-Zuordnung und -Bewertung. Der Server fragt dafür **Paketnamen/Versionen bzw. KB-Nummern** (keine Hostnamen, keine IPs) bei `api.osv.dev`, `api.msrc.microsoft.com`, `www.cisa.gov` und `api.first.org` ab. |
+| `AIOPatcher__CveLookupEnabled` (`true`) | CVE-Zuordnung und -Bewertung. Der Server fragt dafür **Paketnamen/Versionen bzw. KB-Nummern** (keine Hostnamen, keine IPs) bei `api.osv.dev`, `api.msrc.microsoft.com`, `www.cisa.gov`, `api.first.org` und `epss.empiricalsecurity.com` ab. |
 | `AIOPatcher__ContainerUpdateCheckEnabled` (`true`) | Image-Tags laufender Container gegen ihre Registry prüfen (anonym, nur öffentliche Images). |
 | `AIOPatcher__AgentAutoUpdate` (`true`) | Signierte Agent-Updates an ältere Agents anbieten. |
+| `AIOPatcher__UpdateCheckRepository` (leer) | GitHub-Repository (`owner/name`), dessen Releases auf neue AIOPatcher-Versionen geprüft werden. Nur Hinweis, nichts wird installiert. |
+| `AIOPatcher__LockedFeatures` (leer) | Kommagetrennte Funktionen, die immer aus sind und im Dashboard nicht eingeschaltet werden können, z. B. `AppUpdates,OpnsenseUpdates`. Namen: `Automation`, `PatchJobs`, `Reboots`, `AppUpdates`, `AgentSelfUpdate`, `SnapshotTests`, `OpnsenseUpdates`, `ApiTokens`, `CveLookup`, `ContainerChecks`, `ReleaseCheck`. |
+| `AIOPatcher__TrustedProxies` (leer) | Reverse Proxy vor dem Dashboard (IPs/Netze, kommagetrennt), z. B. `127.0.0.1`. Nur von diesen wird `X-Forwarded-For` übernommen. Siehe [REVERSE-PROXY.md](REVERSE-PROXY.md). |
 | `AIOPatcher__Language` (`en`) | Sprache für Texte, die ohne Anfrage entstehen (siehe unten). |
 
 Die VM braucht dafür ausgehend HTTPS (443) ins Internet. Wer das nicht möchte, schaltet die ersten beiden ab.
+Die übrigen Schalter liegen im Dashboard unter *Einstellungen → Funktionen & Sicherheit*; die Variablen oben sperren die
+jeweilige Funktion dort zusätzlich.
 
 ### Integrationen (Proxmox, Hetzner Cloud, OPNsense)
 

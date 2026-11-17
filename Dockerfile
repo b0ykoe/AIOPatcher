@@ -69,6 +69,8 @@ ENV AIOPatcher__DataDirectory=/data \
     AIOPatcher__AgentPort=8443
 VOLUME /data
 EXPOSE 8443 9443
+# Gesundheitsprüfung ohne curl im Image: der Server fragt sich selbst unter /healthz.
+HEALTHCHECK --interval=60s --timeout=10s --start-period=90s --retries=3   CMD ["dotnet", "AIOPatcher.Server.dll", "healthcheck"]
 # Nicht als Root laufen (UID 1654 = "app" im .NET-Image).
 USER app
 ENTRYPOINT ["dotnet", "AIOPatcher.Server.dll"]

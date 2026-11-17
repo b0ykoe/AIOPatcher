@@ -51,6 +51,45 @@ public sealed class ContainerInfo
     public DateTime SeenAt { get; set; }
 }
 
+/// <summary>
+/// Lücke in einem installierten Paket, für die es (noch) kein Update gibt. Nur relevante werden gespeichert
+/// (KEV oder EPSS über der Schwelle), sonst würde allein der Linux-Kernel tausende Einträge erzeugen.
+/// </summary>
+public sealed class HostVulnerability
+{
+    public long Id { get; set; }
+    public Guid HostId { get; set; }
+    public ManagedHost? Host { get; set; }
+    public required string CveId { get; set; }
+
+    /// <summary>Quellpaket, z. B. "openssl".</summary>
+    public required string Package { get; set; }
+    public string? InstalledVersion { get; set; }
+    public DateTime FoundAt { get; set; }
+}
+
+/// <summary>Installiertes Programm bzw. Paket eines Hosts (vom Agent, ersetzt bei jedem Inventar-Scan).</summary>
+public sealed class InstalledApp
+{
+    public long Id { get; set; }
+    public Guid HostId { get; set; }
+    public ManagedHost? Host { get; set; }
+
+    public required string Name { get; set; }
+    public string? Version { get; set; }
+    public string? Publisher { get; set; }
+
+    /// <summary>"dpkg", "snap", "registry", "winget".</summary>
+    public required string Source { get; set; }
+
+    /// <summary>Debian-Quellpaket bzw. winget-ID.</summary>
+    public string? PackageId { get; set; }
+    public string? AvailableVersion { get; set; }
+
+    /// <summary>Herstellerseite laut Windows-Registry.</summary>
+    public string? Url { get; set; }
+}
+
 /// <summary>Letzter bekannter Digest eines Image-Tags in der Registry (gecacht, gilt für alle Hosts).</summary>
 public sealed class ImageCheck
 {

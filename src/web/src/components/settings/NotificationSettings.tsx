@@ -43,6 +43,7 @@ import {
   type Site,
 } from "../../api";
 import { confirmAction, EmptyState, errorText, notifyError, notifySuccess } from "../ui";
+import { GuidePanel } from "../GuidePanel";
 
 const channelTypes: ChannelType[] = ["Ntfy", "Email", "Webhook", "Discord", "Slack", "Telegram"];
 
@@ -320,6 +321,7 @@ function ChannelModal({ channel, sites, onClose, onSaved }: { channel: Notificat
           </Checkbox.Group>
         </div>
 
+        <GuidePanel topic={type} defaultOpen={channel === "new"} />
         {error && <Alert color="red" variant="light">{error}</Alert>}
         <Group justify="flex-end">
           <Button variant="default" onClick={onClose}>
