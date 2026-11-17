@@ -81,7 +81,7 @@ export function ComplianceTab({ hostId, os }: { hostId: string; os: OsFamily }) 
           </Group>
           <Group gap="xs">
             {canFirewall && fw.manageable && (
-              <Button size="xs" variant="light" component={Link} to="/compliance?tab=firewall">{t("compliance.deployProfile")}</Button>
+              <Button size="xs" variant="light" component={Link} to="/security?tab=compliance&view=firewall">{t("compliance.deployProfile")}</Button>
             )}
             {canFirewall && fw.hasOriginalBackup && (
               <Button size="xs" variant="subtle" color="orange" leftSection={<IconHistory size={14} />}

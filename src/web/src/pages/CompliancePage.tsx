@@ -16,7 +16,13 @@ export function CompliancePage() {
   const { t } = useTranslation();
   const { isOn } = useFeatures();
   const [params, setParams] = useSearchParams();
-  const tab = params.get("tab") ?? "overview";
+  // eigener Parameter: "tab" gehört dem Bereich Sicherheit (Lücken | CVE-Suche | Compliance)
+  const view = params.get("view") ?? "overview";
+  const setView = (v: string | null) => setParams((p) => {
+    const next = new URLSearchParams(p);
+    if (!v || v === "overview") next.delete("view"); else next.set("view", v);
+    return next;
+  }, { replace: true });
 
   if (!isOn("ComplianceChecks")) {
     return (
@@ -30,7 +36,7 @@ export function CompliancePage() {
   return (
     <>
       <PageHeader title={t("compliance.title")} description={t("compliance.description")} />
-      <Tabs value={tab} onChange={(v) => setParams(v === "overview" ? {} : { tab: v ?? "overview" })}>
+      <Tabs value={view} onChange={setView}>
         <Tabs.List mb="md">
           <Tabs.Tab value="overview" leftSection={<IconShieldCheck size={16} />}>{t("compliance.tabOverview")}</Tabs.Tab>
           <Tabs.Tab value="firewall" leftSection={<IconFlame size={16} />}>{t("compliance.tabFirewall")}</Tabs.Tab>
