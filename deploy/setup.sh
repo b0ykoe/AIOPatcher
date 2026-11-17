@@ -11,8 +11,10 @@
 #   3. Zertifikat fürs Dashboard: Let's Encrypt, intern (Zertifikat der AIOPatcher-CA) oder eigene Dateien
 #   4. Firewall (ufw): SSH, Agents (8443), Dashboard nur aus erlaubten Netzen
 #   5. Starten, auf "gesund" warten, Setup-Token und CA-Fingerprint ausgeben
+#   6. Antworten in /opt/aiopatcher/setup.conf merken, Befehl "aiopatcher-update" einrichten (optional nächtlich)
 #
-# Erneut ausführen ist gefahrlos: bestehende Dateien werden vorher gesichert (*.bak-DATUM), Daten bleiben.
+# Updates danach ohne Setup: sudo aiopatcher-update (siehe deploy/update.sh).
+# Erneut ausführen ist gefahrlos: Vorschläge kommen aus dem letzten Lauf, Dateien werden vorher gesichert, Daten bleiben.
 set -euo pipefail
 
 # --- Vorgaben ------------------------------------------------------------------------------------------
@@ -29,6 +31,7 @@ PROXY_NET=""       # external: IP/Netz des vorhandenen Proxys
 UFW=""             # yes | no
 LANGUAGE_ARG=""
 TIMEZONE=""
+AUTO_UPDATE=""     # yes | no: nachts automatisch aktualisieren
 ASSUME_YES=0
 DRY_RUN=0
 NO_BUILD=0
@@ -55,6 +58,7 @@ Optionen (ohne Angabe wird gefragt, mit --yes gilt der Vorschlag):
   --no-build             vorhandenes Image aiopatcher-server:local verwenden
   --language de|en       Sprache für Benachrichtigungen u. ä.
   --timezone ZONE        z. B. Europe/Berlin
+  --auto-update yes|no   nachts automatisch aktualisieren (systemd-Timer, Standard: no)
   --base DIR             Installationsordner (Standard /opt/aiopatcher)
   --yes                  Vorschläge ohne Rückfrage übernehmen
   --dry-run              nur Dateien in ./aiopatcher-setup-preview erzeugen, nichts installieren
@@ -76,6 +80,7 @@ while [ $# -gt 0 ]; do
     --no-build) NO_BUILD=1; shift ;;
     --language) LANGUAGE_ARG="${2:-}"; shift 2 ;;
     --timezone) TIMEZONE="${2:-}"; shift 2 ;;
+    --auto-update) AUTO_UPDATE="${2:-}"; shift 2 ;;
     --base) BASE="${2:-}"; shift 2 ;;
     --yes|-y) ASSUME_YES=1; shift ;;
     --dry-run) DRY_RUN=1; shift ;;
@@ -91,6 +96,16 @@ elif [ "$(id -u)" -ne 0 ]; then
   die "Bitte als root ausführen (sudo)."
 fi
 
+# Antworten vom letzten Lauf als Vorschläge (SAVED_HOSTNAME_ARG usw.); Optionen auf der Kommandozeile gehen vor
+CONF="$BASE/setup.conf"
+SAVED_BUILD_NUMBER=0
+if [ -f "$CONF" ]; then
+  while IFS= read -r line; do
+    case "$line" in [A-Z_]*=*) eval "SAVED_$line" ;; esac
+  done <"$CONF"
+  info "Vorschläge aus dem letzten Lauf ($CONF). Nur aktualisieren geht auch ohne Fragen: aiopatcher-update"
+fi
+
 # Befehl ausführen bzw. im Probelauf nur anzeigen
 run() {
   if [ "$DRY_RUN" -eq 1 ]; then printf '    [probe] %s\n' "$*"; else "$@"; fi
@@ -98,16 +113,21 @@ run() {
 
 # --- Fragen ------------------------------------------------------------------------------------------
 ask() { # ask VARIABLE "Frage" "Vorschlag"
-  local var="$1" question="$2" default="$3" answer
+  local var="$1" question="$2" default="$3" answer saved="SAVED_$1"
   if [ -n "${!var}" ]; then return; fi
+  default="${!saved:-$default}"
   if [ "$ASSUME_YES" -eq 1 ] || [ ! -t 0 ]; then printf -v "$var" '%s' "$default"; return; fi
   read -r -p "$question [$default]: " answer
   printf -v "$var" '%s' "${answer:-$default}"
 }
 
 choose() { # choose VARIABLE "Frage" "Vorschlag" wert1 "Text1" wert2 "Text2" …
-  local var="$1" question="$2" default="$3"; shift 3
+  local var="$1" question="$2" default="$3" saved="SAVED_$1" option; shift 3
   if [ -n "${!var}" ]; then return; fi
+  # gespeicherte Antwort nur, wenn sie hier zur Auswahl steht
+  for ((option = 1; option <= $#; option += 2)); do
+    if [ "${!option}" = "${!saved:-}" ]; then default="${!saved}"; fi
+  done
   if [ "$ASSUME_YES" -eq 1 ] || [ ! -t 0 ]; then printf -v "$var" '%s' "$default"; return; fi
   local values=() i=1 answer
   echo
@@ -203,6 +223,10 @@ for net in "${ALLOW_LIST[@]}"; do [[ "$net" =~ ^[0-9a-fA-F:.]+(/[0-9]{1,3})?$ ]]
 choose UFW "Firewall (ufw) einrichten?" "yes" yes "Ja: SSH, Agents (8443) und Dashboard nur aus den erlaubten Netzen" no "Nein, mache ich selbst (z. B. Hetzner-Firewall)"
 ask LANGUAGE_ARG "Sprache (de/en)" "de"
 ask TIMEZONE "Zeitzone" "$(cat /etc/timezone 2>/dev/null || timedatectl show -p Timezone --value 2>/dev/null || echo Europe/Berlin)"
+choose AUTO_UPDATE "AIOPatcher nachts automatisch aktualisieren? (sonst von Hand: sudo aiopatcher-update)" no \
+  no "Nein, ich aktualisiere selbst (empfohlen: dann weißt du, wann sich etwas ändert)" \
+  yes "Ja, jede Nacht neuen Code holen, bauen und neu starten (mit Sicherung und Rücksprung bei Fehlern)"
+case "$AUTO_UPDATE" in yes|no) ;; *) die "--auto-update: yes oder no" ;; esac
 
 # --- Übersicht ---------------------------------------------------------------------------------------
 case "$PROXY" in
@@ -218,6 +242,7 @@ cat <<EOF
     Agents:        https://$URL_HOST:8443
     Erlaubt:       ${ALLOW_LIST[*]}
     Firewall:      $UFW
+    Auto-Update:   $AUTO_UPDATE
     Ordner:        $BASE
 EOF
 if [ "$ASSUME_YES" -eq 0 ] && [ -t 0 ]; then
@@ -260,15 +285,20 @@ if [ "$DRY_RUN" -eq 0 ] && ! command -v docker >/dev/null 2>&1; then
   curl -fsSL https://get.docker.com | sh
 fi
 
+# Versionsnummer für eigene Builds: 0.1.<Anzahl Commits> (ohne Git fortlaufend), damit Agents Updates angeboten bekommen
+BUILD_NUMBER="$SAVED_BUILD_NUMBER"
 if [ -z "$IMAGE" ]; then
   IMAGE=aiopatcher-server:local
   if [ "$NO_BUILD" -eq 0 ]; then
+    COMMITS="$(git -c safe.directory="$REPO" -C "$REPO" rev-list --count HEAD 2>/dev/null || echo 0)"
+    if [ "$COMMITS" -gt "$BUILD_NUMBER" ]; then BUILD_NUMBER="$COMMITS"; elif [ "$COMMITS" -eq 0 ]; then BUILD_NUMBER=$((BUILD_NUMBER + 1)); fi
+    VERSION="0.1.$BUILD_NUMBER"
     [ -f "$REPO/Dockerfile" ] || die "Kein Dockerfile in $REPO. Skript aus dem entpackten Repo starten oder --image angeben."
     ensure_build_resources
-    info "Baue das Image (Server, Weboberfläche, alle Agents; dauert ca. 10-15 Minuten, auf kleinen Servern länger) ..."
+    info "Baue das Image $VERSION (Server, Weboberfläche, alle Agents; dauert ca. 10-15 Minuten, auf kleinen Servern länger) ..."
     if [ "$DRY_RUN" -eq 1 ]; then
-      run docker build -t "$IMAGE" "$REPO"
-    elif ! docker build -t "$IMAGE" "$REPO"; then
+      run docker build --build-arg VERSION="$VERSION" -t "$IMAGE" "$REPO"
+    elif ! docker build --build-arg VERSION="$VERSION" -t "$IMAGE" "$REPO"; then
       if dmesg 2>/dev/null | tail -n 200 | grep -qiE "out of memory|killed process"; then
         die "Bau abgebrochen: zu wenig Arbeitsspeicher (der Kernel hat einen Prozess beendet). Mehr RAM/Swap, dann erneut starten."
       fi
@@ -487,6 +517,54 @@ if [ "$UFW" = yes ]; then
   run ufw --force enable
 fi
 
+# --- Antworten merken, Update-Befehl -----------------------------------------------------------------
+# Für den nächsten Setup-Lauf (Vorschläge) und für aiopatcher-update (Image, Code, Proxy, Versionszähler)
+{
+  echo "# Erzeugt von deploy/setup.sh am $(date '+%Y-%m-%d %H:%M'). Wird von setup.sh und aiopatcher-update gelesen."
+  for var in HOSTNAME_ARG PROXY TLS EMAIL CERT_FILE KEY_FILE ALLOW PROXY_NET UFW LANGUAGE_ARG TIMEZONE AUTO_UPDATE IMAGE REPO BUILD_NUMBER; do
+    printf '%s=%q\n' "$var" "${!var}"
+  done
+} >"$CONF"
+chmod 600 "$CONF"
+info "Geschrieben: $CONF"
+
+run ln -sf "$REPO/deploy/update.sh" /usr/local/bin/aiopatcher-update
+if [ "$AUTO_UPDATE" = yes ]; then
+  UNIT_DIR=/etc/systemd/system
+  [ "$DRY_RUN" -eq 1 ] && UNIT_DIR="$BASE/systemd"
+  mkdir -p "$UNIT_DIR"
+  cat >"$UNIT_DIR/aiopatcher-update.service" <<EOF
+[Unit]
+Description=AIOPatcher aktualisieren
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/aiopatcher-update --quiet --base $BASE
+EOF
+  cat >"$UNIT_DIR/aiopatcher-update.timer" <<EOF
+[Unit]
+Description=AIOPatcher nachts aktualisieren
+
+[Timer]
+OnCalendar=*-*-* 04:00
+RandomizedDelaySec=45m
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+  run systemctl daemon-reload
+  run systemctl enable --now aiopatcher-update.timer
+  info "Nächtliches Update eingerichtet (04:00-04:45, Log: journalctl -u aiopatcher-update)"
+elif [ "$DRY_RUN" -eq 0 ] && [ -f /etc/systemd/system/aiopatcher-update.timer ]; then
+  systemctl disable --now aiopatcher-update.timer >/dev/null 2>&1 || true
+  rm -f /etc/systemd/system/aiopatcher-update.timer /etc/systemd/system/aiopatcher-update.service
+  systemctl daemon-reload
+  info "Nächtliches Update abgeschaltet."
+fi
+
 # --- Start -------------------------------------------------------------------------------------------
 if [ "$DRY_RUN" -eq 1 ]; then
   echo
@@ -559,6 +637,7 @@ EOF
 fi
 echo "    Nächste Schritte: Dashboard öffnen, Token eingeben, Konto und Authenticator einrichten,"
 echo "    dann \"Host hinzufügen\" (ein Befehl pro Host). Log: docker compose -f $COMPOSE logs -f aiopatcher"
+echo "    Updates später ohne Setup: sudo aiopatcher-update$([ "$AUTO_UPDATE" = yes ] && echo " (läuft zusätzlich jede Nacht)")"
 if [ "$UFW" = no ]; then
   echo
   warn "Firewall nicht eingerichtet: Port 8443 für Agents freigeben, Dashboard nur aus deinen Netzen."

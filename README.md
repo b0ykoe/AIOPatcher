@@ -50,23 +50,33 @@ CA-Fingerprint**. Im Dashboard: Token eingeben, Konto und Authenticator einricht
 
 - Alles auch ohne Fragen, z. B. `setup.sh --yes --hostname patch.example.com --proxy traefik --tls letsencrypt --email ich@example.com`
   (`--help` zeigt alle Optionen). `--dry-run` erzeugt nur die Dateien zum Ansehen.
-- Erneut ausführen ist gefahrlos: Konfigurationen werden vorher gesichert, Daten bleiben.
+- Erneut ausführen ist gefahrlos: Die Antworten vom letzten Lauf (`/opt/aiopatcher/setup.conf`) sind die Vorschläge,
+  Konfigurationen werden vorher gesichert, Daten bleiben. Für Updates ist das nicht nötig (siehe unten).
 - Hetzner: zusätzlich zur ufw ggf. die Cloud-Firewall öffnen (8443 für alle, Dashboard nur für dich).
 - Manuell statt Skript: [deploy/docker-compose.yml](deploy/docker-compose.yml) anpassen, gehärtete Variante in
   [docs/SERVER-SETUP.md](docs/SERVER-SETUP.md), Proxys in [docs/REVERSE-PROXY.md](docs/REVERSE-PROXY.md).
 
-**Updates von AIOPatcher:** Das Dashboard meldet neue Versionen (`AIOPatcher__UpdateCheckRepository`). Dann:
+**Updates von AIOPatcher** – ohne Setup, ein Befehl:
 
 ```bash
-sudo docker compose pull && sudo docker compose up -d
+sudo aiopatcher-update
 ```
+
+Holt den neuen Code (`git pull`), baut das Image, während der alte Container weiterläuft, sichert dann den Datenordner
+(`/opt/aiopatcher/backups`, die letzten drei), startet neu und wartet, bis AIOPatcher gesund ist. Startet die neue
+Version nicht, kommen altes Image und Daten automatisch zurück. Die Versionsnummer eigener Builds ist `0.1.<Commits>`,
+dadurch bekommen die Agents das Update ebenfalls angeboten. `--check` zeigt nur, ob es Neues gibt; `--force` baut auch
+ohne neuen Code. Nachts automatisch: beim Setup „Auto-Update“ wählen (systemd-Timer, Log: `journalctl -u aiopatcher-update`).
+Mit fertigem Image (`--image`) holt der Befehl stattdessen das neue Image (`docker compose pull`).
+
+Installationen von vor diesem Befehl: einmal `cd /opt/aiopatcher/src && sudo git pull && sudo bash deploy/update.sh`,
+danach gibt es `aiopatcher-update`. Code per `tar` statt Git: neuen Stand nach `/opt/aiopatcher/src` entpacken, dann
+`sudo aiopatcher-update`.
 
 Vor jeder Datenbank-Migration legt AIOPatcher selbst eine Sicherung unter `/opt/aiopatcher/data/backups` an.
 Der Container hat einen eingebauten Healthcheck (`docker ps` zeigt `healthy`). In der Compose-Datei stehen
 auskommentiert: **autoheal** (startet bei dauerhaftem „unhealthy“ neu), **Diun** (meldet neue Images, ändert nichts,
 empfohlen) und **Watchtower** (aktualisiert automatisch, nur wenn du das wirklich willst).
-
-> Selbst gebautes Image (Setup-Skript): Update = neuen Code hochladen und `setup.sh` erneut ausführen.
 
 ## Stand
 
