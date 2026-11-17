@@ -22,6 +22,9 @@ public enum NotificationEvents
 
     /// <summary>Agent-Update zurückgerollt oder abgelehnt (Selbsttest fehlgeschlagen).</summary>
     AgentUpdateFailed = 1024,
+
+    /// <summary>Nach einem Neustart laufen Dienste oder Container nicht mehr, die vorher liefen.</summary>
+    RebootCheckFailed = 2048,
 }
 
 public enum ChannelType

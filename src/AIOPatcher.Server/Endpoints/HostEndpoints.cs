@@ -5,6 +5,7 @@ using AIOPatcher.Server.Data;
 using AIOPatcher.Server.Options;
 using AIOPatcher.Server.Security;
 using AIOPatcher.Server.Services;
+using AIOPatcher.Server.Services.Modules;
 using Microsoft.EntityFrameworkCore;
 
 namespace AIOPatcher.Server.Endpoints;
@@ -83,7 +84,8 @@ public static class HostEndpoints
         int AgentProtocol = 0,
         IReadOnlyList<HostModuleDto>? Modules = null,
         IReadOnlyList<BrokenAptSource>? BrokenSources = null,
-        bool AutoFixSources = false);
+        bool AutoFixSources = false,
+        RebootCheckResult? RebootCheck = null);
 
     /// <summary>Modul des Agents: vorhanden, lokal (policy.json) oder im Dashboard abgeschaltet. Required = nicht abschaltbar.</summary>
     public sealed record HostModuleDto(string Id, bool Available, bool DisabledLocally, bool DisabledInDashboard, bool Required, IReadOnlyList<string> Actions);
@@ -147,6 +149,7 @@ public static class HostEndpoints
                 releases.Latest?.Version, releases.Latest?.Url, releases.UpdateAvailable));
         op.MapPost("/hosts/{id:guid}/revoke", RevokeHost);
         op.MapPost("/hosts/{id:guid}/agent-update/retry", RetryAgentUpdate);
+        op.MapDelete("/hosts/{id:guid}/reboot-check", DismissRebootCheck);
         op.MapPut("/hosts/{id:guid}/modules/{module}", ToggleModule);
         op.MapDelete("/hosts/{id:guid}", DeleteHost).RequireAuthorization(UserAccounts.AdminPolicy);
 
@@ -272,7 +275,8 @@ public static class HostEndpoints
         var uptime = host.BootedAt is { } booted ? DateTime.UtcNow - booted : host.Uptime;
         return Results.Ok(new HostDetailDto(summary, host.KernelVersion, uptime, host.EnrolledAt, host.CertificateExpiresAt, updates, addresses,
             host.IntegrationId, host.Integration?.Name, host.ExternalId, await ContainersAsync(db, id, ct), agentUpdate,
-            host.ProtocolVersion, ModulesOf(host), BrokenSourcesOf(host), features.IsOn(Feature.AptSourceFixes)));
+            host.ProtocolVersion, ModulesOf(host), BrokenSourcesOf(host), features.IsOn(Feature.AptSourceFixes),
+            features.IsOn(Feature.RebootCheck) ? RebootCheck.Result(host) : null));
     }
 
     private static List<BrokenAptSource>? BrokenSourcesOf(ManagedHost host)
@@ -336,6 +340,25 @@ public static class HostEndpoints
         {
             host.AgentUpdateBlockedVersion = null;
             audit.Add("agent.update.retry", $"{host.Name}: {blocked}", siteId: host.SiteId, hostId: host.Id);
+            await db.SaveChangesAsync(ct);
+        }
+
+        return Results.NoContent();
+    }
+
+    /// <summary>Hinweis "nach dem Neustart fehlt …" ausblenden (z. B. Dienst absichtlich entfernt). Der nächste Neustart prüft neu.</summary>
+    private static async Task<IResult> DismissRebootCheck(Guid id, AppDbContext db, AuditLog audit, CancellationToken ct)
+    {
+        var host = await db.Hosts.FindAsync([id], ct);
+        if (host is null)
+        {
+            return Results.NotFound();
+        }
+
+        if (RebootCheck.Result(host) is { } result)
+        {
+            host.RebootCheck = null;
+            audit.Add("host.rebootcheck.dismissed", $"{host.Name}: {string.Join(", ", result.Missing.Select(m => m.Name).Take(20))}", siteId: host.SiteId, hostId: host.Id);
             await db.SaveChangesAsync(ct);
         }
 

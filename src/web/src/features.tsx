@@ -22,7 +22,8 @@ export type Feature =
   | "RemoteAccessFixes"
   | "UserManagement"
   | "LegacyAgentProtocol"
-  | "AptSourceFixes";
+  | "AptSourceFixes"
+  | "RebootCheck";
 
 export interface FeatureState {
   feature: Feature;

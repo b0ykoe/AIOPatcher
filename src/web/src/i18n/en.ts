@@ -518,6 +518,7 @@ const en: Translation = {
     ContainerUpdates: "Container updates available",
     CertificateExpiring: "Agent certificate expiring",
     AgentUpdateFailed: "Agent update failed",
+    RebootCheckFailed: "Services missing after reboot",
   },
   rules: {
     description: "When not to patch and which updates to keep out.",
@@ -833,6 +834,18 @@ const en: Translation = {
     allEndpoints: "View all endpoints",
     tryHint: "\"Try it\" uses your current session (read-only calls without parameters). Scripts send the token instead.",
   },
+  rebootCheck: {
+    title: "{{count}} services/containers missing after the reboot on {{when}}",
+    text: "They were running before the reboot (as of {{baseline}}) and not 5 minutes after startup.",
+    before: "before: {{services}} services, {{containers}} containers",
+    allGood: "Reboot {{when}} checked: everything is running again.",
+    recovered: "Back in the meantime: {{names}}",
+    hint: "Checked: auto-start services and running containers ({{before}}).",
+    dismiss: "Dismiss",
+    reason_stopped: "Service is stopped or failed. Linux: systemctl status <name>, journalctl -u <name>. Windows: Services console or Event Viewer.",
+    reason_noRestart: "Container without restart policy: does not start by itself after a reboot. Set restart: unless-stopped in the compose file.",
+    reason_none: "Not running any more (not started or exited).",
+  },
   update: {
     title: "AIOPatcher {{version}} is available (you have {{current}})",
     text: "Run on the server in the folder with docker-compose.yml. AIOPatcher backs up its database automatically before migrating.",
@@ -865,6 +878,8 @@ const en: Translation = {
   features: {
     name_AptSourceFixes: "Disable broken package sources",
     desc_AptSourceFixes: "Before patching, the agent moves third-party package sources that no longer exist (404, repo discontinued) to /etc/apt/aiopatcher-disabled. Never Debian, Ubuntu or Proxmox sources; can be turned off per host with policy allowSourceFixes false.",
+    name_RebootCheck: "Check services after reboot",
+    desc_RebootCheck: "The agent reports running auto-start services and Docker containers (names only). After each reboot AIOPatcher compares with the state before after 5 minutes and reports what is missing.",
     name_LegacyAgentProtocol: "Legacy agent check-in",
     desc_LegacyAgentProtocol: "Agents before the pull protocol send data unasked with every check-in. Keep on only during the transition until all agents are updated (the checks page shows which are still old).",
     group_compliance: "Compliance (firewall, SSH/RDP, users)",
@@ -1111,6 +1126,7 @@ const en: Translation = {
     name_updates: "Updates",
     name_software: "Programs",
     name_docker: "Docker",
+    name_services: "Services",
     name_firewall: "Firewall",
     name_remoteaccess: "SSH / RDP",
     name_users: "Users",

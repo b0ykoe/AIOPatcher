@@ -86,6 +86,12 @@ public static class PullEndpoints
             await db.SaveChangesAsync(ct); // die Historie unten liest aus der Datenbank
         }
 
+        // Vor Patch-/Neustart-Jobs den aktuellen Stand der Dienste holen (Vergleich nach dem Neustart)
+        if (await SnapshotBeforeJobAsync(db, host, features, now, ct))
+        {
+            return Create(db, host, AgentModules.Services, ModuleActions.List, null, null);
+        }
+
         // Jobs: der Agent bekommt sie nur, wenn das zuständige Modul nutzbar ist.
         while (await AgentEndpoints.SelectJobAsync(db, host, null, now, ct, features) is { } job)
         {
@@ -126,6 +132,32 @@ public static class PullEndpoints
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Wartet ein Patch- oder Neustart-Job und ist der letzte Stand der Dienste älter als ein paar Minuten? Nicht kurz nach
+    /// einem Start (Dienste kommen noch hoch, das wäre ein schlechter Vergleichsstand).
+    /// </summary>
+    private static async Task<bool> SnapshotBeforeJobAsync(AppDbContext db, ManagedHost host, FeatureFlags features, DateTime now, CancellationToken ct)
+    {
+        if (!features.IsOn(Feature.RebootCheck) || host.ReportedModules is null || !ModuleJson.Usable(host, AgentModules.Services)
+            || !ModuleJson.Supports(host, AgentModules.Services, ModuleActions.List)
+            || host.BootedAt is not { } booted || now - booted < RebootCheck.Settle)
+        {
+            return false;
+        }
+
+        var jobWaiting = await db.Jobs.AnyAsync(j => j.HostId == host.Id && j.Status == JobStatus.Queued
+            && (j.Type == JobType.Reboot || j.Type == JobType.Patch && j.AllowReboot), ct);
+        if (!jobWaiting)
+        {
+            return false;
+        }
+
+        var last = await db.AgentTasks
+            .Where(t => t.HostId == host.Id && t.Module == AgentModules.Services && t.Action == ModuleActions.List && t.Status != JobStatus.Cancelled)
+            .MaxAsync(t => (DateTime?)t.CreatedAt, ct);
+        return last is null || now - last >= RebootCheck.FreshBeforeJob;
     }
 
     private static AgentTask Create(AppDbContext db, ManagedHost host, string module, string action, JsonElement? payload, Guid? jobId)

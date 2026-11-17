@@ -52,6 +52,12 @@ public sealed class ManagedHost
     /// <summary>Nicht ladbare Paketquellen aus dem letzten Scan (JSON-Liste von BrokenAptSource), null = keine/unbekannt.</summary>
     public string? BrokenAptSources { get; set; }
 
+    /// <summary>Letzter Stand laufender Dienste/Container (JSON, ServiceSnapshot): Vergleichsgrundlage für den nächsten Neustart.</summary>
+    public string? RunningSnapshot { get; set; }
+
+    /// <summary>Ergebnis des letzten Vergleichs nach einem Neustart (JSON, RebootCheckResult), null = keiner oder ausgeblendet.</summary>
+    public string? RebootCheck { get; set; }
+
     // mTLS-Identität
     public required string CertificateThumbprint { get; set; }
     public DateTime CertificateExpiresAt { get; set; }

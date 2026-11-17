@@ -179,6 +179,25 @@ export interface HostDetail {
   brokenSources: BrokenSource[] | null;
   /** Schalter "Kaputte Paketquellen deaktivieren" an */
   autoFixSources: boolean;
+  /** Vergleich laufender Dienste/Container vor und nach dem letzten Neustart (null = keiner, ausgeblendet oder Schalter aus) */
+  rebootCheck: RebootCheck | null;
+}
+
+/** reason: stopped = Dienst gestoppt/fehlgeschlagen, noRestart = Container ohne Restart-Policy, null = läuft einfach nicht */
+export interface RebootCheckItem {
+  kind: "service" | "container";
+  name: string;
+  reason: "stopped" | "noRestart" | null;
+}
+
+export interface RebootCheck {
+  bootedAt: string;
+  baselineAt: string;
+  checkedAt: string;
+  servicesBefore: number;
+  containersBefore: number;
+  missing: RebootCheckItem[];
+  recovered: RebootCheckItem[];
 }
 
 export interface BrokenSource {
@@ -522,6 +541,7 @@ export const notificationEvents = [
   "ContainerUpdates",
   "CertificateExpiring",
   "AgentUpdateFailed",
+  "RebootCheckFailed",
 ] as const;
 export type NotificationEvent = (typeof notificationEvents)[number];
 

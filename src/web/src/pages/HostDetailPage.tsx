@@ -32,6 +32,7 @@ import { HoldModal } from "./RulesPage";
 import { MappingCard } from "../components/MappingCard";
 import { CveCell } from "../components/CveCell";
 import { ContainerTable } from "../components/ContainerTable";
+import { RebootCheckAlert } from "../components/RebootCheckAlert";
 import { SoftwareTab } from "../components/SoftwareTab";
 import { ComplianceTab } from "../components/compliance/ComplianceTab";
 import { AgentModulesCard } from "../components/AgentModulesCard";
@@ -283,6 +284,7 @@ export function HostDetailPage() {
           </Stack>
         </Alert>
       )}
+      <RebootCheckAlert hostId={host.summary.id} check={host.rebootCheck} onChanged={() => void load()} />
       {h.nativeAutoUpdatesEnabled && !h.autoPatch.enabled && (
         <Alert mb="md" color="blue" variant="light" icon={<IconInfoCircle size={18} />}>
           {h.osFamily === "Linux"

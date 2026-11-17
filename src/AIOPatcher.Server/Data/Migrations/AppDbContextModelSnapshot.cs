@@ -781,11 +781,17 @@ namespace AIOPatcher.Server.Data.Migrations
                     b.Property<int>("ProtocolVersion")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("RebootCheck")
+                        .HasColumnType("TEXT");
+
                     b.Property<bool>("RebootRequired")
                         .HasColumnType("INTEGER");
 
                     b.Property<string>("ReportedModules")
                         .HasMaxLength(4000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RunningSnapshot")
                         .HasColumnType("TEXT");
 
                     b.Property<Guid>("SiteId")

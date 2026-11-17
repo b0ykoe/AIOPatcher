@@ -228,6 +228,23 @@ lässt `apt-get update` mit Fehler enden. AIOPatcher geht damit so um:
   Einträge kaputt sind; Quellen von Debian, Ubuntu und Proxmox nie. Zurück: `mv` des Backups (steht im Job-Log).
   Abschalten: Schalter *Kaputte Paketquellen deaktivieren* bzw. pro Host `aiopatcher-agent policy set allowSourceFixes false`.
 
+## Dienste nach Neustart prüfen
+
+Läuft nach einem Neustart alles wieder? AIOPatcher vergleicht laufende Dienste und Container vor und nach jedem Neustart,
+egal ob er vom Patch-Job, vom Dashboard oder von Hand kam:
+
+- **Vorher:** Der Agent meldet alle 30 Minuten und direkt vor jedem Neustart- bzw. Patch-Job mit Neustart, was läuft
+  (Modul `services`, nur Namen).
+- **Nachher:** 5 Minuten nach dem Systemstart (Zeit für langsame Dienste) fragt der Server erneut und vergleicht. Was
+  vorher lief und jetzt nicht, steht rot auf der Host-Seite und geht als Benachrichtigung *Dienste fehlen nach Neustart*
+  raus. Kommt ein Dienst später doch noch hoch, verschwindet er aus der Liste. Läuft alles, zeigt die Host-Seite einen Tag
+  lang „Neustart geprüft: alles läuft wieder“.
+- **Was zählt:** Linux: laufende systemd-Dienste, die aktiviert sind (`enabled`); fehlgeschlagene sind markiert. Windows:
+  laufende Dienste mit Starttyp *Automatisch*, ohne verzögerten Start, Trigger-Start und Benutzerdienste (die starten bzw.
+  enden von selbst und wären nur Fehlalarme). Docker: laufende Container; Container ohne Restart-Policy sind markiert,
+  weil sie nach einem Neustart nie von selbst starten.
+- Absichtlich entfernt? Auf der Host-Seite *Ausblenden*. Abschalten: Schalter *Dienste nach Neustart prüfen*.
+
 ## Auto-Patch
 
 Auf der Host-Seite unter *Auto-Patch → Einstellen*: Wochentage, Startzeit, Dauer, Umfang (nur Security / alle) und ob ein
@@ -285,6 +302,7 @@ jeden Schalter selbst durch, auch für API-Tokens, Auto-Patch und Abläufe; ausg
 | Programm-Updates per winget | **aus** | Programm-Updates werden abgelehnt. |
 | Agent-Self-Update | an | Agents bekommen keine Updates angeboten. |
 | Alter Agent-Check-in | an | Agents vor dem Pull-Protokoll werden abgewiesen (erst abschalten, wenn alle aktualisiert sind). |
+| Dienste nach Neustart prüfen | an | Kein Vergleich vor/nach Neustarts, keine Liste laufender Dienste. |
 | Kaputte Paketquellen deaktivieren | an | Dauerhaft kaputte Fremdquellen bleiben, wo sie sind; gepatcht wird trotzdem, mit Warnung. |
 | Test-Snapshots | an | Kein Test-Snapshot auf der Prüfen-Seite. |
 | OPNsense-Firmware-Update per Klick | **aus** | Firmware-Updates nur in der OPNsense selbst. |
@@ -322,6 +340,7 @@ Jede Funktion ist ein **Modul** mit festen Aktionen. Andere Aufträge lehnt der 
 | `updates` | `scan`, `install`, `reboot` (apt bzw. Windows Update) |
 | `software` | `inventory`, `appupdate` (winget) |
 | `docker` | `inventory` |
+| `services` | `list`: laufende Autostart-Dienste und Container (Vergleich vor/nach Neustart) |
 | `firewall`, `remoteaccess` | `status`, `change` |
 | `users` | `list`, `change` |
 | `agent` | `update` (Self-Update), `renew` (Client-Zertifikat) |

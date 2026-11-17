@@ -517,6 +517,7 @@ const de = {
     ContainerUpdates: "Container-Updates verfügbar",
     CertificateExpiring: "Agent-Zertifikat läuft ab",
     AgentUpdateFailed: "Agent-Update fehlgeschlagen",
+    RebootCheckFailed: "Dienste fehlen nach Neustart",
   },
   rules: {
     description: "Wann nicht gepatcht wird und welche Updates draußen bleiben.",
@@ -832,6 +833,18 @@ const de = {
     allEndpoints: "Alle Endpunkte ansehen",
     tryHint: "„Ausprobieren“ nutzt deine aktuelle Anmeldung (nur lesende Aufrufe ohne Parameter). Skripte schicken stattdessen den Token mit.",
   },
+  rebootCheck: {
+    title: "Nach dem Neustart am {{when}} fehlen {{count}} Dienste/Container",
+    text: "Vor dem Neustart (Stand {{baseline}}) liefen sie, 5 Minuten nach dem Start nicht.",
+    before: "vorher {{services}} Dienste, {{containers}} Container",
+    allGood: "Neustart {{when}} geprüft: alles läuft wieder.",
+    recovered: "Inzwischen wieder da: {{names}}",
+    hint: "Geprüft werden Dienste mit Autostart und laufende Container ({{before}}).",
+    dismiss: "Ausblenden",
+    reason_stopped: "Dienst ist gestoppt oder fehlgeschlagen. Linux: systemctl status <Name>, journalctl -u <Name>. Windows: Dienste-Konsole bzw. Ereignisanzeige.",
+    reason_noRestart: "Container ohne Restart-Policy: startet nach einem Neustart nicht von selbst. In der Compose-Datei restart: unless-stopped setzen.",
+    reason_none: "Läuft nicht mehr (nicht gestartet oder beendet).",
+  },
   update: {
     title: "AIOPatcher {{version}} ist verfügbar (du hast {{current}})",
     text: "Auf dem Server im Ordner mit der docker-compose.yml ausführen. Vorher macht AIOPatcher automatisch ein Backup der Datenbank.",
@@ -864,6 +877,8 @@ const de = {
   features: {
     name_AptSourceFixes: "Kaputte Paketquellen deaktivieren",
     desc_AptSourceFixes: "Vor dem Patchen verschiebt der Agent Fremd-Paketquellen, die es nicht mehr gibt (404, Repo eingestellt), nach /etc/apt/aiopatcher-disabled. Nie Quellen von Debian, Ubuntu oder Proxmox; pro Host abschaltbar mit policy allowSourceFixes false.",
+    name_RebootCheck: "Dienste nach Neustart prüfen",
+    desc_RebootCheck: "Der Agent meldet laufende Autostart-Dienste und Docker-Container (nur Namen). Nach jedem Neustart vergleicht AIOPatcher nach 5 Minuten mit dem Stand davor und meldet, was fehlt.",
     name_LegacyAgentProtocol: "Alter Agent-Check-in",
     desc_LegacyAgentProtocol: "Agents vor dem Pull-Protokoll schicken bei jedem Check-in ungefragt Daten. Nur für den Übergang an lassen, bis alle Agents aktualisiert sind (Prüfen-Seite zeigt, welche noch alt sind).",
     group_compliance: "Compliance (Firewall, SSH/RDP, Benutzer)",
@@ -1110,6 +1125,7 @@ const de = {
     name_updates: "Updates",
     name_software: "Programme",
     name_docker: "Docker",
+    name_services: "Dienste",
     name_firewall: "Firewall",
     name_remoteaccess: "SSH / RDP",
     name_users: "Benutzer",

@@ -105,6 +105,21 @@ public sealed class DockerModule : IAgentModule
     }
 }
 
+/// <summary>services.list: laufende Autostart-Dienste und Container (nur lesen), für den Vergleich vor/nach einem Neustart.</summary>
+public sealed class ServicesModule : IAgentModule
+{
+    public string Id => AgentModules.Services;
+    public bool Available => RunningServicesCollector.Available;
+    public IReadOnlyList<string> Actions { get; } = [ModuleActions.List];
+
+    public async Task<TaskOutcome> ExecuteAsync(AgentTask task, TaskContext context, CancellationToken ct)
+    {
+        var running = await RunningServicesCollector.CollectAsync(ct);
+        var summary = $"{running.Services.Count} services" + (running.Containers is { } c ? $", {c.Count} containers" : "");
+        return Json.Ok(summary, running, PullJsonContext.Default.RunningServices);
+    }
+}
+
 /// <summary>Gemeinsame Basis für firewall, remoteaccess und users: lesen + Systemänderungen über den JobExecutor.</summary>
 public abstract class ComplianceModule(IComplianceProvider provider, JobExecutor executor) : IAgentModule
 {

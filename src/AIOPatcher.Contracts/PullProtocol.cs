@@ -40,6 +40,9 @@ public static class AgentModules
     /// <summary>inventory (laufende Container).</summary>
     public const string Docker = "docker";
 
+    /// <summary>list (laufende Dienste und Container, für den Vergleich vor/nach einem Neustart).</summary>
+    public const string Services = "services";
+
     /// <summary>status, change.</summary>
     public const string Firewall = "firewall";
 
@@ -52,7 +55,7 @@ public static class AgentModules
     /// <summary>update (Self-Update), renew (Client-Zertifikat).</summary>
     public const string Agent = "agent";
 
-    public static readonly string[] All = [System, Updates, Software, Docker, Firewall, RemoteAccess, Users, Agent];
+    public static readonly string[] All = [System, Updates, Software, Docker, Services, Firewall, RemoteAccess, Users, Agent];
 
     /// <summary>Ohne diese geht nichts: nicht abschaltbar.</summary>
     public static readonly string[] Required = [System, Agent];
@@ -131,6 +134,22 @@ public sealed record SoftwareList(IReadOnlyList<InstalledSoftware> Software);
 
 public sealed record ContainerList(IReadOnlyList<ContainerReport> Containers);
 
+/// <summary>
+/// services.list: was gerade läuft und nach einem Neustart wieder laufen sollte. Der Server vergleicht den Stand vor dem
+/// Neustart mit dem ein paar Minuten danach.
+/// </summary>
+/// <param name="Uptime">Zeit seit dem Systemstart (daran erkennt der Server einen Neustart).</param>
+/// <param name="Services">Laufende Dienste, die beim Systemstart automatisch starten (systemd: enabled; Windows: Automatisch, ohne Verzögerung/Trigger).</param>
+/// <param name="Containers">Laufende Docker-Container (null = kein Docker).</param>
+/// <param name="StoppedServices">Solche Dienste, die gerade nicht laufen (systemd: failed; Windows: gestoppt). Nur als Hinweis.</param>
+/// <param name="ContainersWithoutRestart">Laufende Container mit Restart-Policy "no": starten nach einem Neustart nicht von selbst.</param>
+public sealed record RunningServices(
+    TimeSpan Uptime,
+    IReadOnlyList<string> Services,
+    IReadOnlyList<string>? Containers = null,
+    IReadOnlyList<string>? StoppedServices = null,
+    IReadOnlyList<string>? ContainersWithoutRestart = null);
+
 public sealed record RemoteAccessList(IReadOnlyList<RemoteAccessSetting> Settings);
 
 public sealed record UserList(IReadOnlyList<LocalUser> Users);
@@ -152,6 +171,7 @@ public sealed record RenewAnswer(string CertificateSigningRequestPem);
 [JsonSerializable(typeof(AppUpdateRequest))]
 [JsonSerializable(typeof(SoftwareList))]
 [JsonSerializable(typeof(ContainerList))]
+[JsonSerializable(typeof(RunningServices))]
 [JsonSerializable(typeof(FirewallStatus))]
 [JsonSerializable(typeof(RemoteAccessList))]
 [JsonSerializable(typeof(UserList))]
