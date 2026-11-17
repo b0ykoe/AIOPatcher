@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { Link, useParams } from "react-router";
-import { Alert, Anchor, Button, Card, Group, Loader, SimpleGrid, Text } from "@mantine/core";
-import { IconArrowLeft, IconClockPause, IconInfoCircle, IconX } from "@tabler/icons-react";
+import { useParams } from "react-router";
+import { Alert, Button, Card, Group, Loader, SimpleGrid, Text } from "@mantine/core";
+import { IconClockPause, IconInfoCircle, IconX } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import { api, describeJob, describeRequester, formatDateTime, isActiveJob, type Job, type JobDetail, type JobLogLine } from "../api";
 import { useCan } from "../App";
 import { Console } from "../components/Console";
-import { confirmAction, errorText, JobStatusBadge, notifySuccess } from "../components/ui";
+import { BackLink, confirmAction, errorText, JobStatusBadge, notifySuccess } from "../components/ui";
 
 export function JobPage() {
   const { t } = useTranslation();
@@ -65,11 +65,7 @@ export function JobPage() {
 
   return (
     <>
-      <Anchor component={Link} to={`/hosts/${job.hostId}`} size="sm" c="dimmed">
-        <Group gap={4}>
-          <IconArrowLeft size={14} /> {job.hostName}
-        </Group>
-      </Anchor>
+      <BackLink to={`/hosts/${job.hostId}`}>{job.hostName}</BackLink>
 
       <Group justify="space-between" mt="xs" mb="lg" wrap="wrap">
         <Group gap="sm">

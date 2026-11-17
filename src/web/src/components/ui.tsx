@@ -1,9 +1,10 @@
 // Gemeinsame Bausteine, damit alle Seiten gleich aussehen und sich gleich verhalten.
 import { createContext, useContext, type ReactNode } from "react";
-import { Badge, Card, Group, Stack, Text, ThemeIcon, Title, type MantineColor } from "@mantine/core";
+import { Link } from "react-router";
+import { Anchor, Badge, Card, Group, Stack, Text, ThemeIcon, Title, type MantineColor } from "@mantine/core";
 import { modals } from "@mantine/modals";
 import { notifications } from "@mantine/notifications";
-import { IconAlertTriangle, IconCheck } from "@tabler/icons-react";
+import { IconAlertTriangle, IconArrowLeft, IconCheck } from "@tabler/icons-react";
 import type { HostStatus, JobStatus } from "../api";
 import { t } from "../i18n";
 
@@ -50,6 +51,15 @@ export function confirmAction(options: { title: string; message: ReactNode; conf
 
 /** Seite steckt als Reiter in einer anderen (Sicherheit, Auto-Patch, Inventar, Einstellungen): Titel kommt von dort. */
 export const EmbeddedPage = createContext(false);
+
+/** "← Zurück"-Link über dem Seitenkopf: nur so breit wie sein Text (nicht die ganze Zeile klickbar). */
+export function BackLink({ to, children }: { to: string; children: ReactNode }) {
+  return (
+    <Anchor component={Link} to={to} size="sm" c="dimmed" display="inline-flex" style={{ alignItems: "center", gap: 4 }}>
+      <IconArrowLeft size={14} /> {children}
+    </Anchor>
+  );
+}
 
 export function PageHeader({ title, description, actions }: { title: ReactNode; description?: ReactNode; actions?: ReactNode }) {
   const embedded = useContext(EmbeddedPage);

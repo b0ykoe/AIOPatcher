@@ -1,16 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useParams, useSearchParams } from "react-router";
+import { useNavigate, useParams, useSearchParams } from "react-router";
 import {
-  ActionIcon, Alert, Anchor, Badge, Button, Card, Chip, Group, Loader, MultiSelect, NumberInput, SegmentedControl, Select, SimpleGrid, Stack, Switch,
+  ActionIcon, Alert, Badge, Button, Card, Chip, Group, Loader, MultiSelect, NumberInput, SegmentedControl, Select, SimpleGrid, Stack, Switch,
   TagsInput, Text, TextInput, Textarea, ThemeIcon, Tooltip,
 } from "@mantine/core";
 import { TimeInput } from "@mantine/dates";
-import { IconAlertTriangle, IconArrowDown, IconArrowLeft, IconArrowUp, IconPlus, IconTrash, IconUsersGroup } from "@tabler/icons-react";
+import { IconAlertTriangle, IconArrowDown, IconArrowUp, IconPlus, IconTrash, IconUsersGroup } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import { api, splitTags, weekdays, type HostSummary, type PatchScope, type Runbook, type ServerInfo, type Site } from "../api";
 import { useCan } from "../App";
 import { draftToRequest, emptyGroup, emptyPlan, fromTemplate, type GroupDraft, type PlanDraft, type TemplateKey } from "../components/plans/planTemplates";
-import { confirmAction, errorText, notifyError, notifySuccess, PageHeader } from "../components/ui";
+import { BackLink, confirmAction, errorText, notifyError, notifySuccess, PageHeader } from "../components/ui";
 
 /** Patch-Plan anlegen oder bearbeiten: Zeitplan oben, darunter die Gruppen in Reihenfolge. */
 export function PlanEditorPage() {
@@ -150,9 +150,7 @@ export function PlanEditorPage() {
 
   return (
     <>
-      <Anchor component={Link} to="/auto-patch" size="sm" c="dimmed">
-        <Group gap={4}><IconArrowLeft size={14} /> {t("nav.autoPatch")}</Group>
-      </Anchor>
+      <BackLink to="/auto-patch">{t("nav.autoPatch")}</BackLink>
       <PageHeader
         title={isNew ? t("plans.new") : draft.name || t("hubs.plans")}
         description={t("plans.editorDescription")}

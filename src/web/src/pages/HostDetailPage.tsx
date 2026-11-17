@@ -6,7 +6,6 @@ import {
   IconCircleCheck,
   IconLayoutDashboard,
   IconSettings,
-  IconArrowLeft,
   IconBan,
   IconChevronDown,
   IconInfoCircle,
@@ -41,7 +40,7 @@ import { HostMetricsPanel } from "../components/metrics/HostMetricsPanel";
 import { SoftwareTab } from "../components/SoftwareTab";
 import { ComplianceTab } from "../components/compliance/ComplianceTab";
 import { AgentModulesCard } from "../components/AgentModulesCard";
-import { confirmAction, EmptyState, errorText, HostStatusLabel, notifyError, notifySuccess } from "../components/ui";
+import { BackLink, confirmAction, EmptyState, errorText, HostStatusLabel, notifyError, notifySuccess } from "../components/ui";
 
 export function HostDetailPage() {
   const { t } = useTranslation();
@@ -233,9 +232,7 @@ export function HostDetailPage() {
 
   return (
     <>
-      <Anchor component={Link} to="/hosts" size="sm" c="dimmed">
-        <Group gap={4}><IconArrowLeft size={14} /> {t("nav.hosts")}</Group>
-      </Anchor>
+      <BackLink to="/hosts">{t("nav.hosts")}</BackLink>
 
       {/* Kopf: Name, Status, System, kurze Fakten; Aktionen rechts */}
       <Group justify="space-between" mt="xs" mb="md" wrap="wrap" gap="md" className="page-header">

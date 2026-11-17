@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router";
 import { Alert, Anchor, Badge, Button, Card, Group, Loader, Progress, Stack, Table, Text, Timeline } from "@mantine/core";
 import {
-  IconArrowLeft,
   IconCheck,
   IconCircleDashed,
   IconHandStop,
@@ -16,7 +15,7 @@ import { useTranslation } from "react-i18next";
 import { useCan } from "../App";
 import { RunItemBadge, RunStatusBadge } from "../components/RunStatusBadge";
 import { t as tGlobal } from "../i18n";
-import { confirmAction, errorText, notifyError, notifySuccess } from "../components/ui";
+import { BackLink, confirmAction, errorText, notifyError, notifySuccess } from "../components/ui";
 
 /** Live-Ansicht eines Ablauf-Laufs: Wellen als Zeitleiste, Hosts mit Status, Eingriffe (Freigeben, Fortsetzen, Abbrechen). */
 export function RunPage() {
@@ -67,11 +66,7 @@ export function RunPage() {
 
   return (
     <>
-      <Anchor component={Link} to="/runbooks" size="sm" c="dimmed">
-        <Group gap={4}>
-          <IconArrowLeft size={14} /> {t("nav.runbooks")}
-        </Group>
-      </Anchor>
+      <BackLink to="/auto-patch">{t("nav.autoPatch")}</BackLink>
 
       <Group justify="space-between" mt="xs" mb="md" wrap="wrap">
         <div>

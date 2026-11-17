@@ -8,6 +8,10 @@ Geschrieben für Anwender, nicht als Commit-Liste.
 
 ## [Unveröffentlicht]
 
+### Behoben
+- Der Zurück-Link oben auf Host-, Job-, Plan- und Lauf-Seiten war über die ganze Bildschirmbreite klickbar; jetzt nur
+  noch der Text selbst. Der Lauf führt zurück zu Auto-Patch.
+
 ## [0.8.0] - 2026-11-17
 
 ### Neu
