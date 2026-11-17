@@ -23,6 +23,11 @@ Verbindliche Arbeitsweise in diesem Repository. Antworten an den Maintainer auf 
   geschrieben (was ändert sich für mich, was muss ich tun), keine Commit-Liste, keine internen Dateinamen.
 - Versionen: Fehlerbehebungen und kleine Funktionen = Patch (`0.7.2` → `0.7.3`), größere Umbauten = Minor.
 
+## Oberfläche
+
+- Jede Seite und jede UI-Änderung folgt [docs/STYLEGUIDE.md](docs/STYLEGUIDE.md) (Seitenaufbau, Abstände, Farben,
+  Badges, Knöpfe, Werte mit Balken, Tabellen, Zustände). Die Checkliste am Ende gilt vor jedem UI-Commit.
+
 ## Prüfen vor dem Commit
 
 - Server/Agent: `dotnet test tests/AIOPatcher.Tests` (laufenden Dev-Server vorher beenden, er sperrt die DLLs).
