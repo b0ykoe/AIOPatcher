@@ -157,6 +157,7 @@ const de = {
     noMatch: "Kein Treffer.",
   },
   overview: {
+    noUsage: "Noch keine Messwerte",
     nextWindows: "Nächste Wartungsfenster",
     noWindows: "Kein Patch-Plan mit Zeitplan.",
     upToDate: "aktuell",

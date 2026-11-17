@@ -158,6 +158,7 @@ const en: Translation = {
     noMatch: "No match.",
   },
   overview: {
+    noUsage: "No measurements yet",
     nextWindows: "Next maintenance windows",
     noWindows: "No patch plan with a schedule.",
     upToDate: "up to date",

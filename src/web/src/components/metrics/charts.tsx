@@ -25,7 +25,7 @@ export function levelOf(percent: number): "ok" | "warn" | "critical" {
   return percent >= 90 ? "critical" : percent >= 75 ? "warn" : "ok";
 }
 
-const levelColor = { ok: "violet", warn: "yellow", critical: "red" } as const;
+export const levelColor = { ok: "violet", warn: "yellow", critical: "red" } as const;
 
 export function percentOf(used: number | null | undefined, total: number | null | undefined): number | null {
   return used == null || !total ? null : Math.min(100, Math.max(0, (100 * used) / total));
