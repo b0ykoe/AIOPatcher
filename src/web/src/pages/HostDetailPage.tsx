@@ -40,7 +40,7 @@ import { HostMetricsPanel } from "../components/metrics/HostMetricsPanel";
 import { SoftwareTab } from "../components/SoftwareTab";
 import { ComplianceTab } from "../components/compliance/ComplianceTab";
 import { AgentModulesCard } from "../components/AgentModulesCard";
-import { BackLink, confirmAction, EmptyState, errorText, HostStatusLabel, notifyError, notifySuccess } from "../components/ui";
+import { confirmAction, DetailHeader, EmptyState, errorText, HostStatusLabel, notifyError, notifySuccess } from "../components/ui";
 
 export function HostDetailPage() {
   const { t } = useTranslation();
@@ -232,31 +232,22 @@ export function HostDetailPage() {
 
   return (
     <>
-      <BackLink to="/hosts">{t("nav.hosts")}</BackLink>
-
-      {/* Kopf: Name, Status, System, kurze Fakten; Aktionen rechts */}
-      <Group justify="space-between" mt="xs" mb="md" wrap="wrap" gap="md" className="page-header">
-        <Group gap="md" wrap="nowrap" align="flex-start">
-          <OsIcon osName={h.osName} osFamily={h.osFamily} size={34} />
-          <div style={{ minWidth: 0 }}>
-            <Group gap="sm">
-              <Text fz={{ base: 22, sm: 28 }} fw={800} lh={1.1} style={{ wordBreak: "break-word" }}>{h.name}</Text>
-              <HostStatusLabel status={h.status} />
-            </Group>
-            <Text size="sm" c="dimmed">{h.siteName} · {h.osName ?? h.osFamily} {h.osVersion}</Text>
-            <Text size="xs" c="dimmed" mt={2}>
-              {t("hostDetail.factsLine", { seen: formatRelative(h.lastSeenAt), uptime: formatUptime(host.uptime), agent: h.agentVersion ?? "–" })}
-              {h.channel === "public" && ` · ${t("hostDetail.viaPublic")}`}
-            </Text>
-            {splitTags(h.tags).length > 0 && (
-              <Group gap={4} mt={6}>
-                {splitTags(h.tags).map((tag) => <Badge key={tag} size="xs" variant="outline" color="gray" radius="sm">{tag}</Badge>)}
-              </Group>
-            )}
-          </div>
-        </Group>
-
-        {can.operate && <Group gap="sm" wrap="wrap" className="page-actions">
+      <DetailHeader
+        back={{ to: "/hosts", label: t("nav.hosts") }}
+        icon={<OsIcon osName={h.osName} osFamily={h.osFamily} size={34} />}
+        title={h.name}
+        status={<HostStatusLabel status={h.status} />}
+        subtitle={`${h.siteName} · ${h.osName ?? h.osFamily} ${h.osVersion ?? ""}`}
+        meta={<>
+          {t("hostDetail.factsLine", { seen: formatRelative(h.lastSeenAt), uptime: formatUptime(host.uptime), agent: h.agentVersion ?? "–" })}
+          {h.channel === "public" && ` · ${t("hostDetail.viaPublic")}`}
+        </>}
+        extra={splitTags(h.tags).length > 0 && (
+          <Group gap={4} mt={6}>
+            {splitTags(h.tags).map((tag) => <Badge key={tag} size="xs" variant="outline" color="gray" radius="sm">{tag}</Badge>)}
+          </Group>
+        )}
+        actions={can.operate && <>
           {isOn("PatchJobs") && <Menu position="bottom-end" width={270} closeOnItemClick>
             <Menu.Target>
               <Button variant="gradient" className="gradient-button" rightSection={<IconChevronDown size={16} />} disabled={!canRun} leftSection={<IconShieldCheck size={16} />}>
@@ -274,8 +265,8 @@ export function HostDetailPage() {
           </Menu>}
           <Button variant="light" leftSection={<IconScan size={16} />} disabled={!canRun} onClick={() => void startJob("Scan")}>{t("hostsPage.scan")}</Button>
           {isOn("Reboots") && <Button variant="light" color="red" leftSection={<IconPower size={16} />} disabled={!canRun} onClick={reboot}>{t("hostsPage.reboot")}</Button>}
-        </Group>}
-      </Group>
+        </>}
+      />
 
       {activeJob && (
         <Alert mb="md" color="cyan" icon={<span className="dot dot-live" />}>

@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router";
-import { Alert, Button, Card, Group, Loader, SimpleGrid, Text } from "@mantine/core";
+import { Alert, Button, Card, Loader, SimpleGrid, Text } from "@mantine/core";
 import { IconClockPause, IconInfoCircle, IconX } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import { api, describeJob, describeRequester, formatDateTime, isActiveJob, type Job, type JobDetail, type JobLogLine } from "../api";
 import { useCan } from "../App";
 import { Console } from "../components/Console";
-import { BackLink, confirmAction, errorText, JobStatusBadge, notifySuccess } from "../components/ui";
+import { confirmAction, DetailHeader, errorText, JobStatusBadge, notifySuccess } from "../components/ui";
 
 export function JobPage() {
   const { t } = useTranslation();
@@ -65,21 +65,17 @@ export function JobPage() {
 
   return (
     <>
-      <BackLink to={`/hosts/${job.hostId}`}>{job.hostName}</BackLink>
-
-      <Group justify="space-between" mt="xs" mb="lg" wrap="wrap">
-        <Group gap="sm">
-          <Text fz={28} fw={800}>
-            {describeJob(job)}
-          </Text>
-          <JobStatusBadge status={job.status} />
-        </Group>
-        {job.status === "Queued" && can.operate && (
+      <DetailHeader
+        back={{ to: `/hosts/${job.hostId}`, label: job.hostName }}
+        title={describeJob(job)}
+        status={<JobStatusBadge status={job.status} />}
+        subtitle={`${job.hostName} · ${job.siteName}`}
+        actions={job.status === "Queued" && can.operate && (
           <Button variant="light" color="red" leftSection={<IconX size={16} />} onClick={cancel}>
             {t("common.cancel")}
           </Button>
         )}
-      </Group>
+      />
 
       {job.status === "Queued" && (
         <Alert mb="md" color="blue" icon={<IconClockPause size={18} />}>

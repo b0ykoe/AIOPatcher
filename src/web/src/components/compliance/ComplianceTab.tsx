@@ -291,7 +291,7 @@ function PasswordModal({ user, onClose, onSubmit }: { user: LocalUser | null; on
           error={pw2.length > 0 && pw !== pw2 ? t("compliance.passwordMismatch") : undefined} />
         <Group justify="flex-end">
           <Button variant="default" onClick={close}>{t("common.cancel")}</Button>
-          <Button disabled={!valid} loading={busy} onClick={async () => { setBusy(true); await onSubmit(pw); setBusy(false); close(); }}>{t("compliance.action_UserSetPassword")}</Button>
+          <Button variant="gradient" className="gradient-button" disabled={!valid} loading={busy} onClick={async () => { setBusy(true); await onSubmit(pw); setBusy(false); close(); }}>{t("compliance.action_UserSetPassword")}</Button>
         </Group>
       </Stack>
     </Modal>
@@ -312,7 +312,7 @@ function SshKeyModal({ target, onClose, onSubmit }: { target: { user: LocalUser;
           error={key.length > 0 && !valid ? t("compliance.publicKeyInvalid") : undefined} />
         <Group justify="flex-end">
           <Button variant="default" onClick={close}>{t("common.cancel")}</Button>
-          <Button disabled={!valid} loading={busy} color={target?.remove ? "red" : undefined}
+          <Button disabled={!valid} loading={busy} color={target?.remove ? "red" : undefined} variant={target?.remove ? "filled" : "gradient"} className={target?.remove ? undefined : "gradient-button"}
             onClick={async () => { setBusy(true); await onSubmit(key.trim()); setBusy(false); close(); }}>
             {t(target?.remove ? "compliance.action_UserRemoveSshKey" : "compliance.action_UserAddSshKey")}
           </Button>

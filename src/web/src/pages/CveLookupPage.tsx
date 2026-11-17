@@ -356,19 +356,19 @@ function CveDetail({ id }: { id: string }) {
           <Group gap={6} wrap="wrap">
             {main && (
               <Tooltip label={`CVSS ${main.version}${main.source ? ` · ${main.source}` : ""}`}>
-                <Badge size="lg" color={severityColor(main.severity)} variant="filled">
+                <Badge size="md" color={severityColor(main.severity)} variant="filled">
                   {main.baseScore.toFixed(1)} {main.severity ? t(`cveLookup.sev_${main.severity}`, { defaultValue: main.severity }) : ""}
                 </Badge>
               </Tooltip>
             )}
-            {data.isKev && <Badge size="lg" color="red" variant="filled">KEV</Badge>}
-            {data.kevRansomware && <Badge size="lg" color="red">{t("security.ransomware")}</Badge>}
+            {data.isKev && <Badge size="md" color="red" variant="filled">KEV</Badge>}
+            {data.kevRansomware && <Badge size="md" color="red">{t("security.ransomware")}</Badge>}
             {data.epss !== null && (
               <Tooltip label={t("security.epssHint", { percentile: Math.round((data.epssPercentile ?? 0) * 100) })}>
-                <Badge size="lg" color={epssColor(data.epss)}>EPSS {pct(data.epss)}</Badge>
+                <Badge size="md" color={epssColor(data.epss)}>EPSS {pct(data.epss)}</Badge>
               </Tooltip>
             )}
-            {rejected && <Badge size="lg" color="gray">{t("cveLookup.rejected")}</Badge>}
+            {rejected && <Badge size="md" color="gray">{t("cveLookup.rejected")}</Badge>}
           </Group>
         </Group>
 

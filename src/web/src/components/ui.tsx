@@ -61,6 +61,42 @@ export function BackLink({ to, children }: { to: string; children: ReactNode }) 
   );
 }
 
+/**
+ * Kopf einer Detailseite (Styleguide 2): Zurück-Link, Icon, Titel + Status, eine Zeile Untertitel, eine Zeile
+ * Metadaten, optional Tags o. Ä.; Aktionen rechts. Gleiche Größen und Abstände auf Host-, Job-, Lauf- und Plan-Seite.
+ */
+export function DetailHeader({ back, icon, title, status, subtitle, meta, extra, actions }: {
+  back?: { to: string; label: ReactNode };
+  icon?: ReactNode;
+  title: ReactNode;
+  status?: ReactNode;
+  subtitle?: ReactNode;
+  meta?: ReactNode;
+  extra?: ReactNode;
+  actions?: ReactNode;
+}) {
+  return (
+    <>
+      {back && <BackLink to={back.to}>{back.label}</BackLink>}
+      <Group justify="space-between" mt="xs" mb="md" wrap="wrap" gap="md" className="page-header">
+        <Group gap="md" wrap="nowrap" align="flex-start" style={{ minWidth: 0 }}>
+          {icon}
+          <div style={{ minWidth: 0 }}>
+            <Group gap="sm">
+              <Text fz={{ base: 22, sm: 26 }} fw={800} lh={1.15} style={{ wordBreak: "break-word" }}>{title}</Text>
+              {status}
+            </Group>
+            {subtitle && <Text size="sm" c="dimmed">{subtitle}</Text>}
+            {meta && <Text size="xs" c="dimmed" mt={2}>{meta}</Text>}
+            {extra}
+          </div>
+        </Group>
+        {actions && <Group gap="sm" wrap="wrap" className="page-actions">{actions}</Group>}
+      </Group>
+    </>
+  );
+}
+
 export function PageHeader({ title, description, actions }: { title: ReactNode; description?: ReactNode; actions?: ReactNode }) {
   const embedded = useContext(EmbeddedPage);
   if (embedded) {

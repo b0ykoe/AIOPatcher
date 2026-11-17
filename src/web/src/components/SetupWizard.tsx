@@ -148,12 +148,12 @@ export function SetupWizard({ autoOpen }: { autoOpen: boolean }) {
             {sites.length > 0 ? (
               <>
                 <Select label={t("wizard.siteUse")} data={sites.map((s) => ({ value: s.id, label: s.name }))} value={siteId} onChange={setSiteId} allowDeselect={false} />
-                <Group justify="flex-end"><Button onClick={() => setStep(1)}>{t("wizard.next")}</Button></Group>
+                <Group justify="flex-end"><Button variant="gradient" className="gradient-button" onClick={() => setStep(1)}>{t("wizard.next")}</Button></Group>
               </>
             ) : (
               <>
                 <TextInput label={t("wizard.siteName")} description={t("wizard.siteNameHint")} value={siteName} onChange={(e) => setSiteName(e.currentTarget.value)} />
-                <Group justify="flex-end"><Button loading={busy} disabled={!siteName.trim()} onClick={() => void createSite()}>{t("wizard.siteCreate")}</Button></Group>
+                <Group justify="flex-end"><Button variant="gradient" className="gradient-button" loading={busy} disabled={!siteName.trim()} onClick={() => void createSite()}>{t("wizard.siteCreate")}</Button></Group>
               </>
             )}
           </Stack>
@@ -178,7 +178,7 @@ export function SetupWizard({ autoOpen }: { autoOpen: boolean }) {
             )}
             <Group justify="space-between">
               <Button variant="subtle" color="gray" onClick={() => setStep(2)}>{t("wizard.skip")}</Button>
-              <Button disabled={online.length === 0} onClick={() => setStep(2)}>{t("wizard.next")}</Button>
+              <Button variant="gradient" className="gradient-button" disabled={online.length === 0} onClick={() => setStep(2)}>{t("wizard.next")}</Button>
             </Group>
           </Stack>
         )}
@@ -203,7 +203,7 @@ export function SetupWizard({ autoOpen }: { autoOpen: boolean }) {
             <Text size="xs" c="dimmed">{t("wizard.planHint")}</Text>
             <Group justify="space-between">
               <Button variant="subtle" color="gray" onClick={() => setStep(3)}>{t("wizard.skip")}</Button>
-              <Button loading={busy} onClick={() => void createPlan()}>{t("wizard.planCreate")}</Button>
+              <Button variant="gradient" className="gradient-button" loading={busy} onClick={() => void createPlan()}>{t("wizard.planCreate")}</Button>
             </Group>
           </Stack>
         )}

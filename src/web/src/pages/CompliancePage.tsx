@@ -175,7 +175,7 @@ function FirewallProfiles() {
     <Stack>
       <Group justify="space-between">
         <Text size="sm" c="dimmed" maw={760}>{t("compliance.profilesIntro")}</Text>
-        {canEdit && <Button leftSection={<IconPlus size={16} />} onClick={() => setEditing({ profile: null, config: emptyConfig() })}>{t("compliance.newProfile")}</Button>}
+        {canEdit && <Button variant="gradient" className="gradient-button" leftSection={<IconPlus size={16} />} onClick={() => setEditing({ profile: null, config: emptyConfig() })}>{t("compliance.newProfile")}</Button>}
       </Group>
       {!isOn("FirewallManagement") && <FeatureOffHint feature="FirewallManagement" />}
       {profiles.length === 0 && <EmptyState icon={<IconFlame size={28} />} title={t("compliance.noProfiles")} text={t("compliance.noProfilesText")} />}
@@ -354,7 +354,7 @@ function ProfileEditor({ initial, onClose, onSaved }: { initial: { profile: Fire
         <TextInput label={t("compliance.versionNote")} placeholder={t("compliance.versionNotePlaceholder")} value={note} onChange={(e) => setNote(e.currentTarget.value)} maxLength={500} />
         <Group justify="flex-end">
           <Button variant="default" onClick={onClose}>{t("common.cancel")}</Button>
-          <Button loading={busy} disabled={!initial.profile && !name.trim()} onClick={() => void save()}>
+          <Button variant="gradient" className="gradient-button" loading={busy} disabled={!initial.profile && !name.trim()} onClick={() => void save()}>
             {initial.profile ? t("compliance.saveVersion") : t("compliance.saveProfile")}
           </Button>
         </Group>

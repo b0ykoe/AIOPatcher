@@ -15,7 +15,7 @@ import { useTranslation } from "react-i18next";
 import { useCan } from "../App";
 import { RunItemBadge, RunStatusBadge } from "../components/RunStatusBadge";
 import { t as tGlobal } from "../i18n";
-import { BackLink, confirmAction, errorText, notifyError, notifySuccess } from "../components/ui";
+import { confirmAction, DetailHeader, errorText, notifyError, notifySuccess } from "../components/ui";
 
 /** Live-Ansicht eines Ablauf-Laufs: Wellen als Zeitleiste, Hosts mit Status, Eingriffe (Freigeben, Fortsetzen, Abbrechen). */
 export function RunPage() {
@@ -66,23 +66,16 @@ export function RunPage() {
 
   return (
     <>
-      <BackLink to="/auto-patch">{t("nav.autoPatch")}</BackLink>
-
-      <Group justify="space-between" mt="xs" mb="md" wrap="wrap">
-        <div>
-          <Group gap="sm">
-            <Text fz={28} fw={800}>
-              {run.runbookName}
-            </Text>
-            <RunStatusBadge status={run.status} />
-          </Group>
-          <Text size="sm" c="dimmed">
-            {t("run.startedBy", { when: formatRelative(run.createdAt), who: describeRequester(run.requestedBy) })}
-            {run.notAfter ? ` · ${t("run.windowUntil", { date: formatDateTime(run.notAfter) })}` : ""}
-            {run.finishedAt ? ` · ${t("run.finished", { date: formatDateTime(run.finishedAt) })}` : ""}
-          </Text>
-        </div>
-        {can.operate && <Group gap="sm">
+      <DetailHeader
+        back={{ to: "/auto-patch", label: t("nav.autoPatch") }}
+        title={run.runbookName}
+        status={<RunStatusBadge status={run.status} />}
+        subtitle={<>
+          {t("run.startedBy", { when: formatRelative(run.createdAt), who: describeRequester(run.requestedBy) })}
+          {run.notAfter ? ` · ${t("run.windowUntil", { date: formatDateTime(run.notAfter) })}` : ""}
+          {run.finishedAt ? ` · ${t("run.finished", { date: formatDateTime(run.finishedAt) })}` : ""}
+        </>}
+        actions={can.operate && <>
           {run.status === "WaitingApproval" && (
             <Button variant="gradient" className="gradient-button" leftSection={<IconShieldCheck size={16} />} onClick={() => void act("approve", t("run.approved"))}>
               {t("run.approve", { name: run.currentWaveName })}
@@ -98,8 +91,8 @@ export function RunPage() {
               {t("common.cancel")}
             </Button>
           )}
-        </Group>}
-      </Group>
+        </>}
+      />
 
       {run.message && (
         <Alert

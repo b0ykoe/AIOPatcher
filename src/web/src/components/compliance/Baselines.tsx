@@ -92,12 +92,12 @@ export function BaselinesPanel() {
     <Stack>
       <Group justify="space-between" wrap="wrap">
         <Text size="sm" c="dimmed" maw={760}>{t("baselines.intro")}</Text>
-        {can.admin && <Button leftSection={<IconPlus size={16} />} onClick={() => setPicking(true)}>{t("baselines.new")}</Button>}
+        {can.admin && <Button variant="gradient" className="gradient-button" leftSection={<IconPlus size={16} />} onClick={() => setPicking(true)}>{t("baselines.new")}</Button>}
       </Group>
 
       {baselines.length === 0 && (
         <EmptyState icon={<IconShieldCheck size={28} />} title={t("baselines.emptyTitle")} text={t("baselines.emptyText")}
-          action={can.admin ? <Button onClick={() => setPicking(true)}>{t("baselines.chooseTemplate")}</Button> : undefined} />
+          action={can.admin ? <Button variant="gradient" className="gradient-button" onClick={() => setPicking(true)}>{t("baselines.chooseTemplate")}</Button> : undefined} />
       )}
 
       <div className="card-grid">
@@ -336,7 +336,7 @@ function BaselineEditor({ baseline, initial, others, onClose, onSaved }: {
         {errors.length > 0 && <Alert color="red">{errors.map((e) => <div key={e}>{e}</div>)}</Alert>}
         <Group justify="flex-end">
           <Button variant="default" onClick={onClose}>{t("common.cancel")}</Button>
-          <Button loading={busy} disabled={!draft.name.trim()} onClick={() => void save()}>{t("common.save")}</Button>
+          <Button variant="gradient" className="gradient-button" loading={busy} disabled={!draft.name.trim()} onClick={() => void save()}>{t("common.save")}</Button>
         </Group>
       </Stack>
     </Modal>

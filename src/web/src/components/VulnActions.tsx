@@ -107,7 +107,7 @@ export function AckModal({ cve, hosts, opened, onClose, onDone }: { cve: string;
         <Textarea label={t("vulns.note")} placeholder={t("vulns.notePlaceholder")} value={note} onChange={(e) => setNote(e.currentTarget.value)} maxLength={500} autosize minRows={2} />
         <Group justify="flex-end">
           <Button variant="default" onClick={onClose}>{t("common.cancel")}</Button>
-          <Button leftSection={<IconEyeOff size={16} />} loading={busy} onClick={() => void save()}>{t("vulns.ack")}</Button>
+          <Button variant="gradient" className="gradient-button" leftSection={<IconEyeOff size={16} />} loading={busy} onClick={() => void save()}>{t("vulns.ack")}</Button>
         </Group>
       </Stack>
     </Modal>

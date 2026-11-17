@@ -10,7 +10,7 @@ import { useTranslation } from "react-i18next";
 import { api, splitTags, weekdays, type HostSummary, type PatchScope, type Runbook, type ServerInfo, type Site } from "../api";
 import { useCan } from "../App";
 import { draftToRequest, emptyGroup, emptyPlan, fromTemplate, type GroupDraft, type PlanDraft, type TemplateKey } from "../components/plans/planTemplates";
-import { BackLink, confirmAction, errorText, notifyError, notifySuccess, PageHeader } from "../components/ui";
+import { confirmAction, DetailHeader, errorText, notifyError, notifySuccess } from "../components/ui";
 
 /** Patch-Plan anlegen oder bearbeiten: Zeitplan oben, darunter die Gruppen in Reihenfolge. */
 export function PlanEditorPage() {
@@ -150,10 +150,10 @@ export function PlanEditorPage() {
 
   return (
     <>
-      <BackLink to="/auto-patch">{t("nav.autoPatch")}</BackLink>
-      <PageHeader
+      <DetailHeader
+        back={{ to: "/auto-patch", label: t("nav.autoPatch") }}
         title={isNew ? t("plans.new") : draft.name || t("hubs.plans")}
-        description={t("plans.editorDescription")}
+        subtitle={t("plans.editorDescription")}
         actions={can.operate && <>
           {!isNew && <Button variant="light" color="red" leftSection={<IconTrash size={16} />} onClick={remove}>{t("common.delete")}</Button>}
           <Button variant="gradient" className="gradient-button" loading={busy} onClick={() => void save()}>{t("common.save")}</Button>

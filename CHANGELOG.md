@@ -13,6 +13,8 @@ Geschrieben für Anwender, nicht als Commit-Liste.
   Bedeutung (z. B. „Neustart nötig“ immer gelb, Warteschlange grau, verfügbare Updates blau).
 - **Auslastung wie bei Proxmox:** „Aktuell“ (CPU, RAM, Swap, Laufzeit, Load) und „Datenträger“ als schmale Karten mit
   Zeilen untereinander statt Balken über die ganze Bildschirmbreite; in Tabellen kurze Balken mit Wert daneben.
+- Host-, Job-, Lauf- und Plan-Seite haben denselben Kopf (Zurück-Link, Titel mit Status, Metadaten, Aktionen rechts);
+  Hauptaktionen in Dialogen sehen überall gleich aus.
 
 ### Behoben
 - Der Zurück-Link oben auf Host-, Job-, Plan- und Lauf-Seiten war über die ganze Bildschirmbreite klickbar; jetzt nur
