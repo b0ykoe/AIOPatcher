@@ -8,8 +8,10 @@ Geschrieben für Anwender, nicht als Commit-Liste.
 
 ## [Unveröffentlicht]
 
+## [0.8.1] - 2026-11-17
+
 ### Verbessert
-- **Kompakter und einheitlicher** nach dem neuen Styleguide: Karten und Tabellen enger, Farben haben überall dieselbe
+- **Neuer Styleguide, kompakter und einheitlicher:** Karten und Tabellen enger, Farben haben überall dieselbe
   Bedeutung (z. B. „Neustart nötig“ immer gelb, Warteschlange grau, verfügbare Updates blau).
 - **Auslastung wie bei Proxmox:** „Aktuell“ (CPU, RAM, Swap, Laufzeit, Load) und „Datenträger“ als schmale Karten mit
   Zeilen untereinander statt Balken über die ganze Bildschirmbreite; in Tabellen kurze Balken mit Wert daneben.
