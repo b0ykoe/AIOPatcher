@@ -6,42 +6,47 @@ Linux- (Ubuntu/Debian/Proxmox VE/PBS) und Windows-Server patchen, mehrere Sites,
 - Architektur & Entscheidungen: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 - Server aufsetzen (VM, Docker, Backups, Updates): [docs/SERVER-SETUP.md](docs/SERVER-SETUP.md)
 
-## Schnellstart (Docker, ca. 10 Minuten)
+## Schnellstart (Setup-Skript, ca. 15 Minuten)
 
-Voraussetzungen: ein Linux-Server mit Docker (z. B. eine kleine VM, 2 GB RAM), ein DNS-Name für ihn
-(z. B. `patch.example.com`) und offene Ports 8443 (Agents) und 9443 (Dashboard, nur intern/VPN).
-Für eine gehärtete Installation mit Firewall und Backups: [docs/SERVER-SETUP.md](docs/SERVER-SETUP.md).
+Voraussetzungen: ein Debian/Ubuntu-Server mit x64 (z. B. Hetzner CX22 oder eine VM im Homelab, 2–4 GB RAM) und ein
+DNS-Name für ihn. Ohne eigene Domain geht `<ip-mit-bindestrichen>.nip.io`, z. B. `1-2-3-4.nip.io`.
 
-**1. Ordner anlegen** (UID 1654 = Benutzer im Container, der Server läuft nicht als root):
-
-```bash
-sudo mkdir -p /opt/aiopatcher/data && sudo chown 1654:1654 /opt/aiopatcher/data && cd /opt/aiopatcher
-```
-
-**2. Compose-Datei holen und anpassen** (`PublicHostname`, Image-Name, Zeitzone):
+**1. Code auf den Server bringen** (vom eigenen Rechner aus dem Repo, IP anpassen):
 
 ```bash
-sudo curl -fsSL -o docker-compose.yml https://raw.githubusercontent.com/OWNER/AIOPatcher/main/deploy/docker-compose.yml
+git archive --format=tar.gz -o aiopatcher.tar.gz main && scp aiopatcher.tar.gz root@1.2.3.4:/root/
+```
+
+**2. Auf dem Server entpacken und das Setup starten:**
+
+```bash
+mkdir -p /opt/aiopatcher/src && tar -xzf /root/aiopatcher.tar.gz -C /opt/aiopatcher/src
 ```
 
 ```bash
-sudo nano docker-compose.yml
+sudo bash /opt/aiopatcher/src/deploy/setup.sh
 ```
 
-**3. Starten:**
+Das Skript fragt:
 
-```bash
-sudo docker compose up -d
-```
+| Frage | Auswahl |
+|---|---|
+| DNS-Name | Vorschlag aus dem Rechnernamen bzw. `<ip>.nip.io` |
+| Dashboard-Zugang | **direkt** auf 9443 · **Traefik** auf 443 · **nginx** auf 443 · **vorhandener Proxy** (Nginx Proxy Manager o. ä.) |
+| Zertifikat (bei Traefik/nginx) | **Let's Encrypt** (öffentlich erreichbar) · **intern** (AIOPatcher-CA, fürs Homelab) · **eigene Dateien** |
+| Netze fürs Dashboard | private Netze plus die IP, von der du per SSH kommst |
+| Firewall | ufw: SSH, Agents (8443), Dashboard nur aus diesen Netzen |
 
-**4. Setup-Token aus dem Log holen:**
+Danach installiert es Docker (falls nötig), baut das Image, schreibt `/opt/aiopatcher/docker-compose.yml` (und die
+Traefik- bzw. nginx-Konfiguration), richtet die Firewall ein, startet alles und zeigt **Dashboard-URL, Setup-Token und
+CA-Fingerprint**. Im Dashboard: Token eingeben, Konto und Authenticator einrichten, dann *Host hinzufügen*.
 
-```bash
-sudo docker compose logs aiopatcher | grep -i "setup token"
-```
-
-**5. Dashboard öffnen**, `https://patch.example.com:9443`, Token eingeben, Konto und Authenticator einrichten.
-Danach führt das Dashboard weiter: *Host hinzufügen* (ein Befehl pro Host), *Patch-Plan einrichten*, *Prüfen*.
+- Alles auch ohne Fragen, z. B. `setup.sh --yes --hostname patch.example.com --proxy traefik --tls letsencrypt --email ich@example.com`
+  (`--help` zeigt alle Optionen). `--dry-run` erzeugt nur die Dateien zum Ansehen.
+- Erneut ausführen ist gefahrlos: Konfigurationen werden vorher gesichert, Daten bleiben.
+- Hetzner: zusätzlich zur ufw ggf. die Cloud-Firewall öffnen (8443 für alle, Dashboard nur für dich).
+- Manuell statt Skript: [deploy/docker-compose.yml](deploy/docker-compose.yml) anpassen, gehärtete Variante in
+  [docs/SERVER-SETUP.md](docs/SERVER-SETUP.md), Proxys in [docs/REVERSE-PROXY.md](docs/REVERSE-PROXY.md).
 
 **Updates von AIOPatcher:** Das Dashboard meldet neue Versionen (`AIOPatcher__UpdateCheckRepository`). Dann:
 
@@ -54,8 +59,7 @@ Der Container hat einen eingebauten Healthcheck (`docker ps` zeigt `healthy`). I
 auskommentiert: **autoheal** (startet bei dauerhaftem „unhealthy“ neu), **Diun** (meldet neue Images, ändert nichts,
 empfohlen) und **Watchtower** (aktualisiert automatisch, nur wenn du das wirklich willst).
 
-> Noch kein veröffentlichtes Image? Selbst bauen (x64-Maschine): `docker build -t aiopatcher-server:local .`
-> und in der Compose-Datei `image: aiopatcher-server:local` eintragen.
+> Selbst gebautes Image (Setup-Skript): Update = neuen Code hochladen und `setup.sh` erneut ausführen.
 
 ## Stand
 
