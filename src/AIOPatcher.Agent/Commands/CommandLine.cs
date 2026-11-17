@@ -13,6 +13,11 @@ public sealed class CommandLine
         {
             if (!args[i].StartsWith("--", StringComparison.Ordinal))
             {
+                if (i > 0)
+                {
+                    _positional.Add(args[i]);
+                }
+
                 continue;
             }
 
@@ -22,7 +27,12 @@ public sealed class CommandLine
         }
     }
 
+    private readonly List<string> _positional = [];
+
     public string Command { get; }
+
+    /// <summary>Argumente nach dem Befehl, die keine Optionen sind (z. B. "policy set allowSystemChanges true").</summary>
+    public IReadOnlyList<string> Positional => _positional;
 
     public string? Get(string name) => _options.GetValueOrDefault(name);
 

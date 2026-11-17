@@ -45,6 +45,7 @@ import {
   IconSearch,
   IconServer,
   IconShieldBolt,
+  IconShieldCheck,
   IconSun,
   IconUserCircle,
   IconUsers,
@@ -71,6 +72,7 @@ import { ChecksPage } from "./pages/ChecksPage";
 import { ApiPage } from "./pages/ApiPage";
 import { SoftwarePage } from "./pages/SoftwarePage";
 import { SecurityPage } from "./pages/SecurityPage";
+import { CompliancePage } from "./pages/CompliancePage";
 import { RulesPage } from "./pages/RulesPage";
 import { RunPage } from "./pages/RunPage";
 import { SettingsPage } from "./pages/SettingsPage";
@@ -197,6 +199,7 @@ function Shell({ me, onMeChanged, onLoggedOut }: { me: Me; onMeChanged: (me: Me)
     { to: "/", label: t("nav.overview"), icon: IconLayoutDashboard, end: true, simple: true },
     { to: "/hosts", label: t("nav.hosts"), icon: IconServer, simple: true },
     { to: "/security", label: t("nav.security"), icon: IconShieldHalfFilled, simple: true },
+    { to: "/compliance", label: t("nav.compliance"), icon: IconShieldCheck },
     { to: "/checks", label: t("nav.checks"), icon: IconStethoscope, simple: true },
     { to: "/jobs", label: t("nav.jobs"), icon: IconListCheck },
     { to: "/software", label: t("nav.software"), icon: IconApps },
@@ -384,6 +387,7 @@ function Shell({ me, onMeChanged, onLoggedOut }: { me: Me; onMeChanged: (me: Me)
               <Route path="/developer" element={<ApiPage />} />
               <Route path="/software" element={<SoftwarePage />} />
               <Route path="/security" element={<SecurityPage />} />
+              <Route path="/compliance" element={<CompliancePage />} />
               <Route path="/ipam" element={<IpamPage />} />
               <Route path="/account" element={<AccountPage onMeChanged={onMeChanged} />} />
               {isAdmin && <Route path="/users" element={<UsersPage />} />}

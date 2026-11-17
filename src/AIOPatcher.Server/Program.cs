@@ -38,6 +38,7 @@ using var bootstrapLoggerFactory = LoggerFactory.Create(l => l.AddConsole());
 var bootstrapLogger = bootstrapLoggerFactory.CreateLogger("AIOPatcher.Startup");
 var ca = CertificateAuthority.LoadOrCreate(options.CaDirectory, options.PublicHostname, bootstrapLogger);
 builder.Services.AddSingleton(ca);
+builder.Services.AddSingleton(UpdateSigningKey.LoadOrCreate(options.CaDirectory, bootstrapLogger));
 
 // --- Kestrel: zwei getrennte Listener -------------------------------------------------------------
 builder.WebHost.ConfigureKestrel(kestrel =>
@@ -211,6 +212,7 @@ app.MapApiTokenEndpoints();
 app.MapReportEndpoints();
 app.MapIpamEndpoints();
 app.MapCheckEndpoints();
+app.MapComplianceEndpoints();
 app.MapSoftwareEndpoints();
 app.MapVulnerabilityEndpoints();
 app.MapFeatureEndpoints();

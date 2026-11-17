@@ -34,6 +34,11 @@ public static class AgentEndpoints
         var authenticated = agent.MapGroup("").AddEndpointFilter(AuthenticateAgent);
         authenticated.MapPost("/checkin", Checkin);
         authenticated.MapPost("/renew", Renew);
+        authenticated.MapGet("/hello", (HttpContext http) =>
+        {
+            var host = (ManagedHost)http.Items[HostItemKey]!;
+            return Results.Ok(new HelloResponse(host.Id, host.Name, AgentDownloads.AgentVersion));
+        });
         authenticated.MapPost("/jobs/{jobId:guid}/log", AppendJobLog);
         authenticated.MapPost("/jobs/{jobId:guid}/result", CompleteJob);
     }
@@ -172,10 +177,17 @@ public static class AgentEndpoints
         Notifier notifier,
         AgentDownloads downloads,
         FeatureFlags features,
+        UpdateSigningKey updateKey,
+        Microsoft.AspNetCore.DataProtection.IDataProtectionProvider protection,
         CancellationToken ct)
     {
         var host = (ManagedHost)http.Items[HostItemKey]!;
         var now = DateTime.UtcNow;
+
+        if (request.UpdateReport is { } report)
+        {
+            RecordUpdateReport(db, notifier, host, report, now);
+        }
 
         if (host.OfflineNotifiedAt is not null)
         {
@@ -219,13 +231,60 @@ public static class AgentEndpoints
             await ContainerUpdateService.ReplaceContainersAsync(db, host, request.Containers, now, ct);
         }
 
+        if (request.Compliance is not null && features.IsOn(Feature.ComplianceChecks))
+        {
+            await ComplianceEndpoints.StoreAsync(db, host, request.Compliance, now, ct);
+        }
+
         await ReplaceAddressesAsync(db, host, request.Addresses ?? [], now, ct);
-        var job = await DispatchJobAsync(db, host, request.RunningJobId, now, ct, features);
+        var job = await DispatchJobAsync(db, host, request.RunningJobId, now, ct, features, ComplianceEndpoints.SecretProtector(protection));
         await db.SaveChangesAsync(ct);
 
         var renew = host.CertificateExpiresAt - now < CertificateRenewBefore;
-        var update = job is null && features.IsOn(Feature.AgentSelfUpdate) ? downloads.OfferFor(host.OsFamily, request.Architecture, host.AgentVersion) : null;
-        return Results.Ok(new CheckinResponse(options.AgentCheckinIntervalSeconds, job, update, renew));
+        var selfUpdate = features.IsOn(Feature.AgentSelfUpdate);
+        var update = job is null && selfUpdate ? downloads.OfferFor(host.OsFamily, request.Architecture, host.AgentVersion, host.AgentUpdateBlockedVersion) : null;
+        return Results.Ok(new CheckinResponse(options.AgentCheckinIntervalSeconds, job, update, renew, selfUpdate ? updateKey.PublicKeySpkiBase64 : null,
+            features.IsOn(Feature.ComplianceChecks)));
+    }
+
+    /// <summary>
+    /// Ergebnis eines Self-Updates (meldet der Agent einmalig). Gescheiterte Versionen werden für diesen Host gesperrt,
+    /// sonst würde der Agent sie nach dem Rollback sofort wieder angeboten bekommen.
+    /// </summary>
+    public static void RecordUpdateReport(AppDbContext db, Notifier notifier, ManagedHost host, AgentUpdateReport report, DateTime now)
+    {
+        host.AgentUpdateOutcome = report.Outcome;
+        host.AgentUpdateFromVersion = Truncate(report.FromVersion, 32);
+        host.AgentUpdateToVersion = Truncate(report.ToVersion, 32);
+        host.AgentUpdateMessage = report.Message is null ? null : Truncate(report.Message, 1000);
+        host.AgentUpdateAt = report.AtUtc > now || report.AtUtc == default ? now : report.AtUtc;
+
+        if (report.Outcome == AgentUpdateOutcome.Installed)
+        {
+            host.AgentUpdateBlockedVersion = null;
+            db.AuditEntries.Add(new AuditEntry { Actor = $"agent:{host.Name}", Action = "agent.updated", SiteId = host.SiteId, HostId = host.Id, Details = $"{report.FromVersion} → {report.ToVersion}" });
+            return;
+        }
+
+        host.AgentUpdateBlockedVersion = host.AgentUpdateToVersion;
+        var rolledBack = report.Outcome == AgentUpdateOutcome.RolledBack;
+        db.AuditEntries.Add(new AuditEntry
+        {
+            Actor = $"agent:{host.Name}",
+            Action = rolledBack ? "agent.update.rolled-back" : "agent.update.rejected",
+            SiteId = host.SiteId,
+            HostId = host.Id,
+            Details = $"{report.FromVersion} → {report.ToVersion}: {host.AgentUpdateMessage}",
+        });
+        notifier.Publish(new Notification(NotificationEvents.AgentUpdateFailed,
+            rolledBack
+                ? L.T($"{host.Name}: Agent-Update auf {report.ToVersion} zurückgerollt", $"{host.Name}: agent update to {report.ToVersion} rolled back")
+                : L.T($"{host.Name}: Agent-Update auf {report.ToVersion} abgelehnt", $"{host.Name}: agent update to {report.ToVersion} rejected"),
+            (rolledBack
+                ? L.T($"Version {report.FromVersion} läuft wieder. ", $"Version {report.FromVersion} is running again. ")
+                : L.T($"Selbsttest fehlgeschlagen, Version {report.FromVersion} bleibt. ", $"Self-test failed, version {report.FromVersion} stays. "))
+            + host.AgentUpdateMessage,
+            NotificationSeverity.Warning, host.SiteId, host.Id, $"/hosts/{host.Id}"));
     }
 
     /// <summary>So lange vor Ablauf bittet der Server den Agent, ein neues Zertifikat anzufordern.</summary>
@@ -265,7 +324,8 @@ public static class AgentEndpoints
     /// Letzte Kontrolle vor dem Agent: abgeschaltete Funktionen werden hier durchgesetzt, egal wie der Job entstanden ist
     /// (Dashboard, API-Token, Planer, Ablauf). Automatische Jobs warten bei Notaus, statt zu scheitern.
     /// </remarks>
-    public static async Task<AgentJob?> DispatchJobAsync(AppDbContext db, ManagedHost host, Guid? runningJobId, DateTime now, CancellationToken ct, FeatureFlags? features = null)
+    public static async Task<AgentJob?> DispatchJobAsync(AppDbContext db, ManagedHost host, Guid? runningJobId, DateTime now, CancellationToken ct, FeatureFlags? features = null,
+        Microsoft.AspNetCore.DataProtection.IDataProtector? secrets = null)
     {
         if (runningJobId is not null)
         {
@@ -290,6 +350,7 @@ public static class AgentEndpoints
         foreach (var expired in queued.Where(j => j.NotAfter <= now))
         {
             AutoPatchScheduler.ExpireJob(expired, now);
+            expired.ProtectedSecret = null;
         }
 
         PatchJob? next = null;
@@ -312,6 +373,7 @@ public static class AgentEndpoints
                 JobType.Patch when !features.IsOn(Feature.PatchJobs) => Feature.PatchJobs,
                 JobType.Reboot when !features.IsOn(Feature.Reboots) => Feature.Reboots,
                 JobType.AppUpdate when !features.IsOn(Feature.AppUpdates) => Feature.AppUpdates,
+                JobType.SystemChange when ComplianceEndpoints.FeatureFor(candidate) is { } needed && !features.IsOn(needed) => needed,
                 _ => null,
             };
             if (blocked is { } feature)
@@ -319,6 +381,7 @@ public static class AgentEndpoints
                 candidate.Status = JobStatus.Rejected;
                 candidate.FinishedAt = now;
                 candidate.Summary = FeatureFlags.DisabledMessage(feature);
+                candidate.ProtectedSecret = null;
                 continue;
             }
 
@@ -340,7 +403,8 @@ public static class AgentEndpoints
         next.StartedAt = now;
         var holds = next.Type == JobType.Patch ? await PatchRules.HoldsForHostAsync(db, host, now, ct) : null;
         var packages = next.Type == JobType.AppUpdate ? next.Packages?.Split(',', StringSplitOptions.RemoveEmptyEntries) : null;
-        return new AgentJob(next.Id, next.Type, next.Scope, next.AllowReboot, holds is { Count: > 0 } ? holds : null, packages);
+        var change = next.Type == JobType.SystemChange ? ComplianceEndpoints.TakeChange(next, secrets) : null;
+        return new AgentJob(next.Id, next.Type, next.Scope, next.AllowReboot, holds is { Count: > 0 } ? holds : null, packages, change);
     }
 
     private static async Task<IResult> AppendJobLog(Guid jobId, JobLogRequest request, HttpContext http, AppDbContext db, CancellationToken ct)
@@ -403,6 +467,11 @@ public static class AgentEndpoints
         job.RebootPerformed = request.RebootPerformed;
         job.FinishedAt = DateTime.UtcNow;
         host.LastSeenAt = DateTime.UtcNow;
+        if (job.Status == JobStatus.Succeeded && job.Type == JobType.SystemChange)
+        {
+            ComplianceEndpoints.OnChangeSucceeded(host, job);
+        }
+
         audit.Add($"job.{job.Status.ToString().ToLowerInvariant()}", $"{job.Type}: {job.Summary}", siteId: host.SiteId, hostId: host.Id, actor: $"agent:{host.Name}");
         await db.SaveChangesAsync(ct);
 

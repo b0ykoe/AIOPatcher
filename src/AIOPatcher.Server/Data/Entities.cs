@@ -57,6 +57,20 @@ public sealed class ManagedHost
     /// <summary>Wann "Zertifikat läuft ab" gemeldet wurde.</summary>
     public DateTime? CertificateExpiryNotifiedAt { get; set; }
 
+    // Agent-Self-Update: letztes Ergebnis laut Agent
+    public AgentUpdateOutcome? AgentUpdateOutcome { get; set; }
+    public string? AgentUpdateFromVersion { get; set; }
+    public string? AgentUpdateToVersion { get; set; }
+    public string? AgentUpdateMessage { get; set; }
+    public DateTime? AgentUpdateAt { get; set; }
+
+    /// <summary>Diese Version ist auf dem Host gescheitert und wird nicht erneut angeboten (bis "Erneut versuchen").</summary>
+    public string? AgentUpdateBlockedVersion { get; set; }
+
+    /// <summary>Zuletzt erfolgreich ausgerollte Firewall-Version (null = keine bzw. Original wiederhergestellt).</summary>
+    public Guid? FirewallVersionId { get; set; }
+    public DateTime? FirewallAppliedAt { get; set; }
+
     // Auto-Patch
     public bool AutoPatchEnabled { get; set; }
     public PatchScope AutoPatchScope { get; set; } = PatchScope.Security;
@@ -163,6 +177,18 @@ public sealed class PatchJob
 
     /// <summary>AppUpdate: winget-IDs (kommagetrennt).</summary>
     public string? Packages { get; set; }
+
+    /// <summary>SystemChange: <see cref="AIOPatcher.Contracts.SystemChange"/> als JSON, immer ohne Geheimnis.</summary>
+    public string? Payload { get; set; }
+
+    /// <summary>
+    /// SystemChange mit Passwort: per ASP.NET Data Protection verschlüsselt. Wird bei der Übergabe an den Agent
+    /// gelöscht (auch wenn der Job abgebrochen wird oder verfällt), steht nie im Klartext in DB, Log oder Audit.
+    /// </summary>
+    public string? ProtectedSecret { get; set; }
+
+    /// <summary>Firewall-Version, die dieser Job ausrollt (für "aktive Version" am Host).</summary>
+    public Guid? FirewallVersionId { get; set; }
 
     /// <summary>Auto-Patch: spätester Start (Ende des Wartungsfensters). Danach wird der Job nicht mehr vergeben.</summary>
     public DateTime? NotAfter { get; set; }

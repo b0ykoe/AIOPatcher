@@ -219,6 +219,119 @@ namespace AIOPatcher.Server.Data.Migrations
                     b.ToTable("EnrollmentTokens");
                 });
 
+            modelBuilder.Entity("AIOPatcher.Server.Data.FirewallProfile", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("FirewallProfiles");
+                });
+
+            modelBuilder.Entity("AIOPatcher.Server.Data.FirewallProfileVersion", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ConfigJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Hash")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Number")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("ProfileId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Hash");
+
+                    b.HasIndex("ProfileId", "Number")
+                        .IsUnique();
+
+                    b.ToTable("FirewallProfileVersions");
+                });
+
+            modelBuilder.Entity("AIOPatcher.Server.Data.HostCompliance", b =>
+                {
+                    b.Property<Guid>("HostId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Admins")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("AppliedFirewallHash")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("BuiltInAdminActive")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CollectedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("FirewallEnabled")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("FirewallManageable")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("FirewallProduct")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Json")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("RemoteAccessIssues")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Users")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("HostId");
+
+                    b.ToTable("HostCompliance");
+                });
+
             modelBuilder.Entity("AIOPatcher.Server.Data.HostVulnerability", b =>
                 {
                     b.Property<long>("Id")
@@ -469,6 +582,29 @@ namespace AIOPatcher.Server.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
+                    b.Property<DateTime?>("AgentUpdateAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AgentUpdateBlockedVersion")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AgentUpdateFromVersion")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AgentUpdateMessage")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AgentUpdateOutcome")
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AgentUpdateToVersion")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("AgentVersion")
                         .HasColumnType("TEXT");
 
@@ -499,6 +635,12 @@ namespace AIOPatcher.Server.Data.Migrations
 
                     b.Property<string>("ExternalId")
                         .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("FirewallAppliedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("FirewallVersionId")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Hostname")
@@ -741,6 +883,9 @@ namespace AIOPatcher.Server.Data.Migrations
                     b.Property<DateTime?>("FinishedAt")
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid?>("FirewallVersionId")
+                        .HasColumnType("TEXT");
+
                     b.Property<Guid>("HostId")
                         .HasColumnType("TEXT");
 
@@ -749,6 +894,14 @@ namespace AIOPatcher.Server.Data.Migrations
 
                     b.Property<string>("Packages")
                         .HasMaxLength(4000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Payload")
+                        .HasMaxLength(64000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ProtectedSecret")
+                        .HasMaxLength(2000)
                         .HasColumnType("TEXT");
 
                     b.Property<bool>("RebootPerformed")
@@ -1304,6 +1457,28 @@ namespace AIOPatcher.Server.Data.Migrations
                     b.Navigation("Site");
                 });
 
+            modelBuilder.Entity("AIOPatcher.Server.Data.FirewallProfileVersion", b =>
+                {
+                    b.HasOne("AIOPatcher.Server.Data.FirewallProfile", "Profile")
+                        .WithMany("Versions")
+                        .HasForeignKey("ProfileId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Profile");
+                });
+
+            modelBuilder.Entity("AIOPatcher.Server.Data.HostCompliance", b =>
+                {
+                    b.HasOne("AIOPatcher.Server.Data.ManagedHost", "Host")
+                        .WithOne()
+                        .HasForeignKey("AIOPatcher.Server.Data.HostCompliance", "HostId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Host");
+                });
+
             modelBuilder.Entity("AIOPatcher.Server.Data.HostVulnerability", b =>
                 {
                     b.HasOne("AIOPatcher.Server.Data.ManagedHost", "Host")
@@ -1528,6 +1703,11 @@ namespace AIOPatcher.Server.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("Site");
+                });
+
+            modelBuilder.Entity("AIOPatcher.Server.Data.FirewallProfile", b =>
+                {
+                    b.Navigation("Versions");
                 });
 
             modelBuilder.Entity("AIOPatcher.Server.Data.ManagedHost", b =>

@@ -14,7 +14,12 @@ public sealed record JobExecutionResult(
 /// Führt einen Job aus. Der Agent kennt nur diese drei Aktionen, keine Shell und keine freien Parameter.
 /// Die lokale Policy hat immer das letzte Wort.
 /// </summary>
-public sealed class JobExecutor(IPlatformInventory inventory, IPatchPlatform patcher, ILogger<JobExecutor> logger)
+public sealed class JobExecutor(
+    IPlatformInventory inventory,
+    IPatchPlatform patcher,
+    ILogger<JobExecutor> logger,
+    Compliance.IComplianceProvider? compliance = null,
+    AgentState? state = null)
 {
     public async Task<JobExecutionResult> ExecuteAsync(AgentJob job, AgentPolicy policy, Action<string> log, CancellationToken ct)
     {
@@ -28,6 +33,7 @@ public sealed class JobExecutor(IPlatformInventory inventory, IPatchPlatform pat
                 JobType.Patch => await PatchAsync(job, policy, log, ct),
                 JobType.Reboot => Reboot(policy, log),
                 JobType.AppUpdate => await AppUpdateAsync(job, policy, log, ct),
+                JobType.SystemChange => await SystemChangeAsync(job, policy, log, ct),
                 _ => new JobExecutionResult(JobOutcome.Rejected, $"Unknown job type {job.Type}."),
             };
         }
@@ -51,8 +57,50 @@ public sealed class JobExecutor(IPlatformInventory inventory, IPatchPlatform pat
             new JobExecutionResult(JobOutcome.Rejected, "Local policy does not allow program updates (needs allowPatch: All)."),
         JobType.Reboot when !policy.AllowReboot =>
             new JobExecutionResult(JobOutcome.Rejected, "Local policy forbids reboots."),
+        JobType.SystemChange when !policy.AllowSystemChanges =>
+            new JobExecutionResult(JobOutcome.Rejected,
+                "Local policy forbids system changes. To allow firewall, SSH/RDP and user changes on this host: aiopatcher-agent policy set allowSystemChanges true"),
         _ => null,
     };
+
+    /// <summary>Firewall, SSH/RDP, Benutzer: nur feste Aktionen, Werte prüft der jeweilige Provider.</summary>
+    private async Task<JobExecutionResult> SystemChangeAsync(AgentJob job, AgentPolicy policy, Action<string> log, CancellationToken ct)
+    {
+        if (CheckPolicy(job, policy) is { } rejected)
+        {
+            log($"[agent] Rejected: {rejected.Summary}");
+            return rejected;
+        }
+
+        if (job.Change is not { } change || compliance is null || state is null)
+        {
+            return new JobExecutionResult(JobOutcome.Rejected, "System changes are not available in this agent.");
+        }
+
+        log($"[agent] Change: {change.Kind}{(change.UserName is null ? "" : $" ({change.UserName})")}");
+        return await compliance.ApplyAsync(change, ServerReachableAsync, log, ct);
+    }
+
+    /// <summary>Meldet sich der Server mit unserem Zertifikat? (Nach Firewall-Änderungen, sonst Rollback.)</summary>
+    private async Task<bool> ServerReachableAsync(CancellationToken ct)
+    {
+        try
+        {
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            timeout.CancelAfter(TimeSpan.FromSeconds(20));
+            using var client = ServerClient.FromState(state!);
+            await client.HelloAsync(timeout.Token);
+            return true;
+        }
+        catch (ServerRejectedException ex) when (ex.Status == System.Net.HttpStatusCode.NotFound)
+        {
+            return true; // älterer Server ohne /agent/hello, aber erreichbar
+        }
+        catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException or ServerRejectedException && !ct.IsCancellationRequested)
+        {
+            return false;
+        }
+    }
 
     private async Task<JobExecutionResult> ScanAsync(Action<string> log, CancellationToken ct)
     {

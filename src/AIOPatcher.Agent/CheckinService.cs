@@ -21,8 +21,13 @@ public sealed class CheckinService(
     IPatchPlatform patcher,
     JobExecutor executor,
     SelfMaintenance maintenance,
-    ILogger<CheckinService> logger) : BackgroundService
+    ILogger<CheckinService> logger,
+    Compliance.IComplianceProvider? compliance = null) : BackgroundService
 {
+    private static readonly TimeSpan ComplianceInterval = TimeSpan.FromHours(6);
+    private bool _complianceWanted;
+    private DateTime _nextCompliance = DateTime.MinValue;
+
     private static readonly TimeSpan ScanInterval = TimeSpan.FromHours(6);
     private static readonly TimeSpan MinInterval = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan RetryInterval = TimeSpan.FromMinutes(1);
@@ -35,9 +40,13 @@ public sealed class CheckinService(
         logger.LogInformation("AIOPatcher agent {Version} started. Server {Server}, host {HostId}",
             AgentState.AgentVersion, state.Config.ServerUrl, state.Config.HostId);
 
-        SelfMaintenance.CleanupAfterUpdate();
+        maintenance.Startup();
         using var client = ServerClient.FromState(state);
         var interval = TimeSpan.FromMinutes(1);
+
+        // Erster Check-in sofort und ohne Scan (der kann unter Windows Minuten dauern): So sehen Installationsskript
+        // und Self-Update schnell, dass der Agent läuft. Gescannt wird beim nächsten Check-in.
+        _nextScan = DateTime.UtcNow + TimeSpan.FromSeconds(5);
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -45,7 +54,15 @@ public sealed class CheckinService(
             try
             {
                 var waitingForRebootJob = await DeliverPendingResultAsync(client, stoppingToken);
-                var response = await CheckinOnceAsync(client, waitingForRebootJob, stoppingToken);
+                var report = maintenance.ReportForCheckin();
+                var response = await CheckinOnceAsync(client, waitingForRebootJob, report, stoppingToken);
+                maintenance.CheckinSucceeded(report, response.UpdateKey);
+                if (response.CollectCompliance && !_complianceWanted)
+                {
+                    _nextCompliance = DateTime.MinValue; // gerade eingeschaltet: beim nächsten Check-in melden
+                }
+
+                _complianceWanted = response.CollectCompliance;
                 interval = TimeSpan.FromSeconds(Math.Max(response.CheckinIntervalSeconds, (int)MinInterval.TotalSeconds));
                 wait = interval;
 
@@ -85,7 +102,7 @@ public sealed class CheckinService(
         }
     }
 
-    private async Task<CheckinResponse> CheckinOnceAsync(ServerClient client, Guid? runningJobId, CancellationToken ct)
+    private async Task<CheckinResponse> CheckinOnceAsync(ServerClient client, Guid? runningJobId, AgentUpdateReport? updateReport, CancellationToken ct)
     {
         var updates = _freshUpdates;
         IReadOnlyList<ContainerReport>? containers = null;
@@ -111,7 +128,24 @@ public sealed class CheckinService(
             _nextScan = DateTime.UtcNow + ScanInterval;
         }
 
-        var request = await BuildRequestAsync(inventory, updates, ct) with { RunningJobId = runningJobId, Containers = containers, Software = software };
+        ComplianceReport? complianceReport = null;
+        if (_complianceWanted && compliance is not null && DateTime.UtcNow >= _nextCompliance)
+        {
+            _nextCompliance = DateTime.UtcNow + ComplianceInterval;
+            try
+            {
+                complianceReport = await compliance.CollectAsync(ct);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                logger.LogWarning("Compliance check failed: {Message}", ex.Message);
+            }
+        }
+
+        var request = await BuildRequestAsync(inventory, updates, ct) with
+        {
+            RunningJobId = runningJobId, Containers = containers, Software = software, UpdateReport = updateReport, Compliance = complianceReport,
+        };
         var response = await client.CheckinAsync(request, ct);
         _freshUpdates = null;
         logger.LogDebug("Check-in ok, next in {Seconds}s", response.CheckinIntervalSeconds);
@@ -128,6 +162,10 @@ public sealed class CheckinService(
         await using (var log = new JobLog(client, job.JobId, logger))
         {
             result = await executor.ExecuteAsync(job, policy, log.Write, ct);
+            if (job.Type == JobType.SystemChange)
+            {
+                _nextCompliance = DateTime.MinValue; // neuen Stand gleich melden
+            }
             if (result.ScannedUpdates is not null)
             {
                 _freshUpdates = result.ScannedUpdates;

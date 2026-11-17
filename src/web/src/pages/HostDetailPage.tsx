@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { ActionIcon, Alert, Anchor, Badge, Button, Card, Group, Loader, Menu, SegmentedControl, SimpleGrid, Stack, Switch, Table, Tabs, TagsInput, Text, Tooltip } from "@mantine/core";
 import {
   IconAlertTriangle,
@@ -33,6 +33,7 @@ import { MappingCard } from "../components/MappingCard";
 import { CveCell } from "../components/CveCell";
 import { ContainerTable } from "../components/ContainerTable";
 import { SoftwareTab } from "../components/SoftwareTab";
+import { ComplianceTab } from "../components/compliance/ComplianceTab";
 import { confirmAction, EmptyState, errorText, HostStatusLabel, notifyError, notifySuccess } from "../components/ui";
 
 export function HostDetailPage() {
@@ -41,6 +42,7 @@ export function HostDetailPage() {
   const { isOn } = useFeatures();
   const simple = useSimple();
   const { id } = useParams();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const [host, setHost] = useState<HostDetail | null>(null);
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -105,6 +107,17 @@ export function HostDetailPage() {
       danger: true,
       onConfirm: () => startJob("Reboot"),
     });
+
+  const agentUpdate = host.agentUpdate;
+  const retryAgentUpdate = async () => {
+    try {
+      await api.post(`/api/hosts/${h.id}/agent-update/retry`);
+      notifySuccess(t("hostDetail.agentUpdateRetried"));
+      await load();
+    } catch (e) {
+      notifyError(e);
+    }
+  };
 
   const revoke = () =>
     confirmAction({
@@ -248,6 +261,32 @@ export function HostDetailPage() {
         </Alert>
       )}
 
+      {agentUpdate?.blocked && agentUpdate.lastOutcome && agentUpdate.lastOutcome !== "Installed" && (
+        <Alert mb="md" color="orange" variant="light" icon={<IconAlertTriangle size={18} />}
+          title={t("hostDetail.agentUpdateFailedTitle", { version: agentUpdate.toVersion ?? agentUpdate.latestVersion })}>
+          <Stack gap="xs">
+            <Text size="sm">
+              {agentUpdate.lastOutcome === "RolledBack"
+                ? t("hostDetail.agentUpdateRolledBack", { from: agentUpdate.fromVersion ?? "?" })
+                : t("hostDetail.agentUpdateRejected", { from: agentUpdate.fromVersion ?? "?" })}{" "}
+              {t("hostDetail.agentUpdatePaused")}
+            </Text>
+            {agentUpdate.message && (
+              <Text size="xs" c="dimmed" ff="monospace" style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                {formatDateTime(agentUpdate.at)}: {agentUpdate.message}
+              </Text>
+            )}
+            {can.operate && (
+              <Group>
+                <Button size="xs" variant="light" leftSection={<IconRefresh size={14} />} onClick={() => void retryAgentUpdate()}>
+                  {t("hostDetail.agentUpdateRetry")}
+                </Button>
+              </Group>
+            )}
+          </Stack>
+        </Alert>
+      )}
+
       <AutoPatchCard host={h} onSaved={() => void load()} />
       {!simple && <MappingCard host={host} onSaved={() => void load()} />}
       <HoldModal opened={holdFor !== undefined} sites={[]} hosts={[h]} initial={holdFor} onClose={() => setHoldFor(undefined)} onSaved={() => void load()} />
@@ -257,11 +296,21 @@ export function HostDetailPage() {
         <Fact label={t("hostsPage.colLastSeen")} value={formatRelative(h.lastSeenAt)} sub={formatDateTime(h.lastSeenAt)} />
         <Fact label={t("hostDetail.uptime")} value={formatUptime(host.uptime)} />
         <Fact label={t("hostDetail.lastScan")} value={formatRelative(h.lastScanAt)} />
-        <Fact label="Agent" value={h.agentVersion ?? "–"} sub={t("hostDetail.certUntil", { date: formatDateTime(host.certificateExpiresAt).split(",")[0] })} />
+        <Fact
+          label="Agent"
+          value={h.agentVersion ?? "–"}
+          sub={
+            agentUpdate?.available && !agentUpdate.blocked
+              ? t("hostDetail.agentUpdateAvailable", { version: agentUpdate.latestVersion })
+              : agentUpdate?.lastOutcome === "Installed" && agentUpdate.toVersion === h.agentVersion && agentUpdate.fromVersion
+                ? t("hostDetail.agentUpdateInstalled", { from: agentUpdate.fromVersion, date: formatDateTime(agentUpdate.at).split(",")[0] })
+                : t("hostDetail.certUntil", { date: formatDateTime(host.certificateExpiresAt).split(",")[0] })
+          }
+        />
       </SimpleGrid>
 
       <Card p={0}>
-        <Tabs defaultValue="updates">
+        <Tabs defaultValue={searchParams.get("tab") ?? "updates"}>
           <Tabs.List px="md" pt="xs">
             <Tabs.Tab value="updates" leftSection={<IconPackage size={16} />}>
               <Group gap={6} wrap="nowrap">
@@ -277,6 +326,11 @@ export function HostDetailPage() {
             <Tabs.Tab value="software" leftSection={<IconApps size={16} />}>
               {t("software.tab")}
             </Tabs.Tab>
+            {isOn("ComplianceChecks") && (
+              <Tabs.Tab value="compliance" leftSection={<IconShieldCheck size={16} />}>
+                {t("compliance.tab")}
+              </Tabs.Tab>
+            )}
             {host.containers.length > 0 && (
               <Tabs.Tab value="containers" leftSection={<IconBrandDocker size={16} />}>
                 <Group gap={6} wrap="nowrap">
@@ -391,6 +445,10 @@ export function HostDetailPage() {
 
           <Tabs.Panel value="jobs" p="md">
             <JobTable jobs={jobs} />
+          </Tabs.Panel>
+
+          <Tabs.Panel value="compliance">
+            <ComplianceTab hostId={h.id} os={h.osFamily} />
           </Tabs.Panel>
 
           <Tabs.Panel value="software" p="md">

@@ -277,9 +277,9 @@ Alle als Umgebungsvariable in `docker-compose.yml` (Standardwerte in Klammern):
 |---|---|
 | `AIOPatcher__CveLookupEnabled` (`true`) | CVE-Zuordnung und -Bewertung. Der Server fragt dafür **Paketnamen/Versionen bzw. KB-Nummern** (keine Hostnamen, keine IPs) bei `api.osv.dev`, `api.msrc.microsoft.com`, `www.cisa.gov`, `api.first.org` und `epss.empiricalsecurity.com` ab. |
 | `AIOPatcher__ContainerUpdateCheckEnabled` (`true`) | Image-Tags laufender Container gegen ihre Registry prüfen (anonym, nur öffentliche Images). |
-| `AIOPatcher__AgentAutoUpdate` (`true`) | Signierte Agent-Updates an ältere Agents anbieten. |
+| `AIOPatcher__AgentAutoUpdate` (`true`) | Signierte Agent-Updates an ältere Agents anbieten (Release-Signatur oder Server-Schlüssel). `false` sperrt den Schalter „Agent-Self-Update“. |
 | `AIOPatcher__UpdateCheckRepository` (leer) | GitHub-Repository (`owner/name`), dessen Releases auf neue AIOPatcher-Versionen geprüft werden. Nur Hinweis, nichts wird installiert. |
-| `AIOPatcher__LockedFeatures` (leer) | Kommagetrennte Funktionen, die immer aus sind und im Dashboard nicht eingeschaltet werden können, z. B. `AppUpdates,OpnsenseUpdates`. Namen: `Automation`, `PatchJobs`, `Reboots`, `AppUpdates`, `AgentSelfUpdate`, `SnapshotTests`, `OpnsenseUpdates`, `ApiTokens`, `CveLookup`, `ContainerChecks`, `ReleaseCheck`. |
+| `AIOPatcher__LockedFeatures` (leer) | Kommagetrennte Funktionen, die immer aus sind und im Dashboard nicht eingeschaltet werden können, z. B. `AppUpdates,OpnsenseUpdates`. Namen: `Automation`, `PatchJobs`, `Reboots`, `AppUpdates`, `AgentSelfUpdate`, `SnapshotTests`, `OpnsenseUpdates`, `ApiTokens`, `CveLookup`, `ContainerChecks`, `ReleaseCheck`, `ComplianceChecks`, `FirewallManagement`, `RemoteAccessFixes`, `UserManagement`. |
 | `AIOPatcher__TrustedProxies` (leer) | Reverse Proxy vor dem Dashboard (IPs/Netze, kommagetrennt), z. B. `127.0.0.1`. Nur von diesen wird `X-Forwarded-For` übernommen. Siehe [REVERSE-PROXY.md](REVERSE-PROXY.md). |
 | `AIOPatcher__Language` (`en`) | Sprache für Texte, die ohne Anfrage entstehen (siehe unten). |
 
@@ -323,8 +323,10 @@ Mit einer Site verknüpft, landen die ARP-Einträge im IPAM dieser Site.
 
 ### Agent-Updates signieren (eigene Builds)
 
-Agents installieren Updates nur, wenn sie mit dem Release-Schlüssel signiert sind, der beim Bau eingebaut wurde.
-Ohne Schlüssel funktioniert alles, nur Updates erfolgen dann per erneutem Installationsbefehl.
+Ohne Release-Schlüssel signiert der Server Agent-Updates selbst (Schlüssel `ca/update-signing.key`, wird beim ersten Start
+angelegt, mit der CA sichern). Mit Release-Schlüssel nehmen die Agents nur noch Updates an, die mit dem privaten Schlüssel
+signiert sind, der den Server nie sieht. Ein übernommener Server kann dann keinen eigenen Code verteilen.
+Ablauf, Selbsttest und Rollback: [README](../README.md#agent-updates).
 
 ```bash
 dotnet run --project tools/AIOPatcher.Signer -- keygen ./keys

@@ -8,11 +8,12 @@ namespace AIOPatcher.Server.Services;
 /// Liefert die Agent-Binaries aus, die im Image unter /app/agents/&lt;rid&gt;/ liegen.
 /// Eine Datei unter &lt;DataDirectory&gt;/agents/&lt;rid&gt;/ hat Vorrang (zum Testen oder für eigene Builds).
 /// </summary>
-public sealed class AgentDownloads(AIOPatcherOptions options)
+public sealed class AgentDownloads(AIOPatcherOptions options, AIOPatcher.Server.Security.UpdateSigningKey? signingKey = null)
 {
     public static readonly string[] RuntimeIds = ["linux-x64", "linux-arm64", "win-x64"];
 
     private readonly ConcurrentDictionary<string, (DateTime Modified, long Length, string Sha256)> _hashes = new();
+    private readonly ConcurrentDictionary<string, string> _serverSignatures = new();
 
     public static string FileName(string rid) => rid.StartsWith("win", StringComparison.Ordinal) ? "aiopatcher-agent.exe" : "aiopatcher-agent";
 
@@ -58,24 +59,40 @@ public sealed class AgentDownloads(AIOPatcherOptions options)
     };
 
     /// <summary>
-    /// Update-Angebot, wenn der Host eine ältere Version hat und für sein Binary eine Signatur
-    /// (Datei "&lt;binary&gt;.sig", Base64) vorliegt. Unsignierte Builds werden nie angeboten.
+    /// Update-Angebot, wenn der Host eine ältere Version hat. Signatur: "&lt;binary&gt;.sig" (Release-Schlüssel, Base64)
+    /// hat Vorrang, sonst signiert der Server selbst (falls ein Update-Schlüssel da ist). Unsigniert wird nie angeboten.
+    /// blockedVersion: Diese Version ist auf dem Host schon gescheitert (Rollback), nicht erneut anbieten.
     /// </summary>
-    public AIOPatcher.Contracts.AgentUpdateOffer? OfferFor(AIOPatcher.Contracts.OsFamily os, string? architecture, string? hostVersion)
+    public AIOPatcher.Contracts.AgentUpdateOffer? OfferFor(AIOPatcher.Contracts.OsFamily os, string? architecture, string? hostVersion, string? blockedVersion = null)
     {
-        if (RuntimeId(os, architecture) is not { } rid || !IsNewer(AgentVersion, hostVersion) || Find(rid) is not { } file)
+        if (RuntimeId(os, architecture) is not { } rid || !IsNewer(AgentVersion, hostVersion) || Find(rid) is not { } file
+            || string.Equals(blockedVersion, AgentVersion, StringComparison.Ordinal))
         {
             return null;
         }
 
-        var signature = new FileInfo(file.FullName + ".sig");
-        if (!signature.Exists)
+        var sha256 = Sha256(file);
+        var release = new FileInfo(file.FullName + ".sig");
+        if (release.Exists)
+        {
+            return new AIOPatcher.Contracts.AgentUpdateOffer(AgentVersion, $"/agent/download/{rid}", sha256, File.ReadAllText(release.FullName).Trim());
+        }
+
+        if (signingKey is null)
         {
             return null;
         }
 
-        return new AIOPatcher.Contracts.AgentUpdateOffer(AgentVersion, $"/agent/download/{rid}", Sha256(file), File.ReadAllText(signature.FullName).Trim());
+        var signature = _serverSignatures.GetOrAdd(sha256, signingKey.SignSha256Hex);
+        return new AIOPatcher.Contracts.AgentUpdateOffer(AgentVersion, $"/agent/download/{rid}", sha256, signature, AIOPatcher.Contracts.UpdateSigners.Server);
     }
+
+    /// <summary>Wie Updates für diese Binaries signiert werden: "release", "server" oder null (nicht angeboten).</summary>
+    public string? SignerFor(string rid) =>
+        Find(rid) is not { } file ? null
+        : File.Exists(file.FullName + ".sig") ? AIOPatcher.Contracts.UpdateSigners.Release
+        : signingKey is not null ? AIOPatcher.Contracts.UpdateSigners.Server
+        : null;
 
     public static bool IsNewer(string available, string? installed) =>
         Version.TryParse(available.Split('-')[0], out var a) && (installed is null || !Version.TryParse(installed.Split('+')[0].Split('-')[0], out var i) || a > i);

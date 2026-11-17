@@ -16,14 +16,18 @@ export type Feature =
   | "ApiTokens"
   | "CveLookup"
   | "ContainerChecks"
-  | "ReleaseCheck";
+  | "ReleaseCheck"
+  | "ComplianceChecks"
+  | "FirewallManagement"
+  | "RemoteAccessFixes"
+  | "UserManagement";
 
 export interface FeatureState {
   feature: Feature;
   enabled: boolean;
   default: boolean;
   risk: "Low" | "Medium" | "High";
-  group: "hosts" | "integrations" | "access" | "external";
+  group: "hosts" | "compliance" | "integrations" | "access" | "external";
   lockedBy: string | null;
   changedBy: string | null;
   changedAt: string | null;

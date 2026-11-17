@@ -22,6 +22,7 @@ FORCE=0
 UNINSTALL=0
 PURGE=0
 DOWNLOAD_ONLY=""
+ALLOW_SYSTEM_CHANGES=0
 
 die() { echo "Fehler: $*" >&2; exit 1; }
 info() { echo "==> $*"; }
@@ -36,6 +37,8 @@ Optionen:
   --uninstall           Dienst und Programm entfernen (Registrierung bleibt erhalten)
   --purge               Mit --uninstall: auch Zertifikate, Schlüssel und Policy löschen
   --download-only DIR   Nur herunterladen und prüfen, nichts installieren (Test)
+  --allow-system-changes  Firewall-, SSH- und Benutzer-Änderungen aus dem Dashboard erlauben
+                        (policy.json allowSystemChanges; ab Werk aus)
 EOF
 }
 
@@ -48,6 +51,7 @@ while [ $# -gt 0 ]; do
     --uninstall) UNINSTALL=1; shift ;;
     --purge) PURGE=1; shift ;;
     --download-only) DOWNLOAD_ONLY="${2:-}"; shift 2 ;;
+    --allow-system-changes) ALLOW_SYSTEM_CHANGES=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) usage; die "Unbekannte Option: $1" ;;
   esac
@@ -131,6 +135,8 @@ if systemctl is-active --quiet "$SERVICE"; then
   systemctl stop "$SERVICE"
 fi
 install -m 755 -o root -g root "$TMP/aiopatcher-agent" "$BIN"
+# Reste eines automatischen Updates: Sonst würde dessen Wächter die gerade installierte Version wieder überschreiben.
+rm -f "$STATE/update-pending.json" "$BIN.bak" "$BIN.new"
 
 # --- 4. Registrieren (nur wenn nötig) --------------------------------------------------------------
 if [ -f "$STATE/agent.json" ] && [ "$FORCE" -eq 0 ]; then
@@ -142,15 +148,29 @@ else
   "$BIN" "${ARGS[@]}"
 fi
 
-# --- 5. systemd-Dienst -----------------------------------------------------------------------------
+if [ "$ALLOW_SYSTEM_CHANGES" -eq 1 ]; then
+  "$BIN" policy set allowSystemChanges true --state-dir "$STATE" >/dev/null
+  info "Änderungen an Firewall, SSH und Benutzern aus dem Dashboard erlaubt (policy.json)."
+fi
+
+# --- 5. Selbsttest vor dem Dienststart ------------------------------------------------------------
+# Startet der Agent, liest er seine Registrierung, erreicht er den Server mit seinem Zertifikat?
+info "Selbsttest ..."
+if ! "$BIN" selftest --state-dir "$STATE"; then
+  die "Selbsttest fehlgeschlagen (siehe oben). Der Dienst wurde nicht gestartet."
+fi
+
+# --- 6. systemd-Dienst -----------------------------------------------------------------------------
 # KillMode=process: Wird der Dienst gestoppt oder neu gestartet, beendet systemd nur den Agent,
 # nicht ein gerade laufendes apt/dpkg (sonst bliebe das Paketsystem halb aktualisiert zurück).
+# StartLimitIntervalSec=0: systemd gibt nach Abstürzen nie auf, sondern startet alle 30 s neu.
 cat > "$UNIT" <<EOF
 [Unit]
 Description=AIOPatcher Agent
 Documentation=$SERVER
 After=network-online.target
 Wants=network-online.target
+StartLimitIntervalSec=0
 
 [Service]
 Type=notify
@@ -167,7 +187,55 @@ WantedBy=multi-user.target
 EOF
 
 systemctl daemon-reload
-systemctl enable --now "$SERVICE"
+
+show_log() {
+  echo "--- Letzte Log-Zeilen (journalctl -u $SERVICE) ---" >&2
+  journalctl -u "$SERVICE" --since "@$STARTED" -n 30 --no-pager >&2 || true
+}
+
+# --- 7. Crash-Check: läuft der Dienst stabil und meldet er sich beim Server? ------------------------
+STARTED="$(date +%s)"
+RESTARTS_BEFORE="$(systemctl show -p NRestarts --value "$SERVICE" 2>/dev/null || echo 0)"
+if ! systemctl enable --now "$SERVICE"; then
+  show_log
+  die "Dienst startet nicht (siehe Log oben)."
+fi
+
+info "Prüfe, ob der Agent stabil läuft und sich beim Server meldet (bis 90 s) ..."
+RESULT=timeout
+for _ in $(seq 1 45); do
+  sleep 2
+  if [ -f "$STATE/last-checkin" ] && [ "$(stat -c %Y "$STATE/last-checkin")" -ge "$STARTED" ]; then
+    RESULT=ok
+    break
+  fi
+  RESTARTS="$(systemctl show -p NRestarts --value "$SERVICE" 2>/dev/null || echo 0)"
+  STATE_NOW="$(systemctl show -p ActiveState --value "$SERVICE" 2>/dev/null || echo unknown)"
+  if [ "${RESTARTS:-0}" -gt "${RESTARTS_BEFORE:-0}" ] || [ "$STATE_NOW" = failed ]; then
+    RESULT=crashed
+    break
+  fi
+done
+
+case "$RESULT" in
+  ok)
+    info "Agent läuft und hat sich beim Server gemeldet."
+    ;;
+  crashed)
+    show_log
+    die "Der Agent ist nach dem Start abgestürzt. systemd startet ihn alle 30 s neu; Ursache im Log oben."
+    ;;
+  *)
+    show_log
+    die "Der Dienst läuft, hat sich aber nach 90 s noch nicht beim Server gemeldet (Firewall, Netzfreigabe der Site?). Er versucht es weiter."
+    ;;
+esac
+
+if systemctl is-enabled --quiet "$SERVICE"; then
+  info "Autostart: aktiv (startet mit dem System, Neustart nach Absturz nach 30 s)."
+else
+  die "Autostart ist nicht aktiv: systemctl enable $SERVICE"
+fi
 
 info "Fertig. Status: systemctl status $SERVICE | Log: journalctl -u $SERVICE -f"
 info "Lokale Policy (Patchen/Neustarts einschränken): $STATE/policy.json"

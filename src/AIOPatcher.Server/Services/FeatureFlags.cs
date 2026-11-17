@@ -19,6 +19,18 @@ public enum Feature
     CveLookup,
     ContainerChecks,
     ReleaseCheck,
+
+    /// <summary>Firewall, SSH/RDP und Benutzer erfassen (nur lesen).</summary>
+    ComplianceChecks,
+
+    /// <summary>Firewall-Regelsätze ausrollen und wiederherstellen.</summary>
+    FirewallManagement,
+
+    /// <summary>SSH/RDP-Empfehlungen anwenden und zurücknehmen.</summary>
+    RemoteAccessFixes,
+
+    /// <summary>Lokale Benutzer sperren, Adminrechte, Passwörter, SSH-Schlüssel.</summary>
+    UserManagement,
 }
 
 public enum FeatureRisk
@@ -61,6 +73,10 @@ public sealed class FeatureFlags(AIOPatcherOptions options)
         new(Feature.CveLookup, true, FeatureRisk.Low, "external"),
         new(Feature.ContainerChecks, true, FeatureRisk.Low, "external"),
         new(Feature.ReleaseCheck, true, FeatureRisk.Low, "external"),
+        new(Feature.ComplianceChecks, false, FeatureRisk.Medium, "compliance"),
+        new(Feature.FirewallManagement, false, FeatureRisk.High, "compliance"),
+        new(Feature.RemoteAccessFixes, false, FeatureRisk.High, "compliance"),
+        new(Feature.UserManagement, false, FeatureRisk.High, "compliance"),
     ];
 
     private readonly Lock _lock = new();
@@ -162,6 +178,10 @@ public sealed class FeatureFlags(AIOPatcherOptions options)
         Feature.CveLookup => german ? "CVE-Abgleich" : "CVE lookup",
         Feature.ContainerChecks => german ? "Container-Prüfung" : "Container checks",
         Feature.ReleaseCheck => german ? "Versionsprüfung" : "Version check",
+        Feature.ComplianceChecks => german ? "Compliance-Prüfung" : "Compliance checks",
+        Feature.FirewallManagement => german ? "Firewall verwalten" : "Manage firewalls",
+        Feature.RemoteAccessFixes => german ? "SSH/RDP korrigieren" : "Fix SSH/RDP",
+        Feature.UserManagement => german ? "Benutzer verwalten" : "Manage users",
         _ => feature.ToString(),
     };
 }

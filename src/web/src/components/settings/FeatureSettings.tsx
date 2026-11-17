@@ -1,13 +1,13 @@
 import { useState } from "react";
 import { Alert, Badge, Card, Code, Group, Stack, Switch, Text, ThemeIcon, Tooltip } from "@mantine/core";
-import { IconCloud, IconHandStop, IconKey, IconLock, IconPlayerPlay, IconPlugConnected, IconServer } from "@tabler/icons-react";
+import { IconCloud, IconHandStop, IconKey, IconLock, IconPlayerPlay, IconPlugConnected, IconServer, IconShieldCheck } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import { api, formatDateTime } from "../../api";
 import { useFeatures, type Feature, type FeatureState } from "../../features";
 import { confirmAction, notifyError, notifySuccess } from "../ui";
 
 const riskColor = { Low: "teal", Medium: "yellow", High: "red" } as const;
-const groupIcon = { hosts: IconServer, integrations: IconPlugConnected, access: IconKey, external: IconCloud } as const;
+const groupIcon = { hosts: IconServer, compliance: IconShieldCheck, integrations: IconPlugConnected, access: IconKey, external: IconCloud } as const;
 
 /** Funktionen & Sicherheit: was AIOPatcher darf. Der Server setzt jeden Schalter selbst durch. */
 export function FeatureSettings() {
@@ -43,7 +43,7 @@ export function FeatureSettings() {
   };
 
   const automation = list.find((f) => f.feature === "Automation");
-  const groups = (["hosts", "integrations", "access", "external"] as const).map((g) => ({ group: g, items: list.filter((f) => f.group === g && f.feature !== "Automation") }));
+  const groups = (["hosts", "compliance", "integrations", "access", "external"] as const).map((g) => ({ group: g, items: list.filter((f) => f.group === g && f.feature !== "Automation") }));
 
   return (
     <Stack>

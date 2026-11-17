@@ -24,6 +24,31 @@ switch (commandLine.Command)
         Console.WriteLine(AgentState.AgentVersion);
         return 0;
 
+    case "policy":
+    {
+        // aiopatcher-agent policy [set <key> <true|false>] [--state-dir DIR]
+        var stateDir = commandLine.Get("state-dir") ?? AgentState.DefaultDirectory;
+        try
+        {
+            var policy = commandLine.Positional is ["set", var key, var value]
+                ? AgentPolicy.Set(stateDir, key, value)
+                : AgentPolicy.Load(stateDir);
+            Console.WriteLine(JsonSerializer.Serialize(policy, AgentPolicyJsonContext.Default.AgentPolicy));
+            return 0;
+        }
+        catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException or JsonException)
+        {
+            await Console.Error.WriteLineAsync(ex.Message);
+            return 2;
+        }
+    }
+
+    case "selftest":
+    {
+        using var loggerFactory = LoggerFactory.Create(l => l.SetMinimumLevel(LogLevel.Warning).AddSimpleConsole(o => o.SingleLine = true));
+        return await SelfTestCommand.RunAsync(commandLine, () => CreateInventory(loggerFactory), cts.Token);
+    }
+
     case "scan":
     {
         // Diagnose: zeigt, was der Agent beim nächsten Check-in melden würde (ohne Server).
@@ -60,6 +85,10 @@ switch (commandLine.Command)
         }
 
         builder.Services.AddSingleton(AgentState.Load(stateDir));
+        var complianceStore = new AIOPatcher.Agent.Compliance.ComplianceStore(stateDir);
+        builder.Services.AddSingleton<AIOPatcher.Agent.Compliance.IComplianceProvider>(_ => OperatingSystem.IsWindows()
+            ? new AIOPatcher.Agent.Compliance.WindowsCompliance(complianceStore)
+            : new AIOPatcher.Agent.Compliance.LinuxCompliance(complianceStore));
         builder.Services.AddSingleton(sp => CreateInventory(sp.GetRequiredService<ILoggerFactory>()));
         builder.Services.AddSingleton<IPatchPlatform>(_ => OperatingSystem.IsWindows() ? new WindowsPatcher() : new AptPatcher());
         builder.Services.AddSingleton<JobExecutor>();
@@ -71,7 +100,7 @@ switch (commandLine.Command)
     }
 
     default:
-        await Console.Error.WriteLineAsync("Commands: run (default), enroll, scan, version");
+        await Console.Error.WriteLineAsync("Commands: run (default), enroll, selftest, scan, version");
         return 2;
 }
 

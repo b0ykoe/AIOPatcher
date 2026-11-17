@@ -1,3 +1,4 @@
+using AIOPatcher.Contracts;
 using System.Diagnostics;
 using System.Security.Claims;
 using AIOPatcher.Server.Data;
@@ -58,7 +59,7 @@ public static class CheckEndpoints
 
     // --- Server ---------------------------------------------------------------------------------------
 
-    private static async Task<List<CheckResult>> Server(HttpContext http, AppDbContext db, AIOPatcherOptions options, CertificateAuthority ca)
+    private static async Task<List<CheckResult>> Server(HttpContext http, AppDbContext db, AIOPatcherOptions options, CertificateAuthority ca, AgentDownloads downloads)
     {
         var now = DateTime.UtcNow;
         var results = new List<CheckResult>
@@ -97,14 +98,15 @@ public static class CheckEndpoints
             }),
             await Measure("agentBuilds", () =>
             {
-                var downloads = new AgentDownloads(options);
                 var missing = AgentDownloads.RuntimeIds.Where(rid => downloads.Find(rid) is null).ToList();
-                var unsigned = AgentDownloads.RuntimeIds.Where(rid => downloads.Find(rid) is { } f && !File.Exists(f.FullName + ".sig")).ToList();
+                var serverSigned = AgentDownloads.RuntimeIds.Any(rid => downloads.SignerFor(rid) == UpdateSigners.Server);
                 return Task.FromResult(missing.Count > 0
                     ? (CheckStatus.Warning, L.T($"Agent-Builds fehlen: {string.Join(", ", missing)}.", $"Agent builds missing: {string.Join(", ", missing)}."))
-                    : unsigned.Count > 0
-                        ? (CheckStatus.Warning, L.T("Agents nicht signiert: Self-Update ist aus.", "Agents not signed: self-update is off."))
-                        : (CheckStatus.Ok, L.T($"Alle Agents vorhanden und signiert (Version {AgentDownloads.AgentVersion}).", $"All agents present and signed (version {AgentDownloads.AgentVersion}).")));
+                    : serverSigned
+                        ? (CheckStatus.Ok, L.T(
+                            $"Agents {AgentDownloads.AgentVersion} vorhanden. Ohne Release-Signatur: Updates signiert dieser Server (Hosts können das per policy.json ablehnen).",
+                            $"Agents {AgentDownloads.AgentVersion} present. No release signature: this server signs updates (hosts can refuse via policy.json)."))
+                        : (CheckStatus.Ok, L.T($"Alle Agents vorhanden und mit Release-Schlüssel signiert (Version {AgentDownloads.AgentVersion}).", $"All agents present and signed with the release key (version {AgentDownloads.AgentVersion}).")));
             }),
             await Measure("clientIp", () =>
             {

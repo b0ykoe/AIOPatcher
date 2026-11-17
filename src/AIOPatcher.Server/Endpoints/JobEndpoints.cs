@@ -160,6 +160,7 @@ public static class JobEndpoints
         }
 
         job.Status = JobStatus.Cancelled;
+        job.ProtectedSecret = null; // Passwort nie liegen lassen
         job.FinishedAt = DateTime.UtcNow;
         audit.Add("job.cancelled", $"{job.Type} for {job.Host!.Name}", siteId: job.Host.SiteId, hostId: job.HostId);
         await db.SaveChangesAsync(ct);

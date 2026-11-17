@@ -77,7 +77,19 @@ public static class HostEndpoints
         Guid? IntegrationId,
         string? IntegrationName,
         string? ExternalId,
-        IReadOnlyList<ContainerDto> Containers);
+        IReadOnlyList<ContainerDto> Containers,
+        AgentUpdateDto? AgentUpdate = null);
+
+    /// <summary>Available: Server hat eine neuere Agent-Version. Blocked: diese ist hier gescheitert und wird nicht erneut angeboten.</summary>
+    public sealed record AgentUpdateDto(
+        string LatestVersion,
+        bool Available,
+        bool Blocked,
+        AgentUpdateOutcome? LastOutcome,
+        string? FromVersion,
+        string? ToVersion,
+        string? Message,
+        DateTime? At);
 
     public sealed record OverviewDto(
         int Sites,
@@ -124,6 +136,7 @@ public static class HostEndpoints
             new ServerInfoDto(AgentDownloads.AgentVersion, clock.ZoneName, DateTime.UtcNow,
                 releases.Latest?.Version, releases.Latest?.Url, releases.UpdateAvailable));
         op.MapPost("/hosts/{id:guid}/revoke", RevokeHost);
+        op.MapPost("/hosts/{id:guid}/agent-update/retry", RetryAgentUpdate);
         op.MapDelete("/hosts/{id:guid}", DeleteHost).RequireAuthorization(UserAccounts.AdminPolicy);
 
         api.MapGet("/enrollment-tokens", GetEnrollmentTokens);
@@ -239,8 +252,32 @@ public static class HostEndpoints
             .Select(a => new AddressDto(a.Address, a.PrefixLength, a.InterfaceName, a.Subnet != null ? a.Subnet.Name : null))
             .ToListAsync(ct);
 
+        var latest = AgentDownloads.AgentVersion;
+        var agentUpdate = new AgentUpdateDto(latest, host.AgentVersion is not null && AgentDownloads.IsNewer(latest, host.AgentVersion),
+            string.Equals(host.AgentUpdateBlockedVersion, latest, StringComparison.Ordinal),
+            host.AgentUpdateOutcome, host.AgentUpdateFromVersion, host.AgentUpdateToVersion, host.AgentUpdateMessage, host.AgentUpdateAt);
+
         return Results.Ok(new HostDetailDto(summary, host.KernelVersion, host.Uptime, host.EnrolledAt, host.CertificateExpiresAt, updates, addresses,
-            host.IntegrationId, host.Integration?.Name, host.ExternalId, await ContainersAsync(db, id, ct)));
+            host.IntegrationId, host.Integration?.Name, host.ExternalId, await ContainersAsync(db, id, ct), agentUpdate));
+    }
+
+    /// <summary>Gescheiterte Agent-Version wieder anbieten (z. B. nachdem die Ursache behoben ist).</summary>
+    private static async Task<IResult> RetryAgentUpdate(Guid id, AppDbContext db, AuditLog audit, CancellationToken ct)
+    {
+        var host = await db.Hosts.FindAsync([id], ct);
+        if (host is null)
+        {
+            return Results.NotFound();
+        }
+
+        if (host.AgentUpdateBlockedVersion is { } blocked)
+        {
+            host.AgentUpdateBlockedVersion = null;
+            audit.Add("agent.update.retry", $"{host.Name}: {blocked}", siteId: host.SiteId, hostId: host.Id);
+            await db.SaveChangesAsync(ct);
+        }
+
+        return Results.NoContent();
     }
 
     private static async Task<List<ContainerDto>> ContainersAsync(AppDbContext db, Guid hostId, CancellationToken ct)

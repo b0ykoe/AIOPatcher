@@ -81,5 +81,8 @@ Benutzer und Rollen, Deutsch/Englisch, Benachrichtigungen, Patchpausen, zurückg
 CVE (OSV, MSRC, KEV, EPSS), Container-Updates, Berichte, API-Tokens, signiertes Agent-Self-Update,
 Zertifikatserneuerung, IPAM light, OPNsense, CI/Release
 
+**v0.3** Agent-Update mit Server-Schlüssel, Selbsttest und Rollback; Installations-Crash-Check; Compliance (Firewall-Regelsätze
+mit Versionen, SSH/RDP-Empfehlungen, lokale Benutzer), alles hinter Schaltern und lokaler Freigabe
+
 **Offen / Ideen:** Passkeys, Rollen pro Site (Kunden-Logins), Patch-Fenster pro Tag-Gruppe, Snapshot-Rollback per Klick,
 Container-Updates ausführen, Debian-/Ubuntu-Changelogs im Dashboard, Code-Splitting im Frontend

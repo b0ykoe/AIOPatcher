@@ -19,6 +19,9 @@ public enum NotificationEvents
     KevDetected = 128,
     ContainerUpdates = 256,
     CertificateExpiring = 512,
+
+    /// <summary>Agent-Update zurückgerollt oder abgelehnt (Selbsttest fehlgeschlagen).</summary>
+    AgentUpdateFailed = 1024,
 }
 
 public enum ChannelType

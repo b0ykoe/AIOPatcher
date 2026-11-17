@@ -32,6 +32,9 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<InstalledApp> InstalledApps => Set<InstalledApp>();
     public DbSet<HostVulnerability> HostVulnerabilities => Set<HostVulnerability>();
     public DbSet<AIOPatcher.Server.Services.FeatureToggle> FeatureToggles => Set<AIOPatcher.Server.Services.FeatureToggle>();
+    public DbSet<HostCompliance> HostCompliance => Set<HostCompliance>();
+    public DbSet<FirewallProfile> FirewallProfiles => Set<FirewallProfile>();
+    public DbSet<FirewallProfileVersion> FirewallProfileVersions => Set<FirewallProfileVersion>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
@@ -62,6 +65,11 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             e.Property(x => x.CertificateThumbprint).HasMaxLength(128);
             e.Property(x => x.PendingCertificateThumbprint).HasMaxLength(128);
             e.HasIndex(x => x.PendingCertificateThumbprint);
+            e.Property(x => x.AgentUpdateOutcome).HasConversion<string>().HasMaxLength(20);
+            e.Property(x => x.AgentUpdateFromVersion).HasMaxLength(32);
+            e.Property(x => x.AgentUpdateToVersion).HasMaxLength(32);
+            e.Property(x => x.AgentUpdateBlockedVersion).HasMaxLength(32);
+            e.Property(x => x.AgentUpdateMessage).HasMaxLength(1000);
             e.HasIndex(x => x.CertificateThumbprint).IsUnique();
             e.HasIndex(x => new { x.SiteId, x.Name });
             e.HasOne(x => x.Site).WithMany(s => s.Hosts).HasForeignKey(x => x.SiteId).OnDelete(DeleteBehavior.Restrict);
@@ -88,6 +96,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             e.HasIndex(x => new { x.HostId, x.Status });
             e.HasIndex(x => x.CreatedAt);
             e.Property(x => x.Packages).HasMaxLength(4000);
+            e.Property(x => x.Payload).HasMaxLength(64000);
+            e.Property(x => x.ProtectedSecret).HasMaxLength(2000);
         });
 
         b.Entity<JobLogEntry>(e =>
@@ -196,6 +206,31 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             e.HasKey(x => x.Key);
             e.Property(x => x.Key).HasMaxLength(64);
             e.Property(x => x.ChangedBy).HasMaxLength(100);
+        });
+
+        b.Entity<HostCompliance>(e =>
+        {
+            e.HasKey(x => x.HostId);
+            e.HasOne(x => x.Host).WithOne().HasForeignKey<HostCompliance>(x => x.HostId).OnDelete(DeleteBehavior.Cascade);
+            e.Property(x => x.FirewallProduct).HasMaxLength(32);
+            e.Property(x => x.AppliedFirewallHash).HasMaxLength(32);
+        });
+
+        b.Entity<FirewallProfile>(e =>
+        {
+            e.Property(x => x.Name).HasMaxLength(100);
+            e.HasIndex(x => x.Name).IsUnique();
+            e.Property(x => x.Description).HasMaxLength(500);
+        });
+
+        b.Entity<FirewallProfileVersion>(e =>
+        {
+            e.HasOne(x => x.Profile).WithMany(p => p.Versions).HasForeignKey(x => x.ProfileId).OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(x => new { x.ProfileId, x.Number }).IsUnique();
+            e.HasIndex(x => x.Hash);
+            e.Property(x => x.Hash).HasMaxLength(32);
+            e.Property(x => x.Note).HasMaxLength(500);
+            e.Property(x => x.CreatedBy).HasMaxLength(100);
         });
 
         b.Entity<HostVulnerability>(e =>

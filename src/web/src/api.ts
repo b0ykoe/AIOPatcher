@@ -168,6 +168,21 @@ export interface HostDetail {
   integrationName: string | null;
   externalId: string | null;
   containers: ContainerItem[];
+  agentUpdate: AgentUpdateInfo | null;
+}
+
+export type AgentUpdateOutcome = "Installed" | "RolledBack" | "Rejected";
+
+/** available: Server hat eine neuere Agent-Version. blocked: diese ist hier gescheitert und wird nicht erneut angeboten. */
+export interface AgentUpdateInfo {
+  latestVersion: string;
+  available: boolean;
+  blocked: boolean;
+  lastOutcome: AgentUpdateOutcome | null;
+  fromVersion: string | null;
+  toVersion: string | null;
+  message: string | null;
+  at: string | null;
 }
 
 export interface Overview {
@@ -207,7 +222,7 @@ export interface EnrollmentToken {
   expiresAt: string;
 }
 
-export type JobType = "Scan" | "Patch" | "Reboot" | "AppUpdate";
+export type JobType = "Scan" | "Patch" | "Reboot" | "AppUpdate" | "SystemChange";
 export type PatchScope = "Security" | "All";
 export type JobStatus = "Queued" | "Running" | "Succeeded" | "Failed" | "Rejected" | "Cancelled";
 
@@ -250,6 +265,8 @@ export function describeJob(job: Pick<Job, "type" | "scope" | "allowReboot">): s
       return t("jobType.reboot");
     case "AppUpdate":
       return t("jobType.appUpdate");
+    case "SystemChange":
+      return t("jobType.systemChange");
     case "Patch":
       return `${job.scope === "Security" ? t("jobType.security") : t("jobType.all")}${job.allowReboot ? t("jobType.plusReboot") : ""}`;
   }
@@ -477,6 +494,7 @@ export const notificationEvents = [
   "KevDetected",
   "ContainerUpdates",
   "CertificateExpiring",
+  "AgentUpdateFailed",
 ] as const;
 export type NotificationEvent = (typeof notificationEvents)[number];
 

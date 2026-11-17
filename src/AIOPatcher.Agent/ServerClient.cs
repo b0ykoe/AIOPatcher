@@ -69,6 +69,14 @@ public sealed class ServerClient : IDisposable
                ?? throw new InvalidDataException("Empty response from server.");
     }
 
+    public async Task<HelloResponse> HelloAsync(CancellationToken ct)
+    {
+        using var response = await _http.GetAsync(AgentProtocol.HelloPath, ct);
+        await EnsureSuccessAsync(response, ct);
+        return await response.Content.ReadFromJsonAsync(AgentJsonContext.Default.HelloResponse, ct)
+               ?? throw new InvalidDataException("Empty response from server.");
+    }
+
     public async Task AppendJobLogAsync(Guid jobId, JobLogRequest request, CancellationToken ct)
     {
         using var response = await _http.PostAsJsonAsync(AgentProtocol.JobLogPath(jobId), request, AgentJsonContext.Default.JobLogRequest, ct);

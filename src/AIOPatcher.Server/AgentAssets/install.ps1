@@ -19,7 +19,9 @@ param(
     [switch]$Force,
     [switch]$Uninstall,
     [switch]$Purge,
-    [string]$DownloadOnly
+    [string]$DownloadOnly,
+    # Firewall-, RDP- und Benutzer-Aenderungen aus dem Dashboard erlauben (policy.json allowSystemChanges; ab Werk aus)
+    [switch]$AllowSystemChanges
 )
 
 $ErrorActionPreference = 'Stop'
@@ -158,6 +160,10 @@ try {
     }
     New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
     Copy-Item -Path $exeTmp -Destination $Exe -Force
+    # Reste eines automatischen Updates: sonst wuerde dessen Waechter die gerade installierte Version ueberschreiben.
+    foreach ($leftover in @((Join-Path $StateDir 'update-pending.json'), "$Exe.bak", (Join-Path $InstallDir 'aiopatcher-agent.new.exe'))) {
+        Remove-Item -LiteralPath $leftover -Force -ErrorAction SilentlyContinue
+    }
 
     # --- 4. Registrieren (nur wenn noetig) --------------------------------------------------------
     if ((Test-Path (Join-Path $StateDir 'agent.json')) -and -not $Force) {
@@ -170,15 +176,74 @@ try {
         if ($LASTEXITCODE -ne 0) { Fail 'Registrierung fehlgeschlagen.' }
     }
 
-    # --- 5. Windows-Dienst ------------------------------------------------------------------------
+    if ($AllowSystemChanges) {
+        & $Exe policy set allowSystemChanges true --state-dir $StateDir | Out-Null
+        Info 'Aenderungen an Firewall, RDP und Benutzern aus dem Dashboard erlaubt (policy.json).'
+    }
+
+    # --- 5. Selbsttest vor dem Dienststart --------------------------------------------------------
+    # Startet der Agent, liest er seine Registrierung, erreicht er den Server mit seinem Zertifikat?
+    Info 'Selbsttest ...'
+    & $Exe selftest --state-dir $StateDir
+    if ($LASTEXITCODE -ne 0) { Fail 'Selbsttest fehlgeschlagen (siehe oben). Der Dienst wurde nicht gestartet.' }
+
+    # --- 6. Windows-Dienst ------------------------------------------------------------------------
     if (-not $svc) {
         New-Service -Name $ServiceName -DisplayName 'AIOPatcher Agent' `
             -Description 'Meldet Updates an den AIOPatcher-Server und fuehrt freigegebene Patch-Jobs aus.' `
             -BinaryPathName "`"$Exe`" run --state-dir `"$StateDir`"" -StartupType Automatic | Out-Null
     }
     & sc.exe config $ServiceName start= delayed-auto | Out-Null
+    # Nach Absturz neu starten, immer wieder (Zaehler nach 1 Tag zurueck). failureflag 1: auch bei Beenden mit Fehlercode.
     & sc.exe failure $ServiceName reset= 86400 actions= restart/30000/restart/30000/restart/60000 | Out-Null
-    Start-Service -Name $ServiceName
+    & sc.exe failureflag $ServiceName 1 | Out-Null
+
+    # --- 7. Crash-Check: laeuft der Dienst stabil und meldet er sich beim Server? -------------------
+    $started = Get-Date
+    $lastCheckin = Join-Path $StateDir 'last-checkin'
+    function Show-AgentLog {
+        Write-Host '--- Letzte Eintraege (Ereignisanzeige, Anwendung) ---' -ForegroundColor Yellow
+        $events = @()
+        $events += Get-WinEvent -FilterHashtable @{ LogName = 'Application'; ProviderName = 'AIOPatcherAgent'; StartTime = $started } -MaxEvents 20 -ErrorAction SilentlyContinue
+        $events += Get-WinEvent -FilterHashtable @{ LogName = 'Application'; ProviderName = '.NET Runtime', 'Application Error'; StartTime = $started } -MaxEvents 20 -ErrorAction SilentlyContinue |
+            Where-Object { $_.Message -match 'aiopatcher' }
+        $events | Sort-Object TimeCreated | ForEach-Object { Write-Host ("{0:HH:mm:ss} {1}" -f $_.TimeCreated, ($_.Message -split "`n")[0]) }
+    }
+
+    try {
+        Start-Service -Name $ServiceName
+    } catch {
+        Show-AgentLog
+        Fail "Dienst startet nicht: $($_.Exception.Message)"
+    }
+
+    Info 'Pruefe, ob der Agent stabil laeuft und sich beim Server meldet (bis 90 s) ...'
+    $firstPid = (Get-CimInstance Win32_Service -Filter "Name='$ServiceName'").ProcessId
+    $result = 'timeout'
+    for ($i = 0; $i -lt 45; $i++) {
+        Start-Sleep -Seconds 2
+        if ((Test-Path $lastCheckin) -and (Get-Item $lastCheckin).LastWriteTime -ge $started) { $result = 'ok'; break }
+        $service = Get-CimInstance Win32_Service -Filter "Name='$ServiceName'"
+        if ($service.State -ne 'Running' -or $service.ProcessId -ne $firstPid) { $result = 'crashed'; break }
+    }
+
+    switch ($result) {
+        'ok' { Info 'Agent laeuft und hat sich beim Server gemeldet.' }
+        'crashed' {
+            Show-AgentLog
+            Fail 'Der Agent ist nach dem Start abgestuerzt. Windows startet ihn nach 30 s neu; Ursache in der Ereignisanzeige (siehe oben).'
+        }
+        default {
+            Show-AgentLog
+            Fail 'Der Dienst laeuft, hat sich aber nach 90 s noch nicht beim Server gemeldet (Firewall, Netzfreigabe der Site?). Er versucht es weiter.'
+        }
+    }
+
+    if ((Get-Service -Name $ServiceName).StartType.ToString() -like 'Automatic*') {
+        Info 'Autostart: aktiv (verzoegerter Start mit Windows, Neustart nach Absturz nach 30 s).'
+    } else {
+        Fail "Autostart ist nicht aktiv: Set-Service -Name $ServiceName -StartupType Automatic"
+    }
 
     Info "Fertig. Status: Get-Service $ServiceName"
     Info 'Logs: Ereignisanzeige > Windows-Protokolle > Anwendung, Quelle AIOPatcherAgent'

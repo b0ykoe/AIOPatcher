@@ -10,11 +10,12 @@ public sealed record ProcessResult(int ExitCode, string StandardOutput, string S
 public static class ProcessRunner
 {
     /// <summary>Startet ein Programm ohne Shell (keine Interpretation von Argumenten), mit Timeout und C-Locale.</summary>
-    public static async Task<ProcessResult> RunAsync(string fileName, IEnumerable<string> arguments, TimeSpan timeout, CancellationToken ct)
+    /// <param name="stdin">Text für die Standardeingabe (z. B. Passwörter: nie auf die Kommandozeile, dort sieht sie jeder per ps).</param>
+    public static async Task<ProcessResult> RunAsync(string fileName, IEnumerable<string> arguments, TimeSpan timeout, CancellationToken ct, string? stdin = null)
     {
         var stdout = new System.Text.StringBuilder();
         var stderr = new System.Text.StringBuilder();
-        var exitCode = await RunCoreAsync(fileName, arguments, timeout, line => stdout.AppendLine(line), line => stderr.AppendLine(line), ct);
+        var exitCode = await RunCoreAsync(fileName, arguments, timeout, line => stdout.AppendLine(line), line => stderr.AppendLine(line), ct, stdin);
         return new ProcessResult(exitCode, stdout.ToString(), stderr.ToString());
     }
 
@@ -28,7 +29,8 @@ public static class ProcessRunner
         TimeSpan timeout,
         Action<string> onStdout,
         Action<string> onStderr,
-        CancellationToken ct)
+        CancellationToken ct,
+        string? stdin = null)
     {
         var psi = new ProcessStartInfo(fileName)
         {
@@ -67,6 +69,11 @@ public static class ProcessRunner
         if (!process.Start())
         {
             throw new InvalidOperationException($"{fileName} could not be started.");
+        }
+
+        if (stdin is not null)
+        {
+            await process.StandardInput.WriteAsync(stdin);
         }
 
         process.StandardInput.Close();

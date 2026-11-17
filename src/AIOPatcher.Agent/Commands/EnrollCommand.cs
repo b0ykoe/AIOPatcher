@@ -93,6 +93,7 @@ public static class EnrollCommand
             ca.ExportCertificatePem(), response.ClientCertificatePem, key);
 
         AgentPolicy.WriteDefaultIfMissing(stateDir);
+        AIOPatcher.Agent.Maintenance.UpdateState.Reset(stateDir); // evtl. anderer Server: Update-Schlüssel neu lernen
         Console.WriteLine($"Enrolled. Host ID {response.HostId}, data in {stateDir}");
         Console.WriteLine($"Local policy: {Path.Combine(stateDir, AgentPolicy.FileName)} (restrict patching and reboots here).");
         return 0;

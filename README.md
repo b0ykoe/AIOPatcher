@@ -104,7 +104,8 @@ gegen echte Systeme getestet, sondern gegen nachgebaute APIs und Unit-Tests):
 **Betrieb**
 - Docker-Image mit eingebautem Healthcheck, Hinweis im Dashboard bei neuer AIOPatcher-Version
 - **API-Tokens** (Betrachter/Operator) für Skripte, z. B. `curl -H "Authorization: Bearer aiop_…" …/api/overview`
-- **Agent-Self-Update** mit signierten Binaries (Release-Schlüssel), **automatische Erneuerung** der Agent-Zertifikate
+- **Agent-Self-Update**: signiert (Release-Schlüssel oder Schlüssel des Servers), Selbsttest vor dem Tausch, automatischer
+  Rollback, wenn die neue Version abstürzt; **automatische Erneuerung** der Agent-Zertifikate
 - CI (Build, Tests) und Release-Workflow (Docker-Image nach ghcr.io, signierte Agents am GitHub-Release)
 
 ## Agent auf Linux installieren
@@ -114,7 +115,9 @@ einfügen (Debian, Ubuntu, Proxmox VE/PBS; x64 und arm64). Er
 
 1. lädt die CA vom Server und vergleicht sie mit dem Fingerprint aus dem Befehl,
 2. lädt `install.sh` und den Agent nur noch über diese CA und prüft die SHA-256-Prüfsumme,
-3. installiert `/usr/local/bin/aiopatcher-agent`, registriert den Host und richtet den systemd-Dienst `aiopatcher-agent` ein.
+3. installiert `/usr/local/bin/aiopatcher-agent`, registriert den Host und richtet den systemd-Dienst `aiopatcher-agent` ein,
+4. prüft, ob alles läuft: Selbsttest vor dem Start (Registrierung, Zertifikat, Verbindung zum Server), danach bis zu 90 s,
+   ob der Dienst stabil läuft und sich beim Server meldet. Stürzt er ab, zeigt das Skript die letzten Log-Zeilen.
 
 Voraussetzungen auf dem Host: `curl`, ausgehend HTTPS zum Agent-Port des Servers.
 
@@ -126,7 +129,9 @@ systemctl status aiopatcher-agent
 journalctl -u aiopatcher-agent -f
 ```
 
-**Update:** denselben Befehl erneut ausführen. Ist der Host registriert, wird nur das Programm ersetzt.
+**Update:** automatisch (siehe [Agent-Updates](#agent-updates)) oder denselben Befehl erneut ausführen. Ist der Host
+registriert, wird nur das Programm ersetzt.
+**Selbsttest von Hand:** `sudo aiopatcher-agent selftest`
 **Entfernen:** `install.sh --uninstall` (mit `--purge` auch Zertifikate und Policy löschen); den Host danach im Dashboard löschen.
 
 ## Agent auf Windows installieren
@@ -138,10 +143,12 @@ kopieren und in **Windows PowerShell als Administrator** einfügen. Er
 2. prüft die CA gegen den Fingerprint und lädt den Agent nur noch über diese CA (Prüfung pro Verbindung),
 3. installiert nach `C:\Program Files\AIOPatcher\`, registriert den Host (Daten in `C:\ProgramData\AIOPatcher\Agent\`,
    nur für SYSTEM und Administratoren lesbar) und richtet den Dienst `AIOPatcherAgent` ein (verzögerter Autostart,
-   Neustart bei Fehlern).
+   Neustart bei Fehlern),
+4. prüft wie unter Linux per Selbsttest und bis zu 90 s nach dem Start, ob der Dienst stabil läuft und sich beim Server
+   meldet. Bei einem Absturz zeigt es die passenden Einträge aus der Ereignisanzeige.
 
 Logs: Ereignisanzeige → Windows-Protokolle → Anwendung, Quelle `AIOPatcherAgent`.
-Update: denselben Befehl erneut ausführen. Entfernen: `install.ps1 -Uninstall` (mit `-Purge` inkl. Registrierung).
+Update: automatisch (siehe [Agent-Updates](#agent-updates)) oder denselben Befehl erneut ausführen. Entfernen: `install.ps1 -Uninstall` (mit `-Purge` inkl. Registrierung).
 
 Windows installiert Updates standardmäßig auch selbst. Für Hosts, die AIOPatcher patchen soll, per GPO
 „Automatische Updates konfigurieren“ auf „Herunterladen und benachrichtigen“ stellen; das Dashboard zeigt einen Hinweis,
@@ -182,6 +189,10 @@ jeden Schalter selbst durch, auch für API-Tokens, Auto-Patch und Abläufe; ausg
 | OPNsense-Firmware-Update per Klick | **aus** | Firmware-Updates nur in der OPNsense selbst. |
 | API-Tokens | an | Jeder Token wird abgewiesen (bleibt gespeichert). |
 | CVE-Abgleich, Container-Prüfung, Versionsprüfung | an | Keine Verbindungen zu den jeweiligen Diensten. |
+| Compliance-Prüfung | **aus** | Agents melden Firewall, SSH/RDP und Benutzer nicht. |
+| Firewall verwalten | **aus** | Regelsätze können nicht ausgerollt werden. |
+| SSH/RDP korrigieren | **aus** | Empfehlungen lassen sich nicht per Klick anwenden. |
+| Benutzer verwalten | **aus** | Keine Sperren, Adminrechte, Passwörter oder SSH-Schlüssel über das Dashboard. |
 
 Jede Änderung landet im Audit-Log. Schalter ändern geht nur mit Browser-Login als Admin, nicht per API-Token.
 Was nie eingeschaltet werden soll, sperrst du auf dem Server, z. B. in `docker-compose.yml`:
@@ -191,6 +202,75 @@ AIOPatcher__LockedFeatures: "AppUpdates,OpnsenseUpdates"
 ```
 
 Gesperrte Funktionen sind aus und lassen sich im Dashboard nicht einschalten, auch nicht von einem Admin.
+
+## Agent-Updates
+
+Hat der Server eine neuere Agent-Version, aktualisieren sich die Agents selbst, sobald sie nichts zu tun haben:
+
+1. **Signatur prüfen.** Das Image bringt Release-Signaturen mit (GitHub-Release oder eigener Build mit Schlüssel, siehe
+   [SERVER-SETUP](docs/SERVER-SETUP.md#agent-updates-signieren-eigene-builds)). Fehlen sie, signiert der Server selbst; den
+   Schlüssel dafür legt er beim ersten Start neben der CA an (`ca/update-signing.key`), die Agents merken sich ihn beim
+   ersten Check-in. Agents mit eingebautem Release-Schlüssel nehmen nur Release-Signaturen an.
+2. **Selbsttest.** Die neue Version startet einmal mit `selftest`: Läuft sie hier, liest sie die Registrierung, erreicht sie
+   den Server, meldet sie die erwartete Version? Wenn nicht, bleibt die alte Version, und das Dashboard zeigt den Grund.
+3. **Tausch mit Sicherung.** Die alte Version wird als `.bak` gesichert, der Agent startet neu.
+4. **Rollback.** Ein Wächter außerhalb des Agents (systemd-Timer bzw. PowerShell) prüft nach 5 Minuten, ob sich die neue
+   Version beim Server gemeldet hat. Wenn nicht (abgestürzt, hängt), spielt er die Sicherung zurück und startet den Dienst neu.
+
+Gescheiterte Updates erscheinen auf der Host-Seite und als Benachrichtigung („Agent-Update fehlgeschlagen“). Die Version
+wird dem Host nicht erneut angeboten, bis du dort auf *Erneut versuchen* klickst.
+
+**Abwägung beim Server-Schlüssel:** Wer den AIOPatcher-Server übernimmt, kann damit eigenen Code auf alle Hosts bringen,
+deren Agent keinen Release-Schlüssel hat. Für besonders wichtige Hosts (Proxmox-Host, OPNsense) in `policy.json`
+`"trustServerUpdates": false` setzen und dort per Installationsbefehl aktualisieren, oder Agents mit eigenem
+Release-Schlüssel bauen. Ganz abschalten: *Funktionen & Sicherheit → Agent-Self-Update*.
+
+## Compliance (Firewall, SSH/RDP, Benutzer)
+
+Unter *Compliance* (und pro Host im Reiter *Compliance*) zeigt AIOPatcher für jeden Host:
+
+- **Firewall**: an/aus und Regeln. Erkannt werden ufw, firewalld, nftables/iptables, die Proxmox-Firewall und die
+  Windows-Firewall. Verwalten kann AIOPatcher ufw und die Windows-Firewall.
+- **SSH/Remotedesktop**: effektive OpenSSH-Konfiguration (`sshd -T`) bzw. RDP-Einstellungen mit Empfehlungen
+  (Root nur mit Schlüssel, keine Passwort-Anmeldung, NLA, TLS …).
+- **Benutzer**: lokale Konten mit Status, Adminrechten (sudo/wheel bzw. Administratoren), root bzw. eingebautem
+  Administrator, Passwortstatus, SSH-Schlüsseln und letzter Anmeldung.
+
+Alles ist ab Werk aus. Lesen braucht den Schalter *Compliance-Prüfung*, jede Art Änderung ihren eigenen Schalter
+(*Firewall verwalten*, *SSH/RDP korrigieren*, *Benutzer verwalten*) und die Rolle Admin. **Zusätzlich** muss jeder Host
+Änderungen selbst erlauben, sonst lehnt der Agent ab:
+
+```bash
+sudo aiopatcher-agent policy set allowSystemChanges true
+```
+
+Oder gleich bei der Installation: `install.sh … --allow-system-changes` bzw. `install.ps1 … -AllowSystemChanges`.
+
+**Firewall-Regelsätze** (*Compliance → Firewall-Regelsätze*) beschreiben die komplette Firewall: an/aus, Standard für
+eingehend/ausgehend und Regeln wie „443/tcp von überall“ oder „alles aus 10.99.0.0/24“. Jede Änderung wird eine neue
+Version; jede ältere Version lässt sich wieder ausrollen. Beim Ausrollen:
+
+1. prüft der Agent die Regeln selbst noch einmal (nur Ports, IPs/Netze, feste Aktionen, keine Befehle vom Server),
+2. sichert den aktuellen Stand (ufw-Dateien bzw. `netsh advfirewall export`) und beim ersten Mal zusätzlich das
+   **Original** (wiederherstellbar per Klick),
+3. setzt die Regeln: ufw wird komplett neu aufgebaut; unter Windows verwaltet AIOPatcher die Regelgruppe
+   „AIOPatcher“, mit *exklusiv* schaltet es alle anderen eingehenden Regeln ab (nicht löschen),
+4. prüft, ob er den Server noch erreicht. Wenn nicht, stellt er den alten Stand sofort wieder her. Ein Wächter
+   außerhalb des Agents tut das nach 3 Minuten auch, falls der Agent dabei abstürzt.
+
+Der Agent verbindet sich nach außen und kann deshalb nicht prüfen, ob *du* noch per SSH/RDP hinkommst. Das Dashboard
+warnt, wenn ein Regelsatz Port 22 oder 3389 nicht erlaubt. Auf Proxmox-Hosts verwaltet AIOPatcher keine Firewall
+(ufw würde sich mit der Proxmox-Firewall beißen).
+
+**SSH/RDP**: Empfehlungen werden über eine eigene Datei `/etc/ssh/sshd_config.d/00-aiopatcher.conf` gesetzt, vorher mit
+`sshd -t` geprüft; offene Sitzungen bleiben bestehen. *Zurücknehmen* entfernt sie wieder. Passwort-Anmeldung lässt sich
+nur abschalten, wenn ein Admin einen SSH-Schlüssel hat. RDP-Werte stehen in der Registry; die ursprünglichen Werte
+merkt sich der Agent fürs Zurücknehmen. Per Gruppenrichtlinie gesetzte Werte fasst AIOPatcher nicht an.
+
+**Benutzer**: sperren/entsperren, Adminrechte geben/entziehen, Passwort setzen, SSH-Schlüssel hinzufügen/entfernen
+(Linux). Den letzten Admin, der sich anmelden kann, sperrt der Agent nicht. root wird nur per Passwort gesperrt
+(Schlüssel, Cronjobs und `su` aus sudo bleiben). Passwörter liegen auf dem Server nur verschlüsselt bis zur Übergabe
+an den Agent, stehen nie im Log oder Audit-Log und werden auch bei abgebrochenen oder abgelehnten Jobs gelöscht.
 
 ## Lokale Policy auf dem Host
 
@@ -203,13 +283,17 @@ Der Server kann sie nicht ändern; sie wird bei jedem Job neu gelesen.
   "allowPatch": "All",
   "allowReboot": true,
   "allowSelfUpdate": true,
-  "allowAppUpdates": true
+  "trustServerUpdates": true,
+  "allowAppUpdates": true,
+  "allowSystemChanges": false
 }
 ```
 
 `allowPatch`: `None`, `Security` oder `All`. `allowReboot: false` verhindert jeden Neustart durch AIOPatcher,
 z. B. auf dem Proxmox-Host selbst oder der OPNsense-VM. `"allowSelfUpdate": false` verhindert, dass der Agent
-signierte Updates selbst installiert. `"allowAppUpdates": false` verbietet Programm-Updates per winget auf diesem Host
+signierte Updates selbst installiert. `"trustServerUpdates": false` lässt nur Updates mit Release-Signatur zu
+(siehe [Agent-Updates](#agent-updates)). `"allowSystemChanges": true` erlaubt Änderungen an Firewall, SSH/RDP und
+Benutzern (siehe [Compliance](#compliance-firewall-sshrdp-benutzer), ab Werk aus). `"allowAppUpdates": false` verbietet Programm-Updates per winget auf diesem Host
 (diese brauchen außerdem `allowPatch: All`). Die Policy gilt zusätzlich zu den Schaltern im Dashboard: ausgeführt wird nur,
 was beide erlauben.
 
