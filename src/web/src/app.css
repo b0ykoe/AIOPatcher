@@ -415,3 +415,56 @@
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 40rem), 1fr));
   align-items: start;
 }
+
+/* Einstellungen: Seitenmenü links, Inhalt rechts (ab md). */
+.settings-layout {
+  display: block;
+}
+
+@media (min-width: 62em) {
+  .settings-layout {
+    display: grid;
+    grid-template-columns: 230px minmax(0, 1fr);
+    gap: var(--mantine-spacing-xl);
+    align-items: start;
+  }
+
+  .settings-nav {
+    position: sticky;
+    top: calc(var(--app-shell-header-height, 64px) + var(--mantine-spacing-md));
+  }
+}
+
+/* Vorlagen-Auswahl (Patch-Pläne, Kanäle, Assistent) */
+.template-card {
+  display: block;
+  padding: var(--mantine-spacing-md);
+  border-radius: 12px;
+  border: 1px solid var(--mantine-color-default-border);
+  transition: border-color 120ms ease, background-color 120ms ease;
+}
+
+.template-card:hover,
+.template-card:focus-visible {
+  border-color: var(--mantine-color-violet-5);
+  background: var(--mantine-color-violet-light);
+}
+
+.template-card[data-selected] {
+  border-color: var(--mantine-color-violet-5);
+  background: var(--mantine-color-violet-light);
+}
+
+/* Startseite: Hosts links (breit), Wartungsfenster und Jobs rechts */
+.overview-grid {
+  display: grid;
+  gap: var(--mantine-spacing-lg);
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+}
+
+@media (min-width: 88em) {
+  .overview-grid {
+    grid-template-columns: minmax(0, 1fr) 380px;
+  }
+}

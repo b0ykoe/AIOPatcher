@@ -20,7 +20,7 @@ Beispiele: [Traefik](#traefik) · [nginx](#nginx) · [Nginx Proxy Manager](#ngin
    AIOPatcher__TrustedProxies: "127.0.0.1"          # Proxy auf demselben Rechner (Host-Netzwerk)
    AIOPatcher__TrustedProxies: "172.30.0.0/24"      # Proxy in einem Docker-Netz
    ```
-   Welche IP der Proxy hat, zeigt die Prüfen-Seite im Dashboard (Server → „Reverse Proxy / Client-IP“). Solange er
+   Welche IP der Proxy hat, zeigt die Prüfen-Seite (Einstellungen) im Dashboard (Server → „Reverse Proxy / Client-IP“). Solange er
    nicht eingetragen ist, steht dort eine Warnung mit seiner IP.
    Ein Tippfehler in der Liste verhindert den Start (Meldung im Log), damit er nicht unbemerkt bleibt.
 3. **Das Dashboard bleibt intern.** Ein Proxy macht es nicht internetfest. Beschränke den Zugriff auf LAN/VPN
@@ -171,7 +171,7 @@ NPM läuft meist als Container mit eigenem Docker-Netz, AIOPatcher bleibt bei `n
      proxy_ssl_server_name on;
      ```
 5. AIOPatcher die IP von NPM mitteilen. NPM verbindet sich aus seinem Docker-Netz, sichtbar unter
-   `docker network inspect <npm-netz>` oder auf der Prüfen-Seite (Warnung mit der IP von NPM).
+   `docker network inspect <npm-netz>` oder auf der Prüfen-Seite (Einstellungen) (Warnung mit der IP von NPM).
    ```yaml
    AIOPatcher__TrustedProxies: "172.18.0.0/16"
    ```

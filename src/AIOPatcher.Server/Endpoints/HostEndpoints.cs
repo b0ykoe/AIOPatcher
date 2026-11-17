@@ -43,7 +43,19 @@ public static class HostEndpoints
         string? Tags,
         int KevUpdates,
         int ContainerUpdates,
-        bool Mapped);
+        bool Mapped,
+        Guid? PlanId = null,
+        string? PlanGroup = null,
+        PlanVia? PlanVia = null,
+        UsageDto? Usage = null);
+
+    /// <summary>Letzte Auslastung (für Listen): CPU %, RAM %, vollster Datenträger %.</summary>
+    public sealed record UsageDto(DateTime At, double Cpu, float Memory, float? Disk);
+
+    /// <summary>Host einem Patch-Plan (und optional einer Gruppe) zuordnen; PlanId null = aus allen Plänen nehmen (Regeln bleiben).</summary>
+    public sealed record PlanAssignmentRequest(Guid? PlanId, Guid? GroupId);
+
+    public sealed record BulkPlanAssignmentRequest(Guid[] HostIds, Guid? PlanId, Guid? GroupId);
 
     /// <summary>Days: Bitmaske Mo=1, Di=2, Mi=4, Do=8, Fr=16, Sa=32, So=64. Start in Ortszeit des Servers.</summary>
     public sealed record AutoPatchDto(
@@ -118,7 +130,8 @@ public static class HostEndpoints
         FreezeInfoDto? ActiveFreeze,
         int KevHosts,
         int KevUpdates,
-        int ContainerUpdates);
+        int ContainerUpdates,
+        int HostsWithoutPlan = 0);
 
     public sealed record FreezeInfoDto(Guid Id, string Name, Guid? SiteId, DateTime EndsAt);
 
@@ -142,8 +155,10 @@ public static class HostEndpoints
         api.MapGet("/overview", GetOverview);
         api.MapGet("/hosts", GetHosts);
         api.MapGet("/hosts/{id:guid}", GetHost);
-        op.MapPut("/hosts/{id:guid}/auto-patch", UpdateAutoPatch);
-        op.MapPut("/hosts/auto-patch", UpdateAutoPatchBulk);
+        op.MapPut("/hosts/{id:guid}/plan", (Guid id, PlanAssignmentRequest request, AppDbContext db, AuditLog audit, CancellationToken ct) =>
+            AssignPlanAsync([id], request.PlanId, request.GroupId, db, audit, ct));
+        op.MapPut("/hosts/plan", (BulkPlanAssignmentRequest request, AppDbContext db, AuditLog audit, CancellationToken ct) =>
+            AssignPlanAsync(request.HostIds ?? [], request.PlanId, request.GroupId, db, audit, ct));
         api.MapGet("/server-info", (ServerClock clock, ReleaseCheck releases) =>
             new ServerInfoDto(AgentDownloads.AgentVersion, clock.ZoneName, DateTime.UtcNow,
                 releases.Latest?.Version, releases.Latest?.Url, releases.UpdateAvailable));
@@ -179,32 +194,59 @@ public static class HostEndpoints
             h.NativeAutoUpdatesEnabled,
             h.PendingUpdates.Count,
             h.PendingUpdates.Count(u => u.IsSecurity),
-            new AutoPatchDto(h.AutoPatchEnabled, h.AutoPatchScope, h.AutoRebootAllowed, (int)h.MaintenanceDays, h.MaintenanceStart, h.MaintenanceDurationMinutes, null, null, h.LastAutoPatchWindowStart, h.LastAutoPatchNote, false),
-            h.RunbookMemberships.Where(m => m.Wave!.Runbook!.ScheduleEnabled).Select(m => m.Wave!.Runbook!.Name).FirstOrDefault(),
+            new AutoPatchDto(false, PatchScope.Security, false, 0, new TimeOnly(3, 0), 0), // aus dem Patch-Plan, siehe EnrichAsync
+            null,
             h.Tags,
             h.PendingUpdates.Count(u => u.IsKev),
             h.Containers.Count(c => c.LocalDigest != null && images.Any(i => i.Reference == c.Reference && i.RemoteDigest != null && i.RemoteDigest != c.LocalDigest)),
             h.IntegrationId != null && h.ExternalId != null));
 
-    /// <summary>Nächstes Wartungsfenster lässt sich nicht in SQL berechnen: nach dem Laden ergänzen.</summary>
-    private static HostSummaryDto WithNextWindow(HostSummaryDto summary, ServerClock clock)
+    /// <summary>
+    /// Nach dem Laden ergänzen, was sich nicht in SQL rechnen lässt: Patch-Plan des Hosts (ausgewählt, per Regel oder
+    /// "alle übrigen") samt nächstem Fenster, und die letzte Auslastung.
+    /// </summary>
+    public static async Task<List<HostSummaryDto>> EnrichAsync(AppDbContext db, IReadOnlyList<HostSummaryDto> summaries, ServerClock clock, CancellationToken ct)
     {
-        var a = summary.AutoPatch;
-        if (!a.Enabled)
-        {
-            return summary;
-        }
-
+        var membership = await PatchPlans.ResolveAsync(db, ct);
+        var planIds = membership.Values.Select(m => m.PlanId).Distinct().ToList();
+        var plans = await db.Runbooks.AsNoTracking().Include(r => r.Waves).Where(r => planIds.Contains(r.Id)).ToDictionaryAsync(r => r.Id, ct);
+        var ids = summaries.Select(s => s.Id).ToList();
+        var metrics = await db.Hosts.AsNoTracking().Where(h => ids.Contains(h.Id) && h.MetricsAt != null)
+            .Select(h => new { h.Id, h.Metrics, h.MetricsAt }).ToDictionaryAsync(h => h.Id, ct);
         var now = DateTime.UtcNow;
-        var days = (MaintenanceDays)a.Days;
-        var next = MaintenanceWindow.Next(days, a.Start, a.DurationMinutes, now, clock.Zone);
-        var open = MaintenanceWindow.Current(days, a.Start, a.DurationMinutes, now, clock.Zone) is not null;
-        return summary with { AutoPatch = a with { NextWindowStart = next?.StartUtc, NextWindowEnd = next?.EndUtc, WindowOpenNow = open } };
+
+        return summaries.Select(s =>
+        {
+            if (metrics.TryGetValue(s.Id, out var m) && m.Metrics is not null
+                && System.Text.Json.JsonSerializer.Deserialize(m.Metrics, PullJsonContext.Default.HostMetrics) is { } latest)
+            {
+                s = s with { Usage = new UsageDto(m.MetricsAt!.Value, latest.CpuPercent, MetricsHistory.Percent(latest.MemoryUsed, latest.MemoryTotal), MetricsHistory.FullestDisk(latest)) };
+            }
+
+            if (!membership.TryGetValue(s.Id, out var member) || !plans.TryGetValue(member.PlanId, out var plan))
+            {
+                return s;
+            }
+
+            var group = plan.Waves.FirstOrDefault(w => w.Id == member.GroupId);
+            var enabled = plan.ScheduleEnabled && plan.ScheduleDays != MaintenanceDays.None;
+            var next = enabled ? MaintenanceWindow.Next(plan.ScheduleDays, plan.ScheduleStart, plan.ScheduleDurationMinutes, now, clock.Zone) : null;
+            var open = enabled && MaintenanceWindow.Current(plan.ScheduleDays, plan.ScheduleStart, plan.ScheduleDurationMinutes, now, clock.Zone) is not null;
+            return s with
+            {
+                AutoPatch = new AutoPatchDto(enabled, group?.Scope ?? PatchScope.Security, group?.AllowReboot ?? false, (int)plan.ScheduleDays, plan.ScheduleStart,
+                    plan.ScheduleDurationMinutes, next?.StartUtc, next?.EndUtc, plan.LastWindowStart, plan.LastWindowNote, open),
+                ScheduledRunbook = plan.Name,
+                PlanId = plan.Id,
+                PlanGroup = member.GroupName,
+                PlanVia = member.Via,
+            };
+        }).ToList();
     }
 
-    private static async Task<IResult> GetOverview(AppDbContext db, AIOPatcherOptions options, CancellationToken ct)
+    private static async Task<IResult> GetOverview(AppDbContext db, AIOPatcherOptions options, ServerClock clock, CancellationToken ct)
     {
-        var hosts = await ProjectSummaries(db.Hosts.Where(h => !h.IsRevoked), db.ImageChecks, DateTime.UtcNow - options.OfflineAfter).ToListAsync(ct);
+        var hosts = await EnrichAsync(db, await ProjectSummaries(db.Hosts.Where(h => !h.IsRevoked), db.ImageChecks, DateTime.UtcNow - options.OfflineAfter).ToListAsync(ct), clock, ct);
         return Results.Ok(new OverviewDto(
             Sites: await db.Sites.CountAsync(ct),
             Hosts: hosts.Count,
@@ -224,7 +266,8 @@ public static class HostEndpoints
                 .FirstOrDefaultAsync(ct),
             KevHosts: hosts.Count(h => h.KevUpdates > 0),
             KevUpdates: hosts.Sum(h => h.KevUpdates),
-            ContainerUpdates: hosts.Sum(h => h.ContainerUpdates)));
+            ContainerUpdates: hosts.Sum(h => h.ContainerUpdates),
+            HostsWithoutPlan: hosts.Count(h => h.PlanId is null)));
     }
 
     private static async Task<IResult> GetHosts(Guid? siteId, AppDbContext db, AIOPatcherOptions options, ServerClock clock, CancellationToken ct)
@@ -235,10 +278,8 @@ public static class HostEndpoints
             query = query.Where(h => h.SiteId == siteId);
         }
 
-        var hosts = await ProjectSummaries(query, db.ImageChecks, DateTime.UtcNow - options.OfflineAfter).ToListAsync(ct);
-        return Results.Ok(hosts
-            .Select(h => WithNextWindow(h, clock))
-            .OrderBy(h => h.SiteName).ThenBy(h => h.Name, StringComparer.OrdinalIgnoreCase));
+        var hosts = await EnrichAsync(db, await ProjectSummaries(query, db.ImageChecks, DateTime.UtcNow - options.OfflineAfter).ToListAsync(ct), clock, ct);
+        return Results.Ok(hosts.OrderBy(h => h.SiteName).ThenBy(h => h.Name, StringComparer.OrdinalIgnoreCase));
     }
 
     private static async Task<IResult> GetHost(Guid id, AppDbContext db, AIOPatcherOptions options, ServerClock clock, FeatureFlags features, CancellationToken ct)
@@ -249,7 +290,7 @@ public static class HostEndpoints
             return Results.NotFound();
         }
 
-        summary = WithNextWindow(summary, clock);
+        summary = (await EnrichAsync(db, [summary], clock, ct))[0];
 
         var host = await db.Hosts.AsNoTracking().Include(h => h.Integration).SingleAsync(h => h.Id == id, ct);
         var updates = await db.PendingUpdates.Where(u => u.HostId == id)
@@ -378,71 +419,48 @@ public static class HostEndpoints
         }).ToList();
     }
 
-    private static async Task<IResult> UpdateAutoPatch(Guid id, AutoPatchRequest request, AppDbContext db, AIOPatcherOptions options, ServerClock clock, AuditLog audit, CancellationToken ct)
+    /// <summary>
+    /// Hosts einem Plan zuordnen: aus allen Plänen nehmen (nur ausgewählte Mitgliedschaft) und, wenn PlanId gesetzt, in die
+    /// gewünschte bzw. erste Gruppe dieses Plans legen. Ein Host ist so immer nur in einem Plan ausgewählt.
+    /// </summary>
+    private static async Task<IResult> AssignPlanAsync(Guid[] hostIds, Guid? planId, Guid? groupId, AppDbContext db, AuditLog audit, CancellationToken ct)
     {
-        var host = await db.Hosts.FindAsync([id], ct);
-        if (host is null)
-        {
-            return Results.NotFound();
-        }
-
-        var errors = AutoPatchSettings.Validate(request, out var start);
-        if (AutoPatchSettings.CannotApply(host, request) is { } reason)
-        {
-            errors["enabled"] = [reason];
-        }
-
-        if (errors.Count > 0)
-        {
-            return Results.ValidationProblem(errors);
-        }
-
-        AutoPatchSettings.Apply(host, request, start);
-        audit.Add("auto-patch.updated", AutoPatchSettings.Describe(host, request, start), siteId: host.SiteId, hostId: host.Id);
-        await db.SaveChangesAsync(ct);
-
-        var summary = await ProjectSummaries(db.Hosts.Where(h => h.Id == id), db.ImageChecks, DateTime.UtcNow - options.OfflineAfter).SingleAsync(ct);
-        return Results.Ok(WithNextWindow(summary, clock));
-    }
-
-    public sealed record BulkAutoPatchRequest(Guid[] HostIds, AutoPatchRequest Settings);
-
-    public sealed record BulkAutoPatchResult(int Updated, IReadOnlyList<JobPlanner.Skip> Skipped);
-
-    /// <summary>Gleiche Auto-Patch-Einstellung für mehrere Hosts. Gesperrte Hosts werden übersprungen.</summary>
-    private static async Task<IResult> UpdateAutoPatchBulk(BulkAutoPatchRequest request, AppDbContext db, AuditLog audit, CancellationToken ct)
-    {
-        if (request.HostIds is null || request.HostIds.Length == 0 || request.HostIds.Length > JobPlanner.MaxHostsPerRequest || request.Settings is null)
+        if (hostIds.Length is 0 or > JobPlanner.MaxHostsPerRequest)
         {
             return Results.ValidationProblem(new Dictionary<string, string[]> { ["hostIds"] = [L.T($"1 bis {JobPlanner.MaxHostsPerRequest} Hosts auswählen.", $"Select 1 to {JobPlanner.MaxHostsPerRequest} hosts.")] });
         }
 
-        var errors = AutoPatchSettings.Validate(request.Settings, out var start);
-        if (errors.Count > 0)
+        RunbookWave? group = null;
+        if (planId is not null)
         {
-            return Results.ValidationProblem(errors);
+            var plan = await db.Runbooks.Include(r => r.Waves).SingleOrDefaultAsync(r => r.Id == planId, ct);
+            group = plan?.Waves.OrderBy(w => w.Order).FirstOrDefault(w => groupId is null || w.Id == groupId);
+            if (plan is null || group is null)
+            {
+                return Results.NotFound();
+            }
         }
 
-        var wanted = request.HostIds.ToHashSet();
-        var hosts = (await db.Hosts.ToListAsync(ct)).Where(h => wanted.Contains(h.Id)).ToList();
-        var skipped = wanted.Where(id => hosts.All(h => h.Id != id)).Select(id => new JobPlanner.Skip(id, id.ToString(), JobPlanner.HostNotFound)).ToList();
-        var updated = 0;
+        var hosts = await db.Hosts.Where(h => hostIds.Contains(h.Id)).ToListAsync(ct);
+        if (hosts.Count == 0)
+        {
+            return Results.NotFound();
+        }
+
+        var ids = hosts.Select(h => h.Id).ToList();
+        db.RunbookWaveHosts.RemoveRange(await db.RunbookWaveHosts.Where(m => ids.Contains(m.HostId)).ToListAsync(ct));
+        if (group is not null)
+        {
+            db.RunbookWaveHosts.AddRange(ids.Select(id => new RunbookWaveHost { WaveId = group.Id, HostId = id }));
+        }
 
         foreach (var host in hosts)
         {
-            if (AutoPatchSettings.CannotApply(host, request.Settings) is { } reason)
-            {
-                skipped.Add(new JobPlanner.Skip(host.Id, host.Name, reason));
-                continue;
-            }
-
-            AutoPatchSettings.Apply(host, request.Settings, start);
-            audit.Add("auto-patch.updated", AutoPatchSettings.Describe(host, request.Settings, start) + " (bulk)", siteId: host.SiteId, hostId: host.Id);
-            updated++;
+            audit.Add("patch-plan.assigned", group is null ? $"{host.Name}: removed from patch plans" : $"{host.Name}: plan group {group.Name}", siteId: host.SiteId, hostId: host.Id);
         }
 
         await db.SaveChangesAsync(ct);
-        return Results.Ok(new BulkAutoPatchResult(updated, skipped));
+        return Results.NoContent();
     }
 
     private static async Task<IResult> RevokeHost(Guid id, AppDbContext db, AuditLog audit, CancellationToken ct)

@@ -3,10 +3,10 @@ using AIOPatcher.Server.Data;
 
 namespace AIOPatcher.Server.Services;
 
-/// <summary>Auto-Patch-Einstellungen eines Hosts, wie sie das Dashboard schickt.</summary>
+/// <summary>Zeitplan eines Patch-Plans (Wartungsfenster), wie ihn das Dashboard schickt.</summary>
 public sealed record AutoPatchRequest(bool Enabled, PatchScope Scope, bool AllowReboot, int Days, string Start, int DurationMinutes);
 
-/// <summary>Prüft und übernimmt Auto-Patch-Einstellungen (für einen oder viele Hosts gleich).</summary>
+/// <summary>Prüft Zeitpläne (Wochentage, Startzeit, Dauer) der Patch-Pläne.</summary>
 public static class AutoPatchSettings
 {
     /// <summary>Prüft die Eingabe unabhängig vom Host. Leeres Ergebnis = gültig.</summary>
@@ -36,21 +36,4 @@ public static class AutoPatchSettings
 
         return errors;
     }
-
-    /// <summary>Gesperrte Hosts bekommen kein aktives Auto-Patch.</summary>
-    public static string? CannotApply(ManagedHost host, AutoPatchRequest request) =>
-        request.Enabled && host.IsRevoked ? L.T("Host ist gesperrt.", "Host is revoked.") : null;
-
-    public static void Apply(ManagedHost host, AutoPatchRequest request, TimeOnly start)
-    {
-        host.AutoPatchEnabled = request.Enabled;
-        host.AutoPatchScope = request.Scope;
-        host.AutoRebootAllowed = request.AllowReboot;
-        host.MaintenanceDays = (MaintenanceDays)request.Days;
-        host.MaintenanceStart = start;
-        host.MaintenanceDurationMinutes = request.DurationMinutes;
-    }
-
-    public static string Describe(ManagedHost host, AutoPatchRequest request, TimeOnly start) =>
-        $"{host.Name}: {(request.Enabled ? "on" : "off")}, {request.Scope}, reboot {(request.AllowReboot ? "yes" : "no")}, days {request.Days}, {start:HH\\:mm} for {request.DurationMinutes} min";
 }

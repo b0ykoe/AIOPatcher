@@ -48,7 +48,7 @@ public static class ReportEndpoints
             .Where(h => !h.IsRevoked && (siteId == null || h.SiteId == siteId))
             .Select(h => new
             {
-                h.Id, h.Name, Site = h.Site!.Name, h.OsName, h.OsFamily, h.OsVersion, h.LastSeenAt, h.Tags, h.AutoPatchEnabled, h.RebootRequired,
+                h.Id, h.Name, Site = h.Site!.Name, h.OsName, h.OsFamily, h.OsVersion, h.LastSeenAt, h.Tags, h.RebootRequired,
                 Pending = h.PendingUpdates.Count,
                 Security = h.PendingUpdates.Count(u => u.IsSecurity),
                 Kev = h.PendingUpdates.Count(u => u.IsKev),
@@ -58,6 +58,8 @@ public static class ReportEndpoints
                 Failed = h.Jobs.Count(j => j.Type == JobType.Patch && j.Status == JobStatus.Failed && j.FinishedAt >= from),
             })
             .ToListAsync(ct);
+        var plans = await PatchPlans.ResolveAsync(db, ct);
+        var scheduled = (await db.Runbooks.Where(r => r.ScheduleEnabled).Select(r => r.Id).ToListAsync(ct)).ToHashSet();
 
         var rows = hosts
             .Select(h =>
@@ -66,7 +68,7 @@ public static class ReportEndpoints
                 var compliant = h.Kev == 0 && (oldest is null || oldest < sla);
                 var status = h.LastSeenAt is null ? "Pending" : h.LastSeenAt >= onlineSince ? "Online" : "Offline";
                 return new ReportRow(h.Id, h.Name, h.Site, h.OsName ?? h.OsFamily.ToString(), status, h.Tags, h.Pending, h.Security, h.Kev, oldest,
-                    h.LastPatched, h.Succeeded, h.Failed, h.AutoPatchEnabled, h.RebootRequired, compliant);
+                    h.LastPatched, h.Succeeded, h.Failed, plans.TryGetValue(h.Id, out var plan) && scheduled.Contains(plan.PlanId), h.RebootRequired, compliant);
             })
             .OrderBy(r => r.Compliant).ThenBy(r => r.Site).ThenBy(r => r.Host, StringComparer.OrdinalIgnoreCase)
             .ToList();

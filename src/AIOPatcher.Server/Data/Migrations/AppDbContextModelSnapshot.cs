@@ -1192,6 +1192,9 @@ namespace AIOPatcher.Server.Data.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<DateTime?>("ResumeAt")
+                        .HasColumnType("TEXT");
+
                     b.Property<Guid>("RunbookId")
                         .HasColumnType("TEXT");
 
@@ -1294,6 +1297,9 @@ namespace AIOPatcher.Server.Data.Migrations
                     b.Property<int>("Order")
                         .HasColumnType("INTEGER");
 
+                    b.Property<int?>("PauseAfterMinutes")
+                        .HasColumnType("INTEGER");
+
                     b.Property<bool>("RequireApproval")
                         .HasColumnType("INTEGER");
 
@@ -1327,12 +1333,24 @@ namespace AIOPatcher.Server.Data.Migrations
                     b.Property<bool>("AllowReboot")
                         .HasColumnType("INTEGER");
 
+                    b.Property<bool>("IncludeOthers")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid?>("MemberSiteId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("MemberTags")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("TEXT");
 
                     b.Property<int>("Order")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("PauseAfterMinutes")
                         .HasColumnType("INTEGER");
 
                     b.Property<bool>("RequireApproval")

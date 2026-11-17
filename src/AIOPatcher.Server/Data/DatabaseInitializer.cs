@@ -31,6 +31,12 @@ public static class DatabaseInitializer
         await db.Database.MigrateAsync(ct);
         await db.Database.ExecuteSqlRawAsync("PRAGMA journal_mode=WAL;", ct);
 
+        // Früheres Auto-Patch pro Host wird einmalig zu Patch-Plänen
+        if (await AIOPatcher.Server.Services.PatchPlans.MigrateHostAutoPatchAsync(db, ct) is > 0 and var plans)
+        {
+            logger.LogInformation("Converted per-host auto-patch into {Count} patch plan(s)", plans);
+        }
+
         if (pending.Count > 0)
         {
             logger.LogInformation("Migrations applied: {Migrations}", string.Join(", ", pending));

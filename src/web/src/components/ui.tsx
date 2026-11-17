@@ -1,5 +1,5 @@
 // Gemeinsame Bausteine, damit alle Seiten gleich aussehen und sich gleich verhalten.
-import type { ReactNode } from "react";
+import { createContext, useContext, type ReactNode } from "react";
 import { Badge, Card, Group, Stack, Text, ThemeIcon, Title, type MantineColor } from "@mantine/core";
 import { modals } from "@mantine/modals";
 import { notifications } from "@mantine/notifications";
@@ -48,7 +48,21 @@ export function confirmAction(options: { title: string; message: ReactNode; conf
 
 // --- Seitenkopf ----------------------------------------------------------------------------------
 
+/** Seite steckt als Reiter in einer anderen (Sicherheit, Auto-Patch, Inventar, Einstellungen): Titel kommt von dort. */
+export const EmbeddedPage = createContext(false);
+
 export function PageHeader({ title, description, actions }: { title: ReactNode; description?: ReactNode; actions?: ReactNode }) {
+  const embedded = useContext(EmbeddedPage);
+  if (embedded) {
+    // Nur Beschreibung und Knöpfe, ohne zweiten Seitentitel
+    return description || actions ? (
+      <Group justify="space-between" align="flex-end" mb="md" gap="md" wrap="wrap" className="page-header">
+        {description ? <Text c="dimmed" size="sm" maw={760}>{description}</Text> : <span />}
+        {actions && <Group gap="sm" wrap="wrap" className="page-actions">{actions}</Group>}
+      </Group>
+    ) : null;
+  }
+
   return (
     <Group justify="space-between" align="flex-end" mb="lg" gap="md" wrap="wrap" className="page-header">
       <Stack gap={2} className="page-title">

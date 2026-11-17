@@ -94,13 +94,13 @@ public sealed class RunbookEngine(IServiceScopeFactory scopes, ServerClock clock
         return run.Status switch
         {
             RunStatus.Paused => new Notification(NotificationEvents.RunNeedsAttention,
-                L.T($"Ablauf „{name}“ angehalten", $"Runbook \"{name}\" paused"), run.Message ?? "", NotificationSeverity.Warning, LinkPath: link),
+                L.T($"Patch-Plan „{name}“ angehalten", $"Patch plan \"{name}\" paused"), run.Message ?? "", NotificationSeverity.Warning, LinkPath: link),
             RunStatus.WaitingApproval => new Notification(NotificationEvents.RunNeedsAttention,
-                L.T($"Ablauf „{name}“ wartet auf Freigabe", $"Runbook \"{name}\" waiting for approval"), run.Message ?? "", NotificationSeverity.Info, LinkPath: link),
+                L.T($"Patch-Plan „{name}“ wartet auf Freigabe", $"Patch plan \"{name}\" waiting for approval"), run.Message ?? "", NotificationSeverity.Info, LinkPath: link),
             RunStatus.Succeeded => new Notification(NotificationEvents.RunFinished,
-                L.T($"Ablauf „{name}“ abgeschlossen", $"Runbook \"{name}\" finished"), run.Message ?? "", NotificationSeverity.Success, LinkPath: link),
+                L.T($"Patch-Plan „{name}“ abgeschlossen", $"Patch plan \"{name}\" finished"), run.Message ?? "", NotificationSeverity.Success, LinkPath: link),
             RunStatus.Failed => new Notification(NotificationEvents.RunFinished,
-                L.T($"Ablauf „{name}“ mit Fehlern beendet", $"Runbook \"{name}\" finished with errors"), run.Message ?? "", NotificationSeverity.Critical, LinkPath: link),
+                L.T($"Patch-Plan „{name}“ mit Fehlern beendet", $"Patch plan \"{name}\" finished with errors"), run.Message ?? "", NotificationSeverity.Critical, LinkPath: link),
             _ => null,
         };
     }
@@ -113,19 +113,24 @@ public sealed class RunbookEngine(IServiceScopeFactory scopes, ServerClock clock
     public static async Task<RunbookRun> StartRunAsync(AppDbContext db, Guid runbookId, string requestedBy, DateTime now, DateTime? notAfter, CancellationToken ct)
     {
         var runbook = await db.Runbooks
-                          .Include(r => r.Waves).ThenInclude(w => w.Hosts).ThenInclude(h => h.Host)
+                          .Include(r => r.Waves)
                           .SingleOrDefaultAsync(r => r.Id == runbookId, ct)
-                      ?? throw new InvalidOperationException(L.T("Ablauf existiert nicht.", "Runbook does not exist."));
+                      ?? throw new InvalidOperationException(L.T("Patch-Plan existiert nicht.", "Patch plan does not exist."));
 
         if (await db.RunbookRuns.AnyAsync(r => r.RunbookId == runbookId && (r.Status == RunStatus.Running || r.Status == RunStatus.WaitingApproval || r.Status == RunStatus.Paused), ct))
         {
-            throw new InvalidOperationException(L.T("Für diesen Ablauf ist bereits ein Lauf aktiv.", "This runbook already has an active run."));
+            throw new InvalidOperationException(L.T("Für diesen Patch-Plan ist bereits ein Lauf aktiv.", "This patch plan already has an active run."));
         }
 
-        var waves = runbook.Waves.Where(w => w.Hosts.Count > 0).OrderBy(w => w.Order).ToList();
+        // Mitglieder beim Start einfrieren: ausgewählte Hosts, Tag-/Site-Regeln, "alle übrigen"
+        var membership = await PatchPlans.ResolveAsync(db, ct);
+        var memberIds = membership.Where(m => m.Value.PlanId == runbook.Id).ToLookup(m => m.Value.GroupId, m => m.Key);
+        var allIds = memberIds.SelectMany(g => g).ToList();
+        var names = await db.Hosts.Where(h => allIds.Contains(h.Id)).ToDictionaryAsync(h => h.Id, h => h.Name, ct);
+        var waves = runbook.Waves.Where(w => memberIds[w.Id].Any()).OrderBy(w => w.Order).ToList();
         if (waves.Count == 0)
         {
-            throw new InvalidOperationException(L.T("Der Ablauf enthält keine Hosts.", "The runbook contains no hosts."));
+            throw new InvalidOperationException(L.T("Der Patch-Plan enthält keine Hosts.", "The patch plan contains no hosts."));
         }
 
         var run = new RunbookRun
@@ -150,10 +155,11 @@ public sealed class RunbookEngine(IServiceScopeFactory scopes, ServerClock clock
                 RequireApproval = wave.RequireApproval,
                 SnapshotBeforePatch = wave.SnapshotBeforePatch,
                 RequireBackupWithinHours = wave.RequireBackupWithinHours,
+                PauseAfterMinutes = wave.PauseAfterMinutes,
             });
-            foreach (var member in wave.Hosts.OrderBy(h => h.Host!.Name, StringComparer.OrdinalIgnoreCase))
+            foreach (var hostId in memberIds[wave.Id].OrderBy(id => names.GetValueOrDefault(id), StringComparer.OrdinalIgnoreCase))
             {
-                run.Items.Add(new RunbookRunItem { WaveOrder = wave.Order, HostId = member.HostId, HostName = member.Host!.Name });
+                run.Items.Add(new RunbookRunItem { WaveOrder = wave.Order, HostId = hostId, HostName = names.GetValueOrDefault(hostId) ?? "?" });
             }
         }
 
@@ -171,6 +177,17 @@ public sealed class RunbookEngine(IServiceScopeFactory scopes, ServerClock clock
 
     public static async Task AdvanceAsync(AppDbContext db, RunbookRun run, DateTime now, CancellationToken ct, IRunbookPreparation? preparation = null)
     {
+        if (run.ResumeAt is { } resume)
+        {
+            if (now < resume)
+            {
+                return; // Pause nach der vorigen Gruppe
+            }
+
+            run.ResumeAt = null;
+            run.Message = null;
+        }
+
         var wave = run.Waves.Single(w => w.Order == run.CurrentWave);
         var items = run.Items.Where(i => i.WaveOrder == run.CurrentWave).ToList();
 
@@ -234,8 +251,8 @@ public sealed class RunbookEngine(IServiceScopeFactory scopes, ServerClock clock
         // 3) Welle abgeschlossen oder angehalten?
         if (stopNow)
         {
-            Pause(run, L.T($"Welle „{wave.Name}“: Fehler, weitere Hosts nicht gestartet. Fortsetzen oder abbrechen.",
-                $"Wave \"{wave.Name}\": error, remaining hosts not started. Continue or cancel."));
+            Pause(run, L.T($"Gruppe „{wave.Name}“: Fehler, weitere Hosts nicht gestartet. Fortsetzen oder abbrechen.",
+                $"Group \"{wave.Name}\": error, remaining hosts not started. Continue or cancel."));
             return;
         }
 
@@ -253,8 +270,8 @@ public sealed class RunbookEngine(IServiceScopeFactory scopes, ServerClock clock
         if (hasFailures)
         {
             var failed = items.Count(i => i.Status == RunItemStatus.Failed);
-            Pause(run, L.T($"Welle „{wave.Name}“: {failed} Host(s) fehlgeschlagen. Fortsetzen (nächste Welle) oder abbrechen.",
-                $"Wave \"{wave.Name}\": {failed} host(s) failed. Continue (next wave) or cancel."));
+            Pause(run, L.T($"Gruppe „{wave.Name}“: {failed} Host(s) fehlgeschlagen. Fortsetzen (nächste Gruppe) oder abbrechen.",
+                $"Group \"{wave.Name}\": {failed} host(s) failed. Continue (next group) or cancel."));
             return;
         }
 
@@ -277,6 +294,12 @@ public sealed class RunbookEngine(IServiceScopeFactory scopes, ServerClock clock
         }
 
         run.CurrentWave = next.Order;
+        if (wave.PauseAfterMinutes is int pause and > 0)
+        {
+            run.ResumeAt = now.AddMinutes(pause);
+            run.Message = L.T($"Pause nach „{wave.Name}“ bis {run.ResumeAt:HH:mm} UTC.", $"Pause after \"{wave.Name}\" until {run.ResumeAt:HH:mm} UTC.");
+        }
+
         if (next.RequireApproval && !next.Approved)
         {
             run.Status = RunStatus.WaitingApproval;
@@ -284,10 +307,10 @@ public sealed class RunbookEngine(IServiceScopeFactory scopes, ServerClock clock
         }
         else if (windowClosed)
         {
-            Pause(run, L.T($"Wartungsfenster vorbei, Welle „{next.Name}“ nicht gestartet. Fortsetzen oder abbrechen.",
-                $"Maintenance window over, wave \"{next.Name}\" not started. Continue or cancel."));
+            Pause(run, L.T($"Wartungsfenster vorbei, Gruppe „{next.Name}“ nicht gestartet. Fortsetzen oder abbrechen.",
+                $"Maintenance window over, group \"{next.Name}\" not started. Continue or cancel."));
         }
-        else
+        else if (run.ResumeAt is null)
         {
             run.Message = null;
         }
@@ -325,6 +348,28 @@ public sealed class RunbookEngine(IServiceScopeFactory scopes, ServerClock clock
             if (await PatchRules.ActiveFreezeAsync(db, siteIds, now, ct) is { } freeze)
             {
                 Pause(run, PatchRules.FreezeNote(freeze) + L.T(" Fortsetzen oder abbrechen.", " Continue or cancel."));
+                return;
+            }
+        }
+
+        if (run.RequestedBy == AutoPatchScheduler.Actor)
+        {
+            var todo = new List<RunbookRunItem>();
+            foreach (var item in pending)
+            {
+                if (item.SnapshotTakenAt is null && await PatchPlans.NothingToDoAsync(db, hosts[item.HostId!.Value], wave.Scope, wave.AllowReboot, now, ct))
+                {
+                    Finish(item, RunItemStatus.Skipped, L.T("Nichts zu tun: keine offenen Updates laut letztem Scan.", "Nothing to do: no pending updates according to the last scan."), now);
+                }
+                else
+                {
+                    todo.Add(item);
+                }
+            }
+
+            pending = todo;
+            if (pending.Count == 0)
+            {
                 return;
             }
         }
@@ -400,7 +445,7 @@ public sealed class RunbookEngine(IServiceScopeFactory scopes, ServerClock clock
         }
 
         var note = host.RebootRequired
-            ? L.T("Gepatcht, Neustart steht aus (in dieser Welle nicht erlaubt).", "Patched, reboot pending (not allowed in this wave).")
+            ? L.T("Gepatcht, Neustart steht aus (in dieser Gruppe nicht erlaubt).", "Patched, reboot pending (not allowed in this group).")
             : job.RebootPerformed
                 ? L.T("Gepatcht und neu gestartet, Host ist wieder online.", "Patched and rebooted, host is back online.")
                 : L.T("Gepatcht, Host ist online.", "Patched, host is online.");
@@ -507,7 +552,7 @@ public sealed class RunbookEngine(IServiceScopeFactory scopes, ServerClock clock
     }
 
     private static string WaitingForApproval(string wave) =>
-        L.T($"Wartet auf Freigabe für Welle „{wave}“.", $"Waiting for approval of wave \"{wave}\".");
+        L.T($"Wartet auf Freigabe für Gruppe „{wave}“.", $"Waiting for approval of group \"{wave}\".");
 
     private static void Pause(RunbookRun run, string message)
     {
@@ -559,7 +604,7 @@ public sealed class RunbookEngine(IServiceScopeFactory scopes, ServerClock clock
         {
             job.Status = JobStatus.Cancelled;
             job.FinishedAt = now;
-            job.Summary = L.T("Ablauf abgebrochen.", "Runbook cancelled.");
+            job.Summary = L.T("Patch-Plan abgebrochen.", "Patch plan cancelled.");
             withdrawn.Add(job.Id);
         }
 
@@ -569,16 +614,16 @@ public sealed class RunbookEngine(IServiceScopeFactory scopes, ServerClock clock
             {
                 case RunItemStatus.Pending:
                 case RunItemStatus.Running when item.JobId is { } id && withdrawn.Contains(id):
-                    Finish(item, RunItemStatus.Skipped, L.T("Ablauf abgebrochen.", "Runbook cancelled."), now);
+                    Finish(item, RunItemStatus.Skipped, L.T("Patch-Plan abgebrochen.", "Patch plan cancelled."), now);
                     break;
                 case RunItemStatus.Preparing:
-                    Finish(item, RunItemStatus.Skipped, L.T($"Ablauf abgebrochen; Snapshot {item.SnapshotName} bleibt erhalten.",
-                        $"Runbook cancelled; snapshot {item.SnapshotName} is kept."), now);
+                    Finish(item, RunItemStatus.Skipped, L.T($"Patch-Plan abgebrochen; Snapshot {item.SnapshotName} bleibt erhalten.",
+                        $"Patch plan cancelled; snapshot {item.SnapshotName} is kept."), now);
                     break;
                 case RunItemStatus.Running or RunItemStatus.Verifying:
                     // Der Agent patcht bereits: das lässt sich nicht stoppen, Ergebnis steht im Job-Log.
-                    Finish(item, RunItemStatus.Skipped, L.T("Ablauf abgebrochen; der laufende Patch wird zu Ende geführt (siehe Job-Log).",
-                        "Runbook cancelled; the running patch completes (see job log)."), now);
+                    Finish(item, RunItemStatus.Skipped, L.T("Patch-Plan abgebrochen; der laufende Patch wird zu Ende geführt (siehe Job-Log).",
+                        "Patch plan cancelled; the running patch completes (see job log)."), now);
                     break;
             }
         }
@@ -603,7 +648,8 @@ public sealed class RunbookEngine(IServiceScopeFactory scopes, ServerClock clock
             }
 
             runbook.LastWindowStart = window.StartUtc;
-            var siteIds = await db.RunbookWaveHosts.Where(m => m.Wave!.RunbookId == runbook.Id).Select(m => m.Host!.SiteId).Distinct().ToListAsync(ct);
+            var members = (await PatchPlans.ResolveAsync(db, ct)).Where(m => m.Value.PlanId == runbook.Id).Select(m => m.Key).ToList();
+            var siteIds = await db.Hosts.Where(h => members.Contains(h.Id)).Select(h => h.SiteId).Distinct().ToListAsync(ct);
             if (await PatchRules.ActiveFreezeAsync(db, siteIds, now, ct) is { } freeze)
             {
                 runbook.LastWindowNote = L.T("Nicht gestartet: ", "Not started: ") + PatchRules.FreezeNote(freeze);

@@ -233,7 +233,7 @@ Passwort und Authenticator selbst ein. Rollen:
 | Rolle | Darf |
 |---|---|
 | Admin | alles, inklusive Benutzer, Sites und Hosts löschen |
-| Operator | Jobs, Abläufe, Auto-Patch, Hosts hinzufügen und sperren |
+| Operator | Jobs, Patch-Pläne, Hosts hinzufügen und sperren |
 | Betrachter | nur lesen |
 
 Rollenwechsel, Deaktivieren und Passwortänderungen beenden alle anderen Sitzungen des Kontos sofort.
@@ -335,7 +335,7 @@ curl -H "Authorization: Bearer aiop_…" https://patch.example.com:9443/api/repo
 ### Sprache
 
 Das Dashboard folgt der Browsersprache (Deutsch oder Englisch), umstellbar unter *Mein Konto*.
-Texte, die ohne Anfrage entstehen (Notizen des Auto-Patch-Planers, Meldungen von Abläufen), schreibt der Server
+Texte, die ohne Anfrage entstehen (Notizen des Auto-Patch-Planers, Meldungen der Patch-Pläne), schreibt der Server
 in `AIOPatcher__Language` (`de` oder `en`, Standard `en`). Agent-Logs sind immer Englisch.
 
 ## 9. OPNsense

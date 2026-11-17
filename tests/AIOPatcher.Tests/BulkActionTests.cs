@@ -81,31 +81,11 @@ public sealed class BulkActionTests : IDisposable
     }
 
     [Fact]
-    public void Validate_AcceptsDisabledWithoutDays_AndApplySetsAllFields()
+    public void Validate_AcceptsDisabledScheduleWithoutDays()
     {
-        var request = new AutoPatchRequest(false, PatchScope.All, true, 0, "22:30", 90);
-        Assert.Empty(AutoPatchSettings.Validate(request, out var start));
-
-        var enable = request with { Enabled = true, Days = 31 };
-        Assert.Empty(AutoPatchSettings.Validate(enable, out start));
-        AutoPatchSettings.Apply(_web, enable, start);
-
-        Assert.True(_web.AutoPatchEnabled);
-        Assert.Equal(PatchScope.All, _web.AutoPatchScope);
-        Assert.True(_web.AutoRebootAllowed);
-        Assert.Equal(MaintenanceDays.Monday | MaintenanceDays.Tuesday | MaintenanceDays.Wednesday | MaintenanceDays.Thursday | MaintenanceDays.Friday, _web.MaintenanceDays);
-        Assert.Equal(new TimeOnly(22, 30), _web.MaintenanceStart);
-        Assert.Equal(90, _web.MaintenanceDurationMinutes);
-    }
-
-    [Fact]
-    public void CannotApply_EnablingOnRevokedHost_ButDisablingIsFine()
-    {
-        var enable = new AutoPatchRequest(true, PatchScope.Security, false, 127, "03:00", 120);
-
-        Assert.NotNull(AutoPatchSettings.CannotApply(_revoked, enable));
-        Assert.Null(AutoPatchSettings.CannotApply(_revoked, enable with { Enabled = false }));
-        Assert.Null(AutoPatchSettings.CannotApply(_web, enable));
+        Assert.Empty(AutoPatchSettings.Validate(new AutoPatchRequest(false, PatchScope.All, true, 0, "22:30", 90), out var start));
+        Assert.Equal(new TimeOnly(22, 30), start);
+        Assert.Empty(AutoPatchSettings.Validate(new AutoPatchRequest(true, PatchScope.All, true, 31, "22:30", 90), out _));
     }
 
     public void Dispose()

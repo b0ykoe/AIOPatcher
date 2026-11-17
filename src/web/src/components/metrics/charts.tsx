@@ -198,3 +198,20 @@ export function TimeSeriesChart({ title, points, from, to, height = 160, gapAfte
     </Box>
   );
 }
+
+/** Drei Mini-Balken für Tabellenzeilen: CPU, RAM, vollster Datenträger; Werte als Text daneben. */
+export function UsageCompact({ cpu, memory, disk, stale }: { cpu: number; memory: number; disk: number | null; stale?: boolean }) {
+  const rows: [string, number | null][] = [["CPU", cpu], ["RAM", memory], ["Disk", disk]];
+  return (
+    <Box style={{ display: "grid", gridTemplateColumns: "30px 70px 34px", columnGap: 6, rowGap: 2, alignItems: "center", opacity: stale ? 0.45 : 1 }}>
+      {rows.map(([label, value]) => {
+        const level = value == null ? "ok" : levelOf(value);
+        return [
+          <Text key={`${label}l`} size="10px" c="dimmed" lh={1}>{label}</Text>,
+          <Progress key={`${label}b`} value={value ?? 0} size={5} radius="xl" color={levelColor[level]} bg={`var(--mantine-color-${levelColor[level]}-light)`} aria-label={`${label} ${value == null ? "–" : Math.round(value) + " %"}`} />,
+          <Text key={`${label}v`} size="10px" lh={1} ta="right" fw={level === "ok" ? 400 : 700} style={{ fontVariantNumeric: "tabular-nums" }}>{value == null ? "–" : `${Math.round(value)}%`}</Text>,
+        ];
+      })}
+    </Box>
+  );
+}

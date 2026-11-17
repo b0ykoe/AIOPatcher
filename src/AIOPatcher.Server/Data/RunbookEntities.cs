@@ -53,6 +53,19 @@ public sealed class RunbookWave
     /// <summary>Vorbedingung: letztes Backup (Proxmox/PBS bzw. Hetzner-Backup) höchstens so viele Stunden alt. null = keine Prüfung.</summary>
     public int? RequireBackupWithinHours { get; set; }
 
+    /// <summary>Nach dieser Gruppe so viele Minuten warten, bevor die nächste startet (z. B. Test-Host beobachten).</summary>
+    public int? PauseAfterMinutes { get; set; }
+
+    /// <summary>Regel: Hosts mit einem dieser Tags (kommagetrennt) gehören dazu; neue Hosts mit dem Tag automatisch.</summary>
+    public string? MemberTags { get; set; }
+
+    /// <summary>Regel: Hosts dieser Site (zusammen mit Tags: beides muss passen).</summary>
+    public Guid? MemberSiteId { get; set; }
+
+    /// <summary>Regel: alle Hosts, die sonst in keinem Plan sind.</summary>
+    public bool IncludeOthers { get; set; }
+
+    /// <summary>Explizit gewählte Hosts (haben Vorrang vor Regeln anderer Pläne).</summary>
     public List<RunbookWaveHost> Hosts { get; set; } = [];
 }
 
@@ -98,6 +111,9 @@ public sealed class RunbookRun
     /// <summary>Welle, deren Fehler per "Fortsetzen" bestätigt wurden (dort wird nicht erneut angehalten).</summary>
     public int? AcknowledgedWave { get; set; }
 
+    /// <summary>Pause zwischen Gruppen: die nächste Gruppe startet frühestens dann.</summary>
+    public DateTime? ResumeAt { get; set; }
+
     public List<RunbookRunWave> Waves { get; set; } = [];
     public List<RunbookRunItem> Items { get; set; } = [];
 }
@@ -117,6 +133,7 @@ public sealed class RunbookRunWave
     public bool Approved { get; set; }
     public bool SnapshotBeforePatch { get; set; }
     public int? RequireBackupWithinHours { get; set; }
+    public int? PauseAfterMinutes { get; set; }
 }
 
 public enum RunItemStatus

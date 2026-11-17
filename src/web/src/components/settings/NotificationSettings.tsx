@@ -17,6 +17,7 @@ import {
   Text,
   TextInput,
   ThemeIcon,
+  UnstyledButton,
   Tooltip,
 } from "@mantine/core";
 import {
@@ -63,6 +64,8 @@ export function NotificationSettings() {
   const [channels, setChannels] = useState<NotificationChannel[] | null>(null);
   const [sites, setSites] = useState<Site[]>([]);
   const [editing, setEditing] = useState<NotificationChannel | "new" | null>(null);
+  const [picking, setPicking] = useState(false);
+  const [newType, setNewType] = useState<ChannelType>("Ntfy");
 
   const load = useCallback(() => {
     api.get<NotificationChannel[]>("/api/notification-channels").then(setChannels).catch((e) => notifyError(e));
@@ -114,7 +117,7 @@ export function NotificationSettings() {
         <Text size="sm" c="dimmed" maw={640}>
           {t("notifications.intro")}
         </Text>
-        <Button variant="gradient" className="gradient-button" leftSection={<IconPlus size={16} />} onClick={() => setEditing("new")}>
+        <Button variant="gradient" className="gradient-button" leftSection={<IconPlus size={16} />} onClick={() => setPicking(true)}>
           {t("notifications.add")}
         </Button>
       </Group>
@@ -182,12 +185,40 @@ export function NotificationSettings() {
         })}
       </div>
 
-      <ChannelModal channel={editing} sites={sites} onClose={() => setEditing(null)} onSaved={load} />
+      <ChannelTypePicker opened={picking} onClose={() => setPicking(false)} onPick={(type) => { setPicking(false); setNewType(type); setEditing("new"); }} />
+      <ChannelModal channel={editing} initialType={newType} sites={sites} onClose={() => setEditing(null)} onSaved={load} />
     </Stack>
   );
 }
 
-function ChannelModal({ channel, sites, onClose, onSaved }: { channel: NotificationChannel | "new" | null; sites: Site[]; onClose: () => void; onSaved: () => void }) {
+/** Neuer Kanal: erst die Art wählen (mit kurzer Erklärung), dann das passende Formular samt Anleitung. */
+export function ChannelTypePicker({ opened, onClose, onPick }: { opened: boolean; onClose: () => void; onPick: (type: ChannelType) => void }) {
+  const { t } = useTranslation();
+  return (
+    <Modal opened={opened} onClose={onClose} size="lg" title={<Text fw={800}>{t("notifications.pickTitle")}</Text>}>
+      <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
+        {channelTypes.map((type) => {
+          const Icon = typeIcon[type];
+          return (
+            <UnstyledButton key={type} className="template-card" onClick={() => onPick(type)}>
+              <Group gap="sm" wrap="nowrap" align="flex-start">
+                <ThemeIcon variant="light" size={36} radius="md"><Icon size={20} /></ThemeIcon>
+                <div>
+                  <Text fw={700}>{t(`notifications.type${type}`)}</Text>
+                  <Text size="xs" c="dimmed">{t(`notifications.pick${type}`)}</Text>
+                </div>
+              </Group>
+            </UnstyledButton>
+          );
+        })}
+      </SimpleGrid>
+    </Modal>
+  );
+}
+
+export function ChannelModal({ channel, sites, onClose, onSaved, initialType = "Ntfy" }: {
+  channel: NotificationChannel | "new" | null; sites: Site[]; onClose: () => void; onSaved: () => void; initialType?: ChannelType;
+}) {
   const { t } = useTranslation();
   const [name, setName] = useState("");
   const [type, setType] = useState<ChannelType>("Ntfy");
@@ -201,7 +232,7 @@ function ChannelModal({ channel, sites, onClose, onSaved }: { channel: Notificat
     if (!channel) return;
     if (channel === "new") {
       setName("");
-      setType("Ntfy");
+      setType(initialType);
       setSiteId(null);
       setEvents(defaultEvents);
       setConfig({ smtpPort: 587, smtpSecurity: "StartTls" });
@@ -213,7 +244,7 @@ function ChannelModal({ channel, sites, onClose, onSaved }: { channel: Notificat
       setConfig(channel.config);
     }
     setError(null);
-  }, [channel]);
+  }, [channel, initialType]);
 
   const set = (patch: Partial<ChannelConfig>) => setConfig((c) => ({ ...c, ...patch }));
   const field = (key: keyof ChannelConfig) => ({

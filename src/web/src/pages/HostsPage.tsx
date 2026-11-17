@@ -21,8 +21,8 @@ import { useTranslation } from "react-i18next";
 import { useCan, useShell, useSimple } from "../App";
 import { useFeatures } from "../features";
 
-import { PatchPlanWizard } from "../components/PatchPlanWizard";
-import { autoPatchLabel, AutoPatchModal } from "../components/AutoPatchCard";
+import { AssignPlanModal } from "../components/plans/AssignPlanModal";
+import { UsageCompact } from "../components/metrics/charts";
 import { OsIcon } from "../components/OsIcon";
 import { confirmAction, EmptyState, HostStatusLabel, notifyError, notifySuccess, PageHeader, reportBulk } from "../components/ui";
 
@@ -31,7 +31,6 @@ export function HostsPage() {
   const can = useCan();
   const { isOn } = useFeatures();
   const simple = useSimple();
-  const [planOpen, setPlanOpen] = useState(false);
   const { openAddHost } = useShell();
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
@@ -112,11 +111,6 @@ export function HostsPage() {
         actions={
           <>
             <TextInput placeholder={t("hostsPage.filter")} leftSection={<IconSearch size={16} />} value={query} onChange={(e) => setQuery(e.currentTarget.value)} w={200} />
-            {can.operate && (
-              <Button variant="light" leftSection={<IconClockPlay size={16} />} onClick={() => setPlanOpen(true)}>
-                {t("simple.planButton")}
-              </Button>
-            )}
             {!simple && allTags.length > 0 && (
               <MultiSelect placeholder={tagFilter.length === 0 ? t("rules.tagFilter") : undefined} data={allTags} value={tagFilter} onChange={setTagFilter} clearable w={200} leftSection={<IconTags size={16} />} />
             )}
@@ -170,7 +164,7 @@ export function HostsPage() {
                       {h.kevUpdates > 0 && <Badge size="sm" color="red" variant="filled">KEV</Badge>}
                       {h.containerUpdates > 0 && <ContainerUpdatesBadge hostId={h.id} count={h.containerUpdates} size="sm" />}
                       {h.rebootRequired && <Badge size="sm" color="orange">{t("overview.rebootRequired")}</Badge>}
-                      {h.autoPatch.enabled && <Badge size="sm" color="violet" leftSection={<IconClock size={11} />}>{autoPatchLabel(h.autoPatch)}</Badge>}
+                      {h.scheduledRunbook && <Badge size="sm" color="violet" variant="light" leftSection={<IconClock size={11} />}>{h.scheduledRunbook}</Badge>}
                     </Group>
                   </Stack>
                 </Group>
@@ -201,7 +195,7 @@ export function HostsPage() {
                           <Menu.Item onClick={() => selectWhere((h) => h.status === "Online")}>{t("hostsPage.selOnline")}</Menu.Item>
                           <Menu.Item onClick={() => selectWhere((h) => h.securityUpdates > 0)}>{t("hostsPage.selSecurity")}</Menu.Item>
                           <Menu.Item onClick={() => selectWhere((h) => h.rebootRequired)}>{t("overview.rebootRequired")}</Menu.Item>
-                          <Menu.Item onClick={() => selectWhere((h) => !h.autoPatch.enabled && h.status !== "Revoked")}>{t("hostsPage.selNoAutoPatch")}</Menu.Item>
+                          <Menu.Item onClick={() => selectWhere((h) => !h.planId && h.status !== "Revoked")}>{t("hostsPage.selNoPlan")}</Menu.Item>
                           <Menu.Divider />
                           <Menu.Item onClick={() => setSelected(new Set())}>{t("hostsPage.selNone")}</Menu.Item>
                         </Menu.Dropdown>
@@ -211,9 +205,9 @@ export function HostsPage() {
                   <Table.Th>{t("hostsPage.colName")}</Table.Th>
                   <Table.Th>{t("hostsPage.colSystem")}</Table.Th>
                   <Table.Th>{t("jobs.colStatus")}</Table.Th>
-                  <Table.Th>{t("hostsPage.colLastSeen")}</Table.Th>
                   <Table.Th ta="right">{t("hostsPage.colUpdates")}</Table.Th>
-                  <Table.Th>Auto-Patch</Table.Th>
+                  {isOn("Metrics") && <Table.Th w={150}>{t("nav.utilization")}</Table.Th>}
+                  <Table.Th>{t("plans.colPlan")}</Table.Th>
                   <Table.Th>{t("hostsPage.colNotes")}</Table.Th>
                 </Table.Tr>
               </Table.Thead>
@@ -260,11 +254,7 @@ export function HostsPage() {
                       </Table.Td>
                       <Table.Td>
                         <HostStatusLabel status={h.status} />
-                      </Table.Td>
-                      <Table.Td>
-                        <Text size="sm" c="dimmed">
-                          {formatRelative(h.lastSeenAt)}
-                        </Text>
+                        <Text size="xs" c="dimmed">{formatRelative(h.lastSeenAt)}</Text>
                       </Table.Td>
                       <Table.Td ta="right">
                         {h.lastScanAt ? (
@@ -282,39 +272,30 @@ export function HostsPage() {
                           </Text>
                         )}
                       </Table.Td>
+                      {isOn("Metrics") && (
+                        <Table.Td>
+                          {h.usage
+                            ? <UsageCompact cpu={h.usage.cpu} memory={h.usage.memory} disk={h.usage.disk} stale={Date.now() - new Date(h.usage.at).getTime() > 15 * 60 * 1000} />
+                            : <Text size="xs" c="dimmed">–</Text>}
+                        </Table.Td>
+                      )}
                       <Table.Td>
-                        {h.autoPatch.enabled ? (
-                          <Tooltip label={t("hostsPage.nextWindow", { start: formatWindowStart(h.autoPatch.nextWindowStart) })}>
-                            <Group gap={6} wrap="nowrap">
-                              <IconClock size={15} color="var(--mantine-color-violet-4)" />
-                              <Text size="sm">{autoPatchLabel(h.autoPatch)}</Text>
-                            </Group>
+                        {h.scheduledRunbook ? (
+                          <Tooltip label={h.autoPatch.enabled ? t("hostsPage.nextWindow", { start: formatWindowStart(h.autoPatch.nextWindowStart) }) : t("plans.manualOnly")}>
+                            <div>
+                              <Group gap={6} wrap="nowrap">
+                                <IconClock size={15} color={h.autoPatch.enabled ? "var(--mantine-color-violet-4)" : "var(--mantine-color-gray-5)"} />
+                                <Text size="sm" truncate maw={180}>{h.scheduledRunbook}</Text>
+                              </Group>
+                              {h.planGroup && <Text size="xs" c="dimmed" truncate maw={200}>{h.planGroup}</Text>}
+                            </div>
                           </Tooltip>
                         ) : (
-                          <Text size="sm" c="dimmed">
-                            {t("autoPatch.offShort")}
-                          </Text>
+                          <Text size="sm" c="dimmed">{t("overview.noPlan")}</Text>
                         )}
                       </Table.Td>
                       <Table.Td>
-                        <Group gap={6}>
-                          {h.kevUpdates > 0 && (
-                            <Tooltip label={t("security.kevHint")}>
-                              <Badge color="red" variant="filled">KEV</Badge>
-                            </Tooltip>
-                          )}
-                          {h.containerUpdates > 0 && <ContainerUpdatesBadge hostId={h.id} count={h.containerUpdates} />}
-                          {h.rebootRequired && (
-                            <Badge color="yellow" leftSection={<IconRefresh size={12} />}>
-                              {t("jobType.reboot")}
-                            </Badge>
-                          )}
-                          {h.nativeAutoUpdatesEnabled && (
-                            <Tooltip label={t("hostsPage.nativeHint")}>
-                              <Badge color="blue">{t("hostsPage.native")}</Badge>
-                            </Tooltip>
-                          )}
-                        </Group>
+                        <HostHints host={h} />
                       </Table.Td>
                     </Table.Tr>
                   );
@@ -337,7 +318,7 @@ export function HostsPage() {
                     {t("hostsPage.selected", { count: selection.length })}
                   </Badge>
                   <Button size="sm" variant="light" leftSection={<IconClockPlay size={16} />} onClick={() => setAutoPatchOpen(true)}>
-                    Auto-Patch
+                    {t("hubs.plans")}
                   </Button>
                   {isOn("PatchJobs") && <Menu position="top" width={270}>
                     <Menu.Target>
@@ -409,7 +390,6 @@ export function HostsPage() {
         </Transition>
       </Affix>
 
-      <PatchPlanWizard opened={planOpen} onClose={() => setPlanOpen(false)} onSaved={() => void load()} />
       <BulkTagsModal
         hostIds={selection}
         known={allTags}
@@ -417,12 +397,11 @@ export function HostsPage() {
         onClose={() => setTagsOpen(false)}
         onSaved={() => void load()}
       />
-      <AutoPatchModal
+      <AssignPlanModal
         hostIds={selection}
-        initial={selectedHosts.length === 1 ? selectedHosts[0].autoPatch : undefined}
         opened={autoPatchOpen}
         onClose={() => setAutoPatchOpen(false)}
-        onSaved={() => {
+        onDone={() => {
           setSelected(new Set());
           void load();
         }}
@@ -482,5 +461,26 @@ function ContainerUpdatesBadge({ hostId, count, size }: { hostId: string; count:
       color="blue" variant="light" size={size} style={{ cursor: "pointer" }}>
       {t("security.containerBadge", { count })}
     </Badge>
+  );
+}
+
+/** Hinweise einer Zeile: die zwei wichtigsten als Badge, der Rest als "+n" mit Tooltip. */
+function HostHints({ host: h }: { host: HostSummary }) {
+  const { t } = useTranslation();
+  const hints: { key: string; node: React.ReactNode; label: string }[] = [];
+  if (h.kevUpdates > 0) hints.push({ key: "kev", label: "KEV", node: <Tooltip label={t("security.kevHint")}><Badge color="red" variant="filled">KEV</Badge></Tooltip> });
+  if (h.rebootRequired) hints.push({ key: "reboot", label: t("jobType.reboot"), node: <Badge color="yellow" leftSection={<IconRefresh size={12} />}>{t("jobType.reboot")}</Badge> });
+  if (h.containerUpdates > 0) hints.push({ key: "containers", label: t("security.containerBadge", { count: h.containerUpdates }), node: <ContainerUpdatesBadge hostId={h.id} count={h.containerUpdates} /> });
+  if (h.nativeAutoUpdatesEnabled) hints.push({ key: "native", label: t("hostsPage.native"), node: <Tooltip label={t("hostsPage.nativeHint")}><Badge color="blue">{t("hostsPage.native")}</Badge></Tooltip> });
+  const rest = hints.slice(2);
+  return (
+    <Group gap={6} wrap="nowrap">
+      {hints.slice(0, 2).map((x) => <span key={x.key}>{x.node}</span>)}
+      {rest.length > 0 && (
+        <Tooltip label={rest.map((x) => x.label).join(" · ")}>
+          <Badge variant="outline" color="gray">+{rest.length}</Badge>
+        </Tooltip>
+      )}
+    </Group>
   );
 }

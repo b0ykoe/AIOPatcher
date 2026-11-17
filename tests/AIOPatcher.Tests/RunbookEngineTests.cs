@@ -369,9 +369,6 @@ public sealed class RunbookEngineTests : IDisposable
         Assert.Equal(new DateTime(2026, 11, 17, 6, 0, 0, DateTimeKind.Utc), run.NotAfter); // 03:00 + 4 h Berlin = 06:00 UTC
         Assert.Equal(AutoPatchScheduler.Actor, run.RequestedBy);
 
-        // Host-Auto-Patch für web01 greift nicht, weil web01 zum geplanten Ablauf gehört.
-        var autoPatch = await AutoPatchScheduler.RunOnceAsync(_db, Berlin, _now, CancellationToken.None);
-        Assert.Equal(0, autoPatch.Created);
     }
 
     public void Dispose()

@@ -104,10 +104,15 @@ gegen echte Systeme getestet, sondern gegen nachgebaute APIs und Unit-Tests):
 - Jobs (Scan, Patch, Neustart) mit Live-Log, Ergebnis auch nach Neustart; lokale `policy.json` hat Vorrang
 
 **Bedienung**
-- **Einfacher und erweiterter Modus** pro Benutzer: Einfach zeigt nur Übersicht, Hosts, Sicherheit und Prüfen,
-  die Übersicht ist eine To-do-Liste mit Ein-Klick-Aktionen; der **Patch-Plan-Assistent** richtet Auto-Patch für alle
-  Hosts auf einmal ein (Vorlagen, Proxmox-Hosts automatisch ohne Neustart)
-- **Prüfen-Seite**: Server, externe Dienste, Benachrichtigungen, Integrationen, pro Host Agent, Backup,
+- Übersichtliche Navigation: **Übersicht · Hosts · Auslastung · Sicherheit · Auto-Patch · Inventar · Berichte ·
+  Einstellungen**. Verwandtes steckt als Reiter darin (Sicherheit: Lücken, CVE-Suche, Compliance; Auto-Patch: Pläne,
+  Regeln, Jobs; Inventar: Programme, Netzwerk). Einstellungen mit Seitenmenü (Betrieb, Zugang, Verbindungen).
+- **Startseite**: ein Satz zum Stand („Alles im grünen Bereich“ / „3 Dinge brauchen dich“), darunter die To-dos mit je
+  einer Aktion, Host-Karten mit Auslastung, nächste Wartungsfenster und letzte Jobs
+- **Einrichtungsassistent**: Site → erster Host → Patch-Plan aus Vorlage → Benachrichtigung; startet beim ersten Login
+  von selbst, später unter *Einstellungen → Allgemein*
+- **Einfacher und erweiterter Modus** pro Benutzer: Einfach zeigt Übersicht, Hosts, Auslastung, Sicherheit und Auto-Patch
+- **Prüfen** (Einstellungen): Server, externe Dienste, Benachrichtigungen, Integrationen, pro Host Agent, Backup,
   Wiederherstellbarkeit (PBS-Verify) und Test-Snapshot, API-Token
 - Anleitungen direkt im Dashboard (Proxmox, Hetzner, OPNsense, alle Benachrichtigungskanäle) und **API-Seite**
   mit allen Endpunkten (OpenAPI unter `/api/openapi/v1.json`)
@@ -119,9 +124,10 @@ gegen echte Systeme getestet, sondern gegen nachgebaute APIs und Unit-Tests):
   Sitzungen enden sofort bei Rollen-/Passwortwechsel, Notfallzugang per CLI
 
 **Automatisch patchen**
-- Auto-Patch pro Host im Wartungsfenster
-- Abläufe: Wellen nacheinander, Prüfung nach jedem Host, Freigabe, Zeitplan, Fehlerstrategie;
-  **Snapshot vor dem Patch** (Proxmox-API bzw. Hetzner Cloud) und **Vorbedingung „Backup jünger als X Std.“**
+- **Patch-Pläne** mit Vorlagen (Homelab wöchentlich, Security täglich, Test-Host zuerst, Proxmox sicher): Zeitplan und
+  Gruppen in Reihenfolge, Hosts per Auswahl, Tag, Site oder „alle übrigen“; Pause zwischen Gruppen, Freigabe,
+  Prüfung nach jedem Host, **Snapshot vor dem Patch** (Proxmox-API bzw. Hetzner Cloud) und **Vorbedingung „Backup jünger
+  als X Std.“**
 - **Patchpausen** (z. B. Jahreswechsel) und **zurückgehaltene Updates** (Paket/KB, global, pro Site oder Host)
 
 **Sicherheit & Überblick**
@@ -258,20 +264,34 @@ egal ob er vom Patch-Job, vom Dashboard oder von Hand kam:
   weil sie nach einem Neustart nie von selbst starten.
 - Absichtlich entfernt? Auf der Host-Seite *Ausblenden*. Abschalten: Schalter *Dienste nach Neustart prüfen*.
 
-## Auto-Patch
+## Auto-Patch (Patch-Pläne)
 
-Auf der Host-Seite unter *Auto-Patch → Einstellen*: Wochentage, Startzeit, Dauer, Umfang (nur Security / alle) und ob ein
-Neustart im Fenster erlaubt ist. Zeiten gelten in der Zeitzone des Servers (`TZ` im Container bzw. `AIOPatcher__TimeZone`).
+Unter *Auto-Patch → Patch-Pläne*. Ein Plan legt fest, **wann** gepatcht wird (Wochentage, Startzeit, Wartungsfenster)
+und **in welcher Reihenfolge**: Gruppen laufen nacheinander, die nächste startet erst, wenn die vorige fertig ist und sich
+alle Hosts danach zurückgemeldet haben. Jeder Host ist in höchstens einem Plan; Hosts ohne Plan werden nicht automatisch
+gepatcht, die Startseite erinnert daran.
 
-- Pro Fenster entscheidet der Planer genau einmal: Job anlegen oder überspringen (nichts offen laut Scan der letzten
-  24 Stunden, oder ein anderer Job läuft). Das Ergebnis steht auf der Host-Seite unter „Letztes Fenster“.
-- Ist der Host im Fenster offline, wird der Job am Fensterende verworfen. Außerhalb des Fensters startet nie ein Auto-Job.
-- Ein ausstehender Neustart wird im Fenster nachgeholt, wenn Neustarts erlaubt sind.
-- Fenster dürfen über Mitternacht gehen und gehören zum Tag, an dem sie beginnen. Sommerzeit wird berücksichtigt.
+- **Vorlagen** füllen den Plan vor: *Homelab wöchentlich* (sonntags 3–7 Uhr, alles, Neustart erlaubt), *Security
+  täglich* (nachts 2–4 Uhr, nur Sicherheitsupdates, kein Neustart), *Test-Host zuerst* (Hosts mit Tag `test`, 1 Stunde
+  Pause, dann der Rest; hält bei Fehlern an), *Proxmox sicher* (VMs/LXC mit Snapshot und Backup-Prüfung, der
+  Proxmox-Host zuletzt und nur nach Freigabe).
+- **Wer gehört dazu**: ausgewählte Hosts, Hosts mit einem Tag und/oder einer Site, oder „alle übrigen Hosts“ (nur eine
+  Gruppe insgesamt; neue Hosts kommen automatisch dazu). Ausgewählte Hosts haben Vorrang vor Regeln; ein Host, der in einem
+  Plan ausgewählt wird, verlässt andere Pläne. Auf der Host-Seite und in der Hostliste: *Plan ändern* / *Patch-Pläne*.
+- **Wie**: Umfang (nur Security / alle), Neustart erlaubt, Freigabe vor der Gruppe, Snapshot, Backup-Prüfung, Pause danach,
+  bei Fehlern sofort anhalten oder die Gruppe zu Ende führen.
+- Pro Fenster startet höchstens ein Lauf. Hosts, die laut frischem Scan (24 Stunden) nichts zu installieren haben,
+  werden ohne Job übersprungen; ein ausstehender Neustart wird nachgeholt, wenn er erlaubt ist.
+- Ist ein Host im Fenster offline, wird sein Job am Fensterende verworfen. Außerhalb des Fensters startet keine neue
+  Gruppe; der Lauf hält an und lässt sich fortsetzen. *Jetzt ausführen* startet einen Plan sofort.
+- Fenster dürfen über Mitternacht gehen und gehören zum Tag, an dem sie beginnen. Sommerzeit wird berücksichtigt. Zeiten
+  gelten in der Zeitzone des Servers (`TZ` im Container).
 - Die lokale `policy.json` hat weiterhin Vorrang.
+- **Umstieg**: Das frühere Auto-Patch pro Host wird beim ersten Start zu Plänen (je gleichem Zeitplan, Umfang und Neustart),
+  frühere Abläufe sind jetzt Patch-Pläne. Alte Adressen (`/runbooks`, `/jobs`, `/rules` …) leiten weiter.
 
 **Eigene Update-Automatik des Hosts:** Installiert der Host zusätzlich selbst Updates (unattended-upgrades bzw. Windows
-Update), zeigt die Host-Seite das an. Mit *Abschalten* (Auto-Patch-Karte) patcht danach nur noch AIOPatcher, *Einschalten*
+Update), zeigt die Host-Seite das an. Mit *Abschalten* (Host-Seite → Überblick bzw. Einstellungen, Karte Patch-Plan) patcht danach nur noch AIOPatcher, *Einschalten*
 nimmt es zurück:
 
 - Linux: Der Agent schreibt `/etc/apt/apt.conf.d/99aiopatcher-auto-upgrades` mit `APT::Periodic::Unattended-Upgrade "0"`
@@ -311,16 +331,16 @@ anderen Anbieter sprechen OpenID Connect.
 Das Dashboard kann hinter einem Reverse Proxy laufen (Port 443, Let's-Encrypt-Zertifikat), die Agents bleiben direkt auf 8443.
 Anleitung: [docs/REVERSE-PROXY.md](docs/REVERSE-PROXY.md), fertiges Traefik-Beispiel:
 [deploy/docker-compose.traefik.yml](deploy/docker-compose.traefik.yml). Wichtig: den Proxy in `AIOPatcher__TrustedProxies`
-eintragen. Die Prüfen-Seite zeigt, ob das stimmt.
+eintragen. Die Prüfen-Seite (Einstellungen) zeigt, ob das stimmt.
 
 ## Funktionen & Sicherheit
 
 Unter *Einstellungen → Funktionen & Sicherheit* legt ein Admin fest, was AIOPatcher überhaupt darf. Der Server setzt
-jeden Schalter selbst durch, auch für API-Tokens, Auto-Patch und Abläufe; ausgeblendete Knöpfe sind nur Komfort.
+jeden Schalter selbst durch, auch für API-Tokens und Patch-Pläne; ausgeblendete Knöpfe sind nur Komfort.
 
 | Schalter | Ab Werk | Wirkung, wenn aus |
 |---|---|---|
-| Automatisch patchen | an | **Notaus**: keine Auto-Patch-Jobs, Abläufe bleiben stehen, wartende Auto-Jobs bleiben liegen. Manuelle Jobs gehen weiter. |
+| Automatisch patchen | an | **Notaus**: Patch-Pläne starten nicht und laufende bleiben stehen, wartende Auto-Jobs bleiben liegen. Manuelle Jobs gehen weiter. |
 | Updates installieren | an | Patch-Jobs werden abgelehnt, AIOPatcher zeigt nur an. |
 | Neustarts | an | Neustart-Jobs werden abgelehnt, Patches laufen ohne Neustart. |
 | Programm-Updates per winget | **aus** | Programm-Updates werden abgelehnt. |
@@ -330,7 +350,7 @@ jeden Schalter selbst durch, auch für API-Tokens, Auto-Patch und Abläufe; ausg
 | Auslastung erfassen | an | Keine Messwerte der Hosts, keine Proxmox-Übersicht. |
 | Dienste nach Neustart prüfen | an | Kein Vergleich vor/nach Neustarts, keine Liste laufender Dienste. |
 | Kaputte Paketquellen deaktivieren | an | Dauerhaft kaputte Fremdquellen bleiben, wo sie sind; gepatcht wird trotzdem, mit Warnung. |
-| Test-Snapshots | an | Kein Test-Snapshot auf der Prüfen-Seite. |
+| Test-Snapshots | an | Kein Test-Snapshot auf der Prüfen-Seite (Einstellungen). |
 | OPNsense-Firmware-Update per Klick | **aus** | Firmware-Updates nur in der OPNsense selbst. |
 | API-Tokens | an | Jeder Token wird abgewiesen (bleibt gespeichert). |
 | CVE-Abgleich, Container-Prüfung, Versionsprüfung | an | Keine Verbindungen zu den jeweiligen Diensten. |
@@ -382,7 +402,7 @@ sudo aiopatcher-agent policy set disabledModules docker,users
 `system` und `agent` lassen sich nicht abschalten.
 
 **Übergang:** Agents vor dem Pull-Protokoll checken weiter wie bisher ein und aktualisieren sich per Self-Update. Die
-Prüfen-Seite zeigt, welche noch alt sind. Danach unter *Funktionen & Sicherheit* „Alter Agent-Check-in“ abschalten.
+Prüfen-Seite (Einstellungen) zeigt, welche noch alt sind. Danach unter *Funktionen & Sicherheit* „Alter Agent-Check-in“ abschalten.
 
 ## Agent-Updates
 

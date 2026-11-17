@@ -180,7 +180,7 @@ export function CveLookupPage() {
 const formatSize = (bytes: number) => (bytes >= 1e9 ? `${(bytes / 1e9).toFixed(1)} GB` : `${Math.round(bytes / 1e6)} MB`);
 
 /** Stand der lokalen CVE-Datenbank; aktualisiert sich selbst, solange ein Abgleich läuft. */
-function MirrorStatusLine() {
+export function MirrorStatusLine() {
   const { t, i18n } = useTranslation();
   const can = useCan();
   const [status, setStatus] = useState<MirrorStatus | null>(null);

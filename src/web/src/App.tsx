@@ -1,6 +1,6 @@
 import { EmergencyBanner, FeaturesProvider } from "./features";
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
-import { Navigate, NavLink as RouterLink, Route, Routes, useLocation, useNavigate } from "react-router";
+import { Navigate, NavLink as RouterLink, Route, Routes, useLocation, useNavigate, useParams } from "react-router";
 import {
   ActionIcon,
   AppShell,
@@ -25,30 +25,25 @@ import {
 import { useDisclosure, useHotkeys } from "@mantine/hooks";
 import { Spotlight, spotlight, type SpotlightActionData } from "@mantine/spotlight";
 import {
-  IconBuilding,
+  IconCalendarTime,
   IconCircleCheck,
   IconCircleDashed,
   IconLanguage,
   IconLayoutDashboard,
-  IconListCheck,
   IconLogout,
   IconMoon,
   IconPlus,
-  IconRoute,
   IconShieldHalfFilled,
   IconApps,
-  IconStethoscope,
-  IconNetwork,
   IconReportAnalytics,
-  IconShieldLock,
   IconSettings,
   IconGauge,
   IconSparkles,
+  IconWand,
   IconSearch,
   IconBug,
   IconServer,
   IconShieldBolt,
-  IconShieldCheck,
   IconSun,
   IconUserCircle,
   IconUsers,
@@ -57,6 +52,7 @@ import {
 import { useTranslation } from "react-i18next";
 import { api, ApiError, type HostSummary, type Me, type Overview, type ServerInfo, type SetupStatus, type UiMode, type UserRole } from "./api";
 import { AddHostModal } from "./components/AddHostModal";
+import { openSetupWizard, SetupWizard } from "./components/SetupWizard";
 import { errorText } from "./components/ui";
 import { currentLanguage, setLanguage } from "./i18n";
 import { AccountPage } from "./pages/AccountPage";
@@ -64,26 +60,17 @@ import { HostDetailPage } from "./pages/HostDetailPage";
 import { HostsPage } from "./pages/HostsPage";
 import { InvitePage } from "./pages/InvitePage";
 import { JobPage } from "./pages/JobPage";
-import { JobsPage } from "./pages/JobsPage";
 import { LoginPage } from "./pages/LoginPage";
 import { OverviewPage } from "./pages/OverviewPage";
-import { RunbookEditorPage } from "./pages/RunbookEditorPage";
-import { RunbooksPage } from "./pages/RunbooksPage";
-import { IpamPage } from "./pages/IpamPage";
 import { ReportsPage } from "./pages/ReportsPage";
-import { ChecksPage } from "./pages/ChecksPage";
 import { UtilizationPage } from "./pages/UtilizationPage";
+import { AutoPatchHub, InventoryHub, SecurityHub } from "./pages/Hubs";
+import { PlanEditorPage } from "./pages/PlanEditorPage";
 import { ApiPage } from "./pages/ApiPage";
-import { SoftwarePage } from "./pages/SoftwarePage";
-import { SecurityPage } from "./pages/SecurityPage";
 import { CveLookupPage, normalizeCveId } from "./pages/CveLookupPage";
-import { CompliancePage } from "./pages/CompliancePage";
-import { RulesPage } from "./pages/RulesPage";
 import { RunPage } from "./pages/RunPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { SetupPage } from "./pages/SetupPage";
-import { SitesPage } from "./pages/SitesPage";
-import { UsersPage } from "./pages/UsersPage";
 
 type AuthState =
   | { kind: "loading" }
@@ -200,27 +187,17 @@ function Shell({ me, onMeChanged, onLoggedOut }: { me: Me; onMeChanged: (me: Me)
 
   const simple = me.uiMode === "Simple";
   // simple: auch im einfachen Modus sichtbar. Alle Seiten bleiben per URL erreichbar.
-  const allNavItems = [
+  // Bereiche: verwandte Seiten stecken als Reiter darin (Sicherheit, Auto-Patch, Inventar, Einstellungen).
+  // match: weitere Pfade, bei denen der Eintrag aktiv ist (Detailseiten).
+  const allNavItems: { to: string; label: string; icon: typeof IconServer; end?: boolean; simple?: boolean; match?: string[] }[] = [
     { to: "/", label: t("nav.overview"), icon: IconLayoutDashboard, end: true, simple: true },
     { to: "/hosts", label: t("nav.hosts"), icon: IconServer, simple: true },
-    { to: "/security", label: t("nav.security"), icon: IconShieldHalfFilled, simple: true },
-    { to: "/cves", label: t("nav.cveLookup"), icon: IconBug, simple: true },
-    { to: "/compliance", label: t("nav.compliance"), icon: IconShieldCheck },
     { to: "/utilization", label: t("nav.utilization"), icon: IconGauge, simple: true },
-    { to: "/checks", label: t("nav.checks"), icon: IconStethoscope, simple: true },
-    { to: "/jobs", label: t("nav.jobs"), icon: IconListCheck },
-    { to: "/software", label: t("nav.software"), icon: IconApps },
-    { to: "/runbooks", label: t("nav.runbooks"), icon: IconRoute },
-    { to: "/rules", label: t("nav.rules"), icon: IconShieldLock },
+    { to: "/security", label: t("nav.security"), icon: IconShieldHalfFilled, simple: true, match: ["/cves"] },
+    { to: "/auto-patch", label: t("nav.autoPatch"), icon: IconCalendarTime, simple: true, match: ["/runs", "/jobs"] },
+    { to: "/inventory", label: t("nav.inventory"), icon: IconApps },
     { to: "/reports", label: t("nav.reports"), icon: IconReportAnalytics },
-    { to: "/ipam", label: t("nav.ipam"), icon: IconNetwork },
-    { to: "/sites", label: t("nav.sites"), icon: IconBuilding },
-    ...(isAdmin
-      ? [
-          { to: "/users", label: t("nav.users"), icon: IconUsers },
-          { to: "/settings", label: t("nav.settings"), icon: IconSettings, simple: true },
-        ]
-      : []),
+    ...(isAdmin ? [{ to: "/settings", label: t("nav.settings"), icon: IconSettings, simple: true }] : []),
   ];
   const navItems = allNavItems.filter((n) => !simple || n.simple);
 
@@ -378,7 +355,7 @@ function Shell({ me, onMeChanged, onLoggedOut }: { me: Me; onMeChanged: (me: Me)
                   end={n.end}
                   label={n.label}
                   leftSection={<n.icon size={18} />}
-                  active={n.end ? location.pathname === n.to : location.pathname.startsWith(n.to)}
+                  active={n.end ? location.pathname === n.to : [n.to, ...(n.match ?? [])].some((p) => location.pathname.startsWith(p))}
                   variant="light"
                   style={{ borderRadius: 10 }}
                   rightSection={n.to === "/jobs" && overview && overview.runningJobs > 0 ? <span className="dot dot-live" /> : undefined}
@@ -396,32 +373,37 @@ function Shell({ me, onMeChanged, onLoggedOut }: { me: Me; onMeChanged: (me: Me)
               <Route path="/" element={<OverviewPage />} />
               <Route path="/hosts" element={<HostsPage />} />
               <Route path="/hosts/:id" element={<HostDetailPage />} />
-              <Route path="/jobs" element={<JobsPage />} />
               <Route path="/jobs/:id" element={<JobPage />} />
-              <Route path="/runbooks" element={<RunbooksPage />} />
-              <Route path="/runbooks/:id" element={<RunbookEditorPage />} />
               <Route path="/runs/:id" element={<RunPage />} />
-              <Route path="/sites" element={<SitesPage />} />
-              <Route path="/rules" element={<RulesPage />} />
-              <Route path="/reports" element={<ReportsPage />} />
-              <Route path="/checks" element={<ChecksPage />} />
               <Route path="/utilization" element={<UtilizationPage />} />
-              <Route path="/developer" element={<ApiPage />} />
-              <Route path="/software" element={<SoftwarePage />} />
-              <Route path="/security" element={<SecurityPage />} />
-              <Route path="/cves" element={<CveLookupPage />} />
+              <Route path="/security" element={<SecurityHub />} />
               <Route path="/cves/:id" element={<CveLookupPage />} />
-              <Route path="/compliance" element={<CompliancePage />} />
-              <Route path="/ipam" element={<IpamPage />} />
+              <Route path="/auto-patch" element={<AutoPatchHub />} />
+              <Route path="/auto-patch/plans/:id" element={<PlanEditorPage />} />
+              <Route path="/inventory" element={<InventoryHub />} />
+              <Route path="/reports" element={<ReportsPage />} />
+              <Route path="/developer" element={<ApiPage />} />
               <Route path="/account" element={<AccountPage onMeChanged={onMeChanged} />} />
-              {isAdmin && <Route path="/users" element={<UsersPage />} />}
               {isAdmin && <Route path="/settings/:tab?" element={<SettingsPage />} />}
+              {/* frühere Adressen */}
+              <Route path="/cves" element={<Navigate to="/security?tab=cves" replace />} />
+              <Route path="/compliance" element={<Navigate to="/security?tab=compliance" replace />} />
+              <Route path="/jobs" element={<Navigate to="/auto-patch?tab=jobs" replace />} />
+              <Route path="/rules" element={<Navigate to="/auto-patch?tab=rules" replace />} />
+              <Route path="/runbooks" element={<Navigate to="/auto-patch" replace />} />
+              <Route path="/runbooks/:id" element={<RunbookRedirect />} />
+              <Route path="/software" element={<Navigate to="/inventory?tab=software" replace />} />
+              <Route path="/ipam" element={<Navigate to="/inventory?tab=network" replace />} />
+              <Route path="/sites" element={<Navigate to="/settings/sites" replace />} />
+              <Route path="/users" element={<Navigate to="/settings/users" replace />} />
+              <Route path="/checks" element={<Navigate to="/settings/checks" replace />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </AppShell.Main>
         </AppShell>
 
         {canOperate && <AddHostModal opened={addHostOpen} onClose={() => { addHost.close(); refreshOverview(); }} />}
+        {isAdmin && <SetupWizard autoOpen={overview !== null && overview.hosts === 0} />}
         <Spotlight
           actions={actions}
           query={spotlightQuery}
@@ -533,7 +515,7 @@ function GettingStarted({ overview, onAddHost }: { overview: Overview | null; on
     {
       label: t("nav.stepAutoPatch"),
       done: overview.autoPatchHosts > 0,
-      action: <Button size="compact-xs" variant="light" onClick={() => navigate("/hosts")}>{t("nav.hosts")}</Button>,
+      action: <Button size="compact-xs" variant="light" onClick={() => navigate("/auto-patch")}>{t("nav.go")}</Button>,
     },
   ];
   const done = steps.filter((s) => s.done).length;
@@ -556,6 +538,13 @@ function GettingStarted({ overview, onAddHost }: { overview: Overview | null; on
           </Group>
         ))}
       </Stack>
+      <Button size="compact-xs" variant="subtle" fullWidth mt="xs" leftSection={<IconWand size={14} />} onClick={openSetupWizard}>{t("wizard.gettingStarted")}</Button>
     </Box>
   );
+}
+
+/** Frühere Ablauf-Adresse /runbooks/:id → Plan-Editor. */
+function RunbookRedirect() {
+  const { id } = useParams();
+  return <Navigate to={`/auto-patch/plans/${id}`} replace />;
 }

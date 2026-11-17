@@ -13,8 +13,12 @@ public static class RunbookEndpoints
 
     public sealed record WaveHostDto(Guid Id, string Name, string SiteName);
 
+    /// <summary>Hosts = ausgewählte; Members = effektiv (ausgewählt, per Regel, "alle übrigen"), so wie ein Lauf sie jetzt nähme.</summary>
     public sealed record RunbookWaveDto(Guid Id, int Order, string Name, PatchScope Scope, bool AllowReboot, bool RequireApproval, IReadOnlyList<WaveHostDto> Hosts,
-        bool SnapshotBeforePatch, int? RequireBackupWithinHours);
+        bool SnapshotBeforePatch, int? RequireBackupWithinHours, int? PauseAfterMinutes = null, string? MemberTags = null, Guid? MemberSiteId = null,
+        bool IncludeOthers = false, IReadOnlyList<WaveMemberDto>? Members = null);
+
+    public sealed record WaveMemberDto(Guid Id, string Name, string SiteName, PlanVia Via);
 
     public sealed record ScheduleDto(bool Enabled, int Days, TimeOnly Start, int DurationMinutes, DateTime? NextWindowStart, DateTime? NextWindowEnd, DateTime? LastWindowStart, string? LastWindowNote);
 
@@ -33,7 +37,8 @@ public static class RunbookEndpoints
         int Skipped,
         int CurrentWave,
         string? CurrentWaveName,
-        DateTime? NotAfter);
+        DateTime? NotAfter,
+        DateTime? ResumeAt = null);
 
     public sealed record RunbookDto(
         Guid Id,
@@ -47,12 +52,13 @@ public static class RunbookEndpoints
     public sealed record RunItemDto(long Id, Guid? HostId, string HostName, RunItemStatus Status, Guid? JobId, string? Message, DateTime? StartedAt, DateTime? FinishedAt);
 
     public sealed record RunWaveDto(int Order, string Name, PatchScope Scope, bool AllowReboot, bool RequireApproval, bool Approved, IReadOnlyList<RunItemDto> Items,
-        bool SnapshotBeforePatch, int? RequireBackupWithinHours);
+        bool SnapshotBeforePatch, int? RequireBackupWithinHours, int? PauseAfterMinutes = null);
 
     public sealed record RunDetailDto(RunSummaryDto Run, IReadOnlyList<RunWaveDto> Waves);
 
     public sealed record WaveRequest(string Name, PatchScope Scope, bool AllowReboot, bool RequireApproval, List<Guid> HostIds,
-        bool SnapshotBeforePatch = false, int? RequireBackupWithinHours = null);
+        bool SnapshotBeforePatch = false, int? RequireBackupWithinHours = null, int? PauseAfterMinutes = null, string? MemberTags = null,
+        Guid? MemberSiteId = null, bool IncludeOthers = false);
 
     public sealed record RunbookRequest(
         string Name,
@@ -96,7 +102,8 @@ public static class RunbookEndpoints
     {
         var runbooks = await WithDetails(db).OrderBy(r => r.Name).ToListAsync(ct);
         var lastRuns = await LastRunsAsync(db, ct);
-        return Results.Ok(runbooks.Select(r => ToDto(r, lastRuns.GetValueOrDefault(r.Id), clock)));
+        var members = await MembersAsync(db, ct);
+        return Results.Ok(runbooks.Select(r => ToDto(r, lastRuns.GetValueOrDefault(r.Id), clock, members)));
     }
 
     private static async Task<IResult> GetRunbook(Guid id, AppDbContext db, ServerClock clock, CancellationToken ct)
@@ -108,7 +115,7 @@ public static class RunbookEndpoints
         }
 
         var lastRuns = await LastRunsAsync(db, ct);
-        return Results.Ok(ToDto(runbook, lastRuns.GetValueOrDefault(runbook.Id), clock));
+        return Results.Ok(ToDto(runbook, lastRuns.GetValueOrDefault(runbook.Id), clock, await MembersAsync(db, ct)));
     }
 
     private static async Task<IResult> CreateRunbook(RunbookRequest request, AppDbContext db, ServerClock clock, AuditLog audit, CancellationToken ct)
@@ -122,7 +129,7 @@ public static class RunbookEndpoints
         db.Runbooks.Add(runbook);
         audit.Add("runbook.created", runbook.Name);
         await db.SaveChangesAsync(ct);
-        return Results.Created($"/api/runbooks/{runbook.Id}", ToDto(await WithDetails(db).SingleAsync(r => r.Id == runbook.Id, ct), null, clock));
+        return Results.Created($"/api/runbooks/{runbook.Id}", ToDto(await WithDetails(db).SingleAsync(r => r.Id == runbook.Id, ct), null, clock, await MembersAsync(db, ct)));
     }
 
     private static async Task<IResult> UpdateRunbook(Guid id, RunbookRequest request, AppDbContext db, ServerClock clock, AuditLog audit, CancellationToken ct)
@@ -141,7 +148,7 @@ public static class RunbookEndpoints
         audit.Add("runbook.updated", runbook.Name);
         await db.SaveChangesAsync(ct);
         var lastRuns = await LastRunsAsync(db, ct);
-        return Results.Ok(ToDto(await WithDetails(db).SingleAsync(r => r.Id == id, ct), lastRuns.GetValueOrDefault(id), clock));
+        return Results.Ok(ToDto(await WithDetails(db).SingleAsync(r => r.Id == id, ct), lastRuns.GetValueOrDefault(id), clock, await MembersAsync(db, ct)));
     }
 
     private static async Task<IResult> DeleteRunbook(Guid id, AppDbContext db, AuditLog audit, CancellationToken ct)
@@ -154,7 +161,7 @@ public static class RunbookEndpoints
 
         if (await db.RunbookRuns.AnyAsync(r => r.RunbookId == id && (r.Status == RunStatus.Running || r.Status == RunStatus.WaitingApproval || r.Status == RunStatus.Paused), ct))
         {
-            return Results.Problem(L.T("Der Ablauf hat einen aktiven Lauf. Erst abbrechen.", "The runbook has an active run. Cancel it first."),statusCode: StatusCodes.Status409Conflict);
+            return Results.Problem(L.T("Der Patch-Plan hat einen aktiven Lauf. Erst abbrechen.", "The patch plan has an active run. Cancel it first."),statusCode: StatusCodes.Status409Conflict);
         }
 
         db.Runbooks.Remove(runbook);
@@ -174,7 +181,7 @@ public static class RunbookEndpoints
         }
         else if (await db.Runbooks.AnyAsync(r => r.Name == name && r.Id != runbook.Id, ct))
         {
-            errors["name"] = [L.T($"Ablauf „{name}“ existiert bereits.", $"Runbook \"{name}\" already exists.")];
+            errors["name"] = [L.T($"Patch-Plan „{name}“ existiert bereits.", $"Patch plan \"{name}\" already exists.")];
         }
 
         var schedule = new AutoPatchRequest(request.ScheduleEnabled, PatchScope.Security, false, request.ScheduleDays, request.ScheduleStart, request.ScheduleDurationMinutes);
@@ -186,29 +193,50 @@ public static class RunbookEndpoints
         var waves = request.Waves ?? [];
         if (waves.Count is < 1 or > MaxWaves)
         {
-            errors["waves"] = [L.T($"1 bis {MaxWaves} Wellen anlegen.", $"Create 1 to {MaxWaves} waves.")];
+            errors["waves"] = [L.T($"1 bis {MaxWaves} Gruppen anlegen.", $"Create 1 to {MaxWaves} groups.")];
         }
 
         var allHostIds = waves.SelectMany(w => w.HostIds ?? []).ToList();
         if (allHostIds.Count != allHostIds.Distinct().Count())
         {
-            errors["waves"] = [L.T("Jeder Host darf nur in einer Welle vorkommen.", "Each host may only appear in one wave.")];
+            errors["waves"] = [L.T("Jeder Host darf nur in einer Gruppe vorkommen.", "Each host may only appear in one group.")];
         }
 
         var known = (await db.Hosts.Select(h => h.Id).ToListAsync(ct)).ToHashSet();
         if (allHostIds.Any(id => !known.Contains(id)))
         {
-            errors["waves"] = [L.T("Unbekannter Host in einer Welle.", "Unknown host in a wave.")];
+            errors["waves"] = [L.T("Unbekannter Host in einer Gruppe.", "Unknown host in a group.")];
         }
 
         if (waves.Any(w => string.IsNullOrWhiteSpace(w.Name) || w.Name.Trim().Length > 100))
         {
-            errors["waves"] = [L.T("Jede Welle braucht einen Namen (bis 100 Zeichen).", "Each wave needs a name (up to 100 characters).")];
+            errors["waves"] = [L.T("Jede Gruppe braucht einen Namen (bis 100 Zeichen).", "Each group needs a name (up to 100 characters).")];
         }
 
         if (waves.Any(w => w.RequireBackupWithinHours is < 1 or > 24 * 31))
         {
             errors["waves"] = [L.T("Backup-Alter: 1 bis 744 Stunden.", "Backup age: 1 to 744 hours.")];
+        }
+
+        if (waves.Any(w => w.PauseAfterMinutes is < 1 or > 24 * 60))
+        {
+            errors["waves"] = [L.T("Pause: 1 bis 1440 Minuten.", "Pause: 1 to 1440 minutes.")];
+        }
+
+        if (waves.Count(w => w.IncludeOthers) > 1)
+        {
+            errors["waves"] = [L.T("„Alle übrigen Hosts“ kann nur eine Gruppe haben.", "Only one group can have \"all other hosts\".")];
+        }
+        else if (waves.Any(w => w.IncludeOthers)
+                 && await db.RunbookWaves.Where(w => w.IncludeOthers && w.RunbookId != runbook.Id).Select(w => w.Runbook!.Name).FirstOrDefaultAsync(ct) is { } other)
+        {
+            errors["waves"] = [L.T($"„Alle übrigen Hosts“ hat schon der Plan „{other}“.", $"Plan \"{other}\" already has \"all other hosts\".")];
+        }
+
+        var siteIds = waves.Where(w => w.MemberSiteId is not null).Select(w => w.MemberSiteId!.Value).Distinct().ToList();
+        if (siteIds.Count > 0 && await db.Sites.CountAsync(s => siteIds.Contains(s.Id), ct) != siteIds.Count)
+        {
+            errors["waves"] = [L.T("Unbekannte Site in einer Gruppe.", "Unknown site in a group.")];
         }
 
         if (errors.Count > 0)
@@ -225,6 +253,10 @@ public static class RunbookEndpoints
         runbook.ScheduleStart = start;
         runbook.ScheduleDurationMinutes = request.ScheduleDurationMinutes;
 
+        // Ein Host ist nur in einem Plan ausgewählt: hier ausgewählte Hosts verlassen andere Pläne
+        var moved = await db.RunbookWaveHosts.Where(m => allHostIds.Contains(m.HostId) && m.Wave!.RunbookId != runbook.Id).ToListAsync(ct);
+        db.RunbookWaveHosts.RemoveRange(moved);
+
         db.RunbookWaves.RemoveRange(runbook.Waves);
         runbook.Waves = waves.Select((w, index) => new RunbookWave
         {
@@ -235,13 +267,25 @@ public static class RunbookEndpoints
             RequireApproval = w.RequireApproval,
             SnapshotBeforePatch = w.SnapshotBeforePatch,
             RequireBackupWithinHours = w.RequireBackupWithinHours,
+            PauseAfterMinutes = w.PauseAfterMinutes,
+            MemberTags = PatchRules.NormalizeTags((w.MemberTags ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries)),
+            MemberSiteId = w.MemberSiteId,
+            IncludeOthers = w.IncludeOthers,
             Hosts = (w.HostIds ?? []).Select(id => new RunbookWaveHost { HostId = id }).ToList(),
         }).ToList();
         return null;
     }
 
-    private static RunbookDto ToDto(Runbook r, RunSummaryDto? lastRun, ServerClock clock)
+    private sealed record Members(Dictionary<Guid, PlanMembership> ByHost, Dictionary<Guid, (string Name, string Site)> Hosts);
+
+    private static async Task<Members> MembersAsync(AppDbContext db, CancellationToken ct) =>
+        new(await PatchPlans.ResolveAsync(db, ct),
+            (await db.Hosts.AsNoTracking().Where(h => !h.IsRevoked).Select(h => new { h.Id, h.Name, Site = h.Site!.Name }).ToListAsync(ct))
+                .ToDictionary(h => h.Id, h => (h.Name, h.Site)));
+
+    private static RunbookDto ToDto(Runbook r, RunSummaryDto? lastRun, ServerClock clock, Members members)
     {
+        var byGroup = members.ByHost.Where(m => m.Value.PlanId == r.Id).ToLookup(m => m.Value.GroupId);
         var next = r.ScheduleEnabled ? MaintenanceWindow.Next(r.ScheduleDays, r.ScheduleStart, r.ScheduleDurationMinutes, DateTime.UtcNow, clock.Zone) : null;
         return new RunbookDto(
             r.Id,
@@ -252,7 +296,10 @@ public static class RunbookEndpoints
             r.Waves.OrderBy(w => w.Order).Select(w => new RunbookWaveDto(
                 w.Id, w.Order, w.Name, w.Scope, w.AllowReboot, w.RequireApproval,
                 w.Hosts.Select(h => new WaveHostDto(h.HostId, h.Host?.Name ?? "?", h.Host?.Site?.Name ?? "")).OrderBy(h => h.Name, StringComparer.OrdinalIgnoreCase).ToList(),
-                w.SnapshotBeforePatch, w.RequireBackupWithinHours)).ToList(),
+                w.SnapshotBeforePatch, w.RequireBackupWithinHours, w.PauseAfterMinutes, w.MemberTags, w.MemberSiteId, w.IncludeOthers,
+                byGroup[w.Id].Where(m => members.Hosts.ContainsKey(m.Key))
+                    .Select(m => new WaveMemberDto(m.Key, members.Hosts[m.Key].Name, members.Hosts[m.Key].Site, m.Value.Via))
+                    .OrderBy(m => m.Name, StringComparer.OrdinalIgnoreCase).ToList())).ToList(),
             lastRun);
     }
 
@@ -274,7 +321,8 @@ public static class RunbookEndpoints
             r.Items.Count(i => i.Status == RunItemStatus.Skipped),
             r.CurrentWave,
             r.Waves.Where(w => w.Order == r.CurrentWave).Select(w => w.Name).FirstOrDefault(),
-            r.NotAfter));
+            r.NotAfter,
+            r.ResumeAt));
 
     private static async Task<Dictionary<Guid, RunSummaryDto>> LastRunsAsync(AppDbContext db, CancellationToken ct)
     {
@@ -326,7 +374,7 @@ public static class RunbookEndpoints
             w.Order, w.Name, w.Scope, w.AllowReboot, w.RequireApproval, w.Approved,
             run.Items.Where(i => i.WaveOrder == w.Order).OrderBy(i => i.HostName, StringComparer.OrdinalIgnoreCase)
                 .Select(i => new RunItemDto(i.Id, i.HostId, i.HostName, i.Status, i.JobId, i.Message, i.StartedAt, i.FinishedAt)).ToList(),
-            w.SnapshotBeforePatch, w.RequireBackupWithinHours)).ToList();
+            w.SnapshotBeforePatch, w.RequireBackupWithinHours, w.PauseAfterMinutes)).ToList();
 
         return Results.Ok(new RunDetailDto(summary, waves));
     }

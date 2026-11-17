@@ -124,6 +124,12 @@ export interface HostSummary {
   containerUpdates: number;
   /** mit Proxmox-VM bzw. Hetzner-Server verknüpft */
   mapped: boolean;
+  /** Patch-Plan des Hosts (null = keiner, kein automatisches Patchen); scheduledRunbook = Name */
+  planId: string | null;
+  planGroup: string | null;
+  planVia: PlanVia | null;
+  /** Letzte Auslastung (null = keine Messung) */
+  usage: { at: string; cpu: number; memory: number; disk: number | null } | null;
 }
 
 export const splitTags = (tags: string | null | undefined) => (tags ? tags.split(",") : []);
@@ -247,8 +253,8 @@ export interface Overview {
   kevHosts: number;
   kevUpdates: number;
   containerUpdates: number;
-  /** mit Proxmox-VM bzw. Hetzner-Server verknüpft */
-  mapped: boolean;
+  /** Hosts, die in keinem Patch-Plan sind (werden nicht automatisch gepatcht) */
+  hostsWithoutPlan: number;
 }
 
 export interface EnrollmentTokenCreated {
@@ -448,6 +454,25 @@ export interface RunbookWave {
   hosts: WaveHost[];
   snapshotBeforePatch: boolean;
   requireBackupWithinHours: number | null;
+  /** Pause nach dieser Gruppe in Minuten */
+  pauseAfterMinutes: number | null;
+  /** Regel: Hosts mit einem dieser Tags (kommagetrennt) */
+  memberTags: string | null;
+  /** Regel: Hosts dieser Site */
+  memberSiteId: string | null;
+  /** Regel: alle Hosts ohne anderen Plan */
+  includeOthers: boolean;
+  /** Effektive Mitglieder jetzt (ausgewählt, per Regel, alle übrigen) */
+  members: WaveMember[];
+}
+
+export type PlanVia = "Host" | "Rule" | "Others";
+
+export interface WaveMember {
+  id: string;
+  name: string;
+  siteName: string;
+  via: PlanVia;
 }
 
 export interface RunbookSchedule {
@@ -477,6 +502,7 @@ export interface RunSummary {
   currentWave: number;
   currentWaveName: string | null;
   notAfter: string | null;
+  resumeAt: string | null;
 }
 
 export interface Runbook {
