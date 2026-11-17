@@ -26,7 +26,7 @@ Ein Admin, mehrere Sites, Linux- und Windows-Server, IPAM light.
 | Server | ASP.NET Core (.NET 10), ein Container | Einfach zu betreiben |
 | Datenbank | SQLite (WAL) in `/data` | Reicht für die Größenordnung, eine Datei |
 | Frontend | React + Vite + TypeScript, vom Server ausgeliefert | Kein separates Frontend-Hosting |
-| Agent | .NET 10 Worker Service. Linux: Native AOT. Windows: self-contained Single-File (COM-Interop für Windows Update) | Eine Codebasis |
+| Agent | .NET 10 Worker Service, self-contained Single-File (Linux getrimmt, ab glibc 2.27; Windows mit COM-Interop für Windows Update). Native AOT nur auf Wunsch (übernimmt die glibc des Build-Rechners) | Eine Codebasis, läuft auf älteren Distributionen |
 | Kommunikation | Agent → Server, nur ausgehend, HTTPS, Polling | Keine offenen Ports auf den Zielen |
 | Agent-Auth | Eigene CA. Einmal-Enrollment-Token + CSR, danach mTLS. Site-ID und Host-ID im Zertifikat | Sperrbar, keine Passwörter, Agent pinnt die CA |
 | Agent-API-Port | `8443`, öffentlich per Port-Forward, mTLS Pflicht, IP-Allowlist pro Site optional | Kunden mit dynamischen IPs |

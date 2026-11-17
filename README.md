@@ -405,8 +405,8 @@ src/AIOPatcher.Agent/bin/Debug/net10.0/aiopatcher-agent run --state-dir ./agent-
 `aiopatcher-agent scan` zeigt ohne Server, was der Agent melden würde. Für schnelle Tests den Server mit
 `AIOPatcher__AgentCheckinIntervalSeconds=10` starten (Standard: 60).
 
-Releases: Linux-Agent mit Native AOT (`dotnet publish src/AIOPatcher.Agent -c Release -r linux-x64`, muss auf Linux gebaut
-werden), Windows-Agent als Single-File (`-r win-x64`).
+Releases: `dotnet publish src/AIOPatcher.Agent -c Release -r linux-x64` (bzw. `linux-arm64`, `win-x64`) ergibt je eine
+Datei ohne installierte .NET-Runtime. Native AOT nur mit `-p:AgentNativeAot=true` (läuft dann erst ab der glibc des Build-Rechners).
 
 ## Entwicklung
 
@@ -451,7 +451,7 @@ dotnet ef migrations add <Name> -p src/AIOPatcher.Server -o Data/Migrations
 
 ## Container bauen
 
-Baut Server, Frontend und alle Agents (linux-x64 als Native AOT, linux-arm64, win-x64). Muss auf einer x64-Maschine laufen.
+Baut Server, Frontend und alle Agents (linux-x64, linux-arm64, win-x64, jeweils als einzelne Datei ohne installierte .NET-Runtime).
 
 ```bash
 docker build -t aiopatcher-server .

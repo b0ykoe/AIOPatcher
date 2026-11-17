@@ -30,13 +30,11 @@ COPY src/AIOPatcher.Server/ src/AIOPatcher.Server/
 RUN dotnet publish src/AIOPatcher.Server -c Release -o /app --no-restore -p:Version=$VERSION
 
 # --- Agents -----------------------------------------------------------------------------------------
-# linux-x64 wird mit Native AOT gebaut und braucht dafür clang. Das Image muss daher auf x64 gebaut werden.
+# Alle Agents als Self-contained Single-File (ohne Native AOT): laufen ab glibc 2.27 (Ubuntu 18.04, Debian 10),
+# brauchen beim Bau keine native Toolchain und deutlich weniger Arbeitsspeicher.
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS agents
 ARG VERSION
 ARG AGENT_RELEASE_KEY=""
-RUN apt-get update \
- && apt-get install -y --no-install-recommends clang zlib1g-dev \
- && rm -rf /var/lib/apt/lists/*
 WORKDIR /src
 COPY global.json Directory.Build.props ./
 COPY src/AIOPatcher.Contracts/ src/AIOPatcher.Contracts/

@@ -253,9 +253,18 @@
   --button-height-lg: 3.125rem;
 }
 
-.mantine-SegmentedControl-root {
-  min-height: 2.5rem;
-  align-items: stretch;
+/* Umschalter (SegmentedControl) so hoch wie Felder und Knöpfe daneben: Innenknöpfe füllen die Höhe, Text mittig */
+.mantine-SegmentedControl-label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2rem; /* + 2 x 4 px Rahmenabstand = 40 px wie Felder und Knöpfe */
+}
+
+/* Code-Felder (TOTP) gleich hoch wie normale Felder */
+.mantine-PinInput-root.mantine-PinInput-root {
+  --pin-input-size-sm: 2.5rem;
+  --pin-input-size-md: 2.75rem;
 }
 
 .mantine-Table-th {
@@ -356,4 +365,9 @@
   .page-actions:has(> .mantine-Button-root + .mantine-Button-root) > .mantine-Button-root:first-child {
     flex-basis: 100%;
   }
+}
+
+/* Hinweistext unter dem Feld (Theme: inputWrapperOrder): etwas Abstand nach oben */
+.mantine-Input-wrapper + .mantine-InputWrapper-description {
+  margin-top: 0.375rem;
 }

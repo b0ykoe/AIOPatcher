@@ -264,7 +264,6 @@ if [ -z "$IMAGE" ]; then
   IMAGE=aiopatcher-server:local
   if [ "$NO_BUILD" -eq 0 ]; then
     [ -f "$REPO/Dockerfile" ] || die "Kein Dockerfile in $REPO. Skript aus dem entpackten Repo starten oder --image angeben."
-    [ "$(uname -m)" = x86_64 ] || [ "$DRY_RUN" -eq 1 ] || die "Der Bau braucht x64 (Agents als Native AOT). Auf ARM: Image woanders bauen, dann --image."
     ensure_build_resources
     info "Baue das Image (Server, Weboberfläche, alle Agents; dauert ca. 10-15 Minuten, auf kleinen Servern länger) ..."
     if [ "$DRY_RUN" -eq 1 ]; then

@@ -10,11 +10,12 @@
 
   <!--
     Publish-Varianten (immer eine einzelne Datei ohne installierte .NET-Runtime):
-    - linux-x64:   Native AOT (klein, schnell). Muss auf Linux x64 gebaut werden. Abschaltbar mit -p:AgentNativeAot=false.
-    - linux-arm64: Self-contained Single-File, getrimmt (kein Cross-Toolchain für AOT nötig).
+    - linux-x64/arm64: Self-contained Single-File, getrimmt. Läuft ab glibc 2.27 (Ubuntu 18.04, Debian 10).
+      Native AOT (-p:AgentNativeAot=true) wäre kleiner, übernimmt aber die glibc des Build-Rechners (Docker-SDK:
+      2.34+), damit liefe der Agent auf Ubuntu 20.04/Debian 11 nicht mehr. Deshalb nur auf ausdrücklichen Wunsch.
     - win-x64:     Self-contained Single-File, nicht getrimmt (COM-Interop für Windows Update).
   -->
-  <PropertyGroup Condition="'$(RuntimeIdentifier)' == 'linux-x64' and '$(AgentNativeAot)' != 'false'">
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' == 'linux-x64' and '$(AgentNativeAot)' == 'true'">
     <PublishAot>true</PublishAot>
   </PropertyGroup>
   <PropertyGroup Condition="'$(RuntimeIdentifier)' != '' and '$(PublishAot)' != 'true'">

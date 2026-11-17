@@ -135,15 +135,33 @@ ACTUAL="$(sed -e '/-----BEGIN/d' -e '/-----END/d' "$TMP/ca.crt" | tr -d '\r\n' |
 pinned_curl() { curl -fsS --cacert "$TMP/ca.crt" "$@"; }
 
 # --- 2. Agent herunterladen und Prüfsumme kontrollieren --------------------------------------------
-info "Lade Agent ($RID) ..."
-pinned_curl --max-time 600 "$SERVER/agent/download/$RID" -o "$TMP/aiopatcher-agent" \
-  || die "Download fehlgeschlagen. Liegt auf dem Server ein Agent-Build für $RID?"
-EXPECTED="$(pinned_curl --max-time 30 "$SERVER/agent/download/$RID/sha256" | tr -d '[:space:]' | tr 'a-f' 'A-F')"
-GOT="$(sha256sum "$TMP/aiopatcher-agent" | cut -c1-64 | tr 'a-f' 'A-F')"
-[ -n "$EXPECTED" ] && [ "$EXPECTED" = "$GOT" ] || die "Prüfsumme stimmt nicht (erwartet $EXPECTED, erhalten $GOT)."
-chmod 755 "$TMP/aiopatcher-agent"
-AGENT_PATH="$TMP/aiopatcher-agent"
-VERSION="$(agent version)" || die "Der Agent startet auf diesem System nicht."
+download_agent() {
+  info "Lade Agent ($RID) ..."
+  pinned_curl --max-time 600 "$SERVER/agent/download/$RID" -o "$TMP/aiopatcher-agent" \
+    || die "Download fehlgeschlagen. Liegt auf dem Server ein Agent-Build für $RID?"
+  EXPECTED="$(pinned_curl --max-time 30 "$SERVER/agent/download/$RID/sha256" | tr -d '[:space:]' | tr 'a-f' 'A-F')"
+  GOT="$(sha256sum "$TMP/aiopatcher-agent" | cut -c1-64 | tr 'a-f' 'A-F')"
+  [ -n "$EXPECTED" ] && [ "$EXPECTED" = "$GOT" ] || die "Prüfsumme stimmt nicht (erwartet $EXPECTED, erhalten $GOT)."
+  chmod 755 "$TMP/aiopatcher-agent"
+  AGENT_PATH="$TMP/aiopatcher-agent"
+}
+
+download_agent
+if ! VERSION="$(agent version 2>"$TMP/start-error")"; then
+  # Normaler Agent startet nicht (z. B. zu alte glibc): auf den Lite-Agent ausweichen, wenn möglich.
+  if [ "$LITE" -eq 0 ] && command -v python3 >/dev/null 2>&1 && command -v openssl >/dev/null 2>&1 \
+     && python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 5) else 1)'; then
+    warn_text="$(head -n 2 "$TMP/start-error" | tr '\n' ' ')"
+    info "Der normale Agent startet hier nicht ($warn_text). Nehme den Lite-Agent (Updates scannen und installieren, Neustarts)."
+    LITE=1
+    RID=lite-linux
+    download_agent
+    VERSION="$(agent version)" || die "Auch der Lite-Agent startet nicht."
+  else
+    cat "$TMP/start-error" >&2
+    die "Der Agent startet auf diesem System nicht (siehe oben). Für den Lite-Agent python3 (3.5+) und openssl installieren."
+  fi
+fi
 info "Agent $VERSION geprüft (SHA-256 $GOT)."
 
 if [ -n "$DOWNLOAD_ONLY" ]; then

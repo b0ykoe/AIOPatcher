@@ -293,8 +293,8 @@ function Shell({ me, onMeChanged, onLoggedOut }: { me: Me; onMeChanged: (me: Me)
                 visibleFrom="xs"
                 className="glass"
                 px="sm"
-                py={6}
-                style={{ borderRadius: 10, border: "1px solid var(--mantine-color-default-border)", minWidth: 220 }}
+                h={40}
+                style={{ borderRadius: "var(--mantine-radius-md)", border: "1px solid var(--mantine-color-default-border)", minWidth: 220, display: "flex", alignItems: "center" }}
               >
                 <Group gap="xs" wrap="nowrap">
                   <IconSearch size={16} opacity={0.6} />
@@ -322,7 +322,7 @@ function Shell({ me, onMeChanged, onLoggedOut }: { me: Me; onMeChanged: (me: Me)
               <ColorSchemeToggle />
               <Menu position="bottom-end" width={220}>
                 <Menu.Target>
-                  <ActionIcon size="lg" aria-label={t("nav.account")}>
+                  <ActionIcon size={40} aria-label={t("nav.account")}>
                     <IconUserCircle size={22} />
                   </ActionIcon>
                 </Menu.Target>
@@ -431,7 +431,7 @@ function ColorSchemeToggle() {
   const next = computed === "dark" ? "light" : "dark";
   return (
     <Tooltip label={next === "light" ? t("nav.lightMode") : t("nav.darkMode")}>
-      <ActionIcon size="lg" onClick={() => setColorScheme(next)} aria-label={t("nav.toggleScheme")}>
+      <ActionIcon size={40} onClick={() => setColorScheme(next)} aria-label={t("nav.toggleScheme")}>
         {computed === "dark" ? <IconSun size={20} /> : <IconMoon size={20} />}
       </ActionIcon>
     </Tooltip>

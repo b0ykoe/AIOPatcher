@@ -6,12 +6,25 @@ import {
   Card,
   createTheme,
   Modal,
+  MultiSelect,
+  NumberInput,
   Paper,
+  PasswordInput,
+  Select,
+  TagsInput,
+  Textarea,
+  TextInput,
   Table,
   Tooltip,
   type CSSVariablesResolver,
   type MantineColorsTuple,
 } from "@mantine/core";
+import { TimeInput } from "@mantine/dates";
+
+// Hinweistext unter dem Feld statt zwischen Beschriftung und Feld: So stehen Felder nebeneinander immer auf einer
+// Linie, auch wenn nur eines einen Hinweis hat.
+const inputWrapperOrder: ("label" | "input" | "description" | "error")[] = ["label", "input", "description", "error"];
+const inputDefaults = { defaultProps: { inputWrapperOrder } };
 
 // Tiefes Nachtblau statt Mantines Grau: Grundlage des "Vibrant"-Looks im dunklen Modus.
 const night: MantineColorsTuple = [
@@ -38,6 +51,14 @@ export const theme = createTheme({
   colors: { dark: night },
   cursorType: "pointer",
   components: {
+    TextInput: TextInput.extend(inputDefaults),
+    PasswordInput: PasswordInput.extend(inputDefaults),
+    Select: Select.extend(inputDefaults),
+    MultiSelect: MultiSelect.extend(inputDefaults),
+    NumberInput: NumberInput.extend(inputDefaults),
+    Textarea: Textarea.extend(inputDefaults),
+    TagsInput: TagsInput.extend(inputDefaults),
+    TimeInput: TimeInput.extend(inputDefaults),
     Card: Card.extend({ defaultProps: { radius: "lg", withBorder: true, padding: "lg" }, classNames: { root: "glass" } }),
     Paper: Paper.extend({ defaultProps: { radius: "lg" } }),
     Button: Button.extend({

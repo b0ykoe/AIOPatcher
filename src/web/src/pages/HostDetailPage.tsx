@@ -221,7 +221,7 @@ export function HostDetailPage() {
           </Button>}
           <Menu position="bottom-end">
             <Menu.Target>
-              <ActionIcon variant="subtle" color="gray" size="input-sm" aria-label={t("hostDetail.moreActions")}>
+              <ActionIcon variant="subtle" color="gray" size={40} aria-label={t("hostDetail.moreActions")}>
                 <IconDots size={18} />
               </ActionIcon>
             </Menu.Target>
