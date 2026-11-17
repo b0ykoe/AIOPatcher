@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router";
+import { Link, useNavigate, useSearchParams } from "react-router";
 import { ActionIcon, Affix, Badge, Button, Card, Checkbox, Group, Menu, Modal, MultiSelect, Paper, Select, Stack, Switch, Table, TagsInput, Text, TextInput, Tooltip, Transition } from "@mantine/core";
 import {
   IconChevronDown,
@@ -168,6 +168,7 @@ export function HostsPage() {
                     <Group gap={6}>
                       {h.lastScanAt && <Badge size="sm" color={h.securityUpdates > 0 ? "pink" : "gray"}>{h.pendingUpdates} Updates{h.securityUpdates > 0 ? ` · ${h.securityUpdates} Sec` : ""}</Badge>}
                       {h.kevUpdates > 0 && <Badge size="sm" color="red" variant="filled">KEV</Badge>}
+                      {h.containerUpdates > 0 && <ContainerUpdatesBadge hostId={h.id} count={h.containerUpdates} size="sm" />}
                       {h.rebootRequired && <Badge size="sm" color="orange">{t("overview.rebootRequired")}</Badge>}
                       {h.autoPatch.enabled && <Badge size="sm" color="violet" leftSection={<IconClock size={11} />}>{autoPatchLabel(h.autoPatch)}</Badge>}
                     </Group>
@@ -302,9 +303,7 @@ export function HostsPage() {
                               <Badge color="red" variant="filled">KEV</Badge>
                             </Tooltip>
                           )}
-                          {h.containerUpdates > 0 && (
-                            <Badge color="blue" variant="light">{t("security.containerBadge", { count: h.containerUpdates })}</Badge>
-                          )}
+                          {h.containerUpdates > 0 && <ContainerUpdatesBadge hostId={h.id} count={h.containerUpdates} />}
                           {h.rebootRequired && (
                             <Badge color="yellow" leftSection={<IconRefresh size={12} />}>
                               {t("jobType.reboot")}
@@ -472,5 +471,16 @@ function BulkTagsModal({ hostIds, known, opened, onClose, onSaved }: { hostIds: 
         </Group>
       </Stack>
     </Modal>
+  );
+}
+
+/** "x Container-Updates" führt direkt zum Reiter Container des Hosts (die Zeile selbst öffnet die Update-Ansicht). */
+function ContainerUpdatesBadge({ hostId, count, size }: { hostId: string; count: number; size?: "sm" }) {
+  const { t } = useTranslation();
+  return (
+    <Badge component={Link} to={`/hosts/${hostId}?tab=containers`} onClick={(e) => e.stopPropagation()}
+      color="blue" variant="light" size={size} style={{ cursor: "pointer" }}>
+      {t("security.containerBadge", { count })}
+    </Badge>
   );
 }

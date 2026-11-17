@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { Badge, Button, Card, Code, Group, PasswordInput, Stack, Table, Text, Tooltip } from "@mantine/core";
+import { Badge, Button, Card, Code, Group, PasswordInput, SimpleGrid, Stack, Table, Text, Tooltip } from "@mantine/core";
 import { IconBell, IconCloud, IconPlayerPlay, IconPlugConnected, IconServer, IconServerCog, IconKey } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
@@ -182,67 +182,72 @@ export function ChecksPage() {
         }
       />
       <Stack gap="lg">
-        <Section icon={<IconServerCog size={20} />} title={t("checks.server")} hint={t("checks.serverHint")} action={<Button size="xs" variant="light" onClick={loadServer}>{t("checks.test")}</Button>}>
-          <Stack gap="xs">
-            {(server ?? Object.keys(serverLabels).map((key) => ({ key }) as CheckResult)).map((r) => (
-              <Group key={r.key} justify="space-between" wrap="nowrap" align="flex-start">
-                <Text size="sm" w={200} style={{ flexShrink: 0 }}>{serverLabels[r.key] ?? r.key}</Text>
-                <div style={{ flex: 1 }}>
-                  <ResultView result={server ? r : undefined} running={server === null} />
-                </div>
-              </Group>
-            ))}
-          </Stack>
-        </Section>
-
-        <Section
-          icon={<IconCloud size={20} />}
-          title={t("checks.external")}
-          hint={t("checks.externalHint")}
-          action={<Button size="xs" variant="light" loading={running.has("external")} onClick={() => void runExternal()}>{t("checks.test")}</Button>}
-        >
-          <Stack gap="xs">
-            {["nvd", "osv", "kev", "epss", "msrc", "dockerHub"].map((key) => (
-              <Group key={key} justify="space-between" wrap="nowrap" align="flex-start">
-                <Text size="sm" w={200} style={{ flexShrink: 0 }}>{t(`checks.ext_${key}` as "checks.ext_osv")}</Text>
-                <div style={{ flex: 1 }}>
-                  <ResultView result={external?.find((r) => r.key === key)} running={running.has("external")} />
-                </div>
-              </Group>
-            ))}
-          </Stack>
-        </Section>
-
-        {can.admin && (
-          <Section icon={<IconBell size={20} />} title={t("checks.notifications")} hint={t("checks.notificationsHint")}>
-            {channels.length === 0 ? (
-              <Text size="sm" c="dimmed">{t("checks.noChannels")}</Text>
-            ) : (
-              <Stack gap="xs">
-                {channels.map((c) => (
-                  <Group key={c.id} justify="space-between" wrap="nowrap" align="flex-start">
-                    <Text size="sm" w={200} style={{ flexShrink: 0 }}>{c.name}</Text>
-                    <div style={{ flex: 1 }}><ResultView result={results[`channel:${c.id}`]} running={running.has(`channel:${c.id}`)} /></div>
-                    <Button size="xs" variant="light" onClick={() => void channelTest(c)}>{t("checks.sendTest")}</Button>
-                  </Group>
-                ))}
-              </Stack>
-            )}
-          </Section>
-        )}
-
-        {can.admin && integrations.length > 0 && (
-          <Section icon={<IconPlugConnected size={20} />} title={t("checks.integrations")} hint={t("checks.integrationsHint")}>
+        {/* Breite Bildschirme: kurze Abschnitte paarweise nebeneinander statt jeweils über die ganze Breite. */}
+        <SimpleGrid cols={{ base: 1, lg: 2 }} spacing="lg">
+          <Section icon={<IconServerCog size={20} />} title={t("checks.server")} hint={t("checks.serverHint")} action={<Button size="xs" variant="light" onClick={loadServer}>{t("checks.test")}</Button>}>
             <Stack gap="xs">
-              {integrations.map((i) => (
-                <Group key={i.id} justify="space-between" wrap="nowrap" align="flex-start">
-                  <Text size="sm" w={200} style={{ flexShrink: 0 }}>{i.name}</Text>
-                  <div style={{ flex: 1 }}><ResultView result={results[`integration:${i.id}`]} running={running.has(`integration:${i.id}`)} /></div>
-                  <Button size="xs" variant="light" onClick={() => void integrationTest(i)}>{t("checks.test")}</Button>
+              {(server ?? Object.keys(serverLabels).map((key) => ({ key }) as CheckResult)).map((r) => (
+                <Group key={r.key} justify="space-between" wrap="nowrap" align="flex-start">
+                  <Text size="sm" w={200} style={{ flexShrink: 0 }}>{serverLabels[r.key] ?? r.key}</Text>
+                  <div style={{ flex: 1 }}>
+                    <ResultView result={server ? r : undefined} running={server === null} />
+                  </div>
                 </Group>
               ))}
             </Stack>
           </Section>
+
+          <Section
+            icon={<IconCloud size={20} />}
+            title={t("checks.external")}
+            hint={t("checks.externalHint")}
+            action={<Button size="xs" variant="light" loading={running.has("external")} onClick={() => void runExternal()}>{t("checks.test")}</Button>}
+          >
+            <Stack gap="xs">
+              {["nvd", "osv", "kev", "epss", "msrc", "dockerHub"].map((key) => (
+                <Group key={key} justify="space-between" wrap="nowrap" align="flex-start">
+                  <Text size="sm" w={200} style={{ flexShrink: 0 }}>{t(`checks.ext_${key}` as "checks.ext_osv")}</Text>
+                  <div style={{ flex: 1 }}>
+                    <ResultView result={external?.find((r) => r.key === key)} running={running.has("external")} />
+                  </div>
+                </Group>
+              ))}
+            </Stack>
+          </Section>
+        </SimpleGrid>
+
+        {can.admin && (
+          <SimpleGrid cols={{ base: 1, lg: integrations.length > 0 ? 2 : 1 }} spacing="lg">
+            <Section icon={<IconBell size={20} />} title={t("checks.notifications")} hint={t("checks.notificationsHint")}>
+              {channels.length === 0 ? (
+                <Text size="sm" c="dimmed">{t("checks.noChannels")}</Text>
+              ) : (
+                <Stack gap="xs">
+                  {channels.map((c) => (
+                    <Group key={c.id} justify="space-between" wrap="nowrap" align="flex-start">
+                      <Text size="sm" w={200} style={{ flexShrink: 0 }}>{c.name}</Text>
+                      <div style={{ flex: 1 }}><ResultView result={results[`channel:${c.id}`]} running={running.has(`channel:${c.id}`)} /></div>
+                      <Button size="xs" variant="light" onClick={() => void channelTest(c)}>{t("checks.sendTest")}</Button>
+                    </Group>
+                  ))}
+                </Stack>
+              )}
+            </Section>
+
+            {integrations.length > 0 && (
+              <Section icon={<IconPlugConnected size={20} />} title={t("checks.integrations")} hint={t("checks.integrationsHint")}>
+                <Stack gap="xs">
+                  {integrations.map((i) => (
+                    <Group key={i.id} justify="space-between" wrap="nowrap" align="flex-start">
+                      <Text size="sm" w={200} style={{ flexShrink: 0 }}>{i.name}</Text>
+                      <div style={{ flex: 1 }}><ResultView result={results[`integration:${i.id}`]} running={running.has(`integration:${i.id}`)} /></div>
+                      <Button size="xs" variant="light" onClick={() => void integrationTest(i)}>{t("checks.test")}</Button>
+                    </Group>
+                  ))}
+                </Stack>
+              </Section>
+            )}
+          </SimpleGrid>
         )}
 
         <Section icon={<IconServer size={20} />} title={t("checks.hosts")} hint={t("checks.hostsHint")}>
