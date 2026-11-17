@@ -73,51 +73,54 @@ export function FeatureSettings() {
         </Card>
       )}
 
-      {groups.map(({ group, items }) => {
-        const Icon = groupIcon[group];
-        return (
-          <Card key={group}>
-            <Group gap="xs" mb="sm">
-              <Icon size={18} />
-              <Text fw={700}>{t(`features.group_${group}`)}</Text>
-            </Group>
-            <Stack gap="md">
-              {items.map((f) => (
-                <Group key={f.feature} justify="space-between" wrap="nowrap" align="flex-start">
-                  <div style={{ flex: 1 }}>
-                    <Group gap={6}>
-                      <Text fw={600} size="sm">{t(`features.name_${f.feature}`)}</Text>
-                      <Badge size="xs" variant="light" color={riskColor[f.risk]}>{t(`features.risk${f.risk}`)}</Badge>
-                      {f.enabled !== f.default && <Badge size="xs" variant="outline" color="gray">{t("features.changed")}</Badge>}
-                      {f.lockedBy && (
-                        <Tooltip label={t("features.lockedHint", { by: f.lockedBy })} multiline w={300}>
-                          <Badge size="xs" color="gray" leftSection={<IconLock size={10} />}>{t("features.locked")}</Badge>
-                        </Tooltip>
+      {/* Breite Bildschirme: Gruppen in Spalten, Schalter bleiben nah am Text */}
+      <div className="masonry">
+        {groups.map(({ group, items }) => {
+          const Icon = groupIcon[group];
+          return (
+            <Card key={group}>
+              <Group gap="xs" mb="sm">
+                <Icon size={18} />
+                <Text fw={700}>{t(`features.group_${group}`)}</Text>
+              </Group>
+              <Stack gap="md">
+                {items.map((f) => (
+                  <Group key={f.feature} justify="space-between" wrap="nowrap" align="flex-start">
+                    <div style={{ flex: 1 }}>
+                      <Group gap={6}>
+                        <Text fw={600} size="sm">{t(`features.name_${f.feature}`)}</Text>
+                        <Badge size="xs" variant="light" color={riskColor[f.risk]}>{t(`features.risk${f.risk}`)}</Badge>
+                        {f.enabled !== f.default && <Badge size="xs" variant="outline" color="gray">{t("features.changed")}</Badge>}
+                        {f.lockedBy && (
+                          <Tooltip label={t("features.lockedHint", { by: f.lockedBy })} multiline w={300}>
+                            <Badge size="xs" color="gray" leftSection={<IconLock size={10} />}>{t("features.locked")}</Badge>
+                          </Tooltip>
+                        )}
+                      </Group>
+                      <Text size="xs" c="dimmed" mt={2}>{t(`features.desc_${f.feature}`)}</Text>
+                      {f.changedBy && (
+                        <Text size="xs" c="dimmed" mt={2}>{t("features.changedBy", { who: f.changedBy, when: formatDateTime(f.changedAt) })}</Text>
                       )}
-                    </Group>
-                    <Text size="xs" c="dimmed" mt={2}>{t(`features.desc_${f.feature}`)}</Text>
-                    {f.changedBy && (
-                      <Text size="xs" c="dimmed" mt={2}>{t("features.changedBy", { who: f.changedBy, when: formatDateTime(f.changedAt) })}</Text>
-                    )}
-                  </div>
-                  <Switch
-                    checked={f.enabled}
-                    disabled={busy === f.feature || (f.lockedBy !== null && !f.enabled)}
-                    onChange={(e) => toggle(f, e.currentTarget.checked)}
-                    aria-label={t(`features.name_${f.feature}`)}
-                  />
-                </Group>
-              ))}
-            </Stack>
-          </Card>
-        );
-      })}
+                    </div>
+                    <Switch
+                      checked={f.enabled}
+                      disabled={busy === f.feature || (f.lockedBy !== null && !f.enabled)}
+                      onChange={(e) => toggle(f, e.currentTarget.checked)}
+                      aria-label={t(`features.name_${f.feature}`)}
+                    />
+                  </Group>
+                ))}
+              </Stack>
+            </Card>
+          );
+        })}
 
-      <Alert variant="light" color="gray" icon={<IconLock size={18} />} title={t("features.lockTitle")}>
-        <Text size="sm">{t("features.lockText")}</Text>
-        <Code block mt="xs">AIOPatcher__LockedFeatures: "AppUpdates,OpnsenseUpdates"</Code>
-        <Text size="xs" c="dimmed" mt="xs">{t("features.agentText")}</Text>
-      </Alert>
+        <Alert variant="light" color="gray" icon={<IconLock size={18} />} title={t("features.lockTitle")}>
+          <Text size="sm">{t("features.lockText")}</Text>
+          <Code block mt="xs">AIOPATCHER_LOCKED_FEATURES=AppUpdates,OpnsenseUpdates</Code>
+          <Text size="xs" c="dimmed" mt="xs">{t("features.agentText")}</Text>
+        </Alert>
+      </div>
     </Stack>
   );
 }

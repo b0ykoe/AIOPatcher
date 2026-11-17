@@ -11,7 +11,7 @@ import {
   Modal,
   Progress,
   Select,
-  SimpleGrid,
+  Box,
   Stack,
   Table,
   Text,
@@ -158,7 +158,7 @@ export function IpamPage() {
           <EmptyState icon={<IconNetwork size={28} />} title={t("ipam.noneTitle")} text={t("ipam.noneText")} />
         </Card>
       ) : (
-        <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="md" mb="lg">
+        <Box className="card-grid" mb="lg">
           {subnets.map((s) => (
             <Card key={s.id}>
               <Group justify="space-between" wrap="nowrap" align="flex-start">
@@ -193,7 +193,7 @@ export function IpamPage() {
               {s.description && <Text size="xs" c="dimmed" mt={4}>{s.description}</Text>}
             </Card>
           ))}
-        </SimpleGrid>
+        </Box>
       )}
 
       <Card p={0}>

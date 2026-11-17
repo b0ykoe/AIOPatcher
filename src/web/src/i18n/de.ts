@@ -836,6 +836,9 @@ const de = {
     title: "AIOPatcher {{version}} ist verfügbar (du hast {{current}})",
     text: "Auf dem Server im Ordner mit der docker-compose.yml ausführen. Vorher macht AIOPatcher automatisch ein Backup der Datenbank.",
     notes: "Was ist neu?",
+    upToDate: "Aktuell (neueste Version laut GitHub)",
+    unknown: "Versionsprüfung aus oder noch nicht gelaufen",
+    sidebar: "Update {{version}} verfügbar",
   },
   software: {
     tab: "Programme",
@@ -893,7 +896,7 @@ const de = {
     enabledNote: "„{{name}}“ eingeschaltet",
     disabledNote: "„{{name}}“ abgeschaltet",
     lockTitle: "Endgültig sperren (auf dem Server)",
-    lockText: "Was hier nie eingeschaltet werden soll, sperrst du in der docker-compose.yml. Das kann auch ein Admin mit gestohlenem Login nicht aufheben:",
+    lockText: "Was hier nie eingeschaltet werden soll, sperrst du auf dem Server in der .env neben der docker-compose.yml. Das kann auch ein Admin mit gestohlenem Login nicht aufheben:",
     agentText: "Zusätzlich entscheidet jeder Host selbst: policy.json auf dem Host (allowPatch, allowReboot, allowSelfUpdate, trustServerUpdates, allowAppUpdates) hat immer Vorrang.",
     name_Automation: "Automatisch patchen",
     desc_Automation: "Auto-Patch in Wartungsfenstern und Abläufe. Ausschalten wirkt als Notaus: keine automatischen Jobs mehr, laufende Abläufe bleiben stehen. Manuelle Jobs gehen weiter.",

@@ -125,7 +125,7 @@ export function NotificationSettings() {
         </Card>
       )}
 
-      <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
+      <div className="card-grid card-grid-wide">
         {channels?.map((c) => {
           const Icon = typeIcon[c.type];
           return (
@@ -180,7 +180,7 @@ export function NotificationSettings() {
             </Card>
           );
         })}
-      </SimpleGrid>
+      </div>
 
       <ChannelModal channel={editing} sites={sites} onClose={() => setEditing(null)} onSaved={load} />
     </Stack>

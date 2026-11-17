@@ -66,7 +66,7 @@ export function RulesPage() {
   return (
     <>
       <PageHeader title={t("nav.rules")} description={t("rules.description")} />
-      <Stack gap="lg">
+      <div className="split-grid">
         <Card p={0}>
           <Group justify="space-between" p="md" pb="xs">
             <div>
@@ -184,7 +184,7 @@ export function RulesPage() {
             </Table.ScrollContainer>
           )}
         </Card>
-      </Stack>
+      </div>
 
       <FreezeModal opened={freezeOpen} sites={sites} onClose={() => setFreezeOpen(false)} onSaved={load} />
       <HoldModal opened={holdOpen} sites={sites} hosts={hosts} onClose={() => setHoldOpen(false)} onSaved={load} />

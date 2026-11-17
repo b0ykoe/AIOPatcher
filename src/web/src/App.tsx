@@ -42,6 +42,7 @@ import {
   IconReportAnalytics,
   IconShieldLock,
   IconSettings,
+  IconSparkles,
   IconSearch,
   IconBug,
   IconServer,
@@ -53,7 +54,7 @@ import {
   IconUserCog,
 } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
-import { api, ApiError, type HostSummary, type Me, type Overview, type SetupStatus, type UiMode, type UserRole } from "./api";
+import { api, ApiError, type HostSummary, type Me, type Overview, type ServerInfo, type SetupStatus, type UiMode, type UserRole } from "./api";
 import { AddHostModal } from "./components/AddHostModal";
 import { errorText } from "./components/ui";
 import { currentLanguage, setLanguage } from "./i18n";
@@ -382,6 +383,7 @@ function Shell({ me, onMeChanged, onLoggedOut }: { me: Me; onMeChanged: (me: Me)
               ))}
               <Box style={{ flex: 1 }} />
               {canOperate && <GettingStarted overview={overview} onAddHost={addHost.open} />}
+              <VersionInfo />
             </Stack>
           </AppShell.Navbar>
 
@@ -455,6 +457,59 @@ function ColorSchemeToggle() {
         {computed === "dark" ? <IconSun size={20} /> : <IconMoon size={20} />}
       </ActionIcon>
     </Tooltip>
+  );
+}
+
+/** Unten in der Navigation: laufende Version, bei neuer Version ein Hinweis mit Link zu den Release-Notes. */
+function VersionInfo() {
+  const { t } = useTranslation();
+  const [info, setInfo] = useState<ServerInfo | null>(null);
+
+  useEffect(() => {
+    const load = () => void api.get<ServerInfo>("/api/server-info").then(setInfo).catch(() => {});
+    load();
+    const timer = window.setInterval(load, 60 * 60 * 1000); // die Versionsprüfung des Servers läuft ohnehin nur selten
+    return () => window.clearInterval(timer);
+  }, []);
+
+  if (!info) return null;
+
+  const version = (
+    <Text size="xs" c="dimmed" ff="monospace">
+      AIOPatcher v{info.version}
+    </Text>
+  );
+
+  if (!info.updateAvailable || !info.latestVersion) {
+    return (
+      <Group gap={6} px={6} py={4} wrap="nowrap">
+        <IconCircleCheck size={14} color="var(--mantine-color-teal-5)" opacity={info.latestVersion ? 1 : 0} aria-hidden />
+        <Tooltip label={info.latestVersion ? t("update.upToDate") : t("update.unknown")} withArrow position="right">
+          {version}
+        </Tooltip>
+      </Group>
+    );
+  }
+
+  return (
+    <UnstyledButton
+      component="a"
+      href={info.releaseUrl ?? undefined}
+      target="_blank"
+      rel="noreferrer"
+      px={8}
+      py={6}
+      style={{ borderRadius: 10, background: "var(--mantine-color-violet-light)" }}
+      aria-label={t("update.sidebar", { version: info.latestVersion })}
+    >
+      <Group gap={8} wrap="nowrap">
+        <IconSparkles size={16} color="var(--mantine-color-violet-4)" />
+        <Stack gap={0}>
+          <Text size="xs" fw={700} c="violet.3">{t("update.sidebar", { version: info.latestVersion })}</Text>
+          {version}
+        </Stack>
+      </Group>
+    </UnstyledButton>
   );
 }
 

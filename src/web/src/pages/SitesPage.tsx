@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router";
-import { ActionIcon, Anchor, Button, Card, Group, Modal, SimpleGrid, Stack, Text, Textarea, TextInput, ThemeIcon, Tooltip } from "@mantine/core";
+import { ActionIcon, Anchor, Button, Card, Group, Modal, Stack, Text, Textarea, TextInput, ThemeIcon, Tooltip } from "@mantine/core";
 import { IconBuilding, IconEdit, IconPlus, IconTrash } from "@tabler/icons-react";
 import { api, type Site } from "../api";
 import { useTranslation } from "react-i18next";
@@ -52,7 +52,7 @@ export function SitesPage() {
         }
       />
 
-      <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="md">
+      <div className="card-grid">
         {sites.map((s) => (
           <Card key={s.id}>
             <Group justify="space-between" wrap="nowrap" align="flex-start">
@@ -90,7 +90,7 @@ export function SitesPage() {
             </Text>
           </Card>
         ))}
-      </SimpleGrid>
+      </div>
 
       <SiteModal site={editing} onClose={() => setEditing(null)} onSaved={() => { void load(); refreshOverview(); }} />
     </>

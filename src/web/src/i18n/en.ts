@@ -837,6 +837,9 @@ const en: Translation = {
     title: "AIOPatcher {{version}} is available (you have {{current}})",
     text: "Run on the server in the folder with docker-compose.yml. AIOPatcher backs up its database automatically before migrating.",
     notes: "What is new?",
+    upToDate: "Up to date (latest version on GitHub)",
+    unknown: "Version check off or not run yet",
+    sidebar: "Update {{version}} available",
   },
   software: {
     tab: "Programs",
@@ -894,7 +897,7 @@ const en: Translation = {
     enabledNote: "\"{{name}}\" enabled",
     disabledNote: "\"{{name}}\" disabled",
     lockTitle: "Lock permanently (on the server)",
-    lockText: "Whatever should never be enabled here, lock it in docker-compose.yml. Not even an admin with a stolen login can undo that:",
+    lockText: "Whatever should never be enabled here, lock it on the server in the .env next to docker-compose.yml. Not even an admin with a stolen login can undo that:",
     agentText: "In addition each host decides itself: policy.json on the host (allowPatch, allowReboot, allowSelfUpdate, trustServerUpdates, allowAppUpdates) always wins.",
     name_Automation: "Automatic patching",
     desc_Automation: "Auto-patch in maintenance windows and runbooks. Turning it off acts as an emergency stop: no more automatic jobs, running runbooks stop. Manual jobs still work.",

@@ -11,7 +11,6 @@ import {
   NumberInput,
   PasswordInput,
   Select,
-  SimpleGrid,
   Stack,
   Switch,
   Text,
@@ -144,7 +143,7 @@ export function IntegrationSettings() {
         </Card>
       )}
 
-      <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
+      <div className="card-grid card-grid-wide">
         {items?.map((i) => {
           const Icon = typeIcon[i.type];
           const result = results[i.id];
@@ -233,7 +232,7 @@ export function IntegrationSettings() {
             </Card>
           );
         })}
-      </SimpleGrid>
+      </div>
 
       <Card>
         <Group gap="xs" mb="xs">
