@@ -53,7 +53,8 @@ CA-Fingerprint**. Im Dashboard: Token eingeben, Konto und Authenticator einricht
 - Erneut ausführen ist gefahrlos: Die Antworten vom letzten Lauf (`/opt/aiopatcher/setup.conf`) sind die Vorschläge,
   Konfigurationen werden vorher gesichert, Daten bleiben. Für Updates ist das nicht nötig (siehe unten).
 - Hetzner: zusätzlich zur ufw ggf. die Cloud-Firewall öffnen (8443 für alle, Dashboard nur für dich).
-- Manuell statt Skript: [deploy/docker-compose.yml](deploy/docker-compose.yml) anpassen, gehärtete Variante in
+- Manuell statt Skript: [deploy/docker-compose.yml](deploy/docker-compose.yml) plus [deploy/.env.example](deploy/.env.example)
+  als `.env` daneben (nur `AIOPATCHER_HOSTNAME` ist Pflicht), gehärtete Variante in
   [docs/SERVER-SETUP.md](docs/SERVER-SETUP.md), Proxys in [docs/REVERSE-PROXY.md](docs/REVERSE-PROXY.md).
 
 **Mit Portainer** (fertiges Image, ohne Setup-Skript), per App-Template:
@@ -65,9 +66,10 @@ CA-Fingerprint**. Im Dashboard: Token eingeben, Konto und Authenticator einricht
 
 Der Setup-Token steht in den Logs des Containers `aiopatcher`, das Dashboard läuft auf `https://<host>:9443`. Daten liegen
 im Volume `aiopatcher-data`. Jeder Deploy holt das aktuelle Image (`pull_policy: always`); Update also einfach den Stack
-neu deployen. Firewall: 8443 für die Agents, 9443 nur intern/VPN. Ohne Template: `portainer-stack.yml` vom
-[neuesten Release](https://github.com/b0ykoe/AIOPatcher/releases/latest) unter *Stacks → Add stack → Upload* hochladen
-und `AIOPATCHER_HOSTNAME` als Environment variable setzen.
+neu deployen. Firewall: 8443 für die Agents, 9443 nur intern/VPN. Ohne Template: dieselbe
+[deploy/docker-compose.yml](deploy/docker-compose.yml) wie bei Docker Compose unter *Stacks → Add stack → Repository*
+(Compose path `deploy/docker-compose.yml`) oder *Upload* nehmen und die Variablen aus
+[deploy/.env.example](deploy/.env.example) per *Load variables from .env file* laden.
 
 **Updates von AIOPatcher** – ohne Setup, ein Befehl:
 
@@ -294,11 +296,14 @@ jeden Schalter selbst durch, auch für API-Tokens, Auto-Patch und Abläufe; ausg
 | Benutzer verwalten | **aus** | Keine Sperren, Adminrechte, Passwörter oder SSH-Schlüssel über das Dashboard. |
 
 Jede Änderung landet im Audit-Log. Schalter ändern geht nur mit Browser-Login als Admin, nicht per API-Token.
-Was nie eingeschaltet werden soll, sperrst du auf dem Server, z. B. in `docker-compose.yml`:
+Was nie eingeschaltet werden soll, sperrst du auf dem Server, z. B. in der `.env` neben der `docker-compose.yml`:
 
-```yaml
-AIOPatcher__LockedFeatures: "AppUpdates,OpnsenseUpdates"
+```bash
+AIOPATCHER_LOCKED_FEATURES=AppUpdates,OpnsenseUpdates
 ```
+
+(Bei Installationen per `setup.sh` steht stattdessen `AIOPatcher__LockedFeatures: "AppUpdates,OpnsenseUpdates"` direkt in
+der `docker-compose.yml`.)
 
 Gesperrte Funktionen sind aus und lassen sich im Dashboard nicht einschalten, auch nicht von einem Admin.
 

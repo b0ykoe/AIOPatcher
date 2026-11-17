@@ -41,10 +41,11 @@ damit ufw für alle Ports gilt (wie in [SERVER-SETUP](SERVER-SETUP.md#5-firewall
 
 ```bash
 sudo mkdir -p /opt/aiopatcher/data /opt/aiopatcher/traefik/letsencrypt
-sudo chown 1654:1654 /opt/aiopatcher/data && sudo chmod 700 /opt/aiopatcher/data
+sudo chmod 700 /opt/aiopatcher/data
 sudo cp deploy/docker-compose.traefik.yml /opt/aiopatcher/docker-compose.yml
+sudo cp deploy/.env.example /opt/aiopatcher/.env
 sudo cp deploy/traefik/dynamic.yml /opt/aiopatcher/traefik/
-# Hostname, E-Mail und erlaubte Netze in beiden Dateien anpassen
+# .env: AIOPATCHER_HOSTNAME und ACME_EMAIL setzen; dynamic.yml: Hostname und erlaubte Netze anpassen
 cd /opt/aiopatcher
 sudo docker compose up -d aiopatcher        # zuerst, legt data/ca/ca.crt an
 sudo docker compose up -d

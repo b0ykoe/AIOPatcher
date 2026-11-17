@@ -11,7 +11,7 @@
       "platform": "linux",
       "repository": {
         "url": "https://github.com/b0ykoe/AIOPatcher",
-        "stackfile": "deploy/portainer-stack.yml"
+        "stackfile": "deploy/docker-compose.yml"
       },
       "env": [
         {
@@ -37,6 +37,12 @@
           "label": "Version",
           "description": "latest = immer die neueste Version beim Deploy; oder fest, z. B. 0.6.1",
           "default": "latest"
+        },
+        {
+          "name": "AIOPATCHER_DATA_PATH",
+          "label": "Daten",
+          "description": "Docker-Volume (Name) oder Ordner auf dem Host, z. B. /opt/aiopatcher/data",
+          "default": "aiopatcher-data"
         }
       ]
     }

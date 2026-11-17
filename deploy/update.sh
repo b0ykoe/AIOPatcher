@@ -66,7 +66,9 @@ load_config() {
     # shellcheck disable=SC1091
     . "$BASE/setup.conf"
   else
-    IMAGE="$(awk '/^  aiopatcher:/ {s = 1} s && /image:/ {print $2; exit}' "$BASE/docker-compose.yml")"
+    # docker compose config löst Variablen aus der .env auf (image: ...:${AIOPATCHER_VERSION:-latest})
+    IMAGE="$(docker compose -f "$BASE/docker-compose.yml" config --images 2>/dev/null | grep -m1 aiopatcher || true)"
+    [ -n "$IMAGE" ] || IMAGE="$(awk '/^  aiopatcher:/ {s = 1} s && /image:/ {print $2; exit}' "$BASE/docker-compose.yml")"
     grep -q '^  traefik:' "$BASE/docker-compose.yml" && PROXY=traefik
     REPO="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
     [ -f "$REPO/Dockerfile" ] || REPO="$BASE/src"

@@ -67,8 +67,9 @@ jobs:
             done
           done
           (cd dist && sha256sum * > SHA256SUMS)
-          # Stack-Dateien mit fester Version (Portainer: Stacks → Add stack → Upload)
-          sed "s|\${AIOPATCHER_VERSION:-latest}|\${AIOPATCHER_VERSION:-${{ steps.version.outputs.version }}}|" deploy/portainer-stack.yml > dist/portainer-stack.yml
+          # Compose-Datei mit dieser Version als Standard und Vorlage für die .env (Docker Compose und Portainer).
+          # "env.example", weil GitHub führende Punkte in Namen von Release-Dateien ersetzt.
+          cp deploy/.env.example dist/env.example
           sed "s|\${AIOPATCHER_VERSION:-latest}|\${AIOPATCHER_VERSION:-${{ steps.version.outputs.version }}}|" deploy/docker-compose.yml > dist/docker-compose.yml
 
       - uses: softprops/action-gh-release@v2
@@ -78,8 +79,11 @@ jobs:
           body: |
             **Docker-Image:** `ghcr.io/${{ github.repository_owner }}/aiopatcher-server:${{ steps.version.outputs.version }}` (auch `:latest`)
 
-            **Portainer:** `portainer-stack.yml` herunterladen, unter *Stacks → Add stack → Upload* hochladen,
-            bei *Environment variables* `AIOPATCHER_HOSTNAME` setzen (DNS-Name oder IP des Servers), deployen.
-            Den Setup-Token zeigen die Logs des Containers `aiopatcher`; Dashboard: `https://<host>:9443`.
+            **Docker Compose:** `docker-compose.yml` und `env.example` herunterladen, `env.example` in `.env` umbenennen,
+            `AIOPATCHER_HOSTNAME` eintragen (DNS-Name oder IP des Servers), dann `docker compose up -d`.
 
-            **Docker Compose / Setup-Skript:** siehe README.
+            **Portainer:** App-Template (siehe README) oder `docker-compose.yml` unter *Stacks → Add stack → Upload*
+            hochladen und die `.env` per *Load variables from .env file* laden.
+
+            Den Setup-Token zeigen die Logs des Containers `aiopatcher`; Dashboard: `https://<host>:9443`.
+            Setup-Skript: siehe README.

@@ -173,63 +173,45 @@ cd /opt/aiopatcher
 > Der Server läuft im Container nicht als Root, sondern als `app` (UID 1654). Den Besitzer des Datenordners setzt der
 > Container beim Start selbst (ab 0.6.1), ein `chown` von Hand ist nicht nötig.
 
-`docker-compose.yml` anlegen (identisch zu [`deploy/docker-compose.yml`](../deploy/docker-compose.yml) im Repo):
+`docker-compose.yml` und die Vorlage für die Einstellungen holen ([`deploy/docker-compose.yml`](../deploy/docker-compose.yml),
+[`deploy/.env.example`](../deploy/.env.example); alternativ `docker-compose.yml` und `env.example` vom
+[neuesten Release](https://github.com/b0ykoe/AIOPatcher/releases/latest), dort ist die Version schon fest eingetragen):
 
 ```bash
-sudo tee /opt/aiopatcher/docker-compose.yml > /dev/null <<'EOF'
-services:
-  aiopatcher:
-    image: ghcr.io/b0ykoe/aiopatcher-server:latest
-    container_name: aiopatcher
-    restart: unless-stopped
-    network_mode: host
-    volumes:
-      - /opt/aiopatcher/data:/data
-    environment:
-      AIOPatcher__PublicHostname: patch.example.com
-      AIOPatcher__DataDirectory: /data
-      AIOPatcher__DashboardPort: "9443"
-      AIOPatcher__AgentPort: "8443"
-      AIOPatcher__Language: de
-      TZ: Europe/Berlin
-    labels:
-      - com.centurylinklabs.watchtower.enable=true
-
-  watchtower:
-    image: nickfedor/watchtower:latest
-    container_name: watchtower
-    restart: unless-stopped
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    environment:
-      WATCHTOWER_MONITOR_ONLY: "true"
-      WATCHTOWER_LABEL_ENABLE: "true"
-      WATCHTOWER_SCHEDULE: "0 0 7 * * *"
-      WATCHTOWER_NOTIFICATION_URL: "ntfy://ntfy.sh/DEIN-GEHEIMES-TOPIC"
-      TZ: Europe/Berlin
-EOF
+sudo curl -fsSLo docker-compose.yml https://raw.githubusercontent.com/b0ykoe/AIOPatcher/main/deploy/docker-compose.yml
+sudo curl -fsSLo .env https://raw.githubusercontent.com/b0ykoe/AIOPatcher/main/deploy/.env.example
+sudo chmod 600 .env
+sudo nano .env
 ```
 
-**Zu Watchtower:**
+In der `.env` mindestens `AIOPATCHER_HOSTNAME` eintragen (DNS-Name, unter dem die Agents den Server erreichen, z. B.
+`patch.example.com`), für Produktion außerdem eine feste `AIOPATCHER_VERSION` (z. B. `0.6.1`). Alle weiteren Variablen
+sind optional und in der Datei erklärt. Die `docker-compose.yml` selbst bleibt unverändert; Updates der Datei lassen sich
+so einfach übernehmen.
+
+**Watchtower** (optional, meldet neue Images): den auskommentierten Block `watchtower` in der `docker-compose.yml`
+einkommentieren und das ntfy-Topic eintragen.
 - Das ursprüngliche `containrrr/watchtower` ist seit Dezember 2025 archiviert. Wir nutzen den gepflegten Fork `nickfedor/watchtower`. Für Produktion eine feste Version statt `latest` eintragen.
 - Watchtower läuft im **Monitor-Only-Modus**: Er meldet neue Images (z. B. per ntfy), **installiert aber nichts selbst**. Ein Dienst mit Zugriff auf alle deine Server soll sich nicht unbeaufsichtigt aktualisieren.
-- Watchtower hat Zugriff auf den Docker-Socket, also effektiv Root. Wer das nicht will, lässt den Watchtower-Block weg.
+- Watchtower hat Zugriff auf den Docker-Socket, also effektiv Root. Wer das nicht will, lässt den Block auskommentiert.
 
-**Solange es noch kein veröffentlichtes Image gibt**, das Image direkt auf der VM bauen (dauert beim ersten Mal einige Minuten,
-die VM braucht dafür kurzzeitig ca. 4 GB RAM) und in `docker-compose.yml` `image: aiopatcher-server:local` eintragen:
+**Image selbst bauen** statt das veröffentlichte zu nehmen (dauert beim ersten Mal einige Minuten, die VM braucht dafür
+kurzzeitig ca. 4 GB RAM):
 
 ```bash
 sudo apt install -y git
-git clone <REPO-URL> ~/aiopatcher-src
+git clone https://github.com/b0ykoe/AIOPatcher.git ~/aiopatcher-src
 cd ~/aiopatcher-src
-sudo docker build -t aiopatcher-server:local .
+sudo docker build -t ghcr.io/b0ykoe/aiopatcher-server:local .
 cd /opt/aiopatcher
 ```
 
-Starten (bei selbst gebautem Image `pull` weglassen):
+Dann in der `.env` `AIOPATCHER_VERSION=local` und `AIOPATCHER_PULL_POLICY=never` setzen (sonst versucht Docker, das
+Image aus der Registry zu holen). Bequemer geht beides mit `deploy/setup.sh`.
+
+Starten:
 
 ```bash
-sudo docker compose pull
 sudo docker compose up -d
 sudo docker compose logs -f aiopatcher
 ```
@@ -271,7 +253,9 @@ Weitere Befehle: `admin list`, `admin disable <name>`, `admin enable <name>`,
 
 ### Weitere Einstellungen
 
-Alle als Umgebungsvariable in `docker-compose.yml` (Standardwerte in Klammern):
+Alle als Umgebungsvariable des Containers (Standardwerte in Klammern). Die häufigsten setzt du über die `.env` (siehe
+[`deploy/.env.example`](../deploy/.env.example), z. B. `AIOPATCHER_LOCKED_FEATURES` für `AIOPatcher__LockedFeatures`); alle
+anderen trägst du zusätzlich unter `environment:` in der `docker-compose.yml` ein:
 
 | Variable | Bedeutung |
 |---|---|
@@ -424,7 +408,7 @@ sudo docker compose logs -f aiopatcher
 
 Der Server legt vor jeder Datenbank-Migration automatisch eine Kopie der Datenbank unter `/opt/aiopatcher/data/backups/` an.
 
-**Zurück auf die vorherige Version:** In `docker-compose.yml` den Tag von `latest` auf die alte Version setzen (z. B. `:0.1.0`), die Datenbank-Kopie zurückspielen, dann `up -d`.
+**Zurück auf die vorherige Version:** In der `.env` `AIOPATCHER_VERSION` auf die alte Version setzen (z. B. `0.6.0`), die Datenbank-Kopie zurückspielen, dann `up -d`.
 
 Alte Images aufräumen:
 

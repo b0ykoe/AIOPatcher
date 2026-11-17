@@ -15,3 +15,4 @@ TestResults/
 agent-dev/
 *.tsbuildinfo
 .claude/
+.env

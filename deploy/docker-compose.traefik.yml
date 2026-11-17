@@ -9,7 +9,8 @@
 # Traefik erreicht das Dashboard über 127.0.0.1, also ist 127.0.0.1 der einzige vertraute Proxy.
 #
 # Start:
-#   mkdir -p /opt/aiopatcher/data /opt/aiopatcher/traefik/letsencrypt && chown 1654:1654 /opt/aiopatcher/data
+#   mkdir -p /opt/aiopatcher/data /opt/aiopatcher/traefik/letsencrypt   (Besitzer von data setzt der Container selbst)
+#   cp deploy/.env.example .env   # AIOPATCHER_HOSTNAME und ACME_EMAIL eintragen
 #   cp deploy/traefik/dynamic.yml /opt/aiopatcher/traefik/   # Hostname und Netze darin anpassen
 #   docker compose -f docker-compose.traefik.yml up -d aiopatcher   # zuerst: legt die CA an (data/ca/ca.crt)
 #   docker compose -f docker-compose.traefik.yml up -d
@@ -27,7 +28,7 @@ services:
     volumes:
       - ${AIOPATCHER_DATA_PATH:-/opt/aiopatcher/data}:/data
     environment:
-      AIOPatcher__PublicHostname: ${AIOPATCHER_HOSTNAME:-patch.example.com} # Agents: https://<Hostname>:8443, Dashboard: https://<Hostname>
+      AIOPatcher__PublicHostname: ${AIOPATCHER_HOSTNAME:?AIOPATCHER_HOSTNAME setzen (DNS-Name des Servers)} # Agents: https://<Hostname>:8443, Dashboard: https://<Hostname>
       AIOPatcher__DataDirectory: /data
       AIOPatcher__DashboardPort: "${AIOPATCHER_DASHBOARD_PORT:-9443}" # bei Änderung auch in traefik/dynamic.yml anpassen
       AIOPatcher__AgentPort: "${AIOPATCHER_AGENT_PORT:-8443}"

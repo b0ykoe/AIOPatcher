@@ -1,26 +1,33 @@
-# AIOPatcher: Server + Dashboard in einem Container.
-# Schnellstart: README.md → "Schnellstart". Ausführlich (VM, Firewall, Backups): docs/SERVER-SETUP.md.
+# AIOPatcher: Server + Dashboard in einem Container. Eine Datei für Docker Compose und Portainer;
+# alle Einstellungen kommen aus der .env daneben (Vorlage: .env.example) bzw. aus Portainers "Environment variables".
 #
-#   mkdir -p /opt/aiopatcher/data   (Besitzer setzt der Container beim Start selbst)
+# Docker Compose:
+#   mkdir -p /opt/aiopatcher && cd /opt/aiopatcher
+#   docker-compose.yml und .env.example hierher kopieren, .env.example → .env, AIOPATCHER_HOSTNAME eintragen
 #   docker compose up -d && docker compose logs aiopatcher | grep -i "setup token"
 #
-# Mit Traefik: deploy/docker-compose.traefik.yml. nginx / Nginx Proxy Manager: docs/REVERSE-PROXY.md.
+# Portainer: App-Template (README → "Mit Portainer") oder Stacks → Add stack → Repository bzw. Upload,
+#   Variablen per "Load variables from .env file" aus der .env übernehmen.
 #
-# Updates von AIOPatcher selbst: Das Dashboard zeigt an, wenn eine neue Version da ist (UpdateCheckRepository).
-# Aktualisieren dann mit:  docker compose pull && docker compose up -d
+# Ausführlich (VM, Firewall, Backups): docs/SERVER-SETUP.md. Mit Traefik: deploy/docker-compose.traefik.yml.
+# nginx / Nginx Proxy Manager: docs/REVERSE-PROXY.md.
 #
-# Einstellungen kommen aus Umgebungsvariablen (Shell, .env neben dieser Datei oder Portainer "Environment variables").
-# Nicht gesetzt = der Wert hinter ":-" bzw. "-".
+# Updates: Das Dashboard zeigt an, wenn eine neue Version da ist. Jedes "docker compose up -d" bzw. jeder Deploy in
+# Portainer holt das aktuelle Image (AIOPATCHER_PULL_POLICY, Standard always).
+#
+# Nicht gesetzte Variablen = der Wert hinter ":-" bzw. "-". Nur AIOPATCHER_HOSTNAME ist Pflicht.
 services:
   aiopatcher:
-    image: ghcr.io/b0ykoe/aiopatcher-server:${AIOPATCHER_VERSION:-latest} # für Produktion besser eine feste Version, z. B. 0.3.0
+    image: ghcr.io/b0ykoe/aiopatcher-server:${AIOPATCHER_VERSION:-latest} # für Produktion besser eine feste Version, z. B. 0.6.1
+    pull_policy: ${AIOPATCHER_PULL_POLICY:-always} # never bei selbst gebautem Image (aiopatcher-server:local)
     container_name: aiopatcher
     restart: unless-stopped
     network_mode: host # damit ufw-Regeln greifen (Docker-Port-Mappings würden ufw umgehen)
     volumes:
+      # Host-Ordner (Standard) oder Name eines Docker-Volumes (z. B. aiopatcher-data, so legt es das Portainer-Template an)
       - ${AIOPATCHER_DATA_PATH:-/opt/aiopatcher/data}:/data
     environment:
-      AIOPatcher__PublicHostname: ${AIOPATCHER_HOSTNAME:-patch.example.com} # DNS-Name, unter dem Agents den Server erreichen
+      AIOPatcher__PublicHostname: ${AIOPATCHER_HOSTNAME:?AIOPATCHER_HOSTNAME setzen (DNS-Name oder IP, unter der die Agents den Server erreichen)}
       AIOPatcher__DataDirectory: /data
       AIOPatcher__DashboardPort: "${AIOPATCHER_DASHBOARD_PORT:-9443}" # nur intern/VPN freigeben
       AIOPatcher__AgentPort: "${AIOPATCHER_AGENT_PORT:-8443}" # darf öffentlich erreichbar sein (mTLS)
@@ -78,3 +85,7 @@ services:
   #     WATCHTOWER_SCHEDULE: "0 0 7 * * *"
   #     WATCHTOWER_NOTIFICATION_URL: "ntfy://ntfy.sh/DEIN-GEHEIMES-TOPIC"
   #     TZ: Europe/Berlin
+
+# Nur genutzt, wenn AIOPATCHER_DATA_PATH ein Volume-Name statt eines Ordners ist.
+volumes:
+  aiopatcher-data:
