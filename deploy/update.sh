@@ -55,6 +55,16 @@ die() { printf '\033[1;31mFehler:\033[0m %s\n' "$*" >&2; exit 1; }
 # git im Code-Ordner; safe.directory, weil root sonst bei Repos anderer Benutzer abbricht
 g() { git -c safe.directory="$REPO" -C "$REPO" "$@"; }
 
+# Version aus dem letzten Release-Tag: "v0.7.0-3-gabc1234" → 0.7.0.3, genau auf dem Tag → 0.7.0. Fehler = kein Tag.
+tag_version() {
+  local desc tag n
+  desc="$(git -c safe.directory="$1" -C "$1" describe --tags --long --match 'v[0-9]*' 2>/dev/null)" || return 1
+  n="${desc%-g*}"; n="${n##*-}"
+  tag="${desc%-*-g*}"; tag="${tag#v}"
+  case "$tag" in *[!0-9.]* | "") return 1 ;; esac
+  if [ "$n" -gt 0 ] 2>/dev/null; then echo "$tag.$n"; else echo "$tag"; fi
+}
+
 image_version() {
   docker image inspect -f '{{index .Config.Labels "org.opencontainers.image.version"}}' "$1" 2>/dev/null || true
 }
@@ -121,6 +131,7 @@ update_local() {
       exit 0
     fi
     g pull --ff-only -q || die "git pull fehlgeschlagen (lokale Änderungen in $REPO? 'git -C $REPO status')."
+    g fetch -q --tags 2>/dev/null || true # Release-Tags für die Versionsnummer
     after="$(g rev-parse HEAD)"
     [ "$before" != "$after" ] || changed=0
     [ "$changed" -eq 0 ] || g log --oneline "$before..$after" | head -n 20 | sed 's/^/    /'
@@ -130,9 +141,11 @@ update_local() {
     info "$REPO ist kein Git-Repo: baue den Code, der dort liegt (neuen Stand vorher hineinkopieren)."
   fi
 
-  # Versionsnummer: 0.1.<Anzahl Commits>, ohne Git fortlaufend. Agents bekommen damit das Update angeboten.
+  # Versionsnummer: aus dem letzten Release-Tag (v0.7.0 → 0.7.0, 3 Commits danach → 0.7.0.3), passt so zu den
+  # GitHub-Releases. Ohne Tags bzw. ohne Git: 0.1.<fortlaufend>. Agents bekommen damit das Update angeboten.
   if [ "$count" -gt "$BUILD_NUMBER" ]; then BUILD_NUMBER="$count"; elif [ "$count" -eq 0 ]; then BUILD_NUMBER=$((BUILD_NUMBER + 1)); fi
-  local version="0.1.$BUILD_NUMBER"
+  local version
+  version="$(tag_version "$REPO")" || version="0.1.$BUILD_NUMBER"
 
   # Aktuell = kein neuer Code und das Image hat schon diese Version (Code von Hand geholt zählt also als neu)
   if [ "$changed" -eq 0 ] && [ "$FORCE" -eq 0 ] && [ "$(image_version "$IMAGE")" = "$version" ]; then

@@ -79,8 +79,9 @@ sudo aiopatcher-update
 
 Holt den neuen Code (`git pull`), baut das Image, während der alte Container weiterläuft, sichert dann den Datenordner
 (`/opt/aiopatcher/backups`, die letzten drei), startet neu und wartet, bis AIOPatcher gesund ist. Startet die neue
-Version nicht, kommen altes Image und Daten automatisch zurück. Die Versionsnummer eigener Builds ist `0.1.<Commits>`,
-dadurch bekommen die Agents das Update ebenfalls angeboten. `--check` zeigt nur, ob es Neues gibt; `--force` baut auch
+Version nicht, kommen altes Image und Daten automatisch zurück. Die Versionsnummer eigener Builds folgt dem letzten
+Release-Tag (genau auf `v0.7.0`: `0.7.0`, drei Commits danach: `0.7.0.3`), passt also zu den GitHub-Releases; die Agents
+bekommen das Update ebenfalls angeboten. `--check` zeigt nur, ob es Neues gibt; `--force` baut auch
 ohne neuen Code. Nachts automatisch: beim Setup „Auto-Update“ wählen (systemd-Timer, Log: `journalctl -u aiopatcher-update`).
 Mit fertigem Image (`--image`) holt der Befehl stattdessen das neue Image (`docker compose pull`).
 

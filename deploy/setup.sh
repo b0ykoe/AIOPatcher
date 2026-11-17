@@ -285,14 +285,23 @@ if [ "$DRY_RUN" -eq 0 ] && ! command -v docker >/dev/null 2>&1; then
   curl -fsSL https://get.docker.com | sh
 fi
 
-# Versionsnummer für eigene Builds: 0.1.<Anzahl Commits> (ohne Git fortlaufend), damit Agents Updates angeboten bekommen
+# Versionsnummer für eigene Builds: aus dem letzten Release-Tag (v0.7.0 → 0.7.0, 3 Commits danach → 0.7.0.3), passt so
+# zu den GitHub-Releases; ohne Tags bzw. ohne Git 0.1.<fortlaufend>. Agents bekommen damit Updates angeboten.
+tag_version() {
+  local desc tag n
+  desc="$(git -c safe.directory="$1" -C "$1" describe --tags --long --match 'v[0-9]*' 2>/dev/null)" || return 1
+  n="${desc%-g*}"; n="${n##*-}"
+  tag="${desc%-*-g*}"; tag="${tag#v}"
+  case "$tag" in *[!0-9.]* | "") return 1 ;; esac
+  if [ "$n" -gt 0 ] 2>/dev/null; then echo "$tag.$n"; else echo "$tag"; fi
+}
 BUILD_NUMBER="$SAVED_BUILD_NUMBER"
 if [ -z "$IMAGE" ]; then
   IMAGE=aiopatcher-server:local
   if [ "$NO_BUILD" -eq 0 ]; then
     COMMITS="$(git -c safe.directory="$REPO" -C "$REPO" rev-list --count HEAD 2>/dev/null || echo 0)"
     if [ "$COMMITS" -gt "$BUILD_NUMBER" ]; then BUILD_NUMBER="$COMMITS"; elif [ "$COMMITS" -eq 0 ]; then BUILD_NUMBER=$((BUILD_NUMBER + 1)); fi
-    VERSION="0.1.$BUILD_NUMBER"
+    VERSION="$(tag_version "$REPO")" || VERSION="0.1.$BUILD_NUMBER"
     [ -f "$REPO/Dockerfile" ] || die "Kein Dockerfile in $REPO. Skript aus dem entpackten Repo starten oder --image angeben."
     ensure_build_resources
     info "Baue das Image $VERSION (Server, Weboberfläche, alle Agents; dauert ca. 10-15 Minuten, auf kleinen Servern länger) ..."
