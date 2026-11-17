@@ -2,19 +2,18 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { Link } from "react-router";
 import { Alert, Anchor, Badge, Button, Card, Group, Progress, SimpleGrid, Stack, Text, ThemeIcon, Title, Tooltip } from "@mantine/core";
 import {
-  IconAlertTriangle, IconBug, IconCalendarCog, IconCircleCheck, IconClock, IconClockPlay, IconHandStop, IconHeartbeat, IconPackage, IconPlugConnectedX, IconPlus,
+  IconAlertTriangle, IconBug, IconCalendarCog, IconCircleCheck, IconClock, IconClockPlay, IconHandStop, IconHeartbeat, IconListCheck, IconPackage, IconPlugConnectedX, IconPlus,
   IconRefresh, IconServer, IconShieldExclamation, IconUsersGroup, IconWand,
 } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
-import { api, formatDateTime, formatRelative, formatWindowStart, type BulkJobResult, type HostSummary, type Job, type Runbook } from "../api";
+import { api, describeJob, formatDateTime, formatRelative, formatWindowStart, type BulkJobResult, type HostSummary, type Job, type Runbook } from "../api";
 import { useCan, useShell, useSimple } from "../App";
 import { useFeatures } from "../features";
-import { JobList } from "../components/JobTable";
 import { levelColor, levelOf } from "../components/metrics/charts";
 import { AssignPlanModal } from "../components/plans/AssignPlanModal";
 import { openSetupWizard } from "../components/SetupWizard";
 import { UpdateBanner } from "../components/UpdateBanner";
-import { confirmAction, HostStatusLabel, notifyError, reportBulk, StatCard } from "../components/ui";
+import { confirmAction, HostStatusLabel, JobStatusBadge, notifyError, reportBulk, StatCard } from "../components/ui";
 import { TemplatePicker } from "./PlansPage";
 
 interface Todo {
@@ -30,7 +29,7 @@ interface Todo {
 const staleAfterMs = 15 * 60 * 1000;
 
 /**
- * Startseite: oben drei Karten (was dich braucht als Liste mit je einer Aktion, nächste Wartungsfenster, letzte Jobs),
+ * Startseite: oben drei gleich große Karten (was dich braucht mit je einer Aktion, nächste Wartungsfenster, letzte Jobs),
  * im erweiterten Modus Kennzahlen, darunter alle Hosts als kleine Karten mit CPU/RAM/Speicher.
  */
 export function OverviewPage() {
@@ -103,17 +102,17 @@ export function OverviewPage() {
   const todos: Todo[] = [];
   if (kev.length > 0) {
     todos.push({
-      key: "kev", color: "red", icon: <IconBug size={18} />, title: t("simple.kevTitle", { count: kev.length }), text: `${t("simple.kevText")} ${names(kev)}`,
+      key: "kev", color: "red", icon: <IconBug size={14} />, title: t("simple.kevTitle", { count: kev.length }), text: `${t("simple.kevText")} ${names(kev)}`,
       action: can.operate && isOn("PatchJobs") && (
-        <Button size="xs" color="red" onClick={() => run(kev.map((h) => h.id), "Patch", t("simple.kevTitle", { count: kev.length }), names(kev))}>{t("simple.patchNow")}</Button>
+        <Button size="compact-xs" color="red" onClick={() => run(kev.map((h) => h.id), "Patch", t("simple.kevTitle", { count: kev.length }), names(kev))}>{t("simple.patchNow")}</Button>
       ),
     });
   }
   if (security.length > 0) {
     todos.push({
-      key: "security", color: "pink", icon: <IconShieldExclamation size={18} />, title: t("simple.securityTitle", { count: security.length }), text: names(security),
+      key: "security", color: "pink", icon: <IconShieldExclamation size={14} />, title: t("simple.securityTitle", { count: security.length }), text: names(security),
       action: can.operate && isOn("PatchJobs") && (
-        <Button size="xs" variant="light" color="pink" onClick={() => run(security.map((h) => h.id), "Patch", t("simple.securityTitle", { count: security.length }), names(security))}>
+        <Button size="compact-xs" variant="light" color="pink" onClick={() => run(security.map((h) => h.id), "Patch", t("simple.securityTitle", { count: security.length }), names(security))}>
           {t("simple.installNow")}
         </Button>
       ),
@@ -121,9 +120,9 @@ export function OverviewPage() {
   }
   if (reboot.length > 0) {
     todos.push({
-      key: "reboot", color: "yellow", icon: <IconRefresh size={18} />, title: t("simple.rebootTitle", { count: reboot.length }), text: `${names(reboot)}. ${t("simple.rebootText")}`,
+      key: "reboot", color: "yellow", icon: <IconRefresh size={14} />, title: t("simple.rebootTitle", { count: reboot.length }), text: `${names(reboot)}. ${t("simple.rebootText")}`,
       action: can.operate && isOn("Reboots") && (
-        <Button size="xs" variant="light" color="yellow" onClick={() => run(reboot.map((h) => h.id), "Reboot", t("simple.rebootTitle", { count: reboot.length }), `${names(reboot)}. ${t("hostsPage.rebootText")}`, true)}>
+        <Button size="compact-xs" variant="light" color="yellow" onClick={() => run(reboot.map((h) => h.id), "Reboot", t("simple.rebootTitle", { count: reboot.length }), `${names(reboot)}. ${t("hostsPage.rebootText")}`, true)}>
           {t("hostsPage.reboot")}
         </Button>
       ),
@@ -131,24 +130,24 @@ export function OverviewPage() {
   }
   if (offline.length > 0) {
     todos.push({
-      key: "offline", color: "gray", icon: <IconPlugConnectedX size={18} />, title: t("simple.offlineTitle", { count: offline.length }), text: `${names(offline)}. ${t("simple.offlineText")}`,
-      action: <Button size="xs" component={Link} to="/hosts" variant="default">{t("overview.allHosts")}</Button>,
+      key: "offline", color: "gray", icon: <IconPlugConnectedX size={14} />, title: t("simple.offlineTitle", { count: offline.length }), text: `${names(offline)}. ${t("simple.offlineText")}`,
+      action: <Button size="compact-xs" component={Link} to="/hosts" variant="default">{t("overview.allHosts")}</Button>,
     });
   }
   if (unplanned.length > 0) {
     todos.push({
-      key: "plan", color: "violet", icon: <IconCalendarCog size={18} />, title: t("simple.planTitle", { count: unplanned.length }),
+      key: "plan", color: "violet", icon: <IconCalendarCog size={14} />, title: t("simple.planTitle", { count: unplanned.length }),
       text: `${names(unplanned)}. ${t("simple.planText")}`,
       action: can.operate && (plans.length > 0
-        ? <Button size="xs" variant="gradient" className="gradient-button" leftSection={<IconUsersGroup size={14} />} onClick={() => setAssignOpen(true)}>{t("plans.assignShort")}</Button>
-        : <Button size="xs" variant="gradient" className="gradient-button" onClick={() => setTemplateOpen(true)}>{t("plans.chooseTemplate")}</Button>),
+        ? <Button size="compact-xs" variant="gradient" className="gradient-button" leftSection={<IconUsersGroup size={12} />} onClick={() => setAssignOpen(true)}>{t("plans.assignShort")}</Button>
+        : <Button size="compact-xs" variant="gradient" className="gradient-button" onClick={() => setTemplateOpen(true)}>{t("plans.chooseTemplate")}</Button>),
     });
   }
   if (doublePatch.length > 0) {
     todos.push({
-      key: "native", color: "orange", icon: <IconClockPlay size={18} />, title: t("overview.doubleTitle", { count: doublePatch.length }),
+      key: "native", color: "orange", icon: <IconClockPlay size={14} />, title: t("overview.doubleTitle", { count: doublePatch.length }),
       text: `${names(doublePatch)}. ${t("overview.doubleText")}`,
-      action: <Button size="xs" component={Link} to={`/hosts/${doublePatch[0].id}`} variant="light" color="orange">{t("overview.doubleButton")}</Button>,
+      action: <Button size="compact-xs" component={Link} to={`/hosts/${doublePatch[0].id}`} variant="light" color="orange">{t("overview.doubleButton")}</Button>,
     });
   }
 
@@ -168,71 +167,63 @@ export function OverviewPage() {
         </Alert>
       )}
 
-      {/* Oben drei Karten: was dich braucht, was ansteht, was zuletzt lief */}
-      <div className="overview-top">
-        <Card className="overview-todos" padding="lg">
-          <Group gap="md" wrap="nowrap" mb={todos.length ? "md" : 0}>
-            <ThemeIcon size={48} radius="xl" variant={todos.length === 0 ? "gradient" : "light"} color={todos.length === 0 ? "teal" : todos[0].color}>
-              {todos.length === 0 ? <IconCircleCheck size={28} /> : <IconAlertTriangle size={26} />}
-            </ThemeIcon>
-            <div style={{ minWidth: 0 }}>
-              <Title order={3}>{todos.length === 0 ? t("simple.allGood") : t("simple.needsYou", { count: todos.length })}</Title>
-              <Text size="sm" c="dimmed">{t("simple.status", { online: o?.online ?? 0, hosts: o?.hosts ?? 0, updates: o?.pendingUpdates ?? 0 })}</Text>
-            </div>
-          </Group>
-          {todos.length > 0 && (
-            <Stack gap={0} className="todo-list">
-              {todos.map((todo) => (
-                <Group key={todo.key} justify="space-between" wrap="wrap" gap="sm" py="sm" className="todo-row">
-                  <Group gap="sm" wrap="nowrap" style={{ flex: 1, minWidth: 220 }}>
-                    <ThemeIcon size={34} radius="md" variant="light" color={todo.color}>{todo.icon}</ThemeIcon>
-                    <div style={{ minWidth: 0 }}>
-                      <Text fw={600} size="sm">{todo.title}</Text>
-                      <Text size="xs" c="dimmed" lineClamp={2}>{todo.text}</Text>
-                    </div>
-                  </Group>
-                  {todo.action}
+      {/* Oben drei gleich große Karten: was dich braucht, was ansteht, was zuletzt lief (je höchstens drei Zeilen) */}
+      <SimpleGrid cols={{ base: 1, md: 3 }} spacing="md">
+        <InfoCard
+          color={todos.length === 0 ? "teal" : todos[0].color}
+          icon={todos.length === 0 ? <IconCircleCheck size={20} /> : <IconAlertTriangle size={20} />}
+          title={todos.length === 0 ? t("simple.allGood") : t("simple.needsYou", { count: todos.length })}
+          subtitle={t("simple.status", { online: o?.online ?? 0, hosts: o?.hosts ?? 0, updates: o?.pendingUpdates ?? 0 })}
+        >
+          {todos.slice(0, 3).map((todo) => (
+            <Group key={todo.key} gap="xs" wrap="nowrap" justify="space-between">
+              <Tooltip label={todo.text} multiline w={300} withArrow openDelay={300}>
+                <Group gap={8} wrap="nowrap" style={{ minWidth: 0 }}>
+                  <ThemeIcon size={22} radius="sm" variant="light" color={todo.color}>{todo.icon}</ThemeIcon>
+                  <Text size="sm" truncate>{todo.title}</Text>
                 </Group>
-              ))}
-            </Stack>
-          )}
-        </Card>
+              </Tooltip>
+              <div style={{ flexShrink: 0 }}>{todo.action}</div>
+            </Group>
+          ))}
+          {todos.length > 3 && <Text size="xs" c="dimmed">{t("overview.more", { count: todos.length - 3 })}</Text>}
+        </InfoCard>
 
-        <Card padding="lg">
-          <Group justify="space-between" mb="md" wrap="nowrap">
-            <Text fw={700}>{t("overview.nextWindows")}</Text>
-            <Anchor component={Link} to="/auto-patch" size="sm">{t("nav.autoPatch")}</Anchor>
-          </Group>
-          {windows.length === 0 ? (
-            <Stack gap="xs" align="flex-start">
-              <Text size="sm" c="dimmed">{t("overview.noWindows")}</Text>
-              {can.operate && <Button size="xs" variant="light" onClick={() => setTemplateOpen(true)}>{t("plans.chooseTemplate")}</Button>}
-            </Stack>
-          ) : (
-            <Stack gap="sm">
-              {windows.map((p) => (
-                <Group key={p.id} gap="sm" wrap="nowrap">
-                  <ThemeIcon size={34} radius="md" variant="light" color="violet"><IconClock size={18} /></ThemeIcon>
-                  <div style={{ minWidth: 0 }}>
-                    <Text size="sm" fw={600}>{formatWindowStart(p.schedule.nextWindowStart)}</Text>
-                    <Anchor component={Link} to={`/auto-patch/plans/${p.id}`} size="xs" c="dimmed" truncate display="block">
-                      {p.name} · {t("plans.hostCount", { count: p.waves.reduce((n, w) => n + w.members.length, 0) })}
-                    </Anchor>
-                  </div>
-                </Group>
-              ))}
-            </Stack>
-          )}
-        </Card>
+        <InfoCard
+          color="violet"
+          icon={<IconClock size={20} />}
+          title={t("overview.nextWindows")}
+          subtitle={windows[0] ? formatWindowStart(windows[0].schedule.nextWindowStart) : t("overview.noWindows")}
+          link={<Anchor component={Link} to="/auto-patch" size="xs">{t("nav.autoPatch")}</Anchor>}
+        >
+          {windows.length === 0
+            ? can.operate && <div><Button size="compact-xs" variant="light" onClick={() => setTemplateOpen(true)}>{t("plans.chooseTemplate")}</Button></div>
+            : windows.slice(0, 3).map((p) => (
+              <Group key={p.id} gap="xs" wrap="nowrap" justify="space-between">
+                <Anchor component={Link} to={`/auto-patch/plans/${p.id}`} size="sm" truncate>{p.name}</Anchor>
+                <Text size="xs" c="dimmed" style={{ whiteSpace: "nowrap" }}>{formatWindowStart(p.schedule.nextWindowStart)}</Text>
+              </Group>
+            ))}
+        </InfoCard>
 
-        <Card padding="lg">
-          <Group justify="space-between" mb="md" wrap="nowrap">
-            <Text fw={700}>{t("overview.recentJobs")}</Text>
-            <Anchor component={Link} to="/auto-patch?tab=jobs" size="sm">{t("overview.allJobs")}</Anchor>
-          </Group>
-          <JobList jobs={jobs.slice(0, 5)} />
-        </Card>
-      </div>
+        <InfoCard
+          color="cyan"
+          icon={<IconListCheck size={20} />}
+          title={t("overview.recentJobs")}
+          subtitle={jobs[0] ? formatRelative(jobs[0].createdAt) : t("jobs.noneShort")}
+          link={<Anchor component={Link} to="/auto-patch?tab=jobs" size="xs">{t("overview.allJobs")}</Anchor>}
+        >
+          {jobs.slice(0, 3).map((j) => (
+            <Group key={j.id} gap="xs" wrap="nowrap" justify="space-between">
+              <Text size="sm" truncate>
+                <Anchor component={Link} to={`/jobs/${j.id}`} size="sm">{describeJob(j)}</Anchor>
+                <Text span size="xs" c="dimmed"> · {j.hostName}</Text>
+              </Text>
+              <div style={{ flexShrink: 0 }}><JobStatusBadge status={j.status} /></div>
+            </Group>
+          ))}
+        </InfoCard>
+      </SimpleGrid>
 
       {!simple && o && (
         <SimpleGrid cols={{ base: 2, md: 3, xl: 6 }} spacing="md">
@@ -258,6 +249,27 @@ export function OverviewPage() {
       <AssignPlanModal opened={assignOpen} onClose={() => setAssignOpen(false)} onDone={load} hostIds={unplanned.map((h) => h.id)} hosts={unplanned} />
       <TemplatePicker opened={templateOpen} onClose={() => setTemplateOpen(false)} />
     </Stack>
+  );
+}
+
+/** Gleich große Karte oben auf der Startseite (Stil wie die Kennzahlen). */
+function InfoCard({ color, icon, title, subtitle, link, children }: {
+  color: string; icon: ReactNode; title: string; subtitle: string; link?: ReactNode; children?: ReactNode;
+}) {
+  return (
+    <Card className="stat-card" style={{ ["--stat-color" as string]: `var(--mantine-color-${color}-5)` }}>
+      <Group justify="space-between" wrap="nowrap" align="flex-start" gap="xs">
+        <Group gap="sm" wrap="nowrap" style={{ minWidth: 0 }}>
+          <ThemeIcon variant="light" color={color} size="lg" radius="md">{icon}</ThemeIcon>
+          <div style={{ minWidth: 0 }}>
+            <Text fw={700} truncate>{title}</Text>
+            <Text size="xs" c="dimmed" truncate>{subtitle}</Text>
+          </div>
+        </Group>
+        {link && <div style={{ flexShrink: 0, whiteSpace: "nowrap" }}>{link}</div>}
+      </Group>
+      <Stack gap={8} mt="md">{children}</Stack>
+    </Card>
   );
 }
 

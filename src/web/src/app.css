@@ -456,38 +456,6 @@
 }
 
 /* Startseite: nächste Wartungsfenster rechts im Stand-Kasten (auf schmalen Bildschirmen darunter) */
-/* Startseite oben: To-dos | Wartungsfenster | Jobs. Mittelbreit: To-dos über die volle Breite, darunter die beiden anderen. */
-.overview-top {
-  display: grid;
-  gap: var(--mantine-spacing-md);
-  grid-template-columns: minmax(0, 1fr);
-  align-items: stretch;
-}
-
-@media (min-width: 62em) {
-  .overview-top {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .overview-todos {
-    grid-column: 1 / -1;
-  }
-}
-
-@media (min-width: 88em) {
-  .overview-top {
-    grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, 1fr);
-  }
-
-  .overview-todos {
-    grid-column: auto;
-  }
-}
-
-.todo-row + .todo-row {
-  border-top: 1px solid var(--mantine-color-default-border);
-}
-
 /* Kleine Host-Kacheln auf der Startseite */
 .host-grid {
   display: grid;
