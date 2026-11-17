@@ -66,11 +66,12 @@ ENV AIOPatcher__DataDirectory=/data \
     AIOPatcher__DashboardPort=9443 \
     AIOPatcher__AgentPort=8443
 # /data gehört dem Dienst-Benutzer: ein neues Docker-Volume (z. B. Portainer-Stack) übernimmt das, sonst gehört es root
-RUN mkdir -p /data && chown app:app /data
+RUN mkdir -p /data && chown app:app /data && command -v setpriv
 VOLUME /data
 EXPOSE 8443 9443
-# Gesundheitsprüfung ohne curl im Image: der Server fragt sich selbst unter /healthz.
-HEALTHCHECK --interval=60s --timeout=10s --start-period=90s --retries=3   CMD ["dotnet", "AIOPatcher.Server.dll", "healthcheck"]
-# Nicht als Root laufen (UID 1654 = "app" im .NET-Image).
-USER app
-ENTRYPOINT ["dotnet", "AIOPatcher.Server.dll"]
+# Gesundheitsprüfung ohne curl im Image: der Server fragt sich selbst unter /healthz (als app, nicht als root).
+HEALTHCHECK --interval=60s --timeout=10s --start-period=90s --retries=3   CMD ["setpriv", "--reuid=app", "--regid=app", "--init-groups", "dotnet", "AIOPatcher.Server.dll", "healthcheck"]
+# Der Server läuft nicht als Root (UID 1654 = "app" im .NET-Image). Das Startskript gibt /data vorher dem Benutzer app
+# (Host-Ordner, alte Volumes) und wechselt dann zu app.
+COPY --chmod=755 deploy/entrypoint.sh /usr/local/bin/aiopatcher-entrypoint
+ENTRYPOINT ["aiopatcher-entrypoint", "dotnet", "AIOPatcher.Server.dll"]
