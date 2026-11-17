@@ -8,6 +8,8 @@ Geschrieben für Anwender, nicht als Commit-Liste.
 
 ## [Unveröffentlicht]
 
+## [0.8.0] - 2026-11-17
+
 ### Neu
 - **Öffentlicher Zugang für Hosts außerhalb (Cloud):** Der Server läuft intern, Hosts im Netz oder per VPN verbinden
   sich wie bisher direkt. Hosts außerhalb erreichen ihn über eine öffentliche Adresse deines eigenen Reverse Proxys.
@@ -22,8 +24,8 @@ Geschrieben für Anwender, nicht als Commit-Liste.
   gegen Prüfsummen aus dem Befehl geprüft.
 
 ### Verbessert
-- README: Docker-Modul kann Container aktualisieren; `allowAppUpdates` gilt auch für Container-Updates.
 - Release-Seiten zeigen jetzt Patchnotes statt nur der Installationsanleitung.
+- Dokumentation: Container-Updates und die Policy `allowAppUpdates` (gilt auch für Container) beschrieben.
 
 ### Hinweise zum Update
 - Neuer Proxy-Port **8080** (HTTP, `AIOPATCHER_PROXY_PORT`, 0 = aus): nur im LAN freigeben, er ist das Ziel für
