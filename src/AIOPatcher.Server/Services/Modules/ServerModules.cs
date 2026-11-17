@@ -196,7 +196,8 @@ public sealed class DockerServerModule : ServerModule
     public override PlannedTask? Due(ManagedHost host, ModuleContext context, string? polledVersion)
     {
         var last = context.LastRequested(Id, ModuleActions.Inventory);
-        var asked = host.ContainersRequestedAt > last || context.LastRequested(AgentModules.Updates, ModuleActions.Scan) > last;
+        var asked = host.ContainersRequestedAt > last || context.LastRequested(AgentModules.Updates, ModuleActions.Scan) > last
+                    || context.LastRequested(Id, ModuleActions.AppUpdate) > last; // nach "Container aktualisieren" gleich neu melden
         return context.Older(Id, ModuleActions.Inventory, Interval) || asked ? new PlannedTask(ModuleActions.Inventory) : null;
     }
 

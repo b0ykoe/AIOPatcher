@@ -98,15 +98,35 @@ public sealed class SoftwareModule(IPlatformInventory inventory, JobExecutor exe
     }
 }
 
-/// <summary>docker.inventory: laufende Container (nur lesen).</summary>
+/// <summary>docker.inventory: laufende Container; docker.appupdate: einen Compose-Container aktualisieren.</summary>
 public sealed class DockerModule : IAgentModule
 {
     public string Id => AgentModules.Docker;
     public bool Available => OperatingSystem.IsLinux() && (File.Exists("/usr/bin/docker") || File.Exists("/usr/local/bin/docker"));
-    public IReadOnlyList<string> Actions { get; } = [ModuleActions.Inventory];
+    public IReadOnlyList<string> Actions { get; } = [ModuleActions.Inventory, ModuleActions.AppUpdate];
+
+    /// <summary>Container aktualisieren gilt wie Programm-Updates: allowAppUpdates und allowPatch All.</summary>
+    public static string? PolicyRejects(AgentPolicy policy) =>
+        !policy.AllowAppUpdates ? "Local policy forbids program and container updates (allowAppUpdates: false)."
+        : policy.AllowPatch != PatchPermission.All ? "Local policy does not allow container updates (needs allowPatch: All)."
+        : null;
 
     public async Task<TaskOutcome> ExecuteAsync(AgentTask task, TaskContext context, CancellationToken ct)
     {
+        if (task.Action == ModuleActions.AppUpdate)
+        {
+            if (PolicyRejects(context.Policy) is { } rejected)
+            {
+                context.Log($"[agent] Rejected: {rejected}");
+                return TaskOutcome.Rejected(rejected);
+            }
+
+            var name = PullJsonContext.FromElement(task.Payload, PullJsonContext.Default.AppUpdateRequest)?.Packages.FirstOrDefault();
+            return name is null
+                ? TaskOutcome.Rejected("No container given.")
+                : Json.From(await DockerUpdater.UpdateAsync(name, context.Log, ct));
+        }
+
         var containers = await DockerInventory.CollectAsync(ct);
         return containers is null
             ? new TaskOutcome(JobOutcome.Failed, "Docker daemon not reachable.")

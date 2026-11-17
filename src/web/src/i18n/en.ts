@@ -89,7 +89,25 @@ const en: Translation = {
     stepAutoPatch: "Create a patch plan",
     go: "Go",
   },
-  jobType: {
+  containers: {
+    update: "Update",
+    updateTitle: "Update {{name}}?",
+    updateText: "The agent pulls the new image ({{image}}) and recreates only this service (compose {{compose}}). Volumes and settings stay; the container is briefly unavailable. Afterwards the agent checks that it runs again.",
+    updateStarted: "Update for {{name}} started.",
+    blockerShort: {
+      notCompose: "no compose",
+      portainer: "Portainer",
+      noFile: "file missing",
+      agent: "agent too old",
+    },
+    blocker: {
+      notCompose: "Not started with Docker Compose (e.g. docker run). Please update it with the tool that created it.",
+      portainer: "Belongs to a Portainer stack: the compose file lives in Portainer. Use \"Pull and redeploy\" there.",
+      noFile: "The compose file it was started with is no longer on the host.",
+      agent: "The agent on this host is too old for container updates; it will update itself shortly.",
+    },
+  },  jobType: {
+    containerUpdate: "Container update",
     systemChange: "System change",
     appUpdate: "Program updates",
     scan: "Scan",
@@ -1159,8 +1177,8 @@ const en: Translation = {
     desc_PatchJobs: "Patch jobs on hosts (manual, auto-patch, patch plans). Off = AIOPatcher only reports.",
     name_Reboots: "Reboots",
     desc_Reboots: "Reboot hosts (button, after patches, in patch plans). Off = patches run, you reboot yourself.",
-    name_AppUpdates: "Program updates via winget",
-    desc_AppUpdates: "Update installed Windows programs via winget. The software comes from the winget catalog (vendor installers), not from Microsoft Update.",
+    name_AppUpdates: "Program and container updates",
+    desc_AppUpdates: "Update installed Windows programs via winget (software from the winget catalog, not Microsoft Update) and move Docker Compose containers to a new image with one click.",
     name_AgentSelfUpdate: "Agent self-update",
     desc_AgentSelfUpdate: "Agents install new versions themselves: only with a valid signature (release key or, without one, this server's key), after a passed self-test and with automatic rollback if the new version does not report.",
     name_SnapshotTests: "Test snapshots",

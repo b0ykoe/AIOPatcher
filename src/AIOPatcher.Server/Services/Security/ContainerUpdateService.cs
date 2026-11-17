@@ -286,6 +286,10 @@ public sealed class ContainerUpdateService(
                 LocalDigest = reference?.LocalDigest(report.RepoDigests) is { } d ? Cut(d, 400) : null,
                 State = report.State is null ? null : Cut(report.State, 32),
                 SeenAt = now,
+                ComposeProject = report.Compose?.Project is { } p ? Cut(p, 200) : null,
+                ComposeService = report.Compose?.Service is { } sv ? Cut(sv, 200) : null,
+                ComposeFiles = report.Compose is { ConfigFiles.Count: > 0 } c ? Cut(string.Join(',', c.ConfigFiles), 1000) : null,
+                ComposeFilesFound = report.Compose?.FilesFound == true,
             });
         }
 

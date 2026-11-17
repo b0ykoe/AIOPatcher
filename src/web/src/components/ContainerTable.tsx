@@ -1,11 +1,13 @@
 import { useState } from "react";
+import { useNavigate } from "react-router";
 import { Badge, Button, Group, Table, Text, Tooltip, UnstyledButton } from "@mantine/core";
-import { IconChevronDown, IconChevronUp, IconRefresh, IconSelector } from "@tabler/icons-react";
+import { IconChevronDown, IconChevronUp, IconDownload, IconInfoCircle, IconRefresh, IconSelector } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import { api, formatRelative, type ContainerItem } from "../api";
 import { useCan } from "../App";
+import { FeatureOffHint, useFeatures } from "../features";
 import { t as tGlobal } from "../i18n";
-import { notifyError, notifySuccess } from "./ui";
+import { confirmAction, notifyError, notifySuccess } from "./ui";
 
 type SortKey = "name" | "image" | "state" | "registry";
 
@@ -29,6 +31,8 @@ const compare: Record<SortKey, (a: ContainerItem, b: ContainerItem) => number> =
 /** Container eines Hosts mit Hinweis auf neuere Images in der Registry. Spalten sortierbar, Standard: neue Images zuerst. */
 export function ContainerTable({ containers, hostId, onRechecked }: { containers: ContainerItem[]; hostId?: string; onRechecked?: () => void }) {
   const can = useCan();
+  const { isOn } = useFeatures();
+  const canUpdate = !!hostId && can.operate && isOn("AppUpdates");
   const [busy, setBusy] = useState(false);
   const seen = containers.map((c) => c.seenAt).filter((x): x is string => !!x).sort().at(-1) ?? null;
   const checked = containers.map((c) => c.checkedAt).filter((x): x is string => !!x).sort().at(0) ?? null;
@@ -48,6 +52,28 @@ export function ContainerTable({ containers, hostId, onRechecked }: { containers
     }
   };
   const { t } = useTranslation();
+  const [updating, setUpdating] = useState<string | null>(null);
+  const navigate = useNavigate();
+
+  // Ein Compose-Container: Image ziehen, nur diesen Dienst neu erstellen (Job mit Log)
+  const update = (c: ContainerItem) =>
+    confirmAction({
+      title: t("containers.updateTitle", { name: c.name }),
+      message: t("containers.updateText", { image: c.image, compose: c.compose ?? "" }),
+      confirmLabel: t("containers.update"),
+      onConfirm: async () => {
+        setUpdating(c.name);
+        try {
+          const job = await api.post<{ id: string }>(`/api/hosts/${hostId}/containers/${encodeURIComponent(c.name)}/update`);
+          notifySuccess(t("containers.updateStarted", { name: c.name }));
+          navigate(`/jobs/${job.id}`); // Live-Log des Jobs
+        } catch (e) {
+          notifyError(e);
+        } finally {
+          setUpdating(null);
+        }
+      },
+    });
   const [sort, setSort] = useState<{ key: SortKey; desc: boolean }>({ key: "registry", desc: false });
 
   const sorted = [...containers].sort((a, b) => {
@@ -80,6 +106,7 @@ export function ContainerTable({ containers, hostId, onRechecked }: { containers
         {can.operate && <Button size="xs" variant="light" leftSection={<IconRefresh size={14} />} loading={busy} onClick={() => void recheck()}>{tGlobal("security.recheck")}</Button>}
       </Group>
     )}
+    {hostId && can.operate && !isOn("AppUpdates") && containers.some((c) => c.updateAvailable && !c.updateBlocker) && <FeatureOffHint feature="AppUpdates" />}
     <Table.ScrollContainer minWidth={600}>
       <Table>
         <Table.Thead>
@@ -88,6 +115,7 @@ export function ContainerTable({ containers, hostId, onRechecked }: { containers
             {header("image", t("security.image"))}
             {header("state", t("jobs.colStatus"))}
             {header("registry", t("security.registry"))}
+            {canUpdate && <Table.Th w={1} />}
           </Table.Tr>
         </Table.Thead>
         <Table.Tbody>
@@ -95,6 +123,7 @@ export function ContainerTable({ containers, hostId, onRechecked }: { containers
             <Table.Tr key={c.name}>
               <Table.Td>
                 <Text size="sm" fw={600}>{c.name}</Text>
+                {c.compose && <Text size="xs" c="dimmed">Compose: {c.compose}</Text>}
               </Table.Td>
               <Table.Td>
                 <Text size="xs" ff="monospace">{c.image}</Text>
@@ -119,6 +148,22 @@ export function ContainerTable({ containers, hostId, onRechecked }: { containers
                   <Text size="xs" c="dimmed">…</Text>
                 )}
               </Table.Td>
+              {canUpdate && (
+                <Table.Td style={{ whiteSpace: "nowrap" }}>
+                  {c.updateAvailable && (c.updateBlocker ? (
+                    <Tooltip label={t(`containers.blocker.${c.updateBlocker}`)} multiline w={300} withArrow>
+                      <Group gap={4} wrap="nowrap" c="dimmed" style={{ cursor: "help" }}>
+                        <IconInfoCircle size={14} />
+                        <Text size="xs">{t(`containers.blockerShort.${c.updateBlocker}`)}</Text>
+                      </Group>
+                    </Tooltip>
+                  ) : (
+                    <Button size="compact-xs" variant="light" leftSection={<IconDownload size={12} />} loading={updating === c.name} onClick={() => update(c)}>
+                      {t("containers.update")}
+                    </Button>
+                  ))}
+                </Table.Td>
+              )}
             </Table.Tr>
           ))}
         </Table.Tbody>

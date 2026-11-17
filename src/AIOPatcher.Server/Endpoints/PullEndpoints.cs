@@ -180,6 +180,9 @@ public static class PullEndpoints
                 var holds = await PatchRules.HoldsForHostAsync(db, host, now, ct);
                 return (AgentModules.Updates, ModuleActions.Install,
                     PullJsonContext.ToElement(new InstallRequest(job.Scope, job.AllowReboot, holds.Count > 0 ? holds : null, fixSources), PullJsonContext.Default.InstallRequest));
+            case JobType.ContainerUpdate:
+                return (AgentModules.Docker, ModuleActions.AppUpdate,
+                    PullJsonContext.ToElement(new AppUpdateRequest([job.Packages ?? ""]), PullJsonContext.Default.AppUpdateRequest));
             case JobType.AppUpdate:
                 return (AgentModules.Software, ModuleActions.AppUpdate,
                     PullJsonContext.ToElement(new AppUpdateRequest(job.Packages?.Split(',', StringSplitOptions.RemoveEmptyEntries) ?? []), PullJsonContext.Default.AppUpdateRequest));

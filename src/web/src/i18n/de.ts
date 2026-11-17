@@ -88,7 +88,25 @@ const de = {
     stepAutoPatch: "Patch-Plan anlegen",
     go: "Los",
   },
-  jobType: {
+  containers: {
+    update: "Aktualisieren",
+    updateTitle: "{{name}} aktualisieren?",
+    updateText: "Der Agent zieht das neue Image ({{image}}) und erstellt nur diesen Dienst neu (Compose {{compose}}). Volumes und Einstellungen bleiben, der Container ist dabei kurz nicht erreichbar. Danach prüft der Agent, ob er wieder läuft.",
+    updateStarted: "Update für {{name}} gestartet.",
+    blockerShort: {
+      notCompose: "kein Compose",
+      portainer: "Portainer",
+      noFile: "Datei fehlt",
+      agent: "Agent zu alt",
+    },
+    blocker: {
+      notCompose: "Nicht per Docker Compose gestartet (z. B. docker run). Bitte mit dem Werkzeug aktualisieren, das ihn angelegt hat.",
+      portainer: "Gehört zu einem Portainer-Stack: Die Compose-Datei liegt in Portainer. Dort „Pull and redeploy“ verwenden.",
+      noFile: "Die Compose-Datei, mit der er gestartet wurde, liegt nicht mehr auf dem Host.",
+      agent: "Der Agent auf diesem Host ist zu alt für Container-Updates; er aktualisiert sich gleich selbst.",
+    },
+  },  jobType: {
+    containerUpdate: "Container aktualisieren",
     systemChange: "Systemänderung",
     appUpdate: "Programm-Updates",
     scan: "Scan",
@@ -1158,8 +1176,8 @@ const de = {
     desc_PatchJobs: "Patch-Jobs auf Hosts (manuell, Auto-Patch, Patch-Pläne). Aus = AIOPatcher zeigt nur noch an.",
     name_Reboots: "Neustarts",
     desc_Reboots: "Hosts neu starten (Knopf, nach Patches, in Patch-Plänen). Aus = Patches laufen, Neustarts machst du selbst.",
-    name_AppUpdates: "Programm-Updates per winget",
-    desc_AppUpdates: "Installierte Windows-Programme über winget aktualisieren. Software kommt dabei aus dem winget-Katalog (Hersteller-Installer), nicht von Microsoft Update.",
+    name_AppUpdates: "Programm- und Container-Updates",
+    desc_AppUpdates: "Installierte Windows-Programme über winget aktualisieren (Software aus dem winget-Katalog, nicht von Microsoft Update) und Docker-Compose-Container per Klick auf ein neues Image heben.",
     name_AgentSelfUpdate: "Agent-Self-Update",
     desc_AgentSelfUpdate: "Agents installieren neue Versionen selbst: nur mit gültiger Signatur (Release-Schlüssel oder, ohne diesen, Schlüssel dieses Servers), nach bestandenem Selbsttest und mit automatischem Rollback, wenn sich die neue Version nicht meldet.",
     name_SnapshotTests: "Test-Snapshots",

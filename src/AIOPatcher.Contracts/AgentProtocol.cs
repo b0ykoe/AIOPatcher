@@ -38,6 +38,12 @@ public enum JobType
 
     /// <summary>Firewall, SSH/RDP oder Benutzer ändern (siehe <see cref="SystemChange"/>). Braucht policy.json "allowSystemChanges".</summary>
     SystemChange,
+
+    /// <summary>
+    /// Einen Compose-Container aktualisieren: Image ziehen, Dienst neu erstellen (Packages = Containername). Läuft als
+    /// docker.appupdate; braucht policy.json allowAppUpdates und allowPatch All.
+    /// </summary>
+    ContainerUpdate,
 }
 
 [JsonConverter(typeof(JsonStringEnumConverter<PatchScope>))]
@@ -142,8 +148,17 @@ public sealed record InstalledSoftware(
     string? Url = null,
     string? SourceVersion = null);
 
-/// <summary>Laufender Docker-Container. RepoDigests: "repo@sha256:…" des lokalen Images (leer bei selbst gebauten Images).</summary>
-public sealed record ContainerReport(string Name, string Image, string? ImageId, IReadOnlyList<string>? RepoDigests, string? State);
+/// <summary>
+/// Laufender Docker-Container. RepoDigests: "repo@sha256:…" des lokalen Images (leer bei selbst gebauten Images).
+/// Compose: Herkunft, wenn der Container per Docker Compose (oder einem Portainer-Stack) gestartet wurde.
+/// </summary>
+public sealed record ContainerReport(string Name, string Image, string? ImageId, IReadOnlyList<string>? RepoDigests, string? State, ComposeInfo? Compose = null);
+
+/// <summary>
+/// Compose-Herkunft eines Containers aus seinen Labels (com.docker.compose.*). FilesFound: alle Compose-Dateien liegen
+/// auf dem Host (bei Portainer-Stacks liegen sie in Portainers Datenbereich, z. B. /data/compose/12/…).
+/// </summary>
+public sealed record ComposeInfo(string Project, string Service, string? WorkingDir, IReadOnlyList<string> ConfigFiles, bool FilesFound);
 
 /// <param name="Holds">Muster zurückgehaltener Updates (siehe <see cref="HoldPatterns"/>). Ältere Server senden nichts.</param>
 /// <param name="Packages">AppUpdate: winget-IDs der zu aktualisierenden Programme.</param>

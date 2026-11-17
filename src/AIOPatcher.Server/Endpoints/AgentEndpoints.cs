@@ -406,6 +406,7 @@ public static class AgentEndpoints
                 JobType.Patch when !features.IsOn(Feature.PatchJobs) => Feature.PatchJobs,
                 JobType.Reboot when !features.IsOn(Feature.Reboots) => Feature.Reboots,
                 JobType.AppUpdate when !features.IsOn(Feature.AppUpdates) => Feature.AppUpdates,
+                JobType.ContainerUpdate when !features.IsOn(Feature.AppUpdates) => Feature.AppUpdates,
                 JobType.SystemChange when ComplianceEndpoints.BlockedFeature(candidate, features) is { } needed => needed,
                 _ => null,
             };

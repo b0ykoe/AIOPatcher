@@ -158,6 +158,10 @@ export interface ContainerItem {
   pinned: boolean;
   /** wann der Agent den Container zuletzt gemeldet hat */
   seenAt: string | null;
+  /** "projekt/dienst", wenn per Docker Compose gestartet */
+  compose: string | null;
+  /** warum "Aktualisieren" nicht geht; null = geht */
+  updateBlocker: "notCompose" | "portainer" | "noFile" | "agent" | null;
 }
 
 export interface AddressItem {
@@ -276,7 +280,7 @@ export interface EnrollmentToken {
   expiresAt: string;
 }
 
-export type JobType = "Scan" | "Patch" | "Reboot" | "AppUpdate" | "SystemChange";
+export type JobType = "Scan" | "Patch" | "Reboot" | "AppUpdate" | "SystemChange" | "ContainerUpdate";
 export type PatchScope = "Security" | "All";
 export type JobStatus = "Queued" | "Running" | "Succeeded" | "Failed" | "Rejected" | "Cancelled";
 
@@ -321,6 +325,8 @@ export function describeJob(job: Pick<Job, "type" | "scope" | "allowReboot">): s
       return t("jobType.appUpdate");
     case "SystemChange":
       return t("jobType.systemChange");
+    case "ContainerUpdate":
+      return t("jobType.containerUpdate");
     case "Patch":
       return `${job.scope === "Security" ? t("jobType.security") : t("jobType.all")}${job.allowReboot ? t("jobType.plusReboot") : ""}`;
   }

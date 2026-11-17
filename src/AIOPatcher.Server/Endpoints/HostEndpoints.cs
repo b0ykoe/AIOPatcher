@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Security.Claims;
 using System.Security.Cryptography;
 using AIOPatcher.Contracts;
 using AIOPatcher.Server.Data;
@@ -78,7 +79,9 @@ public static class HostEndpoints
     public sealed record UpdateDto(string Name, string? CurrentVersion, string? AvailableVersion, bool IsSecurity, string? Classification, DateTime FirstSeenAt, bool IsHeld,
         string? Cves, bool IsKev, double? MaxEpss);
 
-    public sealed record ContainerDto(string Name, string Image, string? State, bool UpdateAvailable, DateTime? CheckedAt, string? CheckError, bool Pinned, DateTime? SeenAt = null);
+    /// <param name="UpdateBlocker">Warum "Aktualisieren" nicht geht: "notCompose", "portainer", "noFile", "agent" (Agent zu alt); null = geht.</param>
+    public sealed record ContainerDto(string Name, string Image, string? State, bool UpdateAvailable, DateTime? CheckedAt, string? CheckError, bool Pinned, DateTime? SeenAt = null,
+        string? Compose = null, string? UpdateBlocker = null);
     public sealed record AddressDto(string Address, int? PrefixLength, string? InterfaceName, string? SubnetName);
 
     public sealed record HostDetailDto(
@@ -167,6 +170,7 @@ public static class HostEndpoints
         op.MapPost("/hosts/{id:guid}/agent-update/retry", RetryAgentUpdate);
         op.MapDelete("/hosts/{id:guid}/reboot-check", DismissRebootCheck);
         op.MapPost("/hosts/{id:guid}/containers/recheck", RecheckContainers);
+        op.MapPost("/hosts/{id:guid}/containers/{name}/update", UpdateContainer);
         op.MapPut("/hosts/{id:guid}/modules/{module}", ToggleModule);
         op.MapDelete("/hosts/{id:guid}", DeleteHost).RequireAuthorization(UserAccounts.AdminPolicy);
 
@@ -389,6 +393,61 @@ public static class HostEndpoints
         return Results.NoContent();
     }
 
+    /// <summary>
+    /// Einen Compose-Container aktualisieren: Job, der auf dem Host das Image zieht und nur diesen Dienst neu erstellt.
+    /// Wie Programm-Updates: Schalter "Programm-Updates" und lokal allowAppUpdates + allowPatch All.
+    /// </summary>
+    private static async Task<IResult> UpdateContainer(Guid id, string name, ClaimsPrincipal user, AppDbContext db, AuditLog audit, FeatureFlags features, CancellationToken ct)
+    {
+        if (!features.IsOn(Feature.AppUpdates))
+        {
+            return Results.Problem(FeatureFlags.DisabledMessage(Feature.AppUpdates), statusCode: StatusCodes.Status403Forbidden);
+        }
+
+        var host = await db.Hosts.FindAsync([id], ct);
+        var container = host is null ? null : await db.Containers.FirstOrDefaultAsync(c => c.HostId == id && c.Name == name, ct);
+        if (host is null || container is null)
+        {
+            return Results.NotFound();
+        }
+
+        if (!ModuleJson.Supports(host, AgentModules.Docker, ModuleActions.AppUpdate))
+        {
+            return Results.Problem(L.T("Der Agent auf diesem Host ist zu alt für Container-Updates; er aktualisiert sich gleich selbst.",
+                "The agent on this host is too old for container updates; it will update itself shortly."), statusCode: StatusCodes.Status409Conflict);
+        }
+
+        if (container.UpdateBlocker is { } blocker)
+        {
+            return Results.Problem(blocker switch
+            {
+                "portainer" => L.T("Der Container gehört zu einem Portainer-Stack. Bitte in Portainer „Pull and redeploy“ verwenden.",
+                    "The container belongs to a Portainer stack. Please use \"Pull and redeploy\" in Portainer."),
+                "noFile" => L.T("Die Compose-Datei des Containers liegt nicht (mehr) auf dem Host.", "The container's compose file is no longer on the host."),
+                _ => L.T("Der Container wurde nicht per Docker Compose gestartet; bitte mit dem Werkzeug aktualisieren, das ihn angelegt hat.",
+                    "The container was not started with Docker Compose; please update it with the tool that created it."),
+            }, statusCode: StatusCodes.Status409Conflict);
+        }
+
+        if (await db.Jobs.AnyAsync(j => j.HostId == id && (j.Status == JobStatus.Queued || j.Status == JobStatus.Running), ct))
+        {
+            return Results.Problem(L.T("Es ist bereits ein Job geplant oder aktiv.", "A job is already queued or running."), statusCode: StatusCodes.Status409Conflict);
+        }
+
+        var job = new PatchJob
+        {
+            HostId = id,
+            Type = JobType.ContainerUpdate,
+            Scope = PatchScope.All,
+            RequestedBy = $"admin:{user.Identity?.Name}",
+            Packages = container.Name,
+        };
+        db.Jobs.Add(job);
+        audit.Add("job.created", $"ContainerUpdate {container.Name} ({container.Image}) for {host.Name}", siteId: host.SiteId, hostId: host.Id);
+        await db.SaveChangesAsync(ct);
+        return Results.Ok(new { job.Id });
+    }
+
     /// <summary>Container neu prüfen: Images sofort bei der Registry abfragen, Agent meldet seine Container beim nächsten Abruf.</summary>
     private static async Task<IResult> RecheckContainers(Guid id, AppDbContext db, IServiceProvider services, CancellationToken ct)
     {
@@ -430,13 +489,17 @@ public static class HostEndpoints
     private static async Task<List<ContainerDto>> ContainersAsync(AppDbContext db, Guid hostId, CancellationToken ct)
     {
         var containers = await db.Containers.Where(c => c.HostId == hostId).OrderBy(c => c.Name).ToListAsync(ct);
+        // Ältere Agents melden keine Compose-Herkunft und können nicht aktualisieren
+        var host = await db.Hosts.AsNoTracking().FirstOrDefaultAsync(h => h.Id == hostId, ct);
+        var agentCan = host is not null && ModuleJson.Supports(host, AgentModules.Docker, ModuleActions.AppUpdate);
         var references = containers.Select(c => c.Reference).OfType<string>().Distinct().ToList();
         var checks = await db.ImageChecks.Where(i => references.Contains(i.Reference)).ToDictionaryAsync(i => i.Reference, ct);
         return containers.Select(c =>
         {
             var check = c.Reference is null ? null : checks.GetValueOrDefault(c.Reference);
             var update = check?.RemoteDigest is { } remote && c.LocalDigest is not null && !c.HasDigest(remote);
-            return new ContainerDto(c.Name, c.Image, c.State, update, check?.CheckedAt, check?.Error, c.Reference is null, c.SeenAt);
+            return new ContainerDto(c.Name, c.Image, c.State, update, check?.CheckedAt, check?.Error, c.Reference is null, c.SeenAt,
+                c.ComposeProject is null ? null : $"{c.ComposeProject}/{c.ComposeService}", agentCan ? c.UpdateBlocker : "agent");
         }).ToList();
     }
 

@@ -190,7 +190,7 @@ public sealed class FeatureFlags(AIOPatcherOptions options)
         Feature.Automation => german ? "Automatisch patchen" : "Automatic patching",
         Feature.PatchJobs => german ? "Updates installieren" : "Install updates",
         Feature.Reboots => german ? "Neustarts" : "Reboots",
-        Feature.AppUpdates => german ? "Programm-Updates per winget" : "Program updates via winget",
+        Feature.AppUpdates => german ? "Programm- und Container-Updates" : "Program and container updates",
         Feature.AgentSelfUpdate => german ? "Agent-Self-Update" : "Agent self-update",
         Feature.SnapshotTests => german ? "Test-Snapshots" : "Test snapshots",
         Feature.OpnsenseUpdates => german ? "OPNsense-Firmware-Update" : "OPNsense firmware update",

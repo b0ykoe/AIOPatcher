@@ -55,6 +55,27 @@ public sealed class ContainerInfo
     public bool HasDigest(string remote) => LocalDigest is not null && LocalDigest.Split(' ').Contains(remote);
     public string? State { get; set; }
     public DateTime SeenAt { get; set; }
+
+    /// <summary>Compose-Projekt und -Dienst (null = nicht per Compose gestartet).</summary>
+    [System.ComponentModel.DataAnnotations.MaxLength(200)]
+    public string? ComposeProject { get; set; }
+
+    [System.ComponentModel.DataAnnotations.MaxLength(200)]
+    public string? ComposeService { get; set; }
+
+    /// <summary>Compose-Dateien laut Label, durch Komma getrennt.</summary>
+    [System.ComponentModel.DataAnnotations.MaxLength(1000)]
+    public string? ComposeFiles { get; set; }
+
+    /// <summary>Liegen alle Compose-Dateien auf dem Host? (Portainer-Stacks: nein)</summary>
+    public bool ComposeFilesFound { get; set; }
+
+    /// <summary>Warum sich der Container nicht per Klick aktualisieren lässt: "notCompose", "portainer", "noFile"; null = geht.</summary>
+    public string? UpdateBlocker =>
+        ComposeProject is null || ComposeService is null ? "notCompose"
+        : ComposeFilesFound ? null
+        : (ComposeFiles ?? "").Split(',').Any(f => f.StartsWith("/data/compose/", StringComparison.Ordinal)) ? "portainer"
+        : "noFile";
 }
 
 /// <summary>

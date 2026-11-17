@@ -211,6 +211,21 @@ namespace AIOPatcher.Server.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("ComposeFiles")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("ComposeFilesFound")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ComposeProject")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ComposeService")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
                     b.Property<Guid>("HostId")
                         .HasColumnType("TEXT");
 

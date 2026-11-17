@@ -20,8 +20,9 @@ public static class ProcessRunner
     }
 
     /// <summary>Wie <see cref="RunAsync"/>, reicht aber jede Ausgabezeile sofort weiter (für das Live-Log).</summary>
-    public static Task<int> RunStreamingAsync(string fileName, IEnumerable<string> arguments, TimeSpan timeout, Action<string> onLine, CancellationToken ct) =>
-        RunCoreAsync(fileName, arguments, timeout, onLine, onLine, ct);
+    /// <param name="workingDirectory">Arbeitsverzeichnis (z. B. Compose-Projektordner, dort liegt die .env), null = aktuelles.</param>
+    public static Task<int> RunStreamingAsync(string fileName, IEnumerable<string> arguments, TimeSpan timeout, Action<string> onLine, CancellationToken ct, string? workingDirectory = null) =>
+        RunCoreAsync(fileName, arguments, timeout, onLine, onLine, ct, workingDirectory: workingDirectory);
 
     private static async Task<int> RunCoreAsync(
         string fileName,
@@ -30,10 +31,12 @@ public static class ProcessRunner
         Action<string> onStdout,
         Action<string> onStderr,
         CancellationToken ct,
-        string? stdin = null)
+        string? stdin = null,
+        string? workingDirectory = null)
     {
         var psi = new ProcessStartInfo(fileName)
         {
+            WorkingDirectory = workingDirectory ?? "",
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             RedirectStandardInput = true,
