@@ -628,6 +628,12 @@ namespace AIOPatcher.Server.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("AgentInstance")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("AgentRestartedAt")
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTime?>("AgentUpdateAt")
                         .HasColumnType("TEXT");
 
@@ -668,6 +674,9 @@ namespace AIOPatcher.Server.Data.Migrations
 
                     b.Property<bool>("AutoRebootAllowed")
                         .HasColumnType("INTEGER");
+
+                    b.Property<DateTime?>("BootedAt")
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("BrokenAptSources")
                         .HasColumnType("TEXT");

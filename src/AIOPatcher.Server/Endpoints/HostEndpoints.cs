@@ -268,7 +268,9 @@ public static class HostEndpoints
             string.Equals(host.AgentUpdateBlockedVersion, latest, StringComparison.Ordinal),
             host.AgentUpdateOutcome, host.AgentUpdateFromVersion, host.AgentUpdateToVersion, host.AgentUpdateMessage, host.AgentUpdateAt);
 
-        return Results.Ok(new HostDetailDto(summary, host.KernelVersion, host.Uptime, host.EnrolledAt, host.CertificateExpiresAt, updates, addresses,
+        // Uptime ab Systemstart weiterzählen statt den Wert der letzten Meldung zu zeigen
+        var uptime = host.BootedAt is { } booted ? DateTime.UtcNow - booted : host.Uptime;
+        return Results.Ok(new HostDetailDto(summary, host.KernelVersion, uptime, host.EnrolledAt, host.CertificateExpiresAt, updates, addresses,
             host.IntegrationId, host.Integration?.Name, host.ExternalId, await ContainersAsync(db, id, ct), agentUpdate,
             host.ProtocolVersion, ModulesOf(host), BrokenSourcesOf(host), features.IsOn(Feature.AptSourceFixes)));
     }

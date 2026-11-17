@@ -11,7 +11,8 @@ namespace AIOPatcher.Contracts;
 //
 // Der Agent sendet nie ungefragt Daten: Inventar, Updates, Programme, Container, Compliance, Update-Berichte und
 // Zertifikatserneuerung fordert der Server als Auftrag an, der Agent antwortet darauf. Der Abfrage selbst liegt
-// nur die Agent-Version als Header bei (wie ein User-Agent).
+// nur die Agent-Version als Header bei (wie ein User-Agent), dazu eine zufällige Kennung des laufenden Prozesses:
+// Ändert sie sich (Neustart von Agent oder Host), fragt der Server sofort neue Systemdaten an (z. B. Uptime).
 
 public static class PullProtocol
 {
@@ -19,6 +20,7 @@ public static class PullProtocol
 
     public const string PollPath = "/agent/v2/poll";
     public const string VersionHeader = "X-AIOPatcher-Agent-Version";
+    public const string InstanceHeader = "X-AIOPatcher-Agent-Instance";
     public static string TaskLogPath(Guid taskId) => $"/agent/v2/tasks/{taskId}/log";
     public static string TaskResultPath(Guid taskId) => $"/agent/v2/tasks/{taskId}/result";
 }

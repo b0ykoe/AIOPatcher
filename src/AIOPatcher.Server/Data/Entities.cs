@@ -37,6 +37,13 @@ public sealed class ManagedHost
     public DateTime? LastSeenAt { get; set; }
     public DateTime? LastScanAt { get; set; }
     public TimeSpan? Uptime { get; set; }
+
+    /// <summary>Startzeit des Systems (UTC), aus der gemeldeten Uptime berechnet; die Anzeige rechnet damit weiter.</summary>
+    public DateTime? BootedAt { get; set; }
+
+    /// <summary>Kennung des laufenden Agent-Prozesses (Poll-Header) und wann sie zuletzt wechselte (= Neustart).</summary>
+    public string? AgentInstance { get; set; }
+    public DateTime? AgentRestartedAt { get; set; }
     public bool RebootRequired { get; set; }
 
     /// <summary>unattended-upgrades bzw. Windows-Automatik ist aktiv: Gefahr, dass doppelt gepatcht wird.</summary>

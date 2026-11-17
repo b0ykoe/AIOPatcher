@@ -103,6 +103,25 @@ public sealed class PullProtocolTests : IDisposable
     }
 
     [Fact]
+    public async Task AgentRestart_TriggersDescribe_UptimeFromBootTime()
+    {
+        PullEndpoints.NoteInstance(_host, "a1", DateTime.UtcNow);
+        var first = await PollAsync();
+        await AnswerAsync(first!, JobOutcome.Succeeded, Describe(Module(AgentModules.System), Module(AgentModules.Agent)));
+        Assert.Null(await PollAsync());
+        Assert.InRange(_host.BootedAt!.Value, DateTime.UtcNow.AddHours(-5).AddMinutes(-1), DateTime.UtcNow.AddHours(-5).AddMinutes(1));
+
+        // gleicher Prozess: nichts Neues; neuer Prozess (Reboot): sofort neu beschreiben, danach wieder Ruhe
+        PullEndpoints.NoteInstance(_host, "a1", DateTime.UtcNow);
+        Assert.Null(await PollAsync());
+        PullEndpoints.NoteInstance(_host, "b2", DateTime.UtcNow);
+        var again = await PollAsync();
+        Assert.Equal(ModuleActions.Describe, again!.Action);
+        await AnswerAsync(again, JobOutcome.Succeeded, Describe(Module(AgentModules.System), Module(AgentModules.Agent)));
+        Assert.Null(await PollAsync());
+    }
+
+    [Fact]
     public async Task Jobs_BecomeModuleTasks_DisabledModuleRejectsJob()
     {
         var first = await PollAsync();

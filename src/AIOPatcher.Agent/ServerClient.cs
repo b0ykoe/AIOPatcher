@@ -63,11 +63,15 @@ public sealed class ServerClient : IDisposable
 
     // --- Pull: abholen und antworten. Andere Aufrufe hat der Agent nicht (außer Registrierung und Downloads). ---
 
+    /// <summary>Zufällig je Prozessstart; der Server erkennt daran einen Neustart (keine weiteren Daten).</summary>
+    private static readonly string Instance = Guid.NewGuid().ToString("N");
+
     /// <summary>Auftrag abholen. running: Auftrag, den der Agent noch bearbeitet (z. B. über einen Neustart hinweg).</summary>
     public async Task<PollResponse> PollAsync(Guid? running, CancellationToken ct)
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, running is { } id ? $"{PullProtocol.PollPath}?running={id}" : PullProtocol.PollPath);
         request.Headers.Add(PullProtocol.VersionHeader, AgentState.AgentVersion);
+        request.Headers.Add(PullProtocol.InstanceHeader, Instance);
         using var response = await _http.SendAsync(request, ct);
         await EnsureSuccessAsync(response, ct);
         return await response.Content.ReadFromJsonAsync(PullJsonContext.Default.PollResponse, ct)

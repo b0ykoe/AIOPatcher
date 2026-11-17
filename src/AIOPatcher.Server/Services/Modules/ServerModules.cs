@@ -85,7 +85,8 @@ public sealed class SystemServerModule : ServerModule
     public override PlannedTask? Due(ManagedHost host, ModuleContext context, string? polledVersion)
     {
         var versionChanged = polledVersion is not null && polledVersion != host.AgentVersion;
-        return context.Older(Id, ModuleActions.Describe, Interval) || versionChanged && context.Older(Id, ModuleActions.Describe, TimeSpan.FromMinutes(1))
+        var restarted = host.AgentRestartedAt is { } at && !(context.LastRequested(Id, ModuleActions.Describe) >= at);
+        return context.Older(Id, ModuleActions.Describe, Interval) || restarted || versionChanged && context.Older(Id, ModuleActions.Describe, TimeSpan.FromMinutes(1))
             ? new PlannedTask(ModuleActions.Describe)
             : null;
     }
@@ -104,6 +105,7 @@ public sealed class SystemServerModule : ServerModule
         host.OsVersion = AgentEndpoints.Truncate(d.OsVersion, 100);
         host.KernelVersion = d.KernelVersion is null ? null : AgentEndpoints.Truncate(d.KernelVersion, 100);
         host.Uptime = d.Uptime;
+        host.BootedAt = context.Now - d.Uptime;
         host.RebootRequired = d.RebootRequired;
         host.NativeAutoUpdatesEnabled = d.NativeAutoUpdatesEnabled;
         host.Architecture = d.Architecture is "x64" or "arm64" ? d.Architecture : null;

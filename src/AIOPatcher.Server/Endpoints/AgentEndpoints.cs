@@ -208,6 +208,7 @@ public static class AgentEndpoints
         host.OsVersion = Truncate(request.OsVersion, 100);
         host.KernelVersion = request.KernelVersion is null ? null : Truncate(request.KernelVersion, 100);
         host.Uptime = request.Uptime;
+        host.BootedAt = now - request.Uptime;
         host.RebootRequired = request.RebootRequired;
         host.NativeAutoUpdatesEnabled = request.NativeAutoUpdatesEnabled;
 

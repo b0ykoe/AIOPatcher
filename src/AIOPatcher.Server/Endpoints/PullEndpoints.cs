@@ -41,6 +41,7 @@ public static class PullEndpoints
         AgentEndpoints.MarkSeen(host, notifier, now);
         host.ProtocolVersion = PullProtocol.Version;
         var polledVersion = http.Request.Headers[PullProtocol.VersionHeader].ToString() is { Length: > 0 and <= 32 } v ? v : null;
+        NoteInstance(host, http.Request.Headers[PullProtocol.InstanceHeader].ToString(), now);
 
         AgentTask? task = null;
         if (running is null)
@@ -51,6 +52,18 @@ public static class PullEndpoints
         await db.SaveChangesAsync(ct);
         var key = features.IsOn(Feature.AgentSelfUpdate) ? updateKey.PublicKeySpkiBase64 : null;
         return Results.Ok(new PollResponse(options.AgentCheckinIntervalSeconds, task, key));
+    }
+
+    /// <summary>Neue Prozess-Kennung = Agent oder Host neu gestartet: Systemdaten (Uptime, Neustart nötig) gleich neu anfragen.</summary>
+    public static void NoteInstance(ManagedHost host, string? instance, DateTime now)
+    {
+        if (instance is not { Length: > 0 and <= 64 } || instance == host.AgentInstance)
+        {
+            return;
+        }
+
+        host.AgentRestartedAt = host.AgentInstance is null ? null : now; // erste Kennung (Agent-Update auf diese Version) ist kein Neustart
+        host.AgentInstance = instance;
     }
 
     /// <summary>
