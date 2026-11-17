@@ -30,10 +30,23 @@ public sealed partial class AptPatcher : IPatchPlatform
     public async Task<PatchOutcome> PatchAsync(PatchScope scope, IReadOnlyList<string> holds, Action<string> log, CancellationToken ct)
     {
         log("$ apt-get update");
-        var updateExit = await RunPrivilegedAsync("apt-get", ["update"], UpdateTimeout, log, ct);
-        if (updateExit != 0)
+        var updateLines = new List<string>();
+        var updateExit = await RunPrivilegedAsync("apt-get", ["update"], UpdateTimeout, line =>
+        {
+            log(line);
+            updateLines.Add(line);
+        }, ct);
+        var check = AptUpdateCheck.Analyze(updateExit, updateLines);
+        if (!check.CanContinue)
         {
             return new PatchOutcome(false, $"apt-get update failed (exit {updateExit}).");
+        }
+
+        // Kaputte Fremdquelle: trotzdem patchen (die übrigen Quellen sind aktuell), aber deutlich melden
+        var warning = check.BrokenSources.Count == 0 ? "" : $" Warning: package source not reachable: {string.Join("; ", check.BrokenSources)}.";
+        if (warning.Length > 0)
+        {
+            log($"[agent]{warning} Continuing with the other sources; fix or remove it under /etc/apt/sources.list.d/.");
         }
 
         string[] args;
@@ -59,7 +72,7 @@ public sealed partial class AptPatcher : IPatchPlatform
             {
                 var none = scope == PatchScope.Security ? "No pending security updates." : "No pending updates.";
                 log($"[agent] {none}");
-                return new PatchOutcome(true, held.Count > 0 ? $"{none} {held.Count} held back." : none);
+                return new PatchOutcome(true, (held.Count > 0 ? $"{none} {held.Count} held back." : none) + warning);
             }
 
             log($"[agent] {packages.Length} {(scope == PatchScope.Security ? "security " : "")}updates: {string.Join(", ", packages)}");
@@ -82,7 +95,7 @@ public sealed partial class AptPatcher : IPatchPlatform
         }, ct);
 
         return exit == 0
-            ? new PatchOutcome(true, summary ?? "Updates installed.")
+            ? new PatchOutcome(true, (summary ?? "Updates installed.") + warning)
             : new PatchOutcome(false, $"apt-get exited with code {exit}. See the log for details.");
     }
 
