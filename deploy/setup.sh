@@ -226,6 +226,35 @@ if [ "$ASSUME_YES" -eq 0 ] && [ -t 0 ]; then
 fi
 
 # --- Docker und Image --------------------------------------------------------------------------------
+
+# Der Bau (.NET, Native AOT für drei Plattformen, Weboberfläche) braucht ca. 4 GB Arbeitsspeicher und 10 GB Platz.
+# Kleine Server (1-2 GB RAM): vorübergehend reicht Swap, der Bau dauert dann nur länger.
+ensure_build_resources() {
+  [ "$DRY_RUN" -eq 1 ] && return
+  local mem_mb swap_mb free_gb
+  mem_mb=$(awk '/^MemTotal/ {print int($2 / 1024)}' /proc/meminfo)
+  swap_mb=$(awk '/^SwapTotal/ {print int($2 / 1024)}' /proc/meminfo)
+  free_gb=$(df -Pk /var/lib/docker 2>/dev/null | awk 'NR == 2 {print int($4 / 1048576)}')
+  [ -n "$free_gb" ] || free_gb=$(df -Pk / | awk 'NR == 2 {print int($4 / 1048576)}')
+  if [ "${free_gb:-0}" -lt 10 ]; then
+    warn "Nur ${free_gb} GB frei. Der Bau braucht ca. 10 GB (danach räumt Docker mit 'docker builder prune' wieder auf)."
+  fi
+  if [ $((mem_mb + swap_mb)) -lt 4000 ]; then
+    local need=$((4096 - mem_mb - swap_mb + 512))
+    [ "$need" -lt 1024 ] && need=1024
+    info "Wenig Arbeitsspeicher (${mem_mb} MB RAM, ${swap_mb} MB Swap): lege ${need} MB Swap an (/swapfile-aiopatcher, bleibt nach Neustart)."
+    if [ "${free_gb:-0}" -lt $(( need / 1024 + 10 )) ]; then
+      warn "Für Swap und Bau wird der Platz knapp. Notfalls das Image auf einem anderen Rechner bauen und --image verwenden."
+    fi
+    if [ ! -f /swapfile-aiopatcher ]; then
+      fallocate -l "${need}M" /swapfile-aiopatcher 2>/dev/null || dd if=/dev/zero of=/swapfile-aiopatcher bs=1M count="$need" status=none
+      chmod 600 /swapfile-aiopatcher
+      mkswap /swapfile-aiopatcher >/dev/null
+    fi
+    swapon /swapfile-aiopatcher 2>/dev/null || true
+    grep -q '^/swapfile-aiopatcher ' /etc/fstab || echo '/swapfile-aiopatcher none swap sw 0 0' >>/etc/fstab
+  fi
+}
 if [ "$DRY_RUN" -eq 0 ] && ! command -v docker >/dev/null 2>&1; then
   info "Installiere Docker ..."
   curl -fsSL https://get.docker.com | sh
@@ -236,8 +265,16 @@ if [ -z "$IMAGE" ]; then
   if [ "$NO_BUILD" -eq 0 ]; then
     [ -f "$REPO/Dockerfile" ] || die "Kein Dockerfile in $REPO. Skript aus dem entpackten Repo starten oder --image angeben."
     [ "$(uname -m)" = x86_64 ] || [ "$DRY_RUN" -eq 1 ] || die "Der Bau braucht x64 (Agents als Native AOT). Auf ARM: Image woanders bauen, dann --image."
-    info "Baue das Image (Server, Weboberfläche, alle Agents; dauert ca. 10-15 Minuten) ..."
-    run docker build -t "$IMAGE" "$REPO"
+    ensure_build_resources
+    info "Baue das Image (Server, Weboberfläche, alle Agents; dauert ca. 10-15 Minuten, auf kleinen Servern länger) ..."
+    if [ "$DRY_RUN" -eq 1 ]; then
+      run docker build -t "$IMAGE" "$REPO"
+    elif ! docker build -t "$IMAGE" "$REPO"; then
+      if dmesg 2>/dev/null | tail -n 200 | grep -qiE "out of memory|killed process"; then
+        die "Bau abgebrochen: zu wenig Arbeitsspeicher (der Kernel hat einen Prozess beendet). Mehr RAM/Swap, dann erneut starten."
+      fi
+      die "Bau fehlgeschlagen (siehe Ausgabe oben). Häufig: zu wenig RAM oder Speicherplatz, keine Internetverbindung zu nuget.org/npmjs."
+    fi
   fi
 fi
 
