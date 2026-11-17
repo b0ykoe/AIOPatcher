@@ -65,6 +65,8 @@ COPY --from=agents /out ./agents
 ENV AIOPatcher__DataDirectory=/data \
     AIOPatcher__DashboardPort=9443 \
     AIOPatcher__AgentPort=8443
+# /data gehört dem Dienst-Benutzer: ein neues Docker-Volume (z. B. Portainer-Stack) übernimmt das, sonst gehört es root
+RUN mkdir -p /data && chown app:app /data
 VOLUME /data
 EXPOSE 8443 9443
 # Gesundheitsprüfung ohne curl im Image: der Server fragt sich selbst unter /healthz.

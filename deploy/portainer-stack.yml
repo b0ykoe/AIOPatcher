@@ -1,0 +1,29 @@
+# AIOPatcher als Portainer-Stack: Stacks → Add stack → Web editor (diese Datei einfügen) oder Upload.
+# Unter "Environment variables" mindestens AIOPATCHER_HOSTNAME setzen (DNS-Name oder IP, unter der die Agents den
+# Server erreichen). Nach "Deploy the stack": Container "aiopatcher" → Logs → Zeile mit "Setup token" suchen und
+# https://<AIOPATCHER_HOSTNAME>:9443 öffnen.
+#
+# Daten liegen im Docker-Volume "aiopatcher-data" (Datenbank, CA, lokale CVE-Datenbank unter cache/).
+# Update: Stack → "Pull and redeploy" (bei AIOPATCHER_VERSION=latest) oder die Version hochsetzen.
+# Firewall: 8443 (Agents, mTLS) darf öffentlich sein, 9443 (Dashboard) nur intern/VPN.
+services:
+  aiopatcher:
+    image: ghcr.io/b0ykoe/aiopatcher-server:${AIOPATCHER_VERSION:-latest}
+    container_name: aiopatcher
+    restart: unless-stopped
+    network_mode: host # Agents sehen die echte Server-IP, ufw-Regeln greifen
+    volumes:
+      - aiopatcher-data:/data
+    environment:
+      AIOPatcher__PublicHostname: ${AIOPATCHER_HOSTNAME:?AIOPATCHER_HOSTNAME setzen (DNS-Name oder IP des Servers)}
+      AIOPatcher__DataDirectory: /data
+      AIOPatcher__DashboardPort: ${AIOPATCHER_DASHBOARD_PORT:-9443}
+      AIOPatcher__AgentPort: ${AIOPATCHER_AGENT_PORT:-8443}
+      AIOPatcher__Language: ${AIOPATCHER_LANGUAGE:-de}
+      AIOPatcher__UpdateCheckRepository: b0ykoe/AIOPatcher # Hinweis auf neue Versionen im Dashboard
+      TZ: ${TZ:-Europe/Berlin}
+    labels:
+      - autoheal=true
+
+volumes:
+  aiopatcher-data:

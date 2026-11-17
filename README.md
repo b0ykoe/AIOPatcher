@@ -56,6 +56,13 @@ CA-Fingerprint**. Im Dashboard: Token eingeben, Konto und Authenticator einricht
 - Manuell statt Skript: [deploy/docker-compose.yml](deploy/docker-compose.yml) anpassen, gehärtete Variante in
   [docs/SERVER-SETUP.md](docs/SERVER-SETUP.md), Proxys in [docs/REVERSE-PROXY.md](docs/REVERSE-PROXY.md).
 
+**Mit Portainer** (fertiges Image, ohne Setup-Skript): Am [neuesten Release](https://github.com/b0ykoe/AIOPatcher/releases/latest)
+`portainer-stack.yml` herunterladen (oder [deploy/portainer-stack.yml](deploy/portainer-stack.yml) in den Web-Editor kopieren),
+in Portainer unter *Stacks → Add stack → Upload* hochladen, bei *Environment variables* `AIOPATCHER_HOSTNAME` setzen
+(DNS-Name oder IP, unter der die Agents den Server erreichen) und deployen. Der Setup-Token steht in den Logs des
+Containers `aiopatcher`, das Dashboard läuft auf `https://<host>:9443`. Daten liegen im Volume `aiopatcher-data`.
+Update: *Pull and redeploy* bzw. `AIOPATCHER_VERSION` hochsetzen. Firewall: 8443 für die Agents, 9443 nur intern/VPN.
+
 **Updates von AIOPatcher** – ohne Setup, ein Befehl:
 
 ```bash

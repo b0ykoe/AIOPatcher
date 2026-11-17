@@ -1,6 +1,6 @@
 # Release bei einem Tag "v1.2.3":
 #  1. Docker-Image bauen (Server, Web, Agents) und nach ghcr.io pushen
-#  2. Agent-Binaries (+ .sig, falls signiert) und SHA256SUMS an den GitHub-Release hängen
+#  2. Agent-Binaries (+ .sig, falls signiert), SHA256SUMS und die Compose-/Portainer-Dateien an den GitHub-Release hängen
 #
 # Einrichtung (einmalig):
 #  - Release-Schlüssel erzeugen:  dotnet run --project tools/AIOPatcher.Signer -- keygen ./keys
@@ -67,8 +67,19 @@ jobs:
             done
           done
           (cd dist && sha256sum * > SHA256SUMS)
+          # Stack-Dateien mit fester Version (Portainer: Stacks → Add stack → Upload)
+          sed "s|\${AIOPATCHER_VERSION:-latest}|\${AIOPATCHER_VERSION:-${{ steps.version.outputs.version }}}|" deploy/portainer-stack.yml > dist/portainer-stack.yml
+          sed "s|aiopatcher-server:latest|aiopatcher-server:${{ steps.version.outputs.version }}|" deploy/docker-compose.yml > dist/docker-compose.yml
 
       - uses: softprops/action-gh-release@v2
         with:
           files: dist/*
           generate_release_notes: true
+          body: |
+            **Docker-Image:** `ghcr.io/${{ github.repository_owner }}/aiopatcher-server:${{ steps.version.outputs.version }}` (auch `:latest`)
+
+            **Portainer:** `portainer-stack.yml` herunterladen, unter *Stacks → Add stack → Upload* hochladen,
+            bei *Environment variables* `AIOPATCHER_HOSTNAME` setzen (DNS-Name oder IP des Servers), deployen.
+            Den Setup-Token zeigen die Logs des Containers `aiopatcher`; Dashboard: `https://<host>:9443`.
+
+            **Docker Compose / Setup-Skript:** siehe README.
