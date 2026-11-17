@@ -8,7 +8,8 @@ public sealed record JobExecutionResult(
     JobOutcome Outcome,
     string Summary,
     bool RebootRequested = false,
-    IReadOnlyList<AvailableUpdate>? ScannedUpdates = null);
+    IReadOnlyList<AvailableUpdate>? ScannedUpdates = null,
+    IReadOnlyList<BrokenAptSource>? BrokenSources = null);
 
 /// <summary>
 /// Führt einen Job aus. Der Agent kennt nur diese drei Aktionen, keine Shell und keine freien Parameter.
@@ -111,8 +112,14 @@ public sealed class JobExecutor(
         }
 
         var summary = $"{updates.Count} updates available, {updates.Count(u => u.IsSecurity)} of them security.";
+        var broken = inventory.BrokenSources;
+        if (broken is { Count: > 0 })
+        {
+            summary += $" Package source(s) not reachable: {string.Join("; ", broken.Select(b => b.Source))}.";
+        }
+
         log($"[agent] {summary}");
-        return new JobExecutionResult(JobOutcome.Succeeded, summary, ScannedUpdates: updates);
+        return new JobExecutionResult(JobOutcome.Succeeded, summary, ScannedUpdates: updates, BrokenSources: broken);
     }
 
     /// <summary>Programme per winget aktualisieren, eins nach dem anderen; ein Fehler bricht die übrigen nicht ab.</summary>
@@ -169,7 +176,8 @@ public sealed class JobExecutor(
             log($"[agent] Held back by server rules: {string.Join(", ", holds)}");
         }
 
-        var outcome = await patcher.PatchAsync(job.Scope, holds, log, ct);
+        var fix = job.FixBrokenSources && policy.AllowSourceFixes;
+        var outcome = await patcher.PatchAsync(job.Scope, holds, fix, log, ct);
         if (!outcome.Success)
         {
             return new JobExecutionResult(JobOutcome.Failed, outcome.Summary);
@@ -186,17 +194,17 @@ public sealed class JobExecutor(
 
         if (!info.RebootRequired)
         {
-            return new JobExecutionResult(JobOutcome.Succeeded, summary, ScannedUpdates: updates);
+            return new JobExecutionResult(JobOutcome.Succeeded, summary, ScannedUpdates: updates, BrokenSources: inventory.BrokenSources);
         }
 
         if (job.AllowReboot && policy.AllowReboot)
         {
-            return new JobExecutionResult(JobOutcome.Succeeded, summary, RebootRequested: true, ScannedUpdates: updates);
+            return new JobExecutionResult(JobOutcome.Succeeded, summary, RebootRequested: true, ScannedUpdates: updates, BrokenSources: inventory.BrokenSources);
         }
 
         var reason = job.AllowReboot ? "local policy forbids reboots" : "not requested";
         log($"[agent] Reboot required, not performed ({reason}).");
-        return new JobExecutionResult(JobOutcome.Succeeded, $"{summary} Reboot required ({reason}).", ScannedUpdates: updates);
+        return new JobExecutionResult(JobOutcome.Succeeded, $"{summary} Reboot required ({reason}).", ScannedUpdates: updates, BrokenSources: inventory.BrokenSources);
     }
 
     private static JobExecutionResult Reboot(AgentPolicy policy, Action<string> log)

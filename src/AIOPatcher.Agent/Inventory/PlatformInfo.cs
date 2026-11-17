@@ -22,6 +22,9 @@ public interface IPlatformInventory
     /// <summary>null = Plattform kann (noch) nicht scannen.</summary>
     Task<IReadOnlyList<AvailableUpdate>?> ScanUpdatesAsync(CancellationToken ct);
 
+    /// <summary>Beim letzten Scan nicht ladbare Paketquellen (apt). null = auf dieser Plattform nicht geprüft.</summary>
+    IReadOnlyList<BrokenAptSource>? BrokenSources => null;
+
     /// <summary>Installierte Programme/Pakete. null = auf dieser Plattform nicht verfügbar.</summary>
     Task<IReadOnlyList<InstalledSoftware>?> ScanSoftwareAsync(CancellationToken ct) => Task.FromResult<IReadOnlyList<InstalledSoftware>?>(null);
 }

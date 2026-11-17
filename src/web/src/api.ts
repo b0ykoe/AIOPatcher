@@ -175,6 +175,18 @@ export interface HostDetail {
   /** 1 = alter Check-in (Push), 2 = Pull-Agent, 0 = noch nie gemeldet. */
   agentProtocol: number;
   modules: HostModule[] | null;
+  /** Paketquellen, die beim letzten Scan nicht ladbar waren (apt). */
+  brokenSources: BrokenSource[] | null;
+  /** Schalter "Kaputte Paketquellen deaktivieren" an */
+  autoFixSources: boolean;
+}
+
+export interface BrokenSource {
+  source: string;
+  reason: string;
+  permanent: boolean;
+  file: string | null;
+  fixable: boolean;
 }
 
 export interface HostModule {

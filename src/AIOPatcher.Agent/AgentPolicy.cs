@@ -26,8 +26,12 @@ public enum PatchPermission
 /// Firewall, SSH/RDP-Einstellungen und lokale Benutzer ändern lassen. Ab Werk aus: Diese Aktionen können einen Host
 /// aussperren oder übernehmen, daher muss sie jeder Host selbst freigeben (zusätzlich zu den Schaltern im Dashboard).
 /// </param>
+/// <param name="AllowSourceFixes">
+/// Dauerhaft kaputte Fremd-Paketquellen (404, Repo eingestellt) vor dem Patchen nach /etc/apt/aiopatcher-disabled
+/// verschieben (zusätzlich muss der Schalter im Dashboard an sein). Distributions-Quellen fasst der Agent nie an.
+/// </param>
 public sealed record AgentPolicy(PatchPermission AllowPatch = PatchPermission.All, bool AllowReboot = true, bool AllowSelfUpdate = true, bool AllowAppUpdates = true, bool TrustServerUpdates = true,
-    bool AllowSystemChanges = false, IReadOnlyList<string>? DisabledModules = null)
+    bool AllowSystemChanges = false, IReadOnlyList<string>? DisabledModules = null, bool AllowSourceFixes = true)
 {
     /// <summary>Modul auf diesem Host gesperrt? (system und agent lassen sich nicht sperren.)</summary>
     public bool IsModuleDisabled(string module) =>
@@ -46,6 +50,7 @@ public sealed record AgentPolicy(PatchPermission AllowPatch = PatchPermission.Al
             "allowappupdates" => policy with { AllowAppUpdates = Bool() },
             "trustserverupdates" => policy with { TrustServerUpdates = Bool() },
             "allowsystemchanges" => policy with { AllowSystemChanges = Bool() },
+            "allowsourcefixes" => policy with { AllowSourceFixes = Bool() },
             "disabledmodules" => policy with { DisabledModules = value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) is var list && list.All(m => AIOPatcher.Contracts.AgentModules.All.Contains(m)) ? list : throw new ArgumentException($"disabledModules: comma-separated list of {string.Join(", ", AIOPatcher.Contracts.AgentModules.All)}.") },
             _ => throw new ArgumentException($"Unknown policy key '{key}'."),
         };

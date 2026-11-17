@@ -146,7 +146,7 @@ public sealed record ContainerReport(string Name, string Image, string? ImageId,
 /// <param name="Holds">Muster zurückgehaltener Updates (siehe <see cref="HoldPatterns"/>). Ältere Server senden nichts.</param>
 /// <param name="Packages">AppUpdate: winget-IDs der zu aktualisierenden Programme.</param>
 public sealed record AgentJob(Guid JobId, JobType Type, PatchScope Scope, bool AllowReboot, IReadOnlyList<string>? Holds = null, IReadOnlyList<string>? Packages = null,
-    SystemChange? Change = null);
+    SystemChange? Change = null, bool FixBrokenSources = false);
 
 /// <param name="Update">Neuere, signierte Agent-Version verfügbar.</param>
 /// <param name="RenewCertificate">Client-Zertifikat läuft bald ab: neues per /agent/renew anfordern.</param>

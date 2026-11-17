@@ -42,6 +42,9 @@ public sealed class ManagedHost
     /// <summary>unattended-upgrades bzw. Windows-Automatik ist aktiv: Gefahr, dass doppelt gepatcht wird.</summary>
     public bool NativeAutoUpdatesEnabled { get; set; }
 
+    /// <summary>Nicht ladbare Paketquellen aus dem letzten Scan (JSON-Liste von BrokenAptSource), null = keine/unbekannt.</summary>
+    public string? BrokenAptSources { get; set; }
+
     // mTLS-Identität
     public required string CertificateThumbprint { get; set; }
     public DateTime CertificateExpiresAt { get; set; }

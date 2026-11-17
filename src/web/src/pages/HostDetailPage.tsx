@@ -254,6 +254,35 @@ export function HostDetailPage() {
           {t("hostDetail.rebootRequired")}
         </Alert>
       )}
+      {host.brokenSources && host.brokenSources.length > 0 && (
+        <Alert mb="md" color="orange" variant="light" icon={<IconAlertTriangle size={18} />} title={t("hostDetail.brokenSourcesTitle", { count: host.brokenSources.length })}>
+          <Stack gap={6}>
+            {host.brokenSources.map((b) => (
+              <div key={b.source}>
+                <Group gap={6} wrap="wrap">
+                  <Text size="sm" ff="monospace" style={{ wordBreak: "break-all" }}>{b.source}</Text>
+                  {b.fixable && host.autoFixSources ? (
+                    <Badge size="sm" color="teal" variant="light">{t("hostDetail.brokenSourceAutoFix")}</Badge>
+                  ) : b.permanent ? (
+                    <Badge size="sm" color="orange" variant="light">{t("hostDetail.brokenSourceManual")}</Badge>
+                  ) : (
+                    <Badge size="sm" color="gray" variant="light">{t("hostDetail.brokenSourceTemporary")}</Badge>
+                  )}
+                </Group>
+                <Text size="xs" c="dimmed">
+                  {b.reason}
+                  {b.file ? ` · ${b.file}` : ""}
+                </Text>
+              </div>
+            ))}
+            <Text size="xs">
+              {host.brokenSources.some((b) => b.fixable) && host.autoFixSources
+                ? t("hostDetail.brokenSourcesAutoHint")
+                : t("hostDetail.brokenSourcesHint")}
+            </Text>
+          </Stack>
+        </Alert>
+      )}
       {h.nativeAutoUpdatesEnabled && !h.autoPatch.enabled && (
         <Alert mb="md" color="blue" variant="light" icon={<IconInfoCircle size={18} />}>
           {h.osFamily === "Linux"

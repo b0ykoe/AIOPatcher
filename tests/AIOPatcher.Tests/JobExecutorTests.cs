@@ -21,12 +21,14 @@ public class JobExecutorTests
         public int PatchCalls { get; private set; }
         public PatchScope? LastScope { get; private set; }
         public IReadOnlyList<string>? LastHolds { get; private set; }
+        public bool? LastFix { get; private set; }
 
-        public Task<PatchOutcome> PatchAsync(PatchScope scope, IReadOnlyList<string> holds, Action<string> log, CancellationToken ct)
+        public Task<PatchOutcome> PatchAsync(PatchScope scope, IReadOnlyList<string> holds, bool fixBrokenSources, Action<string> log, CancellationToken ct)
         {
             PatchCalls++;
             LastScope = scope;
             LastHolds = holds;
+            LastFix = fixBrokenSources;
             return Task.FromResult(new PatchOutcome(success, success ? "3 upgraded, 0 newly installed, 0 to remove" : "apt-get exited with code 100."));
         }
 
@@ -38,6 +40,18 @@ public class JobExecutorTests
     private static Task<JobExecutionResult> Run(AgentJob job, AgentPolicy policy, FakePatcher patcher, bool rebootRequired = false, IReadOnlyList<AvailableUpdate>? updates = null) =>
         new JobExecutor(new FakeInventory(rebootRequired, updates ?? []), patcher, NullLogger<JobExecutor>.Instance)
             .ExecuteAsync(job, policy, _ => { }, CancellationToken.None);
+
+    [Theory]
+    [InlineData(true, true, true)]
+    [InlineData(true, false, false)] // policy.json allowSourceFixes: false hat Vorrang
+    [InlineData(false, true, false)] // Schalter im Dashboard aus
+    public async Task Patch_FixBrokenSources_OnlyWhenServerAndPolicyAllow(bool requested, bool policyAllows, bool expected)
+    {
+        var patcher = new FakePatcher();
+        await Run(new AgentJob(Guid.NewGuid(), JobType.Patch, PatchScope.All, false, FixBrokenSources: requested), new AgentPolicy(AllowSourceFixes: policyAllows), patcher);
+
+        Assert.Equal(expected, patcher.LastFix);
+    }
 
     [Fact]
     public async Task Patch_RebootRequiredAndAllowed_RequestsReboot()

@@ -669,6 +669,9 @@ namespace AIOPatcher.Server.Data.Migrations
                     b.Property<bool>("AutoRebootAllowed")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("BrokenAptSources")
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTime>("CertificateExpiresAt")
                         .HasColumnType("TEXT");
 

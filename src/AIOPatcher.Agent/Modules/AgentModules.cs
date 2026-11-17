@@ -18,7 +18,7 @@ file static class Json
 
     public static TaskOutcome From(JobExecutionResult result) =>
         new(result.Outcome, result.Summary,
-            result.ScannedUpdates is { } updates ? PullJsonContext.ToElement(new UpdateScanResult(updates), PullJsonContext.Default.UpdateScanResult) : null,
+            result.ScannedUpdates is { } updates ? PullJsonContext.ToElement(new UpdateScanResult(updates, result.BrokenSources), PullJsonContext.Default.UpdateScanResult) : null,
             result.RebootRequested);
 }
 
@@ -56,7 +56,7 @@ public sealed class UpdatesModule(JobExecutor executor) : IAgentModule
             ModuleActions.Scan => new AgentJob(task.TaskId, JobType.Scan, PatchScope.Security, false),
             ModuleActions.Reboot => new AgentJob(task.TaskId, JobType.Reboot, PatchScope.Security, true),
             _ => PullJsonContext.FromElement(task.Payload, PullJsonContext.Default.InstallRequest) is { } install
-                ? new AgentJob(task.TaskId, JobType.Patch, install.Scope, install.AllowReboot, install.Holds)
+                ? new AgentJob(task.TaskId, JobType.Patch, install.Scope, install.AllowReboot, install.Holds, FixBrokenSources: install.FixBrokenSources)
                 : null,
         };
 

@@ -199,6 +199,20 @@ Windows installiert Updates standardmäßig auch selbst. Für Hosts, die AIOPatc
 „Automatische Updates konfigurieren“ auf „Herunterladen und benachrichtigen“ stellen; das Dashboard zeigt einen Hinweis,
 solange das nicht der Fall ist.
 
+## Kaputte Paketquellen (apt)
+
+Eine einzelne Fremdquelle, die es nicht mehr gibt (z. B. NodeSource `node_18.x`: 404, „no longer has a Release file“),
+lässt `apt-get update` mit Fehler enden. AIOPatcher geht damit so um:
+
+- **Vorabprüfung:** Jeder Scan wertet `apt-get update` aus. Nicht ladbare Quellen stehen auf der Host-Seite, mit Datei und
+  ob sie dauerhaft kaputt (404) oder vermutlich nur vorübergehend (DNS, Timeout) ist.
+- **Patchen trotzdem:** Sind die übrigen Quellen geladen, patcht der Agent mit Warnung im Log und im Ergebnis. Abgebrochen wird
+  nur bei Sperre, unterbrochenem dpkg, unbekanntem Fehler oder wenn gar keine Quelle ladbar ist.
+- **Automatisch reparieren:** Vor dem Patchen verschiebt der Agent dauerhaft kaputte Fremdquellen nach
+  `/etc/apt/aiopatcher-disabled/` und lädt die Listen neu. Nur Dateien in `/etc/apt/sources.list.d`, in denen *alle*
+  Einträge kaputt sind; Quellen von Debian, Ubuntu und Proxmox nie. Zurück: `mv` des Backups (steht im Job-Log).
+  Abschalten: Schalter *Kaputte Paketquellen deaktivieren* bzw. pro Host `aiopatcher-agent policy set allowSourceFixes false`.
+
 ## Auto-Patch
 
 Auf der Host-Seite unter *Auto-Patch → Einstellen*: Wochentage, Startzeit, Dauer, Umfang (nur Security / alle) und ob ein
@@ -256,6 +270,7 @@ jeden Schalter selbst durch, auch für API-Tokens, Auto-Patch und Abläufe; ausg
 | Programm-Updates per winget | **aus** | Programm-Updates werden abgelehnt. |
 | Agent-Self-Update | an | Agents bekommen keine Updates angeboten. |
 | Alter Agent-Check-in | an | Agents vor dem Pull-Protokoll werden abgewiesen (erst abschalten, wenn alle aktualisiert sind). |
+| Kaputte Paketquellen deaktivieren | an | Dauerhaft kaputte Fremdquellen bleiben, wo sie sind; gepatcht wird trotzdem, mit Warnung. |
 | Test-Snapshots | an | Kein Test-Snapshot auf der Prüfen-Seite. |
 | OPNsense-Firmware-Update per Klick | **aus** | Firmware-Updates nur in der OPNsense selbst. |
 | API-Tokens | an | Jeder Token wird abgewiesen (bleibt gespeichert). |
@@ -388,6 +403,7 @@ Der Server kann sie nicht ändern; sie wird bei jedem Job neu gelesen.
   "trustServerUpdates": true,
   "allowAppUpdates": true,
   "allowSystemChanges": false,
+  "allowSourceFixes": true,
   "disabledModules": []
 }
 ```
@@ -396,7 +412,7 @@ Der Server kann sie nicht ändern; sie wird bei jedem Job neu gelesen.
 z. B. auf dem Proxmox-Host selbst oder der OPNsense-VM. `"allowSelfUpdate": false` verhindert, dass der Agent
 signierte Updates selbst installiert. `"trustServerUpdates": false` lässt nur Updates mit Release-Signatur zu
 (siehe [Agent-Updates](#agent-updates)). `"allowSystemChanges": true` erlaubt Änderungen an Firewall, SSH/RDP und
-Benutzern (siehe [Compliance](#compliance-firewall-sshrdp-benutzer), ab Werk aus). `"allowAppUpdates": false` verbietet Programm-Updates per winget auf diesem Host
+Benutzern (siehe [Compliance](#compliance-firewall-sshrdp-benutzer), ab Werk aus). `"allowSourceFixes": false` verhindert, dass der Agent kaputte Paketquellen deaktiviert (siehe [Kaputte Paketquellen](#kaputte-paketquellen-apt)). `"allowAppUpdates": false` verbietet Programm-Updates per winget auf diesem Host
 (diese brauchen außerdem `allowPatch: All`). Die Policy gilt zusätzlich zu den Schaltern im Dashboard: ausgeführt wird nur,
 was beide erlauben.
 

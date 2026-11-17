@@ -21,7 +21,8 @@ export type Feature =
   | "FirewallManagement"
   | "RemoteAccessFixes"
   | "UserManagement"
-  | "LegacyAgentProtocol";
+  | "LegacyAgentProtocol"
+  | "AptSourceFixes";
 
 export interface FeatureState {
   feature: Feature;

@@ -8,7 +8,8 @@ public sealed record PatchOutcome(bool Success, string Summary);
 public interface IPatchPlatform
 {
     /// <param name="holds">Muster zurückgehaltener Updates; diese werden nicht installiert.</param>
-    Task<PatchOutcome> PatchAsync(PatchScope scope, IReadOnlyList<string> holds, Action<string> log, CancellationToken ct);
+    /// <param name="fixBrokenSources">Dauerhaft kaputte Fremd-Paketquellen vorher deaktivieren (nur apt).</param>
+    Task<PatchOutcome> PatchAsync(PatchScope scope, IReadOnlyList<string> holds, bool fixBrokenSources, Action<string> log, CancellationToken ct);
 
     /// <summary>Löst einen Neustart mit kurzer Verzögerung aus. true = Neustart ist eingeplant.</summary>
     Task<bool> RequestRebootAsync(Action<string> log, CancellationToken ct);

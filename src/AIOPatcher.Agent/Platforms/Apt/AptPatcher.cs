@@ -27,26 +27,46 @@ public sealed partial class AptPatcher : IPatchPlatform
     [GeneratedRegex(@"^\d+ upgraded, \d+ newly installed, \d+ to remove")]
     private static partial Regex SummaryLine();
 
-    public async Task<PatchOutcome> PatchAsync(PatchScope scope, IReadOnlyList<string> holds, Action<string> log, CancellationToken ct)
+    public async Task<PatchOutcome> PatchAsync(PatchScope scope, IReadOnlyList<string> holds, bool fixBrokenSources, Action<string> log, CancellationToken ct)
     {
-        log("$ apt-get update");
-        var updateLines = new List<string>();
-        var updateExit = await RunPrivilegedAsync("apt-get", ["update"], UpdateTimeout, line =>
+        var (updateExit, check) = await UpdateListsAsync(log, ct);
+        var note = "";
+
+        // Dauerhaft kaputte Fremdquellen (z. B. eingestelltes Repo) deaktivieren und die Listen neu laden
+        var fixable = AptSources.Classify(check.Broken).Where(b => b.Fixable && b.File is not null).ToList();
+        if (fixable.Count > 0 && !fixBrokenSources)
         {
-            log(line);
-            updateLines.Add(line);
-        }, ct);
-        var check = AptUpdateCheck.Analyze(updateExit, updateLines);
-        if (!check.CanContinue)
+            log("[agent] Broken package sources are not disabled automatically (switch in the dashboard or policy allowSourceFixes).");
+        }
+        else if (fixable.Count > 0)
         {
-            return new PatchOutcome(false, $"apt-get update failed (exit {updateExit}).");
+            var disabled = new List<string>();
+            foreach (var file in fixable.Select(b => b.File!).Distinct())
+            {
+                if (AptSources.Disable(file) is { } moved)
+                {
+                    log($"[agent] Disabled broken package source {file} (moved to {moved}; to restore: mv {moved} {file}).");
+                    disabled.Add(Path.GetFileName(file));
+                }
+            }
+
+            if (disabled.Count > 0)
+            {
+                note = $" Disabled broken package source(s): {string.Join(", ", disabled)} (backup in {AptSources.BackupDirectory}).";
+                (updateExit, check) = await UpdateListsAsync(log, ct);
+            }
         }
 
-        // Kaputte Fremdquelle: trotzdem patchen (die übrigen Quellen sind aktuell), aber deutlich melden
-        var warning = check.BrokenSources.Count == 0 ? "" : $" Warning: package source not reachable: {string.Join("; ", check.BrokenSources)}.";
-        if (warning.Length > 0)
+        if (!check.CanContinue)
         {
-            log($"[agent]{warning} Continuing with the other sources; fix or remove it under /etc/apt/sources.list.d/.");
+            return new PatchOutcome(false, $"apt-get update failed (exit {updateExit}).{note}");
+        }
+
+        // Übrige kaputte Quellen: trotzdem patchen (die anderen Quellen sind aktuell), aber deutlich melden
+        var warning = note + (check.Broken.Count == 0 ? "" : $" Warning: package source not reachable: {string.Join("; ", check.BrokenSources)}.");
+        if (check.Broken.Count > 0)
+        {
+            log($"[agent] Warning: package source not reachable: {string.Join("; ", check.BrokenSources)}. Continuing with the other sources.");
         }
 
         string[] args;
@@ -97,6 +117,18 @@ public sealed partial class AptPatcher : IPatchPlatform
         return exit == 0
             ? new PatchOutcome(true, (summary ?? "Updates installed.") + warning)
             : new PatchOutcome(false, $"apt-get exited with code {exit}. See the log for details.");
+    }
+
+    private static async Task<(int Exit, AptUpdateCheck.Result Check)> UpdateListsAsync(Action<string> log, CancellationToken ct)
+    {
+        log("$ apt-get update");
+        var lines = new List<string>();
+        var exit = await RunPrivilegedAsync("apt-get", ["update"], UpdateTimeout, line =>
+        {
+            log(line);
+            lines.Add(line);
+        }, ct);
+        return (exit, AptUpdateCheck.Analyze(exit, lines));
     }
 
     public async Task<bool> RequestRebootAsync(Action<string> log, CancellationToken ct)

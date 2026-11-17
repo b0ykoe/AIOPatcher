@@ -311,6 +311,12 @@ const de = {
     clearSelection: "Auswahl aufheben",
   },
   hostDetail: {
+    brokenSourcesTitle: "{{count}} Paketquelle(n) nicht erreichbar",
+    brokenSourceAutoFix: "wird beim nächsten Patch deaktiviert",
+    brokenSourceManual: "dauerhaft kaputt, bitte selbst entfernen",
+    brokenSourceTemporary: "vermutlich vorübergehend",
+    brokenSourcesAutoHint: "Gepatcht wird trotzdem mit den übrigen Quellen. Dauerhaft kaputte Fremdquellen verschiebt der Agent beim nächsten Patch nach /etc/apt/aiopatcher-disabled (zurück per mv). Quellen von Debian, Ubuntu und Proxmox fasst er nie an.",
+    brokenSourcesHint: "Gepatcht wird trotzdem mit den übrigen Quellen. Die Quelle bitte auf dem Host korrigieren oder die Datei unter /etc/apt/sources.list.d entfernen.",
     agentUpdateAvailable: "Update auf {{version}} folgt automatisch",
     agentUpdateInstalled: "Aktualisiert von {{from}} ({{date}})",
     agentUpdateFailedTitle: "Agent-Update auf {{version}} gescheitert",
@@ -853,6 +859,8 @@ const de = {
     versions: "Versionen",
   },
   features: {
+    name_AptSourceFixes: "Kaputte Paketquellen deaktivieren",
+    desc_AptSourceFixes: "Vor dem Patchen verschiebt der Agent Fremd-Paketquellen, die es nicht mehr gibt (404, Repo eingestellt), nach /etc/apt/aiopatcher-disabled. Nie Quellen von Debian, Ubuntu oder Proxmox; pro Host abschaltbar mit policy allowSourceFixes false.",
     name_LegacyAgentProtocol: "Alter Agent-Check-in",
     desc_LegacyAgentProtocol: "Agents vor dem Pull-Protokoll schicken bei jedem Check-in ungefragt Daten. Nur für den Übergang an lassen, bis alle Agents aktualisiert sind (Prüfen-Seite zeigt, welche noch alt sind).",
     group_compliance: "Compliance (Firewall, SSH/RDP, Benutzer)",

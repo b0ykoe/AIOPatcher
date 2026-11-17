@@ -312,6 +312,12 @@ const en: Translation = {
     clearSelection: "Clear selection",
   },
   hostDetail: {
+    brokenSourcesTitle: "{{count}} package source(s) not reachable",
+    brokenSourceAutoFix: "will be disabled at the next patch",
+    brokenSourceManual: "permanently broken, please remove it yourself",
+    brokenSourceTemporary: "probably temporary",
+    brokenSourcesAutoHint: "Patching still runs with the other sources. The agent moves permanently broken third-party sources to /etc/apt/aiopatcher-disabled at the next patch (restore with mv). It never touches Debian, Ubuntu or Proxmox sources.",
+    brokenSourcesHint: "Patching still runs with the other sources. Please fix the source on the host or remove its file under /etc/apt/sources.list.d.",
     agentUpdateAvailable: "Update to {{version}} follows automatically",
     agentUpdateInstalled: "Updated from {{from}} ({{date}})",
     agentUpdateFailedTitle: "Agent update to {{version}} failed",
@@ -854,6 +860,8 @@ const en: Translation = {
     versions: "Versions",
   },
   features: {
+    name_AptSourceFixes: "Disable broken package sources",
+    desc_AptSourceFixes: "Before patching, the agent moves third-party package sources that no longer exist (404, repo discontinued) to /etc/apt/aiopatcher-disabled. Never Debian, Ubuntu or Proxmox sources; can be turned off per host with policy allowSourceFixes false.",
     name_LegacyAgentProtocol: "Legacy agent check-in",
     desc_LegacyAgentProtocol: "Agents before the pull protocol send data unasked with every check-in. Keep on only during the transition until all agents are updated (the checks page shows which are still old).",
     group_compliance: "Compliance (firewall, SSH/RDP, users)",

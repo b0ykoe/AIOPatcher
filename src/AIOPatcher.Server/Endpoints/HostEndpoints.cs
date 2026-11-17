@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Security.Cryptography;
 using AIOPatcher.Contracts;
 using AIOPatcher.Server.Data;
@@ -80,7 +81,9 @@ public static class HostEndpoints
         IReadOnlyList<ContainerDto> Containers,
         AgentUpdateDto? AgentUpdate = null,
         int AgentProtocol = 0,
-        IReadOnlyList<HostModuleDto>? Modules = null);
+        IReadOnlyList<HostModuleDto>? Modules = null,
+        IReadOnlyList<BrokenAptSource>? BrokenSources = null,
+        bool AutoFixSources = false);
 
     /// <summary>Modul des Agents: vorhanden, lokal (policy.json) oder im Dashboard abgeschaltet. Required = nicht abschaltbar.</summary>
     public sealed record HostModuleDto(string Id, bool Available, bool DisabledLocally, bool DisabledInDashboard, bool Required, IReadOnlyList<string> Actions);
@@ -235,7 +238,7 @@ public static class HostEndpoints
             .OrderBy(h => h.SiteName).ThenBy(h => h.Name, StringComparer.OrdinalIgnoreCase));
     }
 
-    private static async Task<IResult> GetHost(Guid id, AppDbContext db, AIOPatcherOptions options, ServerClock clock, CancellationToken ct)
+    private static async Task<IResult> GetHost(Guid id, AppDbContext db, AIOPatcherOptions options, ServerClock clock, FeatureFlags features, CancellationToken ct)
     {
         var summary = await ProjectSummaries(db.Hosts.Where(h => h.Id == id), db.ImageChecks, DateTime.UtcNow - options.OfflineAfter).SingleOrDefaultAsync(ct);
         if (summary is null)
@@ -267,7 +270,19 @@ public static class HostEndpoints
 
         return Results.Ok(new HostDetailDto(summary, host.KernelVersion, host.Uptime, host.EnrolledAt, host.CertificateExpiresAt, updates, addresses,
             host.IntegrationId, host.Integration?.Name, host.ExternalId, await ContainersAsync(db, id, ct), agentUpdate,
-            host.ProtocolVersion, ModulesOf(host)));
+            host.ProtocolVersion, ModulesOf(host), BrokenSourcesOf(host), features.IsOn(Feature.AptSourceFixes)));
+    }
+
+    private static List<BrokenAptSource>? BrokenSourcesOf(ManagedHost host)
+    {
+        try
+        {
+            return host.BrokenAptSources is null ? null : JsonSerializer.Deserialize(host.BrokenAptSources, PullJsonContext.Default.ListBrokenAptSource);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 
     private static List<HostModuleDto> ModulesOf(ManagedHost host)

@@ -76,7 +76,7 @@ public static class PullEndpoints
         // Jobs: der Agent bekommt sie nur, wenn das zuständige Modul nutzbar ist.
         while (await AgentEndpoints.SelectJobAsync(db, host, null, now, ct, features) is { } job)
         {
-            var (module, action, payload) = await MapJobAsync(db, host, job, secrets, now, ct);
+            var (module, action, payload) = await MapJobAsync(db, host, job, secrets, now, features.IsOn(Feature.AptSourceFixes), ct);
             if (!ModuleJson.Usable(host, module) || host.ReportedModules is not null && !ModuleJson.Supports(host, module, action))
             {
                 job.Status = JobStatus.Rejected;
@@ -123,7 +123,7 @@ public static class PullEndpoints
     }
 
     /// <summary>Job aus dem Dashboard → Auftrag an ein Modul.</summary>
-    private static async Task<(string Module, string Action, JsonElement? Payload)> MapJobAsync(AppDbContext db, ManagedHost host, PatchJob job, IDataProtector? secrets, DateTime now, CancellationToken ct)
+    private static async Task<(string Module, string Action, JsonElement? Payload)> MapJobAsync(AppDbContext db, ManagedHost host, PatchJob job, IDataProtector? secrets, DateTime now, bool fixSources, CancellationToken ct)
     {
         switch (job.Type)
         {
@@ -134,7 +134,7 @@ public static class PullEndpoints
             case JobType.Patch:
                 var holds = await PatchRules.HoldsForHostAsync(db, host, now, ct);
                 return (AgentModules.Updates, ModuleActions.Install,
-                    PullJsonContext.ToElement(new InstallRequest(job.Scope, job.AllowReboot, holds.Count > 0 ? holds : null), PullJsonContext.Default.InstallRequest));
+                    PullJsonContext.ToElement(new InstallRequest(job.Scope, job.AllowReboot, holds.Count > 0 ? holds : null, fixSources), PullJsonContext.Default.InstallRequest));
             case JobType.AppUpdate:
                 return (AgentModules.Software, ModuleActions.AppUpdate,
                     PullJsonContext.ToElement(new AppUpdateRequest(job.Packages?.Split(',', StringSplitOptions.RemoveEmptyEntries) ?? []), PullJsonContext.Default.AppUpdateRequest));

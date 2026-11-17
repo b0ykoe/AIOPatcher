@@ -139,6 +139,9 @@ public sealed class UpdatesServerModule : ServerModule
             return null;
         }
 
+        host.BrokenAptSources = scan.BrokenSources is { Count: > 0 } broken
+            ? System.Text.Json.JsonSerializer.Serialize(broken.Take(20).ToList(), PullJsonContext.Default.ListBrokenAptSource)
+            : null;
         var newSecurity = await AgentEndpoints.ReplaceUpdatesAsync(context.Db, host, scan.Updates, context.Now, ct);
         if (newSecurity.Count > 0)
         {

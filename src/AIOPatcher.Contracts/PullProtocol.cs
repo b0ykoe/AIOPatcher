@@ -110,9 +110,18 @@ public sealed record SystemDescription(
     IReadOnlyList<ModuleInfo> Modules,
     AgentUpdateReport? UpdateReport = null);
 
-public sealed record UpdateScanResult(IReadOnlyList<AvailableUpdate> Updates);
+/// <param name="BrokenSources">Paketquellen, die beim letzten apt-get update nicht ladbar waren (null = Agent prüft das nicht).</param>
+public sealed record UpdateScanResult(IReadOnlyList<AvailableUpdate> Updates, IReadOnlyList<BrokenAptSource>? BrokenSources = null);
 
-public sealed record InstallRequest(PatchScope Scope, bool AllowReboot, IReadOnlyList<string>? Holds = null);
+/// <summary>Nicht ladbare apt-Paketquelle.</summary>
+/// <param name="Source">"URI Suite", z. B. "https://deb.nodesource.com/node_18.x jammy".</param>
+/// <param name="Permanent">404 bzw. "no longer has a Release file": wird nicht von selbst wieder gehen (anders als DNS/Timeout).</param>
+/// <param name="File">Datei unter /etc/apt/sources.list.d, in der die Quelle steht (falls gefunden).</param>
+/// <param name="Fixable">Darf automatisch deaktiviert werden: dauerhaft kaputt, keine Distributions-Quelle, Datei enthält nur kaputte Einträge.</param>
+public sealed record BrokenAptSource(string Source, string Reason, bool Permanent, string? File = null, bool Fixable = false);
+
+/// <param name="FixBrokenSources">Dauerhaft kaputte Fremdquellen vor dem Patchen deaktivieren (Schalter im Dashboard; policy.json "allowSourceFixes").</param>
+public sealed record InstallRequest(PatchScope Scope, bool AllowReboot, IReadOnlyList<string>? Holds = null, bool FixBrokenSources = false);
 
 public sealed record AppUpdateRequest(IReadOnlyList<string> Packages);
 
@@ -136,6 +145,7 @@ public sealed record RenewAnswer(string CertificateSigningRequestPem);
 [JsonSerializable(typeof(TaskResultResponse))]
 [JsonSerializable(typeof(SystemDescription))]
 [JsonSerializable(typeof(UpdateScanResult))]
+[JsonSerializable(typeof(List<BrokenAptSource>))]
 [JsonSerializable(typeof(InstallRequest))]
 [JsonSerializable(typeof(AppUpdateRequest))]
 [JsonSerializable(typeof(SoftwareList))]

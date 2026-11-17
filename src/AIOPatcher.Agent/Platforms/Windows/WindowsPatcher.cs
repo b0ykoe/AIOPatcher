@@ -8,7 +8,7 @@ namespace AIOPatcher.Agent.Platforms.Windows;
 [SupportedOSPlatform("windows")]
 public sealed class WindowsPatcher : IPatchPlatform
 {
-    public async Task<PatchOutcome> PatchAsync(PatchScope scope, IReadOnlyList<string> holds, Action<string> log, CancellationToken ct)
+    public async Task<PatchOutcome> PatchAsync(PatchScope scope, IReadOnlyList<string> holds, bool fixBrokenSources, Action<string> log, CancellationToken ct)
     {
         var result = await WindowsUpdateApi.InstallAsync(scope, holds, log).WaitAsync(ct);
         return new PatchOutcome(result.Success, result.Summary);

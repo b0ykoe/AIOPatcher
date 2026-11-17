@@ -9,6 +9,8 @@ namespace AIOPatcher.Agent.Platforms.Apt;
 [UnsupportedOSPlatform("windows")]
 public sealed class LinuxInventory(ILogger<LinuxInventory> logger) : IPlatformInventory
 {
+    public IReadOnlyList<BrokenAptSource>? BrokenSources { get; private set; }
+
     private static readonly TimeSpan AptUpdateTimeout = TimeSpan.FromMinutes(10);
     private static readonly TimeSpan ShortTimeout = TimeSpan.FromSeconds(30);
 
@@ -34,11 +36,15 @@ public sealed class LinuxInventory(ILogger<LinuxInventory> logger) : IPlatformIn
     public async Task<IReadOnlyList<AvailableUpdate>?> ScanUpdatesAsync(CancellationToken ct)
     {
         // Paketlisten aktualisieren braucht Root. Schlägt das fehl, scannen wir mit den vorhandenen Listen.
-        var update = await RunPrivilegedAsync("apt-get", ["update", "-qq"], AptUpdateTimeout, ct);
+        var update = await RunPrivilegedAsync("apt-get", ["update"], AptUpdateTimeout, ct);
         if (!update.Success)
         {
             logger.LogWarning("apt-get update failed (exit {Code}): {Error}", update.ExitCode, Trim(update.StandardError));
         }
+
+        // Vorabprüfung: kaputte Paketquellen melden, bevor ein Patch-Job daran hängen bleibt
+        var lines = (update.StandardOutput + "\n" + update.StandardError).Split('\n');
+        BrokenSources = AptSources.Classify(AptUpdateCheck.Analyze(update.ExitCode, lines).Broken);
 
         // Simulation braucht keine Rechte. Proxmox verlangt dist-upgrade, daher immer dist-upgrade simulieren.
         var simulation = await ProcessRunner.RunAsync("apt-get", ["-s", "-o", "Debug::NoLocking=1", "dist-upgrade"], AptUpdateTimeout, ct);
