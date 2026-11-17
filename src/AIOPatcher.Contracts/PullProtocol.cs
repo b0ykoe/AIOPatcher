@@ -43,6 +43,9 @@ public static class AgentModules
     /// <summary>list (laufende Dienste und Container, für den Vergleich vor/nach einem Neustart).</summary>
     public const string Services = "services";
 
+    /// <summary>sample (CPU, RAM, Datenträger, Container-Auslastung).</summary>
+    public const string Metrics = "metrics";
+
     /// <summary>status, change.</summary>
     public const string Firewall = "firewall";
 
@@ -55,7 +58,7 @@ public static class AgentModules
     /// <summary>update (Self-Update), renew (Client-Zertifikat).</summary>
     public const string Agent = "agent";
 
-    public static readonly string[] All = [System, Updates, Software, Docker, Services, Firewall, RemoteAccess, Users, Agent];
+    public static readonly string[] All = [System, Updates, Software, Docker, Services, Metrics, Firewall, RemoteAccess, Users, Agent];
 
     /// <summary>Ohne diese geht nichts: nicht abschaltbar.</summary>
     public static readonly string[] Required = [System, Agent];
@@ -83,6 +86,7 @@ public static class ModuleActions
     public const string Change = "change";
     public const string Update = "update";
     public const string Renew = "renew";
+    public const string Sample = "sample";
 }
 
 /// <param name="Task">Höchstens ein Auftrag pro Abfrage. Der Agent fragt nach Erledigung sofort wieder.</param>
@@ -155,6 +159,26 @@ public sealed record RemoteAccessList(IReadOnlyList<RemoteAccessSetting> Setting
 
 public sealed record UserList(IReadOnlyList<LocalUser> Users);
 
+/// <summary>metrics.sample: Auslastung jetzt (CPU als Mittel seit der letzten Messung).</summary>
+/// <param name="Load">Linux: Load 1/5/15 Minuten.</param>
+/// <param name="Containers">Laufende Docker-Container (null = kein Docker).</param>
+public sealed record HostMetrics(
+    TimeSpan Uptime,
+    double CpuPercent,
+    int CpuCores,
+    long MemoryTotal,
+    long MemoryUsed,
+    long? SwapTotal,
+    long? SwapUsed,
+    IReadOnlyList<double>? Load,
+    IReadOnlyList<DiskUsage> Disks,
+    IReadOnlyList<ContainerUsage>? Containers = null);
+
+/// <summary>Datenträger: Used = Total − für Benutzer verfügbar (wie df).</summary>
+public sealed record DiskUsage(string Mount, string? FileSystem, long Total, long Used);
+
+public sealed record ContainerUsage(string Name, double CpuPercent, long MemoryUsed, long? MemoryLimit);
+
 /// <summary>Antwort des Agents auf agent.renew.</summary>
 public sealed record RenewAnswer(string CertificateSigningRequestPem);
 
@@ -173,6 +197,7 @@ public sealed record RenewAnswer(string CertificateSigningRequestPem);
 [JsonSerializable(typeof(SoftwareList))]
 [JsonSerializable(typeof(ContainerList))]
 [JsonSerializable(typeof(RunningServices))]
+[JsonSerializable(typeof(HostMetrics))]
 [JsonSerializable(typeof(FirewallStatus))]
 [JsonSerializable(typeof(RemoteAccessList))]
 [JsonSerializable(typeof(UserList))]

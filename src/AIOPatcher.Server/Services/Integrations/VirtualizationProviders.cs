@@ -8,6 +8,26 @@ namespace AIOPatcher.Server.Services.Integrations;
 
 public sealed record MachineInfo(string ExternalId, string Name, string? Status, IReadOnlyList<string> Addresses);
 
+/// <summary>
+/// Proxmox-Ressource aus /cluster/resources: Knoten, VM (qemu), Container (lxc) oder Speicher. Cpu als Anteil 0..1 der
+/// zugewiesenen Kerne. Bei VMs meldet Proxmox die Plattenbelegung nicht (Disk = 0), bei Containern schon.
+/// </summary>
+public sealed record ProxmoxResource(
+    string Type,
+    string Id,
+    string Name,
+    string? Node,
+    int? VmId,
+    string? Status,
+    double? Cpu,
+    int? MaxCpu,
+    long? Memory,
+    long? MaxMemory,
+    long? Disk,
+    long? MaxDisk,
+    long? UptimeSeconds,
+    string? ExternalId);
+
 public enum ProviderTaskState
 {
     Running,
@@ -118,6 +138,39 @@ public sealed class ProxmoxProvider(Integration integration, IntegrationHttp htt
                 (string?)v["status"],
                 []))
             .OrderBy(m => m.Name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    /// <summary>Alle Knoten, Gäste und Speicher mit Auslastung (ein Aufruf, braucht nur Sys.Audit/VM.Audit/Datastore.Audit).</summary>
+    public async Task<IReadOnlyList<ProxmoxResource>> ListResourcesAsync(CancellationToken ct)
+    {
+        var data = await SendAsync(HttpMethod.Get, "cluster/resources", null, ct) as JsonArray ?? [];
+        return ParseResources(data);
+    }
+
+    public static List<ProxmoxResource> ParseResources(JsonArray data)
+    {
+        static double? D(JsonNode? n) => n is JsonValue v && v.TryGetValue<double>(out var d) ? d : null;
+        static long? L(JsonNode? n) => D(n) is { } d ? (long)d : null;
+
+        return data.OfType<JsonObject>()
+            .Where(r => (string?)r["type"] is "node" or "qemu" or "lxc" or "storage" && D(r["template"]) != 1)
+            .Select(r =>
+            {
+                var type = (string)r["type"]!;
+                var vmid = D(r["vmid"]) is { } v ? (int?)v : null;
+                var name = type switch
+                {
+                    "node" => (string?)r["node"],
+                    "storage" => (string?)r["storage"],
+                    _ => (string?)r["name"],
+                } ?? $"{vmid}";
+                return new ProxmoxResource(type, (string?)r["id"] ?? name, name, (string?)r["node"], vmid, (string?)r["status"],
+                    D(r["cpu"]), D(r["maxcpu"]) is { } mc ? (int)mc : null, L(r["mem"]), L(r["maxmem"]), L(r["disk"]), L(r["maxdisk"]), L(r["uptime"]),
+                    type is "qemu" or "lxc" ? $"{r["node"]}/{type}/{vmid}" : null);
+            })
+            .OrderBy(r => r.Type switch { "node" => 0, "qemu" or "lxc" => 1, _ => 2 })
+            .ThenBy(r => r.Name, StringComparer.OrdinalIgnoreCase)
             .ToList();
     }
 

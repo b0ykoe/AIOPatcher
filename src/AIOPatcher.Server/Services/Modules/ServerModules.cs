@@ -65,6 +65,7 @@ public abstract class ServerModule
         new SoftwareServerModule(),
         new DockerServerModule(),
         new ServicesServerModule(),
+        new MetricsServerModule(),
         new ComplianceServerModule(AgentModules.Firewall, ModuleActions.Status),
         new ComplianceServerModule(AgentModules.RemoteAccess, ModuleActions.Status),
         new ComplianceServerModule(AgentModules.Users, ModuleActions.List),

@@ -115,6 +115,7 @@ switch (commandLine.Command)
         builder.Services.AddSingleton<IAgentModule, SoftwareModule>();
         builder.Services.AddSingleton<IAgentModule, DockerModule>();
         builder.Services.AddSingleton<IAgentModule, ServicesModule>();
+        builder.Services.AddSingleton<IAgentModule, MetricsModule>();
         builder.Services.AddSingleton<IAgentModule, FirewallModule>();
         builder.Services.AddSingleton<IAgentModule, RemoteAccessModule>();
         builder.Services.AddSingleton<IAgentModule, UsersModule>();

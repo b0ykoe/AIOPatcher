@@ -669,3 +669,94 @@ export interface SoftwareSummary {
   availableVersion: string | null;
   infoUrl: string | null;
 }
+
+// --- Auslastung ------------------------------------------------------------------------------------
+
+export interface DiskUsage {
+  mount: string;
+  fileSystem: string | null;
+  total: number;
+  used: number;
+}
+
+export interface ContainerUsage {
+  name: string;
+  cpuPercent: number;
+  memoryUsed: number;
+  memoryLimit: number | null;
+}
+
+export interface HostMetrics {
+  uptime: string;
+  cpuPercent: number;
+  cpuCores: number;
+  memoryTotal: number;
+  memoryUsed: number;
+  swapTotal: number | null;
+  swapUsed: number | null;
+  load: number[] | null;
+  disks: DiskUsage[];
+  containers: ContainerUsage[] | null;
+}
+
+export interface MetricPoint {
+  at: string;
+  cpu: number;
+  memory: number;
+  disk: number | null;
+}
+
+export interface HostMetricsResponse {
+  at: string | null;
+  latest: HostMetrics | null;
+  series: MetricPoint[];
+}
+
+export interface HostUtilization {
+  id: string;
+  name: string;
+  siteName: string;
+  osFamily: OsFamily;
+  lastSeenAt: string | null;
+  at: string | null;
+  cpu: number | null;
+  cores: number | null;
+  memoryUsed: number | null;
+  memoryTotal: number | null;
+  disk: number | null;
+  diskMount: string | null;
+  containers: number | null;
+  recent: MetricPoint[];
+}
+
+/** Proxmox /cluster/resources: cpu = Anteil 0..1 der zugewiesenen Kerne; disk bei VMs immer 0 (meldet Proxmox nicht). */
+export interface ProxmoxResource {
+  type: "node" | "qemu" | "lxc" | "storage";
+  id: string;
+  name: string;
+  node: string | null;
+  vmId: number | null;
+  status: string | null;
+  cpu: number | null;
+  maxCpu: number | null;
+  memory: number | null;
+  maxMemory: number | null;
+  disk: number | null;
+  maxDisk: number | null;
+  uptimeSeconds: number | null;
+  externalId: string | null;
+}
+
+export interface ProxmoxUtilization {
+  integrationId: string;
+  name: string;
+  at: string | null;
+  error: string | null;
+  resources: { resource: ProxmoxResource; hostId: string | null; hostName: string | null }[];
+}
+
+export interface Utilization {
+  enabled: boolean;
+  hosts: HostUtilization[];
+  proxmox: ProxmoxUtilization[];
+}

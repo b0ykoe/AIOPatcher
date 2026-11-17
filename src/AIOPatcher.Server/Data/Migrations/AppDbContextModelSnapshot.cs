@@ -378,6 +378,36 @@ namespace AIOPatcher.Server.Data.Migrations
                     b.ToTable("HostCompliance");
                 });
 
+            modelBuilder.Entity("AIOPatcher.Server.Data.HostMetricSample", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("At")
+                        .HasColumnType("TEXT");
+
+                    b.Property<float>("Cpu")
+                        .HasColumnType("REAL");
+
+                    b.Property<float?>("Disk")
+                        .HasColumnType("REAL");
+
+                    b.Property<Guid>("HostId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<float>("Memory")
+                        .HasColumnType("REAL");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("At");
+
+                    b.HasIndex("HostId", "At");
+
+                    b.ToTable("MetricSamples", (string)null);
+                });
+
             modelBuilder.Entity("AIOPatcher.Server.Data.HostVulnerability", b =>
                 {
                     b.Property<long>("Id")
@@ -743,6 +773,12 @@ namespace AIOPatcher.Server.Data.Migrations
                         .HasColumnType("INTEGER");
 
                     b.Property<TimeOnly>("MaintenanceStart")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Metrics")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("MetricsAt")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Name")
@@ -1643,6 +1679,17 @@ namespace AIOPatcher.Server.Data.Migrations
                     b.HasOne("AIOPatcher.Server.Data.ManagedHost", "Host")
                         .WithOne()
                         .HasForeignKey("AIOPatcher.Server.Data.HostCompliance", "HostId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Host");
+                });
+
+            modelBuilder.Entity("AIOPatcher.Server.Data.HostMetricSample", b =>
+                {
+                    b.HasOne("AIOPatcher.Server.Data.ManagedHost", "Host")
+                        .WithMany()
+                        .HasForeignKey("HostId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 

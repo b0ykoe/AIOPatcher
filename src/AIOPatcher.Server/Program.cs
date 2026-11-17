@@ -226,6 +226,7 @@ app.MapUserEndpoints();
 app.MapNotificationEndpoints();
 app.MapPatchRuleEndpoints();
 app.MapIntegrationEndpoints();
+app.MapMetricsEndpoints();
 app.MapApiTokenEndpoints();
 app.MapReportEndpoints();
 app.MapIpamEndpoints();

@@ -58,6 +58,10 @@ public sealed class ManagedHost
     /// <summary>Ergebnis des letzten Vergleichs nach einem Neustart (JSON, RebootCheckResult), null = keiner oder ausgeblendet.</summary>
     public string? RebootCheck { get; set; }
 
+    /// <summary>Letzte Auslastungsmessung (JSON, HostMetrics: CPU, RAM, Datenträger, Container) und wann.</summary>
+    public string? Metrics { get; set; }
+    public DateTime? MetricsAt { get; set; }
+
     // mTLS-Identität
     public required string CertificateThumbprint { get; set; }
     public DateTime CertificateExpiresAt { get; set; }

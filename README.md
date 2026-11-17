@@ -228,6 +228,19 @@ lässt `apt-get update` mit Fehler enden. AIOPatcher geht damit so um:
   Einträge kaputt sind; Quellen von Debian, Ubuntu und Proxmox nie. Zurück: `mv` des Backups (steht im Job-Log).
   Abschalten: Schalter *Kaputte Paketquellen deaktivieren* bzw. pro Host `aiopatcher-agent policy set allowSourceFixes false`.
 
+## Auslastung (CPU, RAM, Speicher)
+
+Seite *Auslastung* und Reiter *Auslastung* auf jeder Host-Seite:
+
+- **Hosts mit Agent:** alle 5 Minuten CPU (Mittel seit der letzten Messung), RAM, Swap, Load und jeder Datenträger
+  (echte Dateisysteme, ohne tmpfs/overlay und ohne die Volumes der Proxmox-Gäste). Auf Docker-Hosts zusätzlich CPU und
+  RAM je Container. Verlauf 24 Stunden bzw. 7 Tage, danach wird er gelöscht. Ab 75 % gelb, ab 90 % rot.
+- **Proxmox (über die Integration, ohne Agent):** Knoten, Storages und alle VMs und LXC-Container mit CPU, RAM und
+  (bei LXC) Plattenbelegung, live alle 30 Sekunden. Gäste ohne Agent sind als „nicht eingetragen“ markiert, eingetragene
+  verlinken auf ihre Host-Seite. Proxmox meldet bei VMs nur die Plattengröße, nicht die Belegung; die steht mit Agent auf der
+  Host-Seite. Die Rechte der Integration reichen dafür schon (`VM.Audit`, `Sys.Audit`, `Datastore.Audit`).
+- Abschalten: Schalter *Auslastung erfassen*; pro Host das Modul `metrics` (Host → *Agent & Module*).
+
 ## Dienste nach Neustart prüfen
 
 Läuft nach einem Neustart alles wieder? AIOPatcher vergleicht laufende Dienste und Container vor und nach jedem Neustart,
@@ -314,6 +327,7 @@ jeden Schalter selbst durch, auch für API-Tokens, Auto-Patch und Abläufe; ausg
 | Agent-Self-Update | an | Agents bekommen keine Updates angeboten. |
 | Alter Agent-Check-in | an | Agents vor dem Pull-Protokoll werden abgewiesen (erst abschalten, wenn alle aktualisiert sind). |
 | Update-Automatik der Hosts steuern | an | Kein Ab-/Einschalten von unattended-upgrades bzw. Windows Update aus dem Dashboard. |
+| Auslastung erfassen | an | Keine Messwerte der Hosts, keine Proxmox-Übersicht. |
 | Dienste nach Neustart prüfen | an | Kein Vergleich vor/nach Neustarts, keine Liste laufender Dienste. |
 | Kaputte Paketquellen deaktivieren | an | Dauerhaft kaputte Fremdquellen bleiben, wo sie sind; gepatcht wird trotzdem, mit Warnung. |
 | Test-Snapshots | an | Kein Test-Snapshot auf der Prüfen-Seite. |
@@ -353,6 +367,7 @@ Jede Funktion ist ein **Modul** mit festen Aktionen. Andere Aufträge lehnt der 
 | `software` | `inventory`, `appupdate` (winget) |
 | `docker` | `inventory` |
 | `services` | `list`: laufende Autostart-Dienste und Container (Vergleich vor/nach Neustart) |
+| `metrics` | `sample`: CPU, RAM, Datenträger, Container-Auslastung |
 | `firewall`, `remoteaccess` | `status`, `change` |
 | `users` | `list`, `change` |
 | `agent` | `update` (Self-Update), `renew` (Client-Zertifikat) |

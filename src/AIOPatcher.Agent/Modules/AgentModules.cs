@@ -129,6 +129,21 @@ public sealed class ServicesModule : IAgentModule
     }
 }
 
+/// <summary>metrics.sample: CPU, RAM, Datenträger und Container-Auslastung (nur lesen).</summary>
+public sealed class MetricsModule : IAgentModule
+{
+    public string Id => AgentModules.Metrics;
+    public bool Available => OperatingSystem.IsWindows() || OperatingSystem.IsLinux();
+    public IReadOnlyList<string> Actions { get; } = [ModuleActions.Sample];
+
+    public async Task<TaskOutcome> ExecuteAsync(AgentTask task, TaskContext context, CancellationToken ct)
+    {
+        var metrics = await MetricsCollector.CollectAsync(ct);
+        var memory = metrics.MemoryTotal > 0 ? 100.0 * metrics.MemoryUsed / metrics.MemoryTotal : 0;
+        return Json.Ok($"CPU {metrics.CpuPercent:0}%, RAM {memory:0}%", metrics, PullJsonContext.Default.HostMetrics);
+    }
+}
+
 /// <summary>Gemeinsame Basis für firewall, remoteaccess und users: lesen + Systemänderungen über den JobExecutor.</summary>
 public abstract class ComplianceModule(IComplianceProvider provider, JobExecutor executor) : IAgentModule
 {

@@ -6,6 +6,8 @@
     <InvariantGlobalization>true</InvariantGlobalization>
     <!-- AOT-/Trim-Analyse auch beim normalen Build, damit Probleme unter Windows schon auffallen. -->
     <IsAotCompatible>true</IsAotCompatible>
+    <!-- LibraryImport (kernel32: CPU-Zeiten, Speicher) erzeugt Code mit Zeigern. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <!--

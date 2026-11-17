@@ -34,6 +34,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<AIOPatcher.Server.Services.FeatureToggle> FeatureToggles => Set<AIOPatcher.Server.Services.FeatureToggle>();
     public DbSet<HostCompliance> HostCompliance => Set<HostCompliance>();
     public DbSet<AgentTaskRecord> AgentTasks => Set<AgentTaskRecord>();
+    public DbSet<HostMetricSample> MetricSamples => Set<HostMetricSample>();
     public DbSet<SsoSettingsRecord> SsoSettings => Set<SsoSettingsRecord>();
     public DbSet<FirewallProfile> FirewallProfiles => Set<FirewallProfile>();
     public DbSet<FirewallProfileVersion> FirewallProfileVersions => Set<FirewallProfileVersion>();
@@ -230,6 +231,14 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             e.Property(x => x.DefaultRole).HasConversion<string>().HasMaxLength(20);
             e.Property(x => x.CertificateFingerprint).HasMaxLength(100);
             e.Property(x => x.UpdatedBy).HasMaxLength(100);
+        });
+
+        b.Entity<HostMetricSample>(e =>
+        {
+            e.ToTable("MetricSamples");
+            e.HasOne(x => x.Host).WithMany().HasForeignKey(x => x.HostId).OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(x => new { x.HostId, x.At });
+            e.HasIndex(x => x.At);
         });
 
         b.Entity<AgentTaskRecord>(e =>

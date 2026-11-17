@@ -9,6 +9,7 @@ import {
   IconDots,
   IconInfoCircle,
   IconListCheck,
+  IconGauge,
   IconNetwork,
   IconBrandDocker,
   IconApps,
@@ -34,6 +35,7 @@ import { CveCell } from "../components/CveCell";
 import { ContainerTable } from "../components/ContainerTable";
 import { RebootCheckAlert } from "../components/RebootCheckAlert";
 import { NativeUpdatesButton } from "../components/NativeUpdatesButton";
+import { HostMetricsPanel } from "../components/metrics/HostMetricsPanel";
 import { SoftwareTab } from "../components/SoftwareTab";
 import { ComplianceTab } from "../components/compliance/ComplianceTab";
 import { AgentModulesCard } from "../components/AgentModulesCard";
@@ -377,6 +379,11 @@ export function HostDetailPage() {
                 </Group>
               </Tabs.Tab>
             )}
+            {isOn("Metrics") && (
+              <Tabs.Tab value="metrics" leftSection={<IconGauge size={16} />}>
+                {t("nav.utilization")}
+              </Tabs.Tab>
+            )}
             <Tabs.Tab value="network" leftSection={<IconNetwork size={16} />}>
               {t("hostDetail.network")}
             </Tabs.Tab>
@@ -493,6 +500,10 @@ export function HostDetailPage() {
 
           <Tabs.Panel value="containers" p="md">
             <ContainerTable containers={host.containers} />
+          </Tabs.Panel>
+
+          <Tabs.Panel value="metrics" p="md">
+            {isOn("Metrics") && <HostMetricsPanel hostId={h.id} />}
           </Tabs.Panel>
 
           <Tabs.Panel value="network" p="md">

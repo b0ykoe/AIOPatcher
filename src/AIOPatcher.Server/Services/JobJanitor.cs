@@ -1,5 +1,6 @@
 using AIOPatcher.Server.Data;
 using AIOPatcher.Server.Options;
+using AIOPatcher.Server.Services.Modules;
 using Microsoft.EntityFrameworkCore;
 
 namespace AIOPatcher.Server.Services;
@@ -57,9 +58,17 @@ public sealed class JobJanitor(IServiceScopeFactory scopes, AIOPatcherOptions op
             .Where(l => l.Job!.FinishedAt != null && l.Job.FinishedAt < retentionBefore)
             .ExecuteDeleteAsync(ct);
 
-        if (stale.Count > 0 || deleted > 0)
+        // Auslastung: 7 Tage Verlauf. Daten-Aufträge an Agents (ohne Job) nach 30 Tagen: Planung braucht nur die letzten Stunden.
+        var samples = await db.MetricSamples.Where(s => s.At < now - MetricsHistory.Keep).ExecuteDeleteAsync(ct);
+        var tasksBefore = now.AddDays(-30);
+        var tasks = await db.AgentTasks
+            .Where(t => t.JobId == null && t.CreatedAt < tasksBefore && t.Status != JobStatus.Running)
+            .ExecuteDeleteAsync(ct);
+
+        if (stale.Count > 0 || deleted > 0 || samples > 0 || tasks > 0)
         {
-            logger.LogInformation("Cleaned up: {Stale} stale jobs, {Lines} old log lines", stale.Count, deleted);
+            logger.LogInformation("Cleaned up: {Stale} stale jobs, {Lines} old log lines, {Samples} metric samples, {Tasks} agent tasks",
+                stale.Count, deleted, samples, tasks);
         }
     }
 }

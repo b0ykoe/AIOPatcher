@@ -24,7 +24,8 @@ export type Feature =
   | "LegacyAgentProtocol"
   | "AptSourceFixes"
   | "RebootCheck"
-  | "AutoUpdateControl";
+  | "AutoUpdateControl"
+  | "Metrics";
 
 export interface FeatureState {
   feature: Feature;
