@@ -4,6 +4,9 @@
 #
 # Erstinstallation (Befehl kommt fertig aus dem Dashboard, "Host hinzufügen"):
 #   install.sh --server https://patch.example.com:8443 --token <token> --fingerprint <sha256>
+# Host außerhalb (Cloud), Server nur intern erreichbar: zusätzlich die öffentliche Adresse und die Prüfsummen
+#   install.sh --server https://10.0.0.5:8443 --public-url https://agents.example.com --sha256 linux-x64=<sha256>,... \
+#              --token <token> --fingerprint <sha256>
 # Update (Agent bleibt registriert, Token nicht nötig):
 #   install.sh --server https://patch.example.com:8443 --fingerprint <sha256>
 # Deinstallation:
@@ -17,6 +20,8 @@ UNIT=/etc/systemd/system/aiopatcher-agent.service
 SERVICE=aiopatcher-agent
 
 SERVER=""
+PUBLIC=""
+HASHES=""
 TOKEN=""
 FINGERPRINT=""
 FORCE=0
@@ -34,6 +39,8 @@ usage() {
 Optionen:
   --server URL          Agent-API des AIOPatcher-Servers, z. B. https://patch.example.com:8443
   --fingerprint SHA256  Fingerprint der AIOPatcher-CA (aus dem Dashboard)
+  --public-url URL      Öffentliche Adresse über den Reverse Proxy (Ausweichweg, wenn --server nicht erreichbar ist)
+  --sha256 RID=HASH,... Prüfsummen der Agent-Builds (aus dem Dashboard), nötig für den Download über --public-url
   --token TOKEN         Enrollment-Token (nur für die Erstregistrierung)
   --force               Neu registrieren, auch wenn der Agent schon registriert ist
   --uninstall           Dienst und Programm entfernen (Registrierung bleibt erhalten)
@@ -49,6 +56,8 @@ EOF
 while [ $# -gt 0 ]; do
   case "$1" in
     --server) SERVER="${2:-}"; shift 2 ;;
+    --public-url) PUBLIC="${2:-}"; shift 2 ;;
+    --sha256) HASHES="${2:-}"; shift 2 ;;
     --token) TOKEN="${2:-}"; shift 2 ;;
     --fingerprint) FINGERPRINT="${2:-}"; shift 2 ;;
     --force) FORCE=1; shift ;;
@@ -88,6 +97,8 @@ fi
 [ -n "$FINGERPRINT" ] || { usage; die "--fingerprint fehlt."; }
 SERVER="${SERVER%/}"
 case "$SERVER" in https://*) ;; *) die "--server muss mit https:// beginnen." ;; esac
+PUBLIC="${PUBLIC%/}"
+case "$PUBLIC" in ""|https://*) ;; *) die "--public-url muss mit https:// beginnen." ;; esac
 FINGERPRINT="$(printf '%s' "$FINGERPRINT" | tr -d ': ' | tr 'a-f' 'A-F')"
 
 for tool in curl sha256sum base64 sed tr; do
@@ -126,9 +137,17 @@ trap 'rm -rf "$TMP"' EXIT
 # --- 1. CA holen und gegen den Fingerprint prüfen (Pinning) ---------------------------------------
 # Nur dieser eine Abruf geht ohne Zertifikatsprüfung: Die Antwort wird sofort gegen den Fingerprint
 # aus dem Dashboard geprüft. Alles danach läuft ausschließlich gegen diese CA.
+# Über die öffentliche Adresse gehört TLS dem Reverse Proxy (Let's Encrypt, Cloudflare): Dort zählt ebenfalls nur
+# der Fingerprint der gelieferten CA, der Agent selbst wird gegen die Prüfsumme aus dem Installationsbefehl geprüft.
 info "Prüfe Server-CA ..."
-curl -fsS --insecure --max-time 30 "$SERVER/agent/ca" -o "$TMP/ca.crt" \
-  || die "Server nicht erreichbar: $SERVER (Firewall/Port-Forward prüfen)."
+VIA_PUBLIC=0
+if ! curl -fsS --insecure --connect-timeout 8 --max-time 30 "$SERVER/agent/ca" -o "$TMP/ca.crt"; then
+  [ -n "$PUBLIC" ] || die "Server nicht erreichbar: $SERVER (Firewall/VPN prüfen oder im Dashboard die öffentliche Adresse einrichten)."
+  info "$SERVER nicht erreichbar, nutze die öffentliche Adresse $PUBLIC."
+  curl -fsS --max-time 30 "$PUBLIC/agent/ca" -o "$TMP/ca.crt" \
+    || die "Auch $PUBLIC nicht erreichbar (Reverse Proxy und DNS prüfen, Einstellungen → Öffentlicher Zugang)."
+  VIA_PUBLIC=1
+fi
 ACTUAL="$(sed -e '/-----BEGIN/d' -e '/-----END/d' "$TMP/ca.crt" | tr -d '\r\n' | base64 -d | sha256sum | cut -c1-64 | tr 'a-f' 'A-F')"
 [ "$ACTUAL" = "$FINGERPRINT" ] || die "CA-Fingerprint stimmt nicht! Erwartet $FINGERPRINT, Server liefert $ACTUAL. Abbruch."
 
@@ -137,9 +156,17 @@ pinned_curl() { curl -fsS --cacert "$TMP/ca.crt" "$@"; }
 # --- 2. Agent herunterladen und Prüfsumme kontrollieren --------------------------------------------
 download_agent() {
   info "Lade Agent ($RID) ..."
-  pinned_curl --max-time 600 "$SERVER/agent/download/$RID" -o "$TMP/aiopatcher-agent" \
-    || die "Download fehlgeschlagen. Liegt auf dem Server ein Agent-Build für $RID?"
-  EXPECTED="$(pinned_curl --max-time 30 "$SERVER/agent/download/$RID/sha256" | tr -d '[:space:]' | tr 'a-f' 'A-F')"
+  if [ "$VIA_PUBLIC" -eq 1 ]; then
+    [ "$RID" != lite-linux ] || die "Der Lite-Agent (alte Systeme) geht nur direkt bzw. per VPN zum Server, nicht über die öffentliche Adresse."
+    EXPECTED="$(printf '%s' "$HASHES" | tr ',' '\n' | sed -n "s/^$RID=//p" | tr -d '[:space:]' | tr 'a-f' 'A-F')"
+    [ -n "$EXPECTED" ] || die "Für $RID fehlt die Prüfsumme (--sha256). Installationsbefehl neu aus dem Dashboard holen."
+    curl -fsS --max-time 600 "$PUBLIC/agent/download/$RID" -o "$TMP/aiopatcher-agent" \
+      || die "Download über $PUBLIC fehlgeschlagen."
+  else
+    pinned_curl --max-time 600 "$SERVER/agent/download/$RID" -o "$TMP/aiopatcher-agent" \
+      || die "Download fehlgeschlagen. Liegt auf dem Server ein Agent-Build für $RID?"
+    EXPECTED="$(pinned_curl --max-time 30 "$SERVER/agent/download/$RID/sha256" | tr -d '[:space:]' | tr 'a-f' 'A-F')"
+  fi
   GOT="$(sha256sum "$TMP/aiopatcher-agent" | cut -c1-64 | tr 'a-f' 'A-F')"
   [ -n "$EXPECTED" ] && [ "$EXPECTED" = "$GOT" ] || die "Prüfsumme stimmt nicht (erwartet $EXPECTED, erhalten $GOT)."
   chmod 755 "$TMP/aiopatcher-agent"
@@ -201,6 +228,7 @@ if [ -f "$STATE/agent.json" ] && [ "$FORCE" -eq 0 ]; then
 else
   [ -n "$TOKEN" ] || die "--token fehlt (nötig für die Erstregistrierung)."
   ARGS=(enroll --server "$SERVER" --token "$TOKEN" --fingerprint "$FINGERPRINT" --state-dir "$STATE")
+  [ -n "$PUBLIC" ] && [ "$LITE" -eq 0 ] && ARGS+=(--public-url "$PUBLIC")
   [ "$FORCE" -eq 1 ] && ARGS+=(--force)
   agent "${ARGS[@]}"
 fi

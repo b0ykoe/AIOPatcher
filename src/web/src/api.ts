@@ -130,6 +130,8 @@ export interface HostSummary {
   planVia: PlanVia | null;
   /** Letzte Auslastung (null = keine Messung) */
   usage: { at: string; cpu: number; memory: number; disk: number | null } | null;
+  /** Weg der letzten Agent-Anfrage: "direct" (intern) oder "public" (über den Reverse Proxy) */
+  channel?: "direct" | "public" | null;
 }
 
 export const splitTags = (tags: string | null | undefined) => (tags ? tags.split(",") : []);
@@ -270,6 +272,11 @@ export interface EnrollmentTokenCreated {
   serverUrl: string;
   caFingerprintSha256: string;
   windowsInstallScriptSha256: string | null;
+  /** öffentliche Adresse über den Reverse Proxy (Einstellungen → Öffentlicher Zugang), null = nicht eingerichtet */
+  publicUrl: string | null;
+  linuxInstallScriptSha256: string | null;
+  /** "linux-x64=HASH,..." für den Download über die öffentliche Adresse */
+  agentSha256: string | null;
 }
 
 export interface EnrollmentToken {

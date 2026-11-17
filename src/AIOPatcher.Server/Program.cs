@@ -58,6 +58,12 @@ builder.WebHost.ConfigureKestrel(kestrel =>
         https.ClientCertificateMode = ClientCertificateMode.AllowCertificate;
         https.ClientCertificateValidation = (certificate, _, _) => ca.IsIssuedByThisCa(certificate);
     }));
+
+    // Proxy-Port: HTTP für den eigenen Reverse Proxy (TLS macht der Proxy); Anfragen sind signiert, siehe PublicChannelGate.
+    if (options.AgentProxyPort > 0)
+    {
+        kestrel.ListenAnyIP(options.AgentProxyPort);
+    }
 });
 
 // --- Services -------------------------------------------------------------------------------------
@@ -171,6 +177,7 @@ builder.Services.AddSingleton<CveMirror>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<CveMirror>());
 builder.Services.AddSingleton<CveLookupService>();
 builder.Services.AddHostedService<ContainerUpdateService>();
+builder.Services.AddSingleton<PublicAccess>();
 builder.Services.AddSingleton<ReleaseCheck>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<ReleaseCheck>());
 
@@ -189,6 +196,7 @@ using (var scope = app.Services.CreateScope())
     await app.Services.GetRequiredService<SetupTokenService>().InitializeAsync(db, app.Logger, CancellationToken.None);
     await app.Services.GetRequiredService<FeatureFlags>().LoadAsync(db, CancellationToken.None);
     await app.Services.GetRequiredService<AIOPatcher.Server.Services.Sso.SsoService>().LoadAsync(db, CancellationToken.None);
+    await app.Services.GetRequiredService<PublicAccess>().LoadAsync(db, CancellationToken.None);
 }
 
 // --- Pipeline -------------------------------------------------------------------------------------
@@ -238,6 +246,7 @@ app.MapSoftwareEndpoints();
 app.MapVulnerabilityEndpoints();
 app.MapCveLookupEndpoints();
 app.MapFeatureEndpoints();
+app.MapPublicAccessEndpoints();
 app.MapOpenApi("/api/openapi/{documentName}.json").RequireAuthorization();
 app.MapAgentEndpoints();
 app.MapAgentDownloadEndpoints();
@@ -245,8 +254,8 @@ app.MapAgentDownloadEndpoints();
 app.MapFallback("/api/{**path}", () => Results.NotFound());
 app.MapFallbackToFile("index.html");
 
-app.Logger.LogInformation("Dashboard: https://{Host}:{DashboardPort}  |  Agent-API: https://{Host}:{AgentPort}",
-    options.PublicHostname, options.DashboardPort, options.PublicHostname, options.AgentPort);
+app.Logger.LogInformation("Dashboard: https://{Host}:{DashboardPort}  |  Agent-API: https://{Host}:{AgentPort}  |  Proxy-Port (HTTP): {ProxyPort}",
+    options.PublicHostname, options.DashboardPort, options.PublicHostname, options.AgentPort, options.AgentProxyPort > 0 ? options.AgentProxyPort.ToString(System.Globalization.CultureInfo.InvariantCulture) : "off");
 
 await app.RunAsync();
 return 0;

@@ -9,7 +9,9 @@
 #   1. Docker installieren (falls nötig), Image aus diesem Repo bauen (oder --image verwenden)
 #   2. Zugang zum Dashboard wählen: direkt (9443), Traefik, nginx oder vorhandener Proxy (Nginx Proxy Manager …)
 #   3. Zertifikat fürs Dashboard: Let's Encrypt, intern (Zertifikat der AIOPatcher-CA) oder eigene Dateien
-#   4. Firewall (ufw): SSH, Agents (8443), Dashboard nur aus erlaubten Netzen
+#   4. Firewall (ufw): SSH, Agents (8443), Dashboard und Proxy-Port (8080) nur aus erlaubten Netzen
+#   Der Server läuft intern. Hosts außerhalb (Cloud): später im Dashboard unter Einstellungen → Öffentlicher Zugang
+#   über den eigenen Reverse Proxy (nginx, Caddy, Nginx Proxy Manager, Traefik, Cloudflare Tunnel).
 #   5. Starten, auf "gesund" warten, Setup-Token und CA-Fingerprint ausgeben
 #   6. Antworten in /opt/aiopatcher/setup.conf merken, Befehl "aiopatcher-update" einrichten (optional nächtlich)
 #
@@ -166,10 +168,11 @@ URL_HOST="$HOSTNAME_ARG"
 if [[ "$HOSTNAME_ARG" =~ ^[0-9.]+$ ]]; then IS_IP=1; fi
 if [[ "$HOSTNAME_ARG" == *:* ]]; then IS_IP=1; URL_HOST="[$HOSTNAME_ARG]"; fi
 
-INTERNAL_DEFAULT=0
-if [ -n "$IP" ] && is_private "$IP"; then INTERNAL_DEFAULT=1; fi
 
-choose PROXY "Wie soll das Dashboard erreichbar sein?" "$([ "$INTERNAL_DEFAULT" -eq 1 ] && echo none || echo traefik)" \
+echo
+echo "Standard: Der Server läuft intern. Hosts außerhalb (Cloud) und das Dashboard von unterwegs richtest du später im"
+echo "Dashboard unter Einstellungen → Öffentlicher Zugang über deinen eigenen Reverse Proxy ein."
+choose PROXY "Wie soll das Dashboard erreichbar sein?" none \
   none "Direkt auf Port 9443 (einfachste Variante, Zertifikat der AIOPatcher-CA)" \
   traefik "Traefik auf Port 443 (wird mit eingerichtet)" \
   nginx "nginx auf Port 443 (wird mit eingerichtet)" \
@@ -183,7 +186,7 @@ if [ "$PROXY" = traefik ] || [ "$PROXY" = nginx ]; then
       internal "Intern: Zertifikat der AIOPatcher-CA (enthält die IP)" \
       custom "Eigene Zertifikatsdateien"
   fi
-  choose TLS "Zertifikat fürs Dashboard?" "$([ "$INTERNAL_DEFAULT" -eq 1 ] && echo internal || echo letsencrypt)" \
+  choose TLS "Zertifikat fürs Dashboard?" internal \
     letsencrypt "Let's Encrypt (Server muss aus dem Internet auf Port 80/443 erreichbar sein)" \
     internal "Intern: Zertifikat der AIOPatcher-CA (Homelab; CA einmal im Browser/System hinterlegen)" \
     custom "Eigene Zertifikatsdateien (z. B. von deiner internen CA)"
@@ -346,6 +349,7 @@ services:
       AIOPatcher__DataDirectory: /data
       AIOPatcher__DashboardPort: "9443"
       AIOPatcher__AgentPort: "8443"
+      AIOPatcher__AgentProxyPort: "8080" # HTTP für den eigenen Reverse Proxy (Einstellungen → Öffentlicher Zugang), nur LAN
       AIOPatcher__Language: "$LANGUAGE_ARG"
       TZ: "$TIMEZONE"
 EOF
@@ -509,6 +513,8 @@ if [ "$UFW" = yes ]; then
   SSH_PORT="$(printf '%s' "${SSH_CONNECTION:-}" | awk '{print $4}')"
   run ufw allow "${SSH_PORT:-22}/tcp" comment "SSH"
   run ufw allow 8443/tcp comment "AIOPatcher Agents (mTLS)"
+  # Proxy-Port nur aus den erlaubten Netzen: dort steht dein Reverse Proxy, nie direkt ins Internet
+  for net in "${ALLOW_LIST[@]}"; do run ufw allow from "$net" to any port 8080 proto tcp comment "AIOPatcher Proxy-Port (Reverse Proxy)"; done
   case "$PROXY" in
     none)
       for net in "${ALLOW_LIST[@]}"; do run ufw allow from "$net" to any port 9443 proto tcp comment "AIOPatcher Dashboard"; done ;;
@@ -626,6 +632,7 @@ cat <<EOF
     Setup-Token:    ${TOKEN:-"(schon eingerichtet)"}
     CA-Fingerprint: ${FINGERPRINT:-?}
     Agents:         https://$URL_HOST:8443
+    Proxy-Port:     http://$URL_HOST:8080 (nur LAN, Ziel für deinen Reverse Proxy)
 
 EOF
 case "$PROXY:$TLS" in
@@ -646,6 +653,7 @@ EOF
 fi
 echo "    Nächste Schritte: Dashboard öffnen, Token eingeben, Konto und Authenticator einrichten,"
 echo "    dann \"Host hinzufügen\" (ein Befehl pro Host). Log: docker compose -f $COMPOSE logs -f aiopatcher"
+echo "    Hosts außerhalb (Cloud): Einstellungen → Öffentlicher Zugang (Assistent mit Vorlagen für deinen Reverse Proxy)."
 echo "    Updates später ohne Setup: sudo aiopatcher-update$([ "$AUTO_UPDATE" = yes ] && echo " (läuft zusätzlich jede Nacht)")"
 if [ "$UFW" = no ]; then
   echo

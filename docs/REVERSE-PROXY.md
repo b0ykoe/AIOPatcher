@@ -6,12 +6,15 @@ Nötig ist das nicht. Ohne Proxy ist AIOPatcher genauso sicher.
 
 Beispiele: [Traefik](#traefik) · [nginx](#nginx) · [Nginx Proxy Manager](#nginx-proxy-manager)
 
+Hosts außerhalb (Cloud), die den intern laufenden Server nicht direkt erreichen: siehe
+[Agents von außen über den eigenen Reverse Proxy](#agents-von-außen-über-den-eigenen-reverse-proxy).
+
 ## Drei Regeln
 
-1. **Nur das Dashboard (9443) kommt hinter den Proxy, die Agents (8443) nicht.**
-   Agents melden sich mit eigenem Zertifikat an (mTLS) und prüfen, ob der Server ein Zertifikat der AIOPatcher-CA
-   zeigt. Ein Proxy, der TLS beendet, macht beides kaputt. Port 8443 bleibt direkt freigegeben.
-   Geht das nicht, hilft nur TCP-Passthrough (siehe jeweils „Optional“).
+1. **Der Agent-Port 8443 (mTLS) kommt nie hinter einen Proxy.**
+   Agents melden sich dort mit eigenem Zertifikat an und prüfen, ob der Server ein Zertifikat der AIOPatcher-CA
+   zeigt. Ein Proxy, der TLS beendet, macht beides kaputt. Für Agents über einen Proxy gibt es einen eigenen Port
+   (8080, signierte Anfragen statt Client-Zertifikat), siehe [Agents von außen](#agents-von-außen-über-den-eigenen-reverse-proxy).
 2. **Den Proxy eintragen:** `AIOPatcher__TrustedProxies`.
    Sonst sieht AIOPatcher bei jeder Anfrage nur die IP des Proxys. Dann sperrt die Login-Bremse (10 Versuche pro Minute
    und IP) alle Benutzer gemeinsam, und im Audit-Log steht überall dieselbe IP. Nur von eingetragenen IPs/Netzen wird
@@ -32,6 +35,48 @@ Damit kann der Proxy es sauber prüfen. Die Prüfung abzuschalten geht auch, wen
 Rechner laufen.
 
 WebSockets braucht AIOPatcher nicht. Live-Logs werden abgefragt.
+
+## Agents von außen über den eigenen Reverse Proxy
+
+Typisch im Homelab: Der Server läuft intern (z. B. `10.0.0.5`), Hosts im Netz oder per VPN verbinden sich direkt.
+Ein Host in der Cloud kommt aber nicht ins LAN. Für ihn macht dein eigener Reverse Proxy den Server unter einer
+öffentlichen Adresse erreichbar, z. B. `https://agents.example.com`.
+
+```
+Cloud-Host ──HTTPS──> dein Proxy (nginx, Caddy, NPM, Traefik, Cloudflare) ──HTTP──> AIOPatcher 10.0.0.5:8080 (nur /agent/)
+LAN-Host   ──mTLS───────────────────────────────────────────────────────────────> AIOPatcher 10.0.0.5:8443
+```
+
+Einrichten im Dashboard: **Einstellungen → Öffentlicher Zugang**. Der Assistent erzeugt die fertige Konfiguration für
+nginx, Caddy, Nginx Proxy Manager, Traefik, Cloudflare Tunnel bzw. die Portweiterleitung auf der OPNsense und zeigt
+am Ende einen Test-Befehl (`curl https://agents.example.com/agent/public-check`). Kommt der Aufruf an, siehst du das
+dort live, auch ob er über Cloudflare kam.
+
+**Wie das sicher bleibt, obwohl der Proxy TLS beendet:**
+
+- Der Proxy-Port (`AIOPatcher__AgentProxyPort`, Standard 8080, HTTP) nimmt nur `/agent/*` an und antwortet
+  erst, wenn im Dashboard eine öffentliche Adresse eingerichtet ist. Ihn nur im LAN freigeben, nie direkt ins Internet.
+- Jede Anfrage eines Agents ist mit dem Schlüssel seines Client-Zertifikats signiert (Methode, Pfad, Zeit, einmalige
+  Nonce, Inhalt). Ohne gültige Signatur eines von dieser CA ausgestellten Zertifikats: 401. Wiederholte oder über 5
+  Minuten alte Anfragen werden abgelehnt.
+- Jede Antwort signiert der Server (an die Nonce der Anfrage gebunden). Der Agent prüft sie gegen die gepinnte CA.
+  Wer den Proxy kontrolliert (auch Cloudflare), kann mitlesen, aber keine Aufträge einschleusen oder verändern.
+- Geheimnisse (z. B. ein neues Benutzer-Passwort) verschlüsselt der Server zusätzlich nur für den Agent.
+- Registrieren über die öffentliche Adresse: Die CA wird am Fingerprint erkannt, Installationsskript und Agent an
+  Prüfsummen, die das Dashboard in den Installationsbefehl schreibt (`Host hinzufügen` → „Außerhalb (Cloud)“).
+
+**Wie Agents den Weg wählen:** Sie kennen beide Adressen, versuchen zuerst die interne und weichen automatisch auf die
+öffentliche aus, wenn die nicht erreichbar ist (die interne probieren sie alle 15 Minuten wieder). Bestehende Agents
+lernen die öffentliche Adresse bei ihrer nächsten Abfrage. Die Host-Seite zeigt „über die öffentliche Adresse“.
+
+**Hinweise:**
+
+- Der Proxy muss den Pfad unverändert durchreichen und Anfragen bis etwa 50 MB annehmen (große Inventare).
+- Sites mit Netzfreigabe: Hinter dem Proxy sieht AIOPatcher die IP des Proxys. Damit die echte IP des Agents zählt,
+  den Proxy in `AIOPatcher__TrustedProxies` eintragen (dann gilt `CF-Connecting-IP` bzw. `X-Forwarded-For`).
+- Der Lite-Agent (sehr alte Systeme) beherrscht nur den direkten Weg (bzw. VPN).
+- Das Dashboard kann der Assistent optional ebenfalls öffentlich machen (eigener Name). Davon raten wir ab: dann nur mit
+  2FA/SSO für alle und am besten zusätzlich geschützt (Cloudflare Access, VPN, IP-Freigabe am Proxy).
 
 ## Traefik
 

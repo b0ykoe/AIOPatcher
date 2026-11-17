@@ -43,6 +43,10 @@ public sealed class ManagedHost
 
     /// <summary>Kennung des laufenden Agent-Prozesses (Poll-Header) und wann sie zuletzt wechselte (= Neustart).</summary>
     public string? AgentInstance { get; set; }
+
+    /// <summary>Weg der letzten Agent-Anfrage: "direct" (interne Adresse, mTLS) oder "public" (über den Reverse Proxy).</summary>
+    [System.ComponentModel.DataAnnotations.MaxLength(16)]
+    public string? LastChannel { get; set; }
     public DateTime? AgentRestartedAt { get; set; }
     public bool RebootRequired { get; set; }
 

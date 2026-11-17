@@ -8,7 +8,8 @@
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
         "AIOPatcher__DashboardPort": "7443",
-        "AIOPatcher__AgentPort": "7444"
+        "AIOPatcher__AgentPort": "7444",
+        "AIOPatcher__AgentProxyPort": "7445"
       }
     }
   }

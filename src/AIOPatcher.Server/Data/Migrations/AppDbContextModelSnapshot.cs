@@ -839,6 +839,10 @@ namespace AIOPatcher.Server.Data.Migrations
                     b.Property<DateTime?>("LastAutoPatchWindowStart")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("LastChannel")
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTime?>("LastScanAt")
                         .HasColumnType("TEXT");
 
@@ -1188,6 +1192,35 @@ namespace AIOPatcher.Server.Data.Migrations
                     b.HasIndex("HostId");
 
                     b.ToTable("PendingUpdates");
+                });
+
+            modelBuilder.Entity("AIOPatcher.Server.Data.PublicAccessSettingsRecord", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("AgentUrl")
+                        .HasMaxLength(300)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DashboardUrl")
+                        .HasMaxLength(300)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Proxy")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("PublicAccessSettings", (string)null);
                 });
 
             modelBuilder.Entity("AIOPatcher.Server.Data.Runbook", b =>

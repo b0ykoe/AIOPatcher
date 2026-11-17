@@ -6,6 +6,7 @@ namespace AIOPatcher.Server.Security;
 /// Trennt Dashboard und Agent-API anhand des lokalen Ports (Socket-Ebene, nicht über den Host-Header fälschbar):
 /// - Agent-Port: nur /agent/*, Client-Zertifikat Pflicht (außer Enrollment und Ping).
 /// - Dashboard-Port: alles außer /agent/*.
+/// - Proxy-Port: nur /agent/*, signierte Anfragen statt Client-Zertifikat (siehe <see cref="PublicChannelGate"/>).
 /// </summary>
 public static class PortIsolation
 {
@@ -14,6 +15,12 @@ public static class PortIsolation
     public static IApplicationBuilder UsePortIsolation(this IApplicationBuilder app, AIOPatcherOptions options) =>
         app.Use(async (ctx, next) =>
         {
+            if (PublicChannelGate.IsProxyPort(ctx, options))
+            {
+                await PublicChannelGate.HandleAsync(ctx, next, options);
+                return;
+            }
+
             var isAgentPort = ctx.Connection.LocalPort == options.AgentPort;
             var isAgentPath = ctx.Request.Path.StartsWithSegments("/agent", StringComparison.OrdinalIgnoreCase);
 

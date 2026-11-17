@@ -330,6 +330,15 @@ Statt Gruppen gehen auch Realm-Rollen: Claim `realm_access.roles`. Hat Keycloak 
 den SHA-256-Fingerprint unter *Erweitert* eintragen. SAML wird (noch) nicht unterstützt; Keycloak und die meisten
 anderen Anbieter sprechen OpenID Connect.
 
+## Hosts außerhalb (Cloud) über den eigenen Reverse Proxy
+
+Der Server läuft intern (z. B. `10.0.0.5`). Hosts im Netz oder per VPN verbinden sich direkt. Hosts außerhalb gehen über
+eine öffentliche Adresse deines eigenen Reverse Proxys (nginx, Caddy, Nginx Proxy Manager, Traefik, Cloudflare Tunnel)
+auf den Proxy-Port 8080 (nur LAN). Einrichten im Dashboard unter **Einstellungen → Öffentlicher Zugang** (Assistent mit
+fertigen Konfigurationen und Test). Anfragen sind signiert, Antworten vom Server unterschrieben und Geheimnisse nur für
+den Agent verschlüsselt, das funktioniert auch hinter Cloudflare. Agents nehmen zuerst die interne Adresse und weichen
+automatisch auf die öffentliche aus. Details: [docs/REVERSE-PROXY.md](docs/REVERSE-PROXY.md#agents-von-außen-über-den-eigenen-reverse-proxy).
+
 ## Reverse Proxy (Traefik, nginx, Nginx Proxy Manager)
 
 Das Dashboard kann hinter einem Reverse Proxy laufen (Port 443, Let's-Encrypt-Zertifikat), die Agents bleiben direkt auf 8443.

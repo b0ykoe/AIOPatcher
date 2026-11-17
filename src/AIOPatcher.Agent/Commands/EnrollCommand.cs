@@ -11,6 +11,8 @@ namespace AIOPatcher.Agent.Commands;
 /// 1. CA vom Server holen und gegen den Fingerprint aus dem Installationsbefehl prüfen (Pinning).
 /// 2. Erst dann über die gepinnte Verbindung Token + CSR schicken.
 /// 3. Zertifikat, Schlüssel und CA lokal ablegen.
+/// Mit --public-url: Ist die interne Adresse nicht erreichbar (Host außerhalb), läuft alles über den Reverse Proxy.
+/// Die CA wird dort ebenfalls am Fingerprint erkannt, die Antwort auf die Registrierung ist vom Server signiert.
 /// </summary>
 public static class EnrollCommand
 {
@@ -19,11 +21,12 @@ public static class EnrollCommand
         var server = args.Get("server");
         var token = args.Get("token");
         var fingerprint = args.Get("fingerprint");
+        var publicUrl = args.Get("public-url");
         var stateDir = args.Get("state-dir") ?? AgentState.DefaultDirectory;
 
         if (server is null || token is null || fingerprint is null)
         {
-            await Console.Error.WriteLineAsync("Usage: aiopatcher-agent enroll --server https://<host>:8443 --token <token> --fingerprint <sha256> [--state-dir <path>] [--force]");
+            await Console.Error.WriteLineAsync("Usage: aiopatcher-agent enroll --server https://<host>:8443 --token <token> --fingerprint <sha256> [--public-url https://<name>] [--state-dir <path>] [--force]");
             return 2;
         }
 
@@ -39,13 +42,28 @@ public static class EnrollCommand
             return 2;
         }
 
+        Uri? publicUri = null;
+        if (publicUrl is not null && (!Uri.TryCreate(publicUrl, UriKind.Absolute, out publicUri) || publicUri.Scheme != Uri.UriSchemeHttps))
+        {
+            await Console.Error.WriteLineAsync("--public-url must be an https:// URL.");
+            return 2;
+        }
+
         // 1. CA holen und pinnen
         X509Certificate2 ca;
         try
         {
-            ca = await FetchAndVerifyCaAsync(serverUri, CertificateHelper.NormalizeFingerprint(fingerprint), ct);
+            try
+            {
+                ca = await FetchAndVerifyCaAsync(serverUri, CertificateHelper.NormalizeFingerprint(fingerprint), ct);
+            }
+            catch (Exception ex) when (publicUri is not null && ServerClient.IsUnreachable(ex))
+            {
+                Console.WriteLine($"{serverUri} not reachable, using the public address {publicUri}.");
+                ca = await FetchCaViaPublicAsync(publicUri, CertificateHelper.NormalizeFingerprint(fingerprint), ct);
+            }
         }
-        catch (Exception ex) when (ex is HttpRequestException or CryptographicException or InvalidDataException)
+        catch (Exception ex) when (ex is HttpRequestException or CryptographicException or InvalidDataException or TaskCanceledException)
         {
             await Console.Error.WriteLineAsync($"CA verification failed: {ex.Message}");
             return 1;
@@ -59,7 +77,7 @@ public static class EnrollCommand
         var csr = new CertificateRequest($"CN={hostname}", key, HashAlgorithmName.SHA256).CreateSigningRequestPem();
 
         EnrollResponse response;
-        using (var client = new ServerClient(serverUri, ca, clientCertificate: null))
+        using (var client = new ServerClient(serverUri, ca, clientCertificate: null, publicUri))
         {
             try
             {
@@ -89,7 +107,7 @@ public static class EnrollCommand
             return 1;
         }
 
-        AgentState.Save(stateDir, new AgentConfig(serverUri.GetLeftPart(UriPartial.Authority), response.HostId, response.SiteId),
+        AgentState.Save(stateDir, new AgentConfig(serverUri.GetLeftPart(UriPartial.Authority), response.HostId, response.SiteId, publicUri?.GetLeftPart(UriPartial.Authority)),
             ca.ExportCertificatePem(), response.ClientCertificatePem, key);
 
         AgentPolicy.WriteDefaultIfMissing(stateDir);
@@ -105,7 +123,7 @@ public static class EnrollCommand
         var nameMismatch = false;
 
         // Hier kennen wir die CA noch nicht: Server-Zertifikat merken, Prüfung danach gegen die gepinnte CA.
-        using var handler = new SocketsHttpHandler();
+        using var handler = new SocketsHttpHandler { ConnectTimeout = TimeSpan.FromSeconds(10) };
         handler.SslOptions.RemoteCertificateValidationCallback = (_, cert, _, errors) =>
         {
             if (cert is not null)
@@ -135,6 +153,24 @@ public static class EnrollCommand
         if (presentedLeaf is null || !CertificateHelper.ValidateServer(ca, presentedLeaf, System.Net.Security.SslPolicyErrors.None))
         {
             throw new CryptographicException("Server certificate was not issued by the pinned CA.");
+        }
+
+        return ca;
+    }
+
+    /// <summary>
+    /// CA über den Reverse Proxy holen: TLS gehört dort dem Proxy (Let's Encrypt, Cloudflare), darum zählt allein der
+    /// Fingerprint der gelieferten CA. Danach prüft der Agent jede Antwort gegen diese CA (Antwort-Signatur).
+    /// </summary>
+    private static async Task<X509Certificate2> FetchCaViaPublicAsync(Uri publicUrl, string expectedFingerprint, CancellationToken ct)
+    {
+        using var http = new HttpClient { BaseAddress = publicUrl, Timeout = TimeSpan.FromSeconds(30) };
+        var pem = await http.GetStringAsync("/agent/ca", ct);
+        var ca = X509Certificate2.CreateFromPem(pem);
+        var actual = CertificateHelper.Sha256Fingerprint(ca);
+        if (!string.Equals(actual, expectedFingerprint, StringComparison.Ordinal))
+        {
+            throw new CryptographicException($"Fingerprint mismatch via {publicUrl}. Expected {expectedFingerprint}, got {actual}.");
         }
 
         return ca;

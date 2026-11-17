@@ -91,7 +91,8 @@ public static class ModuleActions
 
 /// <param name="Task">Höchstens ein Auftrag pro Abfrage. Der Agent fragt nach Erledigung sofort wieder.</param>
 /// <param name="UpdateKey">Öffentlicher Update-Schlüssel des Servers (siehe <see cref="CheckinResponse"/>).</param>
-public sealed record PollResponse(int PollIntervalSeconds, AgentTask? Task, string? UpdateKey = null);
+/// <param name="PublicUrl">Öffentliche Adresse für diesen Agent (über Reverse Proxy), falls eingerichtet; der Agent merkt sie sich als Ausweichweg.</param>
+public sealed record PollResponse(int PollIntervalSeconds, AgentTask? Task, string? UpdateKey = null, string? PublicUrl = null);
 
 /// <param name="Payload">Parameter der Aktion, z. B. <see cref="InstallRequest"/> oder <see cref="SystemChange"/>.</param>
 public sealed record AgentTask(Guid TaskId, string Module, string Action, JsonElement? Payload = null);

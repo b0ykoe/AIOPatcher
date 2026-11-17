@@ -49,7 +49,8 @@ public static class HostEndpoints
         Guid? PlanId = null,
         string? PlanGroup = null,
         PlanVia? PlanVia = null,
-        UsageDto? Usage = null);
+        UsageDto? Usage = null,
+        string? Channel = null);
 
     /// <summary>Letzte Auslastung (für Listen): CPU %, RAM %, vollster Datenträger %.</summary>
     public sealed record UsageDto(DateTime At, double Cpu, float Memory, float? Disk);
@@ -147,7 +148,10 @@ public static class HostEndpoints
         DateTime ExpiresAt,
         string ServerUrl,
         string CaFingerprintSha256,
-        string? WindowsInstallScriptSha256);
+        string? WindowsInstallScriptSha256,
+        string? PublicUrl = null,
+        string? LinuxInstallScriptSha256 = null,
+        string? AgentSha256 = null);
 
     public sealed record EnrollmentTokenDto(Guid Id, Guid SiteId, string? Label, DateTime CreatedAt, DateTime ExpiresAt);
 
@@ -219,10 +223,14 @@ public static class HostEndpoints
         var ids = summaries.Select(s => s.Id).ToList();
         var metrics = await db.Hosts.AsNoTracking().Where(h => ids.Contains(h.Id) && h.MetricsAt != null)
             .Select(h => new { h.Id, h.Metrics, h.MetricsAt }).ToDictionaryAsync(h => h.Id, ct);
+        var channels = await db.Hosts.AsNoTracking().Where(h => ids.Contains(h.Id) && h.LastChannel != null)
+            .Select(h => new { h.Id, h.LastChannel }).ToDictionaryAsync(h => h.Id, h => h.LastChannel, ct);
         var now = DateTime.UtcNow;
 
         return summaries.Select(s =>
         {
+            // Weg des Agents: direkt (intern) oder über den Reverse Proxy
+            s = s with { Channel = channels.GetValueOrDefault(s.Id) };
             if (metrics.TryGetValue(s.Id, out var m) && m.Metrics is not null
                 && System.Text.Json.JsonSerializer.Deserialize(m.Metrics, PullJsonContext.Default.HostMetrics) is { } latest)
             {
@@ -597,6 +605,7 @@ public static class HostEndpoints
         CertificateAuthority ca,
         AgentDownloads downloads,
         AuditLog audit,
+        PublicAccess publicAccess,
         CancellationToken ct)
     {
         var site = await db.Sites.FindAsync([request.SiteId], ct);
@@ -619,9 +628,17 @@ public static class HostEndpoints
         await db.SaveChangesAsync(ct);
 
         var windowsScript = AgentDownloads.FindScript("install.ps1");
+        var linuxScript = AgentDownloads.FindScript("install.sh");
+        // Für Hosts außerhalb: Über den Reverse Proxy prüft der Host Skript und Agent gegen diese Werte (nicht gegen TLS)
+        var agentHashes = string.Join(',', AgentDownloads.RuntimeIds
+            .Select(rid => downloads.Find(rid) is { } file ? $"{rid}={downloads.Sha256(file).ToUpperInvariant()}" : null)
+            .OfType<string>());
         return Results.Ok(new EnrollmentTokenCreatedDto(
             entity.Id, token, entity.ExpiresAt, options.AgentApiUrl, ca.RootFingerprintSha256,
-            windowsScript is null ? null : downloads.Sha256(windowsScript).ToUpperInvariant()));
+            windowsScript is null ? null : downloads.Sha256(windowsScript).ToUpperInvariant(),
+            publicAccess.AgentUrl,
+            linuxScript is null ? null : downloads.Sha256(linuxScript).ToUpperInvariant(),
+            agentHashes.Length == 0 ? null : agentHashes));
     }
 
     private static async Task<IResult> DeleteEnrollmentToken(Guid id, AppDbContext db, AuditLog audit, CancellationToken ct)

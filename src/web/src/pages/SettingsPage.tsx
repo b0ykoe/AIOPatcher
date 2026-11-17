@@ -2,7 +2,7 @@ import type { ComponentType, ReactNode } from "react";
 import { Navigate, useNavigate, useParams } from "react-router";
 import { Box, NavLink, Select, Text } from "@mantine/core";
 import {
-  IconAdjustments, IconBell, IconBuilding, IconKey, IconLogin2, IconPlugConnected, IconShieldLock, IconStethoscope, IconUsers,
+  IconAdjustments, IconBell, IconBuilding, IconKey, IconLogin2, IconPlugConnected, IconShieldLock, IconStethoscope, IconUsers, IconWorld,
 } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import { ApiTokenSettings } from "../components/settings/ApiTokenSettings";
@@ -10,6 +10,7 @@ import { FeatureSettings } from "../components/settings/FeatureSettings";
 import { GeneralSettings } from "../components/settings/GeneralSettings";
 import { IntegrationSettings } from "../components/settings/IntegrationSettings";
 import { NotificationSettings } from "../components/settings/NotificationSettings";
+import { PublicAccessSettings } from "../components/settings/PublicAccessSettings";
 import { SsoSettings } from "../components/settings/SsoSettings";
 import { EmbeddedPage, PageHeader } from "../components/ui";
 import { ChecksPage } from "./ChecksPage";
@@ -52,6 +53,7 @@ export function SettingsPage() {
         { value: "notifications", label: t("settings.notifications"), icon: IconBell, element: <NotificationSettings /> },
         { value: "integrations", label: t("settings.integrations"), icon: IconPlugConnected, element: <IntegrationSettings /> },
         { value: "sites", label: t("settings.sites"), icon: IconBuilding, element: <SitesPage /> },
+        { value: "public-access", label: t("settings.publicAccess"), icon: IconWorld, element: <PublicAccessSettings /> },
       ],
     },
   ];

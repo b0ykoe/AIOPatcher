@@ -1,3 +1,4 @@
+using System.Security.Cryptography.X509Certificates;
 using System.Text.Json;
 using AIOPatcher.Contracts;
 using AIOPatcher.Server.Data;
@@ -34,6 +35,7 @@ public static class PullEndpoints
         FeatureFlags features,
         UpdateSigningKey updateKey,
         IDataProtectionProvider protection,
+        PublicAccess publicAccess,
         CancellationToken ct)
     {
         var host = (ManagedHost)http.Items[AgentEndpoints.HostItemKey]!;
@@ -49,9 +51,39 @@ public static class PullEndpoints
             task = await NextTaskAsync(db, host, notifier, features, downloads, ComplianceEndpoints.SecretProtector(protection), polledVersion, now, ct);
         }
 
+        // Über den Proxy sieht der Proxy (evtl. Cloudflare) den Inhalt: Geheimnisse nur für den Agent verschlüsselt
+        if (task is not null && http.Items[PublicChannelGate.CertificateItem] is System.Security.Cryptography.X509Certificates.X509Certificate2 agentCert)
+        {
+            task = SealSecrets(task, agentCert);
+        }
+
         await db.SaveChangesAsync(ct);
         var key = features.IsOn(Feature.AgentSelfUpdate) ? updateKey.PublicKeySpkiBase64 : null;
-        return Results.Ok(new PollResponse(options.AgentCheckinIntervalSeconds, task, key));
+        return Results.Ok(new PollResponse(options.AgentCheckinIntervalSeconds, task, key, publicAccess.AgentUrl));
+    }
+
+    /// <summary>Geheimnisse einer Systemänderung (auch in Batch-Schritten) für den Schlüssel des Agents versiegeln.</summary>
+    public static AgentTask SealSecrets(AgentTask task, System.Security.Cryptography.X509Certificates.X509Certificate2 agentCert)
+    {
+        if (task.Action != ModuleActions.Change || PullJsonContext.FromElement(task.Payload, PullJsonContext.Default.SystemChange) is not { } change)
+        {
+            return task;
+        }
+
+        using var key = agentCert.GetECDsaPublicKey();
+        if (key is null)
+        {
+            return task;
+        }
+
+        SystemChange Seal(SystemChange c) => c with
+        {
+            Secret = c.Secret is { Length: > 0 } s && !s.StartsWith(PublicChannel.SealedPrefix, StringComparison.Ordinal) ? PublicChannel.Seal(s, key) : c.Secret,
+            Steps = c.Steps?.Select(Seal).ToList(),
+        };
+
+        var sealedChange = Seal(change);
+        return sealedChange == change ? task : task with { Payload = PullJsonContext.ToElement(sealedChange, PullJsonContext.Default.SystemChange) };
     }
 
     /// <summary>Neue Prozess-Kennung = Agent oder Host neu gestartet: Systemdaten (Uptime, Neustart nötig) gleich neu anfragen.</summary>

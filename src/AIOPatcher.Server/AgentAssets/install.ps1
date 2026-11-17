@@ -4,6 +4,8 @@ AIOPatcher-Agent: Installation, Update und Deinstallation fuer Windows
 
 Erstinstallation (Befehl kommt fertig aus dem Dashboard, "Host hinzufuegen"):
   install.ps1 -Server https://patch.example.com:8443 -Token <token> -Fingerprint <sha256>
+Host ausserhalb (Cloud), Server nur intern erreichbar: zusaetzlich oeffentliche Adresse und Pruefsumme
+  install.ps1 -Server https://10.0.0.5:8443 -PublicUrl https://agents.example.com -Sha256 win-x64=<sha256> -Token <token> -Fingerprint <sha256>
 Update (Agent bleibt registriert):
   install.ps1 -Server https://patch.example.com:8443 -Fingerprint <sha256>
 Deinstallation:
@@ -16,6 +18,10 @@ param(
     [string]$Server,
     [string]$Fingerprint,
     [string]$Token,
+    # Oeffentliche Adresse ueber den Reverse Proxy (Ausweichweg, wenn -Server nicht erreichbar ist)
+    [string]$PublicUrl,
+    # Pruefsummen der Agent-Builds aus dem Dashboard ("win-x64=<sha256>"), noetig fuer den Download ueber -PublicUrl
+    [string]$Sha256,
     [switch]$Force,
     [switch]$Uninstall,
     [switch]$Purge,
@@ -38,13 +44,14 @@ function Info([string]$Message) { Write-Host "==> $Message" }
 
 # HTTPS-Abruf mit eigener Zertifikatspruefung NUR fuer diesen Request (nicht global),
 # ohne Keep-Alive und in eigener Verbindungsgruppe, damit keine Verbindung wiederverwendet wird.
-function Invoke-Fetch([string]$Url, [scriptblock]$Validator, [string]$Group, [string]$OutFile) {
+# Ohne Validator: normale Pruefung durch Windows (oeffentliche Adresse mit Zertifikat des Reverse Proxys).
+function Invoke-Fetch([string]$Url, [scriptblock]$Validator, [string]$Group, [string]$OutFile, [int]$TimeoutMs = 600000) {
     $request = [Net.HttpWebRequest]::Create($Url)
     $request.KeepAlive = $false
     $request.ConnectionGroupName = $Group
-    $request.Timeout = 600000
+    $request.Timeout = $TimeoutMs
     $request.ReadWriteTimeout = 600000
-    $request.ServerCertificateValidationCallback = $Validator
+    if ($Validator) { $request.ServerCertificateValidationCallback = $Validator }
     $response = $request.GetResponse()
     try {
         $stream = $response.GetResponseStream()
@@ -214,6 +221,10 @@ if (-not $Server) { Fail '-Server fehlt.' }
 if (-not $Fingerprint) { Fail '-Fingerprint fehlt.' }
 $Server = $Server.TrimEnd('/')
 if (-not $Server.StartsWith('https://')) { Fail '-Server muss mit https:// beginnen.' }
+if ($PublicUrl) {
+    $PublicUrl = $PublicUrl.TrimEnd('/')
+    if (-not $PublicUrl.StartsWith('https://')) { Fail '-PublicUrl muss mit https:// beginnen.' }
+}
 $Fingerprint = ($Fingerprint -replace '[^0-9A-Fa-f]', '').ToUpperInvariant()
 if (-not [Environment]::Is64BitOperatingSystem) { Fail 'Nur 64-Bit-Windows wird unterstuetzt.' }
 
@@ -230,10 +241,20 @@ try {
     # liefe der Agent-Download ueber die ungepruefte Verbindung des CA-Abrufs (Pruefung wuerde nie
     # ausgefuehrt). Deshalb: Pruefung pro Request, kein Keep-Alive, getrennte Verbindungsgruppen.
     Info 'Pruefe Server-CA ...'
+    # Ueber die oeffentliche Adresse gehoert TLS dem Reverse Proxy: dort zaehlt ebenfalls nur der Fingerprint der CA,
+    # der Agent wird gegen die Pruefsumme aus dem Installationsbefehl geprueft.
+    $viaPublic = $false
     try {
-        $caPem = Invoke-Fetch -Url "$Server/agent/ca" -Validator { $true } -Group 'aiopatcher-unverified'
+        $caPem = Invoke-Fetch -Url "$Server/agent/ca" -Validator { $true } -Group 'aiopatcher-unverified' -TimeoutMs 15000
     } catch {
-        Fail "Server nicht erreichbar: $Server ($($_.Exception.Message))"
+        if (-not $PublicUrl) { Fail "Server nicht erreichbar: $Server ($($_.Exception.Message))" }
+        Info "$Server nicht erreichbar, nutze die oeffentliche Adresse $PublicUrl."
+        try {
+            $caPem = Invoke-Fetch -Url "$PublicUrl/agent/ca" -Group 'aiopatcher-public' -TimeoutMs 30000
+        } catch {
+            Fail "Auch $PublicUrl nicht erreichbar ($($_.Exception.Message)). Reverse Proxy und DNS pruefen."
+        }
+        $viaPublic = $true
     }
 
     $caBase64 = ($caPem -replace '-----[A-Z ]+-----', '') -replace '\s', ''
@@ -258,6 +279,7 @@ try {
         return ($root.Thumbprint -eq $pinnedCa.Thumbprint)
     }.GetNewClosure()
 
+    if ($UseLite -and $viaPublic) { Fail 'Der Lite-Agent (alte Systeme) geht nur direkt bzw. per VPN zum Server, nicht ueber die oeffentliche Adresse.' }
     if ($UseLite) {
         Install-LiteAgent
         exit 0
@@ -267,8 +289,18 @@ try {
     Info 'Lade Agent (win-x64) ...'
     $exeTmp = Join-Path $tmp 'aiopatcher-agent.exe'
     try {
-        Invoke-Fetch -Url "$Server/agent/download/win-x64" -OutFile $exeTmp -Validator $pinnedValidator -Group 'aiopatcher-pinned' | Out-Null
-        $expected = (Invoke-Fetch -Url "$Server/agent/download/win-x64/sha256" -Validator $pinnedValidator -Group 'aiopatcher-pinned').Trim().ToUpperInvariant()
+        if ($viaPublic) {
+            $expected = ''
+            foreach ($pair in ("$Sha256" -split ',')) {
+                $kv = $pair.Trim() -split '=', 2
+                if ($kv.Count -eq 2 -and $kv[0] -eq 'win-x64') { $expected = $kv[1].Trim().ToUpperInvariant() }
+            }
+            if (-not $expected) { Fail 'Fuer win-x64 fehlt die Pruefsumme (-Sha256). Installationsbefehl neu aus dem Dashboard holen.' }
+            Invoke-Fetch -Url "$PublicUrl/agent/download/win-x64" -OutFile $exeTmp -Group 'aiopatcher-public' | Out-Null
+        } else {
+            Invoke-Fetch -Url "$Server/agent/download/win-x64" -OutFile $exeTmp -Validator $pinnedValidator -Group 'aiopatcher-pinned' | Out-Null
+            $expected = (Invoke-Fetch -Url "$Server/agent/download/win-x64/sha256" -Validator $pinnedValidator -Group 'aiopatcher-pinned').Trim().ToUpperInvariant()
+        }
     } catch {
         Fail "Download fehlgeschlagen: $($_.Exception.Message)"
     }
@@ -305,6 +337,7 @@ try {
     } else {
         if (-not $Token) { Fail '-Token fehlt (noetig fuer die Erstregistrierung).' }
         $enrollArgs = @('enroll', '--server', $Server, '--token', $Token, '--fingerprint', $Fingerprint, '--state-dir', $StateDir)
+        if ($PublicUrl) { $enrollArgs += @('--public-url', $PublicUrl) }
         if ($Force) { $enrollArgs += '--force' }
         & $Exe @enrollArgs
         if ($LASTEXITCODE -ne 0) { Fail 'Registrierung fehlgeschlagen.' }

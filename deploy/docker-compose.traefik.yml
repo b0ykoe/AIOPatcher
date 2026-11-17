@@ -32,6 +32,7 @@ services:
       AIOPatcher__DataDirectory: /data
       AIOPatcher__DashboardPort: "${AIOPATCHER_DASHBOARD_PORT:-9443}" # bei Änderung auch in traefik/dynamic.yml anpassen
       AIOPatcher__AgentPort: "${AIOPATCHER_AGENT_PORT:-8443}"
+      AIOPatcher__AgentProxyPort: "${AIOPATCHER_PROXY_PORT:-8080}" # Agents von außen über einen Reverse Proxy, nur LAN
       AIOPatcher__TrustedProxies: "${AIOPATCHER_TRUSTED_PROXIES:-127.0.0.1}" # nur Traefik darf die Client-IP weitergeben (Login-Bremse, Audit-Log)
       AIOPatcher__Language: ${AIOPATCHER_LANGUAGE:-de}
       AIOPatcher__LockedFeatures: ${AIOPATCHER_LOCKED_FEATURES:-} # z. B. "AppUpdates,OpnsenseUpdates"; leer = nichts gesperrt

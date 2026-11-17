@@ -19,6 +19,13 @@ public sealed class AIOPatcherOptions
     /// <summary>Agent-API mit mTLS. Darf öffentlich erreichbar sein.</summary>
     public int AgentPort { get; set; } = 8443;
 
+    /// <summary>
+    /// Agent-API für den eigenen Reverse Proxy (HTTP, nur im LAN erreichbar machen): Agents außerhalb erreichen den Server
+    /// über eine öffentliche Adresse, der Proxy leitet hierher. Anfragen sind signiert statt per Client-Zertifikat
+    /// (siehe Einstellungen → Öffentlicher Zugang). 0 = aus.
+    /// </summary>
+    public int AgentProxyPort { get; set; } = 8080;
+
     /// <summary>Wie oft sich Agents melden. Ein Host gilt nach 3 verpassten Check-ins als offline.</summary>
     public int AgentCheckinIntervalSeconds { get; set; } = 60;
 

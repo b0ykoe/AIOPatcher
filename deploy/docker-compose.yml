@@ -31,6 +31,8 @@ services:
       AIOPatcher__DataDirectory: /data
       AIOPatcher__DashboardPort: "${AIOPATCHER_DASHBOARD_PORT:-9443}" # nur intern/VPN freigeben
       AIOPatcher__AgentPort: "${AIOPATCHER_AGENT_PORT:-8443}" # darf öffentlich erreichbar sein (mTLS)
+      # HTTP für deinen eigenen Reverse Proxy (Hosts außerhalb, Einstellungen → Öffentlicher Zugang); nur im LAN freigeben, 0 = aus
+      AIOPatcher__AgentProxyPort: "${AIOPATCHER_PROXY_PORT:-8080}"
       AIOPatcher__Language: ${AIOPATCHER_LANGUAGE:-de}
       # nur mit Reverse Proxy vor dem Dashboard, z. B. "127.0.0.1", siehe docs/REVERSE-PROXY.md; leer = kein Proxy
       AIOPatcher__TrustedProxies: ${AIOPATCHER_TRUSTED_PROXIES:-}

@@ -1,4 +1,5 @@
 using System.Net;
+using System.Security.Cryptography.X509Certificates;
 using AIOPatcher.Agent.Jobs;
 using AIOPatcher.Agent.Maintenance;
 using AIOPatcher.Agent.Modules;
@@ -42,6 +43,7 @@ public sealed class PollService(
                 var waitingForReboot = await DeliverPendingResultAsync(client, stoppingToken);
                 var response = await client.PollAsync(waitingForReboot, stoppingToken);
                 maintenance.PollSucceeded(response.UpdateKey);
+                LearnPublicUrl(client, response.PublicUrl);
                 interval = TimeSpan.FromSeconds(Math.Max(response.PollIntervalSeconds, (int)MinInterval.TotalSeconds));
                 wait = interval;
 
@@ -67,9 +69,50 @@ public sealed class PollService(
         }
     }
 
+    /// <summary>Öffentliche Adresse vom Server übernehmen und merken (gilt auch nach einem Neustart des Agents).</summary>
+    private void LearnPublicUrl(ServerClient client, string? url)
+    {
+        var current = state.Config.PublicUrl;
+        if (string.Equals(current ?? "", url ?? "", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        if (url is not null && (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps))
+        {
+            return;
+        }
+
+        try
+        {
+            state.SaveConfig(state.Config with { PublicUrl = url });
+            client.UsePublicUrl(url is null ? null : new Uri(url));
+            logger.LogInformation("Public address {Url}", url ?? "(none)");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            logger.LogWarning("Could not save the public address: {Message}", ex.Message);
+        }
+    }
+
+    /// <summary>Über den öffentlichen Weg kommen Geheimnisse nur für diesen Agent verschlüsselt: hier öffnen.</summary>
+    private AgentTask OpenSecrets(AgentTask task)
+    {
+        if (task.Action != ModuleActions.Change || task.Payload is not { } payload || !payload.GetRawText().Contains(PublicChannel.SealedPrefix, StringComparison.Ordinal)
+            || PullJsonContext.FromElement(payload, PullJsonContext.Default.SystemChange) is not { } change)
+        {
+            return task;
+        }
+
+        using var key = state.ClientCertificate.GetECDsaPrivateKey() ?? throw new System.Security.Cryptography.CryptographicException("No ECDSA key.");
+        SystemChange Open(SystemChange c) => c with { Secret = PublicChannel.Open(c.Secret, key), Steps = c.Steps?.Select(Open).ToList() };
+        return task with { Payload = PullJsonContext.ToElement(Open(change), PullJsonContext.Default.SystemChange) };
+    }
+
     private async Task RunTaskAsync(ServerClient client, AgentTask task, CancellationToken ct)
     {
-        logger.LogInformation("Task {TaskId}: {Module}.{Action}", task.TaskId, task.Module, task.Action);
+        logger.LogInformation("Task {TaskId}: {Module}.{Action}{Via}", task.TaskId, task.Module, task.Action, client.LastUsedPublic ? " (via public address)" : "");
+        task = OpenSecrets(task);
 
         // Policy bei jedem Auftrag neu lesen: Änderungen gelten ohne Agent-Neustart.
         var policy = AgentPolicy.Load(state.Directory);

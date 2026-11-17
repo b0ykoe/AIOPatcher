@@ -249,6 +249,7 @@ export function HostDetailPage() {
             <Text size="sm" c="dimmed">{h.siteName} · {h.osName ?? h.osFamily} {h.osVersion}</Text>
             <Text size="xs" c="dimmed" mt={2}>
               {t("hostDetail.factsLine", { seen: formatRelative(h.lastSeenAt), uptime: formatUptime(host.uptime), agent: h.agentVersion ?? "–" })}
+              {h.channel === "public" && ` · ${t("hostDetail.viaPublic")}`}
             </Text>
             {splitTags(h.tags).length > 0 && (
               <Group gap={4} mt={6}>

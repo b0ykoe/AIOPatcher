@@ -15,7 +15,7 @@ public sealed class AgentState
     public const string KeyFile = "client.key";
 
     public required string Directory { get; init; }
-    public required AgentConfig Config { get; init; }
+    public required AgentConfig Config { get; set; }
     public required X509Certificate2 CaCertificate { get; init; }
     public required X509Certificate2 ClientCertificate { get; init; }
 
@@ -56,6 +56,13 @@ public sealed class AgentState
         WriteFile(Path.Combine(directory, CertFile), clientCertPem);
         WriteFile(Path.Combine(directory, CaFile), caPem);
         WriteFile(Path.Combine(directory, ConfigFile), JsonSerializer.Serialize(config, AgentStateJsonContext.Default.AgentConfig));
+    }
+
+    /// <summary>Nur agent.json neu schreiben (z. B. neue öffentliche Adresse vom Server).</summary>
+    public void SaveConfig(AgentConfig config)
+    {
+        WriteFile(Path.Combine(Directory, ConfigFile), JsonSerializer.Serialize(config, AgentStateJsonContext.Default.AgentConfig));
+        Config = config;
     }
 
     private static void WriteFile(string path, string content)
@@ -105,7 +112,8 @@ public sealed class AgentState
     }
 }
 
-public sealed record AgentConfig(string ServerUrl, Guid HostId, Guid SiteId);
+/// <param name="PublicUrl">Öffentliche Adresse über den Reverse Proxy (Ausweichweg, wenn ServerUrl nicht erreichbar ist).</param>
+public sealed record AgentConfig(string ServerUrl, Guid HostId, Guid SiteId, string? PublicUrl = null);
 
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase, WriteIndented = true)]
 [JsonSerializable(typeof(AgentConfig))]

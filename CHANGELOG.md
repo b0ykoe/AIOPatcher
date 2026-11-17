@@ -8,9 +8,29 @@ Geschrieben für Anwender, nicht als Commit-Liste.
 
 ## [Unveröffentlicht]
 
+### Neu
+- **Öffentlicher Zugang für Hosts außerhalb (Cloud):** Der Server läuft intern, Hosts im Netz oder per VPN verbinden
+  sich wie bisher direkt. Hosts außerhalb erreichen ihn über eine öffentliche Adresse deines eigenen Reverse Proxys.
+  Einrichten unter **Einstellungen → Öffentlicher Zugang**: Assistent mit fertiger Konfiguration für nginx, Caddy,
+  Nginx Proxy Manager, Traefik, Cloudflare Tunnel und die Portweiterleitung auf der OPNsense, dazu ein Test-Befehl,
+  dessen Ergebnis live angezeigt wird (auch hinter Cloudflare). Optional auch das Dashboard unter eigenem Namen.
+- Sicher auch durch fremde Proxys: Jede Anfrage eines Agents ist signiert, jede Antwort vom Server unterschrieben, und
+  Geheimnisse wie neue Passwörter sind nur für den Agent verschlüsselt. Wer den Proxy kontrolliert, kann nichts auslösen.
+- Agents kennen beide Adressen, nehmen zuerst die interne und weichen automatisch auf die öffentliche aus. Die Host-Seite
+  zeigt, wenn ein Host über die öffentliche Adresse verbunden ist.
+- **Host hinzufügen → „Außerhalb (Cloud)“:** Installationsbefehl für Hosts ohne Weg ins LAN; Skript und Agent werden
+  gegen Prüfsummen aus dem Befehl geprüft.
+
 ### Verbessert
 - README: Docker-Modul kann Container aktualisieren; `allowAppUpdates` gilt auch für Container-Updates.
 - Release-Seiten zeigen jetzt Patchnotes statt nur der Installationsanleitung.
+
+### Hinweise zum Update
+- Neuer Proxy-Port **8080** (HTTP, `AIOPATCHER_PROXY_PORT`, 0 = aus): nur im LAN freigeben, er ist das Ziel für
+  deinen Reverse Proxy. Er antwortet erst, wenn im Dashboard eine öffentliche Adresse eingerichtet ist.
+- Agents brauchen diese Version für den Ausweichweg; sie aktualisieren sich wie gewohnt selbst und lernen die Adresse
+  bei der nächsten Abfrage. Der Lite-Agent für sehr alte Systeme verbindet sich weiterhin nur direkt.
+- Das Setup-Skript schlägt jetzt immer den internen Betrieb vor (Dashboard direkt auf 9443).
 
 ## [0.7.2] - 2026-11-17
 

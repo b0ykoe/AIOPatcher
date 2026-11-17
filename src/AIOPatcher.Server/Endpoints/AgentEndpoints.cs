@@ -133,7 +133,10 @@ public static class AgentEndpoints
     private static async ValueTask<object?> AuthenticateAgent(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
     {
         var http = context.HttpContext;
-        var certificate = await http.Connection.GetClientCertificateAsync(http.RequestAborted);
+        // Direkt: TLS-Client-Zertifikat. Über den Proxy-Port: von PublicChannelGate geprüftes, signiertes Zertifikat.
+        var viaProxy = http.Items[Security.PublicChannelGate.CertificateItem] is System.Security.Cryptography.X509Certificates.X509Certificate2;
+        var certificate = http.Items[Security.PublicChannelGate.CertificateItem] as System.Security.Cryptography.X509Certificates.X509Certificate2
+                          ?? await http.Connection.GetClientCertificateAsync(http.RequestAborted);
         if (certificate is null)
         {
             return Results.Unauthorized();
@@ -161,11 +164,13 @@ public static class AgentEndpoints
             await db.SaveChangesAsync(http.RequestAborted);
         }
 
-        if (host.IsRevoked || !AgentNetworkPolicy.IsAllowed(host.Site!.AllowedAgentCidrs, http.Connection.RemoteIpAddress))
+        var remote = viaProxy ? http.Items[Security.PublicChannelGate.ClientIpItem] as System.Net.IPAddress : http.Connection.RemoteIpAddress;
+        if (host.IsRevoked || !AgentNetworkPolicy.IsAllowed(host.Site!.AllowedAgentCidrs, remote))
         {
             return Results.Problem(L.T("Agent gesperrt oder IP nicht erlaubt.", "Agent revoked or IP not allowed."),statusCode: StatusCodes.Status403Forbidden);
         }
 
+        host.LastChannel = viaProxy ? "public" : "direct";
         http.Items[HostItemKey] = host;
         return await next(context);
     }
