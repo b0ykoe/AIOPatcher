@@ -19,8 +19,9 @@ function linuxInstallCommand(c: EnrollmentTokenCreated): string {
     `S="${c.serverUrl}"; F="${c.caFingerprintSha256}"; T="${c.token}"`,
     `SUDO=$([ "$(id -u)" = 0 ] || echo sudo); CA=$(mktemp)`,
     `curl -fsSk "$S/agent/ca" -o "$CA" && [ "$(sed '/-----/d' "$CA" | tr -d '\\r\\n' | base64 -d | sha256sum | cut -c1-64 | tr a-f A-F)" = "$F" ] \\`,
-    `  && curl -fsS --cacert "$CA" "$S/agent/install.sh" | $SUDO bash -s -- --server "$S" --token "$T" --fingerprint "$F" \\`,
-    `  || echo "Aborted: CA fingerprint mismatch or installation failed."; rm -f "$CA"`,
+    `  || { echo "Aborted: server not reachable or CA fingerprint does not match."; false; } \\`,
+    `  && { curl -fsS --cacert "$CA" "$S/agent/install.sh" | $SUDO bash -s -- --server "$S" --token "$T" --fingerprint "$F" \\`,
+    `  || echo "Installation failed (see messages above)."; }; rm -f "$CA"`,
   ].join("\n");
 }
 

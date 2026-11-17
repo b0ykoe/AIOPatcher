@@ -74,10 +74,19 @@ switch (commandLine.Command)
             return 3;
         }
 
-        var builder = Host.CreateApplicationBuilder(args);
+        // Ohne die Standard-Konfiguration: Die beobachtet appsettings.json im Inhaltsverzeichnis per Dateiwächter, und das
+        // ist unter systemd "/". .NET meldet dann das ganze Dateisystem bei inotify an; auf Proxmox oder Docker-Hosts dauerte
+        // der Start so über 90 s (systemd brach ab) und brauchte ~350 MB. Der Agent liest keine Konfigurationsdateien.
+        var builder = Host.CreateApplicationBuilder(new HostApplicationBuilderSettings
+        {
+            Args = args,
+            DisableDefaults = true,
+            ContentRootPath = AppContext.BaseDirectory,
+        });
         builder.Services.AddSystemd();
         builder.Services.AddWindowsService(o => o.ServiceName = "AIOPatcherAgent");
         builder.Logging.ClearProviders();
+        builder.Logging.SetMinimumLevel(LogLevel.Information);
         builder.Logging.AddSimpleConsole(o =>
         {
             o.SingleLine = true;

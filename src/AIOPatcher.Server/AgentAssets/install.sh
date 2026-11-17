@@ -238,6 +238,8 @@ Restart=always
 RestartSec=30
 KillMode=process
 TimeoutStopSec=30
+# Start dauert normal wenige Sekunden; Puffer für langsame Hosts, bevor systemd den Start abbricht
+TimeoutStartSec=180
 User=root
 UMask=0077
 
