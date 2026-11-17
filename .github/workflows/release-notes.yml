@@ -1,0 +1,41 @@
+# Patchnotes vorhandener Releases aus CHANGELOG.md neu schreiben (z. B. nach einer Korrektur im CHANGELOG).
+# Start: Actions → "Patchnotes aktualisieren" → Run workflow; Version leer = alle Versionen im CHANGELOG mit Release.
+name: Patchnotes aktualisieren
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version ohne v, z. B. 0.7.2 (leer = alle)"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+jobs:
+  notes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Releases aktualisieren
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/aiopatcher-server"
+          if [ -n "$VERSION" ]; then
+            versions="$VERSION"
+          else
+            versions="$(grep -oE '^## \[[0-9]+\.[0-9]+\.[0-9]+\]' CHANGELOG.md | tr -d '#[] ')"
+          fi
+          for v in $versions; do
+            if ! gh release view "v$v" >/dev/null 2>&1; then
+              echo "v$v: keine Release, übersprungen"
+              continue
+            fi
+            bash tools/release-notes.sh "$v" "$image" > "$RUNNER_TEMP/notes-$v.md"
+            gh release edit "v$v" --notes-file "$RUNNER_TEMP/notes-$v.md"
+            echo "v$v: Patchnotes aktualisiert"
+          done

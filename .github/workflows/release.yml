@@ -1,4 +1,5 @@
 # Release bei einem Tag "v1.2.3":
+#  0. Patchnotes aus CHANGELOG.md, Abschnitt "## [1.2.3]" (fehlt er, bricht der Release hier ab)
 #  1. Docker-Image bauen (Server, Web, Agents) und nach ghcr.io pushen
 #  2. Agent-Binaries (+ .sig, falls signiert), SHA256SUMS und die Compose-/Portainer-Dateien an den GitHub-Release hängen
 #
@@ -25,6 +26,10 @@ jobs:
       - name: Version aus dem Tag
         id: version
         run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      # Früh prüfen: ohne Abschnitt in CHANGELOG.md gibt es keine Release (und kein Image).
+      - name: Patchnotes aus CHANGELOG.md
+        run: bash tools/release-notes.sh "${{ steps.version.outputs.version }}" "ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/aiopatcher-server" > "$RUNNER_TEMP/notes.md"
 
       - uses: docker/setup-buildx-action@v3
 
@@ -75,15 +80,5 @@ jobs:
       - uses: softprops/action-gh-release@v2
         with:
           files: dist/*
-          generate_release_notes: true
-          body: |
-            **Docker-Image:** `ghcr.io/${{ github.repository_owner }}/aiopatcher-server:${{ steps.version.outputs.version }}` (auch `:latest`)
-
-            **Docker Compose:** `docker-compose.yml` und `env.example` herunterladen, `env.example` in `.env` umbenennen,
-            `AIOPATCHER_HOSTNAME` eintragen (DNS-Name oder IP des Servers), dann `docker compose up -d`.
-
-            **Portainer:** App-Template (siehe README) oder `docker-compose.yml` unter *Stacks → Add stack → Upload*
-            hochladen und die `.env` per *Load variables from .env file* laden.
-
-            Den Setup-Token zeigen die Logs des Containers `aiopatcher`; Dashboard: `https://<host>:9443`.
-            Setup-Skript: siehe README.
+          # Patchnotes aus CHANGELOG.md, darunter eingeklappt die Installationshinweise (tools/release-notes.sh)
+          body_path: ${{ runner.temp }}/notes.md
