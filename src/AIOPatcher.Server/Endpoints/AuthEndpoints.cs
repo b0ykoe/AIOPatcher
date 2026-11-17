@@ -156,6 +156,12 @@ public static class AuthEndpoints
         var username = request.Username?.Trim() ?? "";
         var user = await db.Users.SingleOrDefaultAsync(u => u.Username == username && u.IsSetupComplete && !u.IsDisabled, ct);
 
+        // Reine SSO-Benutzer haben kein Passwort: lokal nicht anmeldbar.
+        if (user is not null && string.IsNullOrEmpty(user.PasswordHash))
+        {
+            user = null;
+        }
+
         if (user is null)
         {
             // Gleiche Laufzeit wie bei existierendem Benutzer, damit Benutzernamen nicht erratbar sind.

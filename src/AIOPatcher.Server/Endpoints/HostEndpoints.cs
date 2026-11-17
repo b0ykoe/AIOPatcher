@@ -261,7 +261,7 @@ public static class HostEndpoints
             .ToListAsync(ct);
 
         var latest = AgentDownloads.AgentVersion;
-        var agentUpdate = new AgentUpdateDto(latest, host.AgentVersion is not null && AgentDownloads.IsNewer(latest, host.AgentVersion),
+        var agentUpdate = new AgentUpdateDto(latest, host.AgentVersion is not null && !host.AgentVersion.EndsWith("-lite", StringComparison.Ordinal) && AgentDownloads.IsNewer(latest, host.AgentVersion),
             string.Equals(host.AgentUpdateBlockedVersion, latest, StringComparison.Ordinal),
             host.AgentUpdateOutcome, host.AgentUpdateFromVersion, host.AgentUpdateToVersion, host.AgentUpdateMessage, host.AgentUpdateAt);
 

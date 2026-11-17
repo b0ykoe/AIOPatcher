@@ -163,6 +163,29 @@ public sealed class PullProtocolTests : IDisposable
         Assert.True(stored.FirewallEnabled);
     }
 
+    [Fact]
+    public async Task LiteAgent_GetsOnlyWhatItReports()
+    {
+        // Lite-Agent (alte Systeme): system, updates, agent nur mit "renew".
+        var first = await PollAsync("1.0-lite");
+        await AnswerAsync(first!, JobOutcome.Succeeded, Describe(
+            new ModuleInfo(AgentModules.System, true, false, [ModuleActions.Describe]),
+            new ModuleInfo(AgentModules.Updates, true, false, [ModuleActions.Scan, ModuleActions.Install, ModuleActions.Reboot]),
+            new ModuleInfo(AgentModules.Agent, true, false, [ModuleActions.Renew])));
+
+        Assert.Equal(ModuleActions.Scan, (await PollAsync("1.0-lite"))!.Action);
+
+        var app = new PatchJob { HostId = _host.Id, Type = JobType.AppUpdate, Packages = "7zip.7zip", RequestedBy = "admin:test" };
+        await _features.SetAsync(_db, Feature.AppUpdates, true, "test", CancellationToken.None);
+        _db.Jobs.Add(app);
+        await _db.SaveChangesAsync();
+        await PollAsync("1.0-lite");
+        Assert.Equal(JobStatus.Rejected, app.Status); // kein Modul "software"
+
+        Assert.True(Server.Services.Modules.ModuleJson.Supports(_host, AgentModules.Agent, ModuleActions.Renew));
+        Assert.False(Server.Services.Modules.ModuleJson.Supports(_host, AgentModules.Agent, ModuleActions.Update)); // kein Self-Update-Angebot
+    }
+
     // --- Agent ----------------------------------------------------------------------------------------
 
     private sealed class EchoModule(string id) : IAgentModule

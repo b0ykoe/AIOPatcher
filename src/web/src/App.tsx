@@ -279,7 +279,7 @@ function Shell({ me, onMeChanged, onLoggedOut }: { me: Me; onMeChanged: (me: Me)
       <FeaturesProvider>
       <ShellContext.Provider value={{ openAddHost: addHost.open, overview, refreshOverview }}>
         <AppShell
-          header={{ height: 64 }}
+          header={{ height: { base: 56, sm: 64 } }}
           navbar={{ width: 250, breakpoint: "sm", collapsed: { mobile: !navOpen } }}
           padding={{ base: "md", md: "xl" }}
         >

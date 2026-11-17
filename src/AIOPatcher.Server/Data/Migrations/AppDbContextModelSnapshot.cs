@@ -1348,6 +1348,79 @@ namespace AIOPatcher.Server.Data.Migrations
                     b.ToTable("Sites");
                 });
 
+            modelBuilder.Entity("AIOPatcher.Server.Data.SsoSettingsRecord", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Authority")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("AutoCreateUsers")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("CertificateFingerprint")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ClientId")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DefaultRole")
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("Enabled")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("GroupsClaim")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("LinkByUsername")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ProtectedClientSecret")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RoleMappingsJson")
+                        .IsRequired()
+                        .HasMaxLength(8000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Scopes")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UsernameClaim")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("SsoSettings", (string)null);
+                });
+
             modelBuilder.Entity("AIOPatcher.Server.Data.Subnet", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1437,6 +1510,10 @@ namespace AIOPatcher.Server.Data.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("SsoSubject")
+                        .HasMaxLength(600)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("UiMode")
                         .IsRequired()
                         .HasMaxLength(32)
@@ -1450,6 +1527,9 @@ namespace AIOPatcher.Server.Data.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("InviteTokenHash");
+
+                    b.HasIndex("SsoSubject")
+                        .IsUnique();
 
                     b.HasIndex("Username")
                         .IsUnique();

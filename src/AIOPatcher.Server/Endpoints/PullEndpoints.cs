@@ -77,7 +77,7 @@ public static class PullEndpoints
         while (await AgentEndpoints.SelectJobAsync(db, host, null, now, ct, features) is { } job)
         {
             var (module, action, payload) = await MapJobAsync(db, host, job, secrets, now, ct);
-            if (!ModuleJson.Usable(host, module))
+            if (!ModuleJson.Usable(host, module) || host.ReportedModules is not null && !ModuleJson.Supports(host, module, action))
             {
                 job.Status = JobStatus.Rejected;
                 job.FinishedAt = now;
@@ -105,7 +105,8 @@ public static class PullEndpoints
                 continue;
             }
 
-            if (ModuleJson.Usable(host, module.Id) && module.Due(host, context, polledVersion) is { } planned)
+            if (ModuleJson.Usable(host, module.Id) && module.Due(host, context, polledVersion) is { } planned
+                && (host.ReportedModules is null || ModuleJson.Supports(host, module.Id, planned.Action)))
             {
                 return Create(db, host, module.Id, planned.Action, planned.Payload, null);
             }

@@ -12,13 +12,27 @@ public sealed class AgentDownloads(AIOPatcherOptions options, AIOPatcher.Server.
 {
     public static readonly string[] RuntimeIds = ["linux-x64", "linux-arm64", "win-x64"];
 
+    /// <summary>Lite-Agents (Skripte) für alte Systeme: Python für Ubuntu 16.04/Debian 9, PowerShell 5.1 für Server 2008 R2.</summary>
+    public static readonly string[] LiteIds = ["lite-linux", "lite-windows"];
+
     private readonly ConcurrentDictionary<string, (DateTime Modified, long Length, string Sha256)> _hashes = new();
     private readonly ConcurrentDictionary<string, string> _serverSignatures = new();
 
-    public static string FileName(string rid) => rid.StartsWith("win", StringComparison.Ordinal) ? "aiopatcher-agent.exe" : "aiopatcher-agent";
+    public static string FileName(string rid) => rid switch
+    {
+        "lite-linux" => "aiopatcher-agent-lite.py",
+        "lite-windows" => "aiopatcher-agent-lite.ps1",
+        _ when rid.StartsWith("win", StringComparison.Ordinal) => "aiopatcher-agent.exe",
+        _ => "aiopatcher-agent",
+    };
 
     public FileInfo? Find(string rid)
     {
+        if (LiteIds.Contains(rid))
+        {
+            return new FileInfo(Path.Combine(AppContext.BaseDirectory, "AgentAssets", FileName(rid))) is { Exists: true } lite ? lite : null;
+        }
+
         if (!RuntimeIds.Contains(rid))
         {
             return null; // Whitelist: keine Pfade aus der URL ins Dateisystem

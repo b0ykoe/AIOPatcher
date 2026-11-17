@@ -87,5 +87,7 @@ mit Versionen, SSH/RDP-Empfehlungen, lokale Benutzer), alles hinter Schaltern un
 
 **v0.4** Pull-Agent (Protokoll v2) mit Modulen in Agent und Server, Module pro Host schaltbar, alter Check-in hinter Schalter
 
+**v0.5** SSO per OpenID Connect (Gruppen → Rollen, Verknüpfung lokaler Benutzer), Lite-Agents für alte Systeme (Python für Ubuntu 16.04/Debian 9, PowerShell für Server 2008 R2), automatische Auswahl im Installer
+
 **Offen / Ideen:** Passkeys, Rollen pro Site (Kunden-Logins), Patch-Fenster pro Tag-Gruppe, Snapshot-Rollback per Klick,
 Container-Updates ausführen, Debian-/Ubuntu-Changelogs im Dashboard, Code-Splitting im Frontend

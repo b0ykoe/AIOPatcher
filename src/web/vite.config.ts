@@ -20,6 +20,7 @@ export default defineConfig({
       // Mit Schrägstrich: sonst landen auch Seiten wie /api-irgendwas beim Server.
       "/api/": { target: backend, secure: false },
       "/healthz": { target: backend, secure: false },
+      "/signin-oidc": { target: backend, secure: false },
     },
   },
 });

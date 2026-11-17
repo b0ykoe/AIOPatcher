@@ -67,7 +67,7 @@ builder.Services.AddDataProtection()
     .SetApplicationName("AIOPatcher")
     .PersistKeysToFileSystem(new DirectoryInfo(options.DataProtectionDirectory));
 
-builder.Services.AddAuthentication(ApiTokenAuthenticationHandler.SelectorScheme)
+var authentication = builder.Services.AddAuthentication(ApiTokenAuthenticationHandler.SelectorScheme)
     // Browser: Cookie. Skripte: "Authorization: Bearer aiop_…".
     .AddPolicyScheme(ApiTokenAuthenticationHandler.SelectorScheme, null, o => o.ForwardDefaultSelector = ctx =>
         ApiTokenAuthenticationHandler.HasToken(ctx) ? ApiTokenAuthenticationHandler.SchemeName : CookieAuthenticationDefaults.AuthenticationScheme)
@@ -103,6 +103,20 @@ builder.Services.AddAuthentication(ApiTokenAuthenticationHandler.SelectorScheme)
             }
         };
     });
+// SSO (OpenID Connect): Konfiguration kommt zur Laufzeit aus der Datenbank (SsoService), nicht aus appsettings.
+authentication
+    .AddCookie(AIOPatcher.Server.Services.Sso.SsoService.ExternalCookieScheme, external =>
+    {
+        // Nur für den Weg vom Anbieter zurück zu /api/auth/sso/complete, danach gelöscht.
+        external.Cookie.Name = "__Host-aiopatcher-sso";
+        external.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+        external.Cookie.SameSite = SameSiteMode.Lax;
+        external.ExpireTimeSpan = TimeSpan.FromMinutes(5);
+    })
+    .AddOpenIdConnect(AIOPatcher.Server.Services.Sso.SsoService.Scheme, _ => { });
+builder.Services.AddSingleton<AIOPatcher.Server.Services.Sso.SsoService>();
+builder.Services.AddSingleton<Microsoft.Extensions.Options.IConfigureOptions<Microsoft.AspNetCore.Authentication.OpenIdConnect.OpenIdConnectOptions>, AIOPatcher.Server.Services.Sso.SsoOptionsSetup>();
+
 builder.Services.AddAuthorizationBuilder()
     .AddPolicy(UserAccounts.AdminPolicy, p => p.RequireRole(nameof(UserRole.Admin)))
     .AddPolicy(UserAccounts.OperatorPolicy, p => p.RequireRole(nameof(UserRole.Admin), nameof(UserRole.Operator)));
@@ -171,6 +185,7 @@ using (var scope = app.Services.CreateScope())
 
     await app.Services.GetRequiredService<SetupTokenService>().InitializeAsync(db, app.Logger, CancellationToken.None);
     await app.Services.GetRequiredService<FeatureFlags>().LoadAsync(db, CancellationToken.None);
+    await app.Services.GetRequiredService<AIOPatcher.Server.Services.Sso.SsoService>().LoadAsync(db, CancellationToken.None);
 }
 
 // --- Pipeline -------------------------------------------------------------------------------------
@@ -213,6 +228,7 @@ app.MapReportEndpoints();
 app.MapIpamEndpoints();
 app.MapCheckEndpoints();
 app.MapComplianceEndpoints();
+app.MapSsoEndpoints();
 app.MapSoftwareEndpoints();
 app.MapVulnerabilityEndpoints();
 app.MapFeatureEndpoints();

@@ -154,12 +154,12 @@ export function HostDetailPage() {
         </Group>
       </Anchor>
 
-      <Group justify="space-between" mt="xs" mb="lg" wrap="wrap" gap="md">
-        <Group gap="md" wrap="nowrap">
+      <Group justify="space-between" mt="xs" mb="lg" wrap="wrap" gap="md" className="page-header">
+        <Group gap="md" wrap="nowrap" align="flex-start">
           <OsIcon osName={h.osName} osFamily={h.osFamily} size={34} />
-          <div>
+          <div style={{ minWidth: 0 }}>
             <Group gap="sm">
-              <Text fz={28} fw={800} lh={1.1}>
+              <Text fz={{ base: 22, sm: 28 }} fw={800} lh={1.1} style={{ wordBreak: "break-word" }}>
                 {h.name}
               </Text>
               <HostStatusLabel status={h.status} />
@@ -191,7 +191,7 @@ export function HostDetailPage() {
           </div>
         </Group>
 
-        {can.operate && <Group gap="sm" wrap="wrap">
+        {can.operate && <Group gap="sm" wrap="wrap" className="page-actions">
           {isOn("PatchJobs") && <Menu position="bottom-end" width={270} closeOnItemClick>
             <Menu.Target>
               <Button variant="gradient" className="gradient-button" rightSection={<IconChevronDown size={16} />} disabled={!canRun} leftSection={<IconShieldCheck size={16} />}>
@@ -221,9 +221,9 @@ export function HostDetailPage() {
           </Button>}
           <Menu position="bottom-end">
             <Menu.Target>
-              <Button variant="subtle" color="gray" px="xs" aria-label={t("hostDetail.moreActions")}>
+              <ActionIcon variant="subtle" color="gray" size="input-sm" aria-label={t("hostDetail.moreActions")}>
                 <IconDots size={18} />
-              </Button>
+              </ActionIcon>
             </Menu.Target>
             <Menu.Dropdown>
               {h.status !== "Revoked" && (

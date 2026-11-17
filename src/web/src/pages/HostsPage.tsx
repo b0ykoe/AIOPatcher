@@ -146,7 +146,37 @@ export function HostsPage() {
             action={hosts && hosts.length === 0 && can.operate ? <Button mt="sm" onClick={openAddHost}>{t("nav.addHost")}</Button> : undefined}
           />
         ) : (
-          <Table.ScrollContainer minWidth={960}>
+          <>
+          {/* Handy: Karten statt Tabelle */}
+          <Stack gap={0} hiddenFrom="sm">
+            {filtered?.map((h) => {
+              const isSelected = selected.has(h.id);
+              return (
+                <Group key={h.id} className="mobile-row" wrap="nowrap" align="flex-start" gap="sm" onClick={() => navigate(`/hosts/${h.id}`)}
+                  bg={isSelected ? "var(--mantine-color-violet-light)" : undefined}>
+                  {can.operate && !simple && (
+                    <Checkbox mt={2} aria-label={t("hostsPage.selectHost", { name: h.name })} checked={isSelected}
+                      onClick={(e) => e.stopPropagation()} onChange={() => toggle(h.id)} />
+                  )}
+                  <OsIcon osName={h.osName} osFamily={h.osFamily} />
+                  <Stack gap={4} style={{ flex: 1, minWidth: 0 }}>
+                    <Group justify="space-between" wrap="nowrap" gap="xs">
+                      <Text fw={700} size="sm" truncate>{h.name}</Text>
+                      <HostStatusLabel status={h.status} />
+                    </Group>
+                    <Text size="xs" c="dimmed" truncate>{h.siteName} · {h.osName ?? h.osFamily} · {formatRelative(h.lastSeenAt)}</Text>
+                    <Group gap={6}>
+                      {h.lastScanAt && <Badge size="sm" color={h.securityUpdates > 0 ? "pink" : "gray"}>{h.pendingUpdates} Updates{h.securityUpdates > 0 ? ` · ${h.securityUpdates} Sec` : ""}</Badge>}
+                      {h.kevUpdates > 0 && <Badge size="sm" color="red" variant="filled">KEV</Badge>}
+                      {h.rebootRequired && <Badge size="sm" color="orange">{t("overview.rebootRequired")}</Badge>}
+                      {h.autoPatch.enabled && <Badge size="sm" color="violet" leftSection={<IconClock size={11} />}>{autoPatchLabel(h.autoPatch)}</Badge>}
+                    </Group>
+                  </Stack>
+                </Group>
+              );
+            })}
+          </Stack>
+          <Table.ScrollContainer minWidth={960} visibleFrom="sm">
             <Table>
               <Table.Thead>
                 <Table.Tr>
@@ -293,6 +323,7 @@ export function HostsPage() {
               </Table.Tbody>
             </Table>
           </Table.ScrollContainer>
+          </>
         )}
       </Card>
 

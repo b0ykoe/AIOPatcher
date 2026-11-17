@@ -301,6 +301,21 @@ public static class ModuleJson
     public static HashSet<string> DisabledInDashboard(ManagedHost host) =>
         (host.DisabledModules ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToHashSet();
 
+    /// <summary>
+    /// Kann der Agent diese Aktion? (Lite-Agents für alte Systeme melden z. B. kein agent.update.) Vor der ersten
+    /// Beschreibung kennt der Server nur system.describe.
+    /// </summary>
+    public static bool Supports(ManagedHost host, string module, string action)
+    {
+        var reported = Reported(host);
+        if (reported.Count == 0)
+        {
+            return module == AgentModules.System && action == ModuleActions.Describe;
+        }
+
+        return reported.Any(m => m.Id == module && (m.Actions.Count == 0 || m.Actions.Contains(action)));
+    }
+
     /// <summary>Darf der Server Aufträge für dieses Modul schicken?</summary>
     public static bool Usable(ManagedHost host, string module)
     {

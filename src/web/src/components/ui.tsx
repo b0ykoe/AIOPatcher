@@ -50,12 +50,13 @@ export function confirmAction(options: { title: string; message: ReactNode; conf
 
 export function PageHeader({ title, description, actions }: { title: ReactNode; description?: ReactNode; actions?: ReactNode }) {
   return (
-    <Group justify="space-between" align="flex-end" mb="lg" gap="md" wrap="wrap">
-      <Stack gap={2}>
+    <Group justify="space-between" align="flex-end" mb="lg" gap="md" wrap="wrap" className="page-header">
+      <Stack gap={2} className="page-title">
         <Title order={2}>{title}</Title>
         {description && <Text c="dimmed" size="sm">{description}</Text>}
       </Stack>
-      {actions && <Group gap="sm" wrap="wrap">{actions}</Group>}
+      {/* Handy: Filter und Knöpfe untereinander in voller Breite (siehe app.css .page-actions) */}
+      {actions && <Group gap="sm" wrap="wrap" className="page-actions">{actions}</Group>}
     </Group>
   );
 }

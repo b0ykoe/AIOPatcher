@@ -21,7 +21,9 @@ param(
     [switch]$Purge,
     [string]$DownloadOnly,
     # Firewall-, RDP- und Benutzer-Aenderungen aus dem Dashboard erlauben (policy.json allowSystemChanges; ab Werk aus)
-    [switch]$AllowSystemChanges
+    [switch]$AllowSystemChanges,
+    # Lite-Agent (PowerShell) erzwingen. Auf Server 2008 R2 / Windows 7 automatisch.
+    [switch]$Lite
 )
 
 $ErrorActionPreference = 'Stop'
@@ -58,6 +60,121 @@ function Invoke-Fetch([string]$Url, [scriptblock]$Validator, [string]$Group, [st
 }
 function Fail([string]$Message) { Write-Host "Fehler: $Message" -ForegroundColor Red; exit 1 }
 
+# --- Lite-Agent fuer alte Windows-Versionen ------------------------------------------------------
+# Der normale Agent (.NET 10) laeuft erst ab Server 2012. Davor: PowerShell-Agent, nur Updates und Neustarts,
+# gestartet als Aufgabe (SYSTEM, beim Systemstart, Neustart nach Absturz).
+
+function Enable-Tls12 {
+    $changed = $false
+    foreach ($side in @('Client', 'Server')) {
+        $p = "HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\TLS 1.2\$side"
+        if (-not (Test-Path $p)) { New-Item -Path $p -Force | Out-Null; $changed = $true }
+        $cur = Get-ItemProperty -Path $p
+        if ($cur.Enabled -ne 1 -or $cur.DisabledByDefault -ne 0) {
+            Set-ItemProperty -Path $p -Name Enabled -Value 1 -Type DWord
+            Set-ItemProperty -Path $p -Name DisabledByDefault -Value 0 -Type DWord
+            $changed = $true
+        }
+    }
+    foreach ($net in @('HKLM:\SOFTWARE\Microsoft\.NETFramework\v4.0.30319', 'HKLM:\SOFTWARE\Wow6432Node\Microsoft\.NETFramework\v4.0.30319')) {
+        if (Test-Path $net) {
+            Set-ItemProperty -Path $net -Name SchUseStrongCrypto -Value 1 -Type DWord
+            Set-ItemProperty -Path $net -Name SystemDefaultTlsVersions -Value 1 -Type DWord
+        }
+    }
+    return $changed
+}
+
+function Get-LiteTask {
+    $scheduler = New-Object -ComObject Schedule.Service
+    $scheduler.Connect()
+    try { return $scheduler.GetFolder('\').GetTask($ServiceName) } catch { return $null }
+}
+
+function Install-LiteAgent {
+    Info 'Altes Windows: installiere den Lite-Agent (Updates scannen und installieren, Neustarts).'
+    $file = Join-Path $tmp 'aiopatcher-agent-lite.ps1'
+    try {
+        Invoke-Fetch -Url "$Server/agent/download/lite-windows" -OutFile $file -Validator $pinnedValidator -Group 'aiopatcher-pinned' | Out-Null
+        $expected = (Invoke-Fetch -Url "$Server/agent/download/lite-windows/sha256" -Validator $pinnedValidator -Group 'aiopatcher-pinned').Trim().ToUpperInvariant()
+    } catch {
+        Fail "Download fehlgeschlagen: $($_.Exception.Message)"
+    }
+    $got = (Get-FileHash -Path $file -Algorithm SHA256).Hash.ToUpperInvariant()
+    if (-not $expected -or $got -ne $expected) { Fail "Pruefsumme stimmt nicht (erwartet $expected, erhalten $got)." }
+
+    $liteFile = Join-Path $InstallDir 'aiopatcher-agent-lite.ps1'
+    $ps = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+    $task = Get-LiteTask
+    if ($task -and $task.State -eq 4) { Info 'Halte laufenden Agent fuer das Update an ...'; $task.Stop(0) }
+    New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
+    Copy-Item -Path $file -Destination $liteFile -Force
+
+    if ((Test-Path (Join-Path $StateDir 'agent.json')) -and -not $Force) {
+        Info 'Agent ist bereits registriert, nur Programm aktualisiert.'
+    } else {
+        if (-not $Token) { Fail '-Token fehlt (noetig fuer die Erstregistrierung).' }
+        $enrollArgs = @('enroll', '-Server', $Server, '-Token', $Token, '-Fingerprint', $Fingerprint, '-StateDir', $StateDir)
+        if ($Force) { $enrollArgs += '-Force' }
+        & $ps -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $liteFile @enrollArgs
+        if ($LASTEXITCODE -ne 0) { Fail 'Registrierung fehlgeschlagen.' }
+    }
+
+    Info 'Selbsttest ...'
+    & $ps -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $liteFile selftest -StateDir $StateDir
+    if ($LASTEXITCODE -ne 0) { Fail 'Selbsttest fehlgeschlagen (siehe oben). Wurde TLS 1.2 gerade erst eingeschaltet: Server neu starten und den Befehl erneut ausfuehren.' }
+
+    $xml = @"
+<?xml version="1.0" encoding="UTF-16"?>
+<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <RegistrationInfo><Description>AIOPatcher Lite-Agent: meldet Updates an den AIOPatcher-Server und fuehrt freigegebene Patch-Jobs aus.</Description></RegistrationInfo>
+  <Triggers><BootTrigger><Enabled>true</Enabled><Delay>PT1M</Delay></BootTrigger></Triggers>
+  <Principals><Principal id="Author"><UserId>S-1-5-18</UserId><RunLevel>HighestAvailable</RunLevel></Principal></Principals>
+  <Settings>
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
+    <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>
+    <RestartOnFailure><Interval>PT1M</Interval><Count>999</Count></RestartOnFailure>
+    <StartWhenAvailable>true</StartWhenAvailable>
+    <Enabled>true</Enabled>
+  </Settings>
+  <Actions Context="Author"><Exec><Command>$ps</Command><Arguments>-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$liteFile" run -StateDir "$StateDir"</Arguments></Exec></Actions>
+</Task>
+"@
+    $xmlPath = Join-Path $tmp 'task.xml'
+    [IO.File]::WriteAllText($xmlPath, $xml, [Text.Encoding]::Unicode)
+    & schtasks.exe /Create /TN $ServiceName /XML $xmlPath /F | Out-Null
+    if ($LASTEXITCODE -ne 0) { Fail 'Aufgabe konnte nicht angelegt werden (schtasks).' }
+
+    # Crash-Check wie beim normalen Agent: laeuft die Aufgabe stabil und meldet sie sich beim Server?
+    $started = Get-Date
+    $lastCheckin = Join-Path $StateDir 'last-checkin'
+    & schtasks.exe /Run /TN $ServiceName | Out-Null
+    Info 'Pruefe, ob der Agent stabil laeuft und sich beim Server meldet (bis 90 s) ...'
+    $result = 'timeout'
+    for ($i = 0; $i -lt 45; $i++) {
+        Start-Sleep -Seconds 2
+        if ((Test-Path $lastCheckin) -and (Get-Item $lastCheckin).LastWriteTime -ge $started) { $result = 'ok'; break }
+        $t = Get-LiteTask
+        if ($i -gt 2 -and ($null -eq $t -or $t.State -ne 4)) { $result = 'crashed'; break }
+    }
+    $logFile = Join-Path $StateDir 'agent-lite.log'
+    switch ($result) {
+        'ok' { Info 'Agent laeuft und hat sich beim Server gemeldet.' }
+        'crashed' {
+            if (Test-Path $logFile) { Get-Content $logFile -Tail 20 | ForEach-Object { Write-Host $_ } }
+            Fail 'Der Agent ist nach dem Start beendet worden. Die Aufgabe startet ihn nach 1 Minute neu; Ursache im Log oben.'
+        }
+        default {
+            if (Test-Path $logFile) { Get-Content $logFile -Tail 20 | ForEach-Object { Write-Host $_ } }
+            Fail 'Der Agent laeuft, hat sich aber nach 90 s noch nicht beim Server gemeldet (Firewall, TLS 1.2, Netzfreigabe der Site?).'
+        }
+    }
+    Info "Autostart: Aufgabe '$ServiceName' (SYSTEM, beim Systemstart, Neustart nach Absturz nach 1 Minute)."
+    Info "Fertig. Log: $logFile"
+}
+
 $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
 $isAdmin = (New-Object Security.Principal.WindowsPrincipal $identity).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 if (-not $DownloadOnly -and -not $isAdmin) { Fail 'Bitte PowerShell als Administrator starten.' }
@@ -70,6 +187,7 @@ if ($Uninstall) {
         if ($svc.Status -ne 'Stopped') { Stop-Service -Name $ServiceName -Force }
         & sc.exe delete $ServiceName | Out-Null
     }
+    if (Get-LiteTask) { & schtasks.exe /End /TN $ServiceName 2>$null | Out-Null; & schtasks.exe /Delete /TN $ServiceName /F | Out-Null }
     if (Test-Path $InstallDir) { Remove-Item $InstallDir -Recurse -Force }
     if ($Purge) {
         if (Test-Path $StateDir) { Remove-Item $StateDir -Recurse -Force }
@@ -81,6 +199,17 @@ if ($Uninstall) {
 }
 
 # --- Pruefungen ----------------------------------------------------------------------------------
+$UseLite = $Lite -or ([Environment]::OSVersion.Version -lt [Version]'6.2')
+if ($UseLite) {
+    if ($PSVersionTable.PSVersion.Major -lt 5) {
+        Fail 'Windows PowerShell 5.1 fehlt: WMF 5.1 installieren (https://aka.ms/wmf51download), neu starten und den Befehl erneut ausfuehren.'
+    }
+    $netRelease = (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full' -ErrorAction SilentlyContinue).Release
+    if (-not $netRelease -or $netRelease -lt 528040) {
+        Fail '.NET Framework 4.8 fehlt: installieren (https://dotnet.microsoft.com/download/dotnet-framework/net48), neu starten und den Befehl erneut ausfuehren.'
+    }
+    if (Enable-Tls12) { Info 'TLS 1.2 in SChannel eingeschaltet. Scheitert gleich die Verbindung: Server neu starten und Befehl erneut ausfuehren.' }
+}
 if (-not $Server) { Fail '-Server fehlt.' }
 if (-not $Fingerprint) { Fail '-Fingerprint fehlt.' }
 $Server = $Server.TrimEnd('/')
@@ -128,6 +257,11 @@ try {
         $root = $pinnedChain.ChainElements[$pinnedChain.ChainElements.Count - 1].Certificate
         return ($root.Thumbprint -eq $pinnedCa.Thumbprint)
     }.GetNewClosure()
+
+    if ($UseLite) {
+        Install-LiteAgent
+        exit 0
+    }
 
     # --- 2. Agent herunterladen und Pruefsumme kontrollieren --------------------------------------
     Info 'Lade Agent (win-x64) ...'

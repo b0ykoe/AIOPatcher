@@ -9,7 +9,9 @@ namespace AIOPatcher.Server.Endpoints;
 /// <summary>Benutzerverwaltung (nur Admins).</summary>
 public static class UserEndpoints
 {
-    public sealed record UserDto(Guid Id, string Username, UserRole Role, string Status, DateTime CreatedAt, DateTime? LastLoginAt, DateTime? InviteExpiresAt, string? CreatedBy);
+    /// <param name="Sso">Mit SSO-Konto verknüpft. SsoOnly: kein Passwort, Anmeldung nur per SSO.</param>
+    public sealed record UserDto(Guid Id, string Username, UserRole Role, string Status, DateTime CreatedAt, DateTime? LastLoginAt, DateTime? InviteExpiresAt, string? CreatedBy,
+        bool Sso = false, bool SsoOnly = false);
     public sealed record CreateUserRequest(string Username, UserRole Role);
     public sealed record UpdateUserRequest(UserRole Role, bool Disabled);
     public sealed record InviteResponse(UserDto User, string InviteUrl, DateTime ExpiresAt);
@@ -141,5 +143,6 @@ public static class UserEndpoints
         principal.FindFirstValue(ClaimTypes.NameIdentifier) == user.Id.ToString();
 
     public static UserDto ToDto(UserAccount u) =>
-        new(u.Id, u.Username, u.Role, UserAccounts.Status(u), u.CreatedAt, u.LastLoginAt, u.IsSetupComplete ? null : u.InviteExpiresAt, u.CreatedBy);
+        new(u.Id, u.Username, u.Role, UserAccounts.Status(u), u.CreatedAt, u.LastLoginAt, u.IsSetupComplete ? null : u.InviteExpiresAt, u.CreatedBy,
+            u.SsoSubject is not null, u.SsoSubject is not null && string.IsNullOrEmpty(u.PasswordHash));
 }

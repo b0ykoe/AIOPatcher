@@ -79,6 +79,9 @@ export interface User {
   lastLoginAt: string | null;
   inviteExpiresAt: string | null;
   createdBy: string | null;
+  /** Mit SSO-Konto verknüpft. ssoOnly: kein Passwort, nur SSO-Anmeldung. */
+  sso: boolean;
+  ssoOnly: boolean;
 }
 
 export interface InviteCreated {

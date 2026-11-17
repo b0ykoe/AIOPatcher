@@ -64,6 +64,21 @@ export function UsersPage() {
     load();
   };
 
+  const unlinkSso = (u: User) =>
+    confirmAction({
+      title: t("users.ssoUnlink"),
+      message: t("users.ssoUnlinkText", { name: u.username }),
+      confirmLabel: t("users.ssoUnlink"),
+      onConfirm: async () => {
+        try {
+          await api.delete(`/api/users/${u.id}/sso`);
+          load();
+        } catch (e) {
+          notifyError(e);
+        }
+      },
+    });
+
   const reinvite = (u: User) =>
     confirmAction({
       title: t("users.reinviteTitle", { name: u.username }),
@@ -133,6 +148,7 @@ export function UsersPage() {
                         <Group gap={6} wrap="nowrap">
                           <Text fw={600}>{u.username}</Text>
                           {self && <Badge size="xs" variant="light">{t("common.you")}</Badge>}
+                          {u.sso && <Badge size="xs" color="grape" variant="light">{u.ssoOnly ? t("users.ssoOnly") : t("users.ssoLinked")}</Badge>}
                         </Group>
                         {u.createdBy && <Text size="xs" c="dimmed">{t("users.createdBy", { name: u.createdBy })}</Text>}
                       </Table.Td>
@@ -180,6 +196,9 @@ export function UsersPage() {
                               >
                                 {u.status === "Disabled" ? t("users.enable") : t("users.disable")}
                               </Menu.Item>
+                              {u.sso && !u.ssoOnly && (
+                                <Menu.Item onClick={() => unlinkSso(u)}>{t("users.ssoUnlink")}</Menu.Item>
+                              )}
                               <Menu.Divider />
                               <Menu.Item color="red" leftSection={<IconTrash size={16} />} onClick={() => remove(u)}>
                                 {t("common.delete")}

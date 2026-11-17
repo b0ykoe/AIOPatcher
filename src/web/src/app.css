@@ -236,3 +236,124 @@
     box-shadow: none !important;
   }
 }
+
+/* --- Bedienelemente: einheitlich hoch, sauber gepolstert --------------------------------------------
+   Eingabe, Auswahl und Knopf derselben Größe sind gleich hoch (xs 34, sm 40, md 44 px). Doppelte Klasse,
+   damit diese Werte vor Mantines eigenen (gleich spezifischen) Größen greifen. */
+.mantine-Input-wrapper.mantine-Input-wrapper,
+.mantine-Button-root.mantine-Button-root,
+.mantine-ActionIcon-root.mantine-ActionIcon-root {
+  --input-height-xs: 2.125rem;
+  --input-height-sm: 2.5rem;
+  --input-height-md: 2.75rem;
+  --input-height-lg: 3.125rem;
+  --button-height-xs: 2.125rem;
+  --button-height-sm: 2.5rem;
+  --button-height-md: 2.75rem;
+  --button-height-lg: 3.125rem;
+}
+
+.mantine-SegmentedControl-root {
+  min-height: 2.5rem;
+  align-items: stretch;
+}
+
+.mantine-Table-th {
+  white-space: nowrap;
+}
+
+/* Tabellen in Karten: seitlich scrollen statt abschneiden */
+.mantine-Card-root:has(> .mantine-Table-table),
+.mantine-Card-root:has(> table) {
+  overflow-x: auto;
+}
+
+/* Kartenliste auf dem Handy (z. B. Hosts) */
+.mobile-row {
+  padding: 0.85rem 1rem;
+  cursor: pointer;
+  border-bottom: 1px solid var(--mantine-color-default-border);
+}
+
+.mobile-row:last-child {
+  border-bottom: none;
+}
+
+/* --- Mobile first -------------------------------------------------------------------------------------- */
+@media (max-width: 48em) {
+  /* iOS zoomt in Felder mit Schrift unter 16 px */
+  .mantine-Input-input,
+  .mantine-PillsInput-input input {
+    font-size: 1rem;
+  }
+
+  /* Seitenkopf: Titel oben, Filter und Knöpfe darunter in voller Breite */
+  .page-header {
+    flex-direction: column;
+    align-items: stretch !important;
+  }
+
+  .page-actions {
+    width: 100%;
+  }
+
+  .page-actions > * {
+    flex: 1 1 100%;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  /* Tab-Leisten seitlich wischen statt in mehrere Zeilen umbrechen */
+  .mantine-Tabs-list {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .mantine-Tabs-list::-webkit-scrollbar {
+    display: none;
+  }
+
+  .mantine-Tabs-tab {
+    flex-shrink: 0;
+  }
+
+  /* Dialoge als Vollbild */
+  .mantine-Modal-inner {
+    padding: 0 !important;
+  }
+
+  .mantine-Modal-content {
+    flex: 1 1 100% !important;
+    max-width: 100% !important;
+    min-height: 100dvh;
+    border-radius: 0 !important;
+  }
+
+  /* Karten etwas schlanker gepolstert */
+  .mantine-Card-root {
+    --card-padding: var(--mantine-spacing-md) !important;
+  }
+
+  .mantine-Title-root[data-order="2"] {
+    font-size: 1.5rem;
+  }
+}
+
+@media (max-width: 48em) {
+  /* Kleine Symbol-Knöpfe (z. B. "…"-Menü) in Aktionsleisten nicht auf volle Breite ziehen */
+  .page-actions > .mantine-ActionIcon-root {
+    flex: 0 0 auto;
+    width: auto !important;
+  }
+
+  /* Mehrere Aktionen: die erste (Hauptaktion) volle Breite, die übrigen teilen sich die Zeile */
+  .page-actions:has(> .mantine-Button-root + .mantine-Button-root) > .mantine-Button-root {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .page-actions:has(> .mantine-Button-root + .mantine-Button-root) > .mantine-Button-root:first-child {
+    flex-basis: 100%;
+  }
+}

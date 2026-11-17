@@ -34,6 +34,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<AIOPatcher.Server.Services.FeatureToggle> FeatureToggles => Set<AIOPatcher.Server.Services.FeatureToggle>();
     public DbSet<HostCompliance> HostCompliance => Set<HostCompliance>();
     public DbSet<AgentTaskRecord> AgentTasks => Set<AgentTaskRecord>();
+    public DbSet<SsoSettingsRecord> SsoSettings => Set<SsoSettingsRecord>();
     public DbSet<FirewallProfile> FirewallProfiles => Set<FirewallProfile>();
     public DbSet<FirewallProfileVersion> FirewallProfileVersions => Set<FirewallProfileVersion>();
 
@@ -138,6 +139,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
         {
             e.ToTable("AdminUsers"); // Tabellenname aus v0.1 beibehalten (bestehende Daten)
             e.Property(x => x.Username).HasMaxLength(64);
+            e.Property(x => x.SsoSubject).HasMaxLength(600);
+            e.HasIndex(x => x.SsoSubject).IsUnique();
             e.HasIndex(x => x.Username).IsUnique();
             e.Property(x => x.Language).HasMaxLength(8);
             e.Property(x => x.SecurityStamp).HasMaxLength(64);
@@ -210,6 +213,23 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             e.HasKey(x => x.Key);
             e.Property(x => x.Key).HasMaxLength(64);
             e.Property(x => x.ChangedBy).HasMaxLength(100);
+        });
+
+        b.Entity<SsoSettingsRecord>(e =>
+        {
+            e.ToTable("SsoSettings");
+            e.Property(x => x.Id).ValueGeneratedNever();
+            e.Property(x => x.DisplayName).HasMaxLength(100);
+            e.Property(x => x.Authority).HasMaxLength(500);
+            e.Property(x => x.ClientId).HasMaxLength(200);
+            e.Property(x => x.ProtectedClientSecret).HasMaxLength(2000);
+            e.Property(x => x.Scopes).HasMaxLength(500);
+            e.Property(x => x.UsernameClaim).HasMaxLength(100);
+            e.Property(x => x.GroupsClaim).HasMaxLength(100);
+            e.Property(x => x.RoleMappingsJson).HasMaxLength(8000);
+            e.Property(x => x.DefaultRole).HasConversion<string>().HasMaxLength(20);
+            e.Property(x => x.CertificateFingerprint).HasMaxLength(100);
+            e.Property(x => x.UpdatedBy).HasMaxLength(100);
         });
 
         b.Entity<AgentTaskRecord>(e =>

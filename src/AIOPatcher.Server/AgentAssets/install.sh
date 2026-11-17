@@ -11,6 +11,7 @@
 set -euo pipefail
 
 BIN=/usr/local/bin/aiopatcher-agent
+LITE_BIN=/usr/local/lib/aiopatcher/aiopatcher-agent-lite.py
 STATE=/var/lib/aiopatcher-agent
 UNIT=/etc/systemd/system/aiopatcher-agent.service
 SERVICE=aiopatcher-agent
@@ -23,6 +24,7 @@ UNINSTALL=0
 PURGE=0
 DOWNLOAD_ONLY=""
 ALLOW_SYSTEM_CHANGES=0
+FORCE_LITE=0
 
 die() { echo "Fehler: $*" >&2; exit 1; }
 info() { echo "==> $*"; }
@@ -38,6 +40,8 @@ Optionen:
   --purge               Mit --uninstall: auch Zertifikate, Schlüssel und Policy löschen
   --download-only DIR   Nur herunterladen und prüfen, nichts installieren (Test)
   --allow-system-changes  Firewall-, SSH- und Benutzer-Änderungen aus dem Dashboard erlauben
+  --lite                Lite-Agent (Python) erzwingen. Wird auf alten Systemen (glibc < 2.27,
+                        OpenSSL < 1.1.1, z. B. Ubuntu 16.04, Debian 9) automatisch gewählt.
                         (policy.json allowSystemChanges; ab Werk aus)
 EOF
 }
@@ -52,6 +56,7 @@ while [ $# -gt 0 ]; do
     --purge) PURGE=1; shift ;;
     --download-only) DOWNLOAD_ONLY="${2:-}"; shift 2 ;;
     --allow-system-changes) ALLOW_SYSTEM_CHANGES=1; shift ;;
+    --lite) FORCE_LITE=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) usage; die "Unbekannte Option: $1" ;;
   esac
@@ -67,7 +72,7 @@ if [ "$UNINSTALL" -eq 1 ]; then
   if command -v systemctl >/dev/null 2>&1; then
     systemctl disable --now "$SERVICE" 2>/dev/null || true
   fi
-  rm -f "$UNIT" "$BIN"
+  rm -f "$UNIT" "$BIN" "$LITE_BIN"
   command -v systemctl >/dev/null 2>&1 && systemctl daemon-reload
   if [ "$PURGE" -eq 1 ]; then
     rm -rf "$STATE"
@@ -95,6 +100,26 @@ case "$(uname -m)" in
   *) die "Architektur $(uname -m) wird nicht unterstützt." ;;
 esac
 
+# Alte Systeme: Der normale Agent (.NET 10) braucht glibc 2.27+ und OpenSSL 1.1.1+. Sonst der Lite-Agent
+# (Python 3.5+, nur Updates scannen/installieren und Neustarts).
+version_lt() { [ "$1" != "$2" ] && [ "$(printf '%s\n%s\n' "$1" "$2" | sort -V | head -n1)" = "$1" ]; }
+LITE=$FORCE_LITE
+GLIBC="$(getconf GNU_LIBC_VERSION 2>/dev/null | awk '{print $2}')"
+OSSL="$(openssl version 2>/dev/null | awk '{print $2}' | tr -cd '0-9.')"
+if [ -n "$GLIBC" ] && version_lt "$GLIBC" "2.27"; then LITE=1; fi
+if [ -n "$OSSL" ] && version_lt "$OSSL" "1.1.1"; then LITE=1; fi
+if [ "$LITE" -eq 1 ]; then
+  RID=lite-linux
+  command -v python3 >/dev/null 2>&1 || die "python3 fehlt (apt-get install python3)."
+  python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 5) else 1)' || die "Python 3.5 oder neuer nötig."
+  command -v openssl >/dev/null 2>&1 || die "openssl fehlt (apt-get install openssl)."
+  info "Altes System (glibc ${GLIBC:-?}, OpenSSL ${OSSL:-?}): installiere den Lite-Agent (Updates scannen und installieren, Neustarts)."
+fi
+
+# Agent aufrufen (Lite: über python3)
+AGENT_PATH=""
+agent() { if [ "$LITE" -eq 1 ]; then python3 "$AGENT_PATH" "$@"; else "$AGENT_PATH" "$@"; fi; }
+
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
@@ -117,7 +142,8 @@ EXPECTED="$(pinned_curl --max-time 30 "$SERVER/agent/download/$RID/sha256" | tr 
 GOT="$(sha256sum "$TMP/aiopatcher-agent" | cut -c1-64 | tr 'a-f' 'A-F')"
 [ -n "$EXPECTED" ] && [ "$EXPECTED" = "$GOT" ] || die "Prüfsumme stimmt nicht (erwartet $EXPECTED, erhalten $GOT)."
 chmod 755 "$TMP/aiopatcher-agent"
-VERSION="$("$TMP/aiopatcher-agent" version)" || die "Der Agent startet auf diesem System nicht."
+AGENT_PATH="$TMP/aiopatcher-agent"
+VERSION="$(agent version)" || die "Der Agent startet auf diesem System nicht."
 info "Agent $VERSION geprüft (SHA-256 $GOT)."
 
 if [ -n "$DOWNLOAD_ONLY" ]; then
@@ -134,7 +160,20 @@ if systemctl is-active --quiet "$SERVICE"; then
   info "Halte laufenden Agent für das Update an ..."
   systemctl stop "$SERVICE"
 fi
-install -m 755 -o root -g root "$TMP/aiopatcher-agent" "$BIN"
+if [ "$LITE" -eq 1 ]; then
+  mkdir -p "$(dirname "$LITE_BIN")"
+  install -m 755 -o root -g root "$TMP/aiopatcher-agent" "$LITE_BIN"
+  rm -f "$BIN"
+  AGENT_PATH="$LITE_BIN"
+  EXEC_START="$(command -v python3) $LITE_BIN run --state-dir $STATE"
+  UNIT_TYPE=simple
+else
+  install -m 755 -o root -g root "$TMP/aiopatcher-agent" "$BIN"
+  rm -f "$LITE_BIN"
+  AGENT_PATH="$BIN"
+  EXEC_START="$BIN run --state-dir $STATE"
+  UNIT_TYPE=notify
+fi
 # Reste eines automatischen Updates: Sonst würde dessen Wächter die gerade installierte Version wieder überschreiben.
 rm -f "$STATE/update-pending.json" "$BIN.bak" "$BIN.new"
 
@@ -145,10 +184,12 @@ else
   [ -n "$TOKEN" ] || die "--token fehlt (nötig für die Erstregistrierung)."
   ARGS=(enroll --server "$SERVER" --token "$TOKEN" --fingerprint "$FINGERPRINT" --state-dir "$STATE")
   [ "$FORCE" -eq 1 ] && ARGS+=(--force)
-  "$BIN" "${ARGS[@]}"
+  agent "${ARGS[@]}"
 fi
 
-if [ "$ALLOW_SYSTEM_CHANGES" -eq 1 ]; then
+if [ "$ALLOW_SYSTEM_CHANGES" -eq 1 ] && [ "$LITE" -eq 1 ]; then
+  info "Lite-Agent: --allow-system-changes hat keine Wirkung (keine Firewall-/SSH-/Benutzer-Module)."
+elif [ "$ALLOW_SYSTEM_CHANGES" -eq 1 ]; then
   "$BIN" policy set allowSystemChanges true --state-dir "$STATE" >/dev/null
   info "Änderungen an Firewall, SSH und Benutzern aus dem Dashboard erlaubt (policy.json)."
 fi
@@ -156,7 +197,7 @@ fi
 # --- 5. Selbsttest vor dem Dienststart ------------------------------------------------------------
 # Startet der Agent, liest er seine Registrierung, erreicht er den Server mit seinem Zertifikat?
 info "Selbsttest ..."
-if ! "$BIN" selftest --state-dir "$STATE"; then
+if ! agent selftest --state-dir "$STATE"; then
   die "Selbsttest fehlgeschlagen (siehe oben). Der Dienst wurde nicht gestartet."
 fi
 
@@ -173,8 +214,8 @@ Wants=network-online.target
 StartLimitIntervalSec=0
 
 [Service]
-Type=notify
-ExecStart=$BIN run --state-dir $STATE
+Type=$UNIT_TYPE
+ExecStart=$EXEC_START
 Restart=always
 RestartSec=30
 KillMode=process

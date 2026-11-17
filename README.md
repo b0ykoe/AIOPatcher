@@ -108,6 +108,26 @@ gegen echte Systeme getestet, sondern gegen nachgebaute APIs und Unit-Tests):
   Rollback, wenn die neue Version abstürzt; **automatische Erneuerung** der Agent-Zertifikate
 - CI (Build, Tests) und Release-Workflow (Docker-Image nach ghcr.io, signierte Agents am GitHub-Release)
 
+## Unterstützte Systeme
+
+| System | Agent |
+|---|---|
+| Ubuntu 18.04–26.04, Debian 10–13, Proxmox VE/PBS (x64, arm64) | normaler Agent (alle Module) |
+| Windows Server 2012 – 2025, Windows 10/11 (x64) | normaler Agent (alle Module); 2012/2012 R2 brauchen das VC++-2015-2019-Paket |
+| Ubuntu 16.04, Debian 9 (alte glibc/OpenSSL) | **Lite-Agent** (Python 3.5+) |
+| Windows Server 2008 R2 SP1, Windows 7 SP1 | **Lite-Agent** (PowerShell 5.1 und .NET Framework 4.8) |
+
+Den Lite-Agent wählen die Installationsbefehle automatisch (erzwingen: `--lite` bzw. `-Lite`). Er kann nur das
+Nötigste: Systemdaten, Updates scannen und installieren, Neustarts, Zertifikat erneuern. Kein Self-Update (Update per
+Installationsbefehl), keine Programme, Container oder Compliance. Er ist ein Pull-Agent wie der große.
+
+- **Linux:** Python 3.5+ und `openssl` sind auf Ubuntu 16.04/Debian 9 vorinstalliert. Dienst `aiopatcher-agent`
+  wie beim normalen Agent.
+- **Windows 2008 R2:** vorher WMF 5.1 und .NET Framework 4.8 installieren (der Befehl prüft das und nennt die Links).
+  TLS 1.2 schaltet er in SChannel selbst ein. Danach ist eventuell ein Neustart nötig, dann den Befehl erneut ausführen.
+  Statt eines Dienstes läuft eine Aufgabe „AIOPatcherAgent“ (SYSTEM, beim Systemstart, Neustart nach Absturz),
+  Log unter `C:\ProgramData\AIOPatcher\Agent\agent-lite.log`. Server 2008 ohne R2 wird nicht unterstützt.
+
 ## Agent auf Linux installieren
 
 Im Dashboard unter *Hosts → Host hinzufügen* die Site wählen und den angezeigten Befehl in die Shell des Hosts
@@ -165,6 +185,31 @@ Neustart im Fenster erlaubt ist. Zeiten gelten in der Zeitzone des Servers (`TZ`
 - Ein ausstehender Neustart wird im Fenster nachgeholt, wenn Neustarts erlaubt sind.
 - Fenster dürfen über Mitternacht gehen und gehören zum Tag, an dem sie beginnen. Sommerzeit wird berücksichtigt.
 - Die lokale `policy.json` hat weiterhin Vorrang.
+
+## Anmeldung per SSO (Keycloak & Co.)
+
+Unter *Einstellungen → Anmeldung (SSO)* lässt sich ein Identity-Provider per OpenID Connect anbinden: Keycloak,
+Authentik, Entra ID, Google, Authelia, Zitadel … Die Rolle (Admin, Operator, Betrachter) kommt **bei jedem Login** aus
+den Gruppen des Anbieters. Bei mehreren passenden Gruppen gewinnt die höchste Rolle, ohne passende Gruppe wird
+abgelehnt (oder eine Standardrolle vergeben).
+
+- **Verknüpfen:** Beim ersten SSO-Login wird ein bestehender lokaler Benutzer mit gleichem Benutzernamen verknüpft.
+  Passwort und TOTP bleiben dann als Notfallzugang.
+- **Neue Benutzer:** Unbekannte Benutzer mit passender Gruppe bekommen automatisch ein Konto (nur SSO, ohne Passwort).
+  Beides lässt sich abschalten. Die Benutzerliste zeigt verknüpfte Konten; die Verknüpfung lässt sich dort lösen.
+
+**Keycloak in Kürze:**
+
+1. Client anlegen: Client-ID `aiopatcher`, *Client authentication* an, *Standard flow* an, Redirect-URI
+   `https://patch.example.com:9443/signin-oidc` (steht in den SSO-Einstellungen).
+2. *Client scopes → aiopatcher-dedicated → Add mapper → Group Membership*: Name `groups`, Token Claim Name `groups`,
+   *Full group path* egal (`/admins` und `admins` werden beide erkannt), zu ID-Token und Userinfo hinzufügen.
+3. In AIOPatcher: Issuer-URL `https://sso.example.com/realms/<realm>`, Client-ID, Client-Secret (aus dem Reiter
+   *Credentials*), Gruppen zuordnen, z. B. `aiopatcher-admins` → Admin, `aiopatcher-ops` → Operator.
+
+Statt Gruppen gehen auch Realm-Rollen: Claim `realm_access.roles`. Hat Keycloak ein selbstsigniertes Zertifikat,
+den SHA-256-Fingerprint unter *Erweitert* eintragen. SAML wird (noch) nicht unterstützt; Keycloak und die meisten
+anderen Anbieter sprechen OpenID Connect.
 
 ## Reverse Proxy (Traefik, nginx, Nginx Proxy Manager)
 

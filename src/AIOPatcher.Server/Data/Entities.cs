@@ -335,6 +335,9 @@ public sealed class UserAccount
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? LastLoginAt { get; set; }
+
+    /// <summary>Verknüpftes SSO-Konto ("Issuer|sub"). Benutzer ohne Passwort melden sich nur per SSO an.</summary>
+    public string? SsoSubject { get; set; }
 }
 
 public sealed class AuditEntry
