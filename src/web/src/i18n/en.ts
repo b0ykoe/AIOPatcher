@@ -106,7 +106,8 @@ const en: Translation = {
       noFile: "The compose file it was started with is no longer on the host.",
       agent: "The agent on this host is too old for container updates; it will update itself shortly.",
     },
-  },  jobType: {
+  },
+  jobType: {
     containerUpdate: "Container update",
     systemChange: "System change",
     appUpdate: "Program updates",

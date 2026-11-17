@@ -105,7 +105,8 @@ const de = {
       noFile: "Die Compose-Datei, mit der er gestartet wurde, liegt nicht mehr auf dem Host.",
       agent: "Der Agent auf diesem Host ist zu alt für Container-Updates; er aktualisiert sich gleich selbst.",
     },
-  },  jobType: {
+  },
+  jobType: {
     containerUpdate: "Container aktualisieren",
     systemChange: "Systemänderung",
     appUpdate: "Programm-Updates",
