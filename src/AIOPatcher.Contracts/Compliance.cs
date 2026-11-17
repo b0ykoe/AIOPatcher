@@ -50,7 +50,11 @@ public sealed record LocalUser(
     string PasswordState,
     DateTime? LastLogonUtc,
     int SshKeys,
-    string? FullName = null);
+    string? FullName = null,
+    IReadOnlyList<SshKeyInfo>? Keys = null);
+
+/// <summary>Ein Schlüssel aus authorized_keys. Fingerprint wie "ssh-keygen -lf": "SHA256:" + Base64 ohne Auffüllung.</summary>
+public sealed record SshKeyInfo(string Fingerprint, string Type, string? Comment);
 
 [JsonConverter(typeof(JsonStringEnumConverter<SystemChangeKind>))]
 public enum SystemChangeKind
@@ -79,17 +83,32 @@ public enum SystemChangeKind
 
     /// <summary>Eigene Update-Automatik wieder einschalten (Linux: an; Windows: Standard).</summary>
     AutoUpdatesOn,
+
+    /// <summary>Lokalen Benutzer anlegen (Admin = zusätzlich sudo/wheel bzw. Administratoren). Ohne Passwort.</summary>
+    UserCreate,
+
+    /// <summary>SSH/RDP-Einstellungen auf bestimmte Werte setzen (Values: Id → Wert), nicht nur die Empfehlung.</summary>
+    RemoteAccessSet,
+
+    /// <summary>Mehrere Änderungen nacheinander (Compliance-Vorgabe angleichen); bricht beim ersten Fehler ab.</summary>
+    Batch,
 }
 
 /// <param name="Secret">Nur UserSetPassword. Liegt auf dem Server nur verschlüsselt bis zur Übergabe, wird nie geloggt.</param>
-/// <param name="SshKey">Öffentlicher Schlüssel (eine Zeile authorized_keys) für UserAddSshKey/UserRemoveSshKey.</param>
+/// <param name="SshKey">Öffentlicher Schlüssel (eine Zeile authorized_keys) für UserAddSshKey/UserRemoveSshKey; zum Entfernen auch "SHA256:…".</param>
+/// <param name="Admin">UserCreate: mit Administratorrechten.</param>
+/// <param name="Values">RemoteAccessSet: Id → Sollwert, z. B. "ssh.permitRootLogin" → "no".</param>
+/// <param name="Steps">Batch: die einzelnen Änderungen in Reihenfolge.</param>
 public sealed record SystemChange(
     SystemChangeKind Kind,
     FirewallConfig? Firewall = null,
     IReadOnlyList<string>? Settings = null,
     string? UserName = null,
     string? Secret = null,
-    string? SshKey = null);
+    string? SshKey = null,
+    bool Admin = false,
+    IReadOnlyDictionary<string, string>? Values = null,
+    IReadOnlyList<SystemChange>? Steps = null);
 
 [JsonConverter(typeof(JsonStringEnumConverter<FirewallAction>))]
 public enum FirewallAction

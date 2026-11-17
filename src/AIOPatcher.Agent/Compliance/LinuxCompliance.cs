@@ -116,7 +116,7 @@ public sealed class LinuxCompliance(ComplianceStore store) : IComplianceProvider
     private static async Task<List<LocalUser>> UsersAsync(CancellationToken ct)
     {
         var passwd = await ReadAsync("/etc/passwd", ct);
-        var keys = new Dictionary<string, int>();
+        var keys = new Dictionary<string, IReadOnlyList<SshKeyInfo>>();
         foreach (var entry in ComplianceParsers.ParsePasswd(passwd).Where(p => p.Uid == 0 || p.Uid >= 1000))
         {
             var file = Path.Combine(entry.Home, ".ssh", "authorized_keys");
@@ -124,7 +124,7 @@ public sealed class LinuxCompliance(ComplianceStore store) : IComplianceProvider
             {
                 try
                 {
-                    keys[entry.Name] = ComplianceParsers.CountAuthorizedKeys(await File.ReadAllTextAsync(file, ct));
+                    keys[entry.Name] = ComplianceParsers.ParseAuthorizedKeys(await File.ReadAllTextAsync(file, ct)).Take(100).ToList();
                 }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
                 {
@@ -157,7 +157,9 @@ public sealed class LinuxCompliance(ComplianceStore store) : IComplianceProvider
             SystemChangeKind.FirewallApply when change.Firewall is { } config => ApplyFirewallAsync(config, serverReachable, log, ct),
             SystemChangeKind.FirewallRestoreOriginal => RestoreOriginalAsync(log, ct),
             SystemChangeKind.RemoteAccessFix => SshFixAsync(change.Settings ?? [], log, ct),
+            SystemChangeKind.RemoteAccessSet => SshSetAsync(change.Values ?? new Dictionary<string, string>(), log, ct),
             SystemChangeKind.RemoteAccessRevert => SshRevertAsync(log, ct),
+            SystemChangeKind.UserCreate => UserCreateAsync(change, log, ct),
             >= SystemChangeKind.UserLock and <= SystemChangeKind.UserRemoveSshKey => UserChangeAsync(change, log, ct),
             _ => Task.FromResult(Rejected("Change is incomplete.")),
         };
@@ -275,14 +277,32 @@ public sealed class LinuxCompliance(ComplianceStore store) : IComplianceProvider
         return new JobExecutionResult(JobOutcome.Succeeded, "Firewall restored to the state before AIOPatcher's first change.");
     }
 
-    private async Task<JobExecutionResult> SshFixAsync(IReadOnlyList<string> settings, Action<string> log, CancellationToken ct)
+    private Task<JobExecutionResult> SshFixAsync(IReadOnlyList<string> settings, Action<string> log, CancellationToken ct)
     {
-        var ids = settings.Where(id => ComplianceParsers.SshChecks.Any(c => c.Id == id)).Distinct().ToList();
-        if (ids.Count == 0)
+        var chosen = ComplianceParsers.SshChecks.Where(c => settings.Contains(c.Id)).ToList();
+        return chosen.Count == 0
+            ? Task.FromResult(Rejected("No SSH recommendation selected (RDP settings only exist on Windows)."))
+            : SshWriteAsync(chosen.ToDictionary(c => c.Key, c => c.Recommended), chosen.Select(c => c.Id).ToList(), log, ct);
+    }
+
+    /// <summary>Sollwerte aus einer Compliance-Vorgabe (Id → Wert); nur bekannte Schlüssel mit gültigem Wert.</summary>
+    private Task<JobExecutionResult> SshSetAsync(IReadOnlyDictionary<string, string> values, Action<string> log, CancellationToken ct)
+    {
+        var ssh = values.Where(v => v.Key.StartsWith("ssh.", StringComparison.Ordinal)).ToList();
+        var invalid = ssh.Where(v => !ComplianceParsers.SshSettable.TryGetValue(v.Key, out var s) || !s.Valid(v.Value)).Select(v => $"{v.Key}={v.Value}").ToList();
+        if (invalid.Count > 0)
         {
-            return Rejected("No SSH recommendation selected (RDP settings only exist on Windows).");
+            return Task.FromResult(Rejected($"Invalid SSH value(s): {string.Join(", ", invalid)}."));
         }
 
+        return ssh.Count == 0
+            ? Task.FromResult(Rejected("No SSH value given (RDP settings only exist on Windows)."))
+            : SshWriteAsync(ssh.ToDictionary(v => ComplianceParsers.SshSettable[v.Key].Key, v => v.Value), ssh.Select(v => $"{v.Key}={v.Value}").ToList(), log, ct);
+    }
+
+    /// <summary>Werte in die Drop-in-Datei schreiben (bestehende behalten), mit "sshd -t" prüfen, sonst zurück.</summary>
+    private async Task<JobExecutionResult> SshWriteAsync(Dictionary<string, string> keyValues, List<string> ids, Action<string> log, CancellationToken ct)
+    {
         if (Sshd is not { } sshd)
         {
             return Rejected("OpenSSH server is not installed.");
@@ -293,7 +313,8 @@ public sealed class LinuxCompliance(ComplianceStore store) : IComplianceProvider
             return Rejected("/etc/ssh/sshd_config has no 'Include /etc/ssh/sshd_config.d/*.conf': adjust it by hand.");
         }
 
-        if (ids.Contains("ssh.passwordAuthentication") || ids.Contains("ssh.kbdInteractiveAuthentication"))
+        var passwordOff = keyValues.Any(kv => kv.Key is "PasswordAuthentication" or "KbdInteractiveAuthentication" && kv.Value == "no");
+        if (passwordOff)
         {
             var users = await UsersAsync(ct);
             if (!users.Any(u => u.IsAdmin && u.Enabled && u.SshKeys > 0))
@@ -303,10 +324,15 @@ public sealed class LinuxCompliance(ComplianceStore store) : IComplianceProvider
         }
 
         var previous = File.Exists(SshDropInPath) ? await File.ReadAllTextAsync(SshDropInPath, ct) : null;
-        var all = (previous is null ? [] : ComplianceParsers.SshDropInIds(previous)).Union(ids).ToList();
+        var all = previous is null ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) : ComplianceParsers.SshDropInValues(previous);
+        foreach (var (key, value) in keyValues)
+        {
+            all[key] = value;
+        }
+
         Directory.CreateDirectory(Path.GetDirectoryName(SshDropInPath)!);
         await File.WriteAllTextAsync(SshDropInPath, ComplianceParsers.SshDropIn(all), ct);
-        log($"[agent] Wrote {SshDropInPath}: {string.Join(", ", all)}");
+        log($"[agent] Wrote {SshDropInPath}: {string.Join(", ", all.Select(kv => $"{kv.Key} {kv.Value}"))}");
 
         var test = await ProcessRunner.RunAsync(sshd, ["-t"], Short, ct);
         if (!test.Success)
@@ -447,9 +473,38 @@ public sealed class LinuxCompliance(ComplianceStore store) : IComplianceProvider
         }
     }
 
+    /// <summary>Benutzer anlegen (Home, bash, kein Passwort: Anmeldung per Schlüssel), optional in sudo/wheel.</summary>
+    private async Task<JobExecutionResult> UserCreateAsync(SystemChange change, Action<string> log, CancellationToken ct)
+    {
+        var name = change.UserName;
+        if (!ComplianceParsers.IsValidUserName(name, windows: false))
+        {
+            return Rejected("Invalid user name.");
+        }
+
+        if (ComplianceParsers.ParsePasswd(await ReadAsync("/etc/passwd", ct)).Any(p => p.Name == name))
+        {
+            return new JobExecutionResult(JobOutcome.Succeeded, $"User {name} already exists.");
+        }
+
+        var shell = Which("/bin/bash", "/usr/bin/bash") ?? "/bin/sh";
+        var created = await RunAsync(log, "useradd", ["-m", "-s", shell, name!], $"User {name} created (no password; log in with an SSH key).");
+        if (created.Outcome != JobOutcome.Succeeded || !change.Admin)
+        {
+            return created;
+        }
+
+        var group = ComplianceParsers.AdminGroups.FirstOrDefault(ComplianceParsers.ParseGroups(await ReadAsync("/etc/group", ct)).ContainsKey);
+        return group is null
+            ? new JobExecutionResult(JobOutcome.Failed, $"User {name} created, but neither group sudo nor wheel exists (sudo installed?).")
+            : await RunAsync(log, "usermod", ["-aG", group, name!], $"User {name} created and added to group {group}.");
+    }
+
     private static async Task<JobExecutionResult> SshKeyAsync(SystemChange change, string name, Action<string> log, CancellationToken ct)
     {
-        if (!ComplianceParsers.IsValidPublicKey(change.SshKey))
+        // Entfernen geht auch per Fingerabdruck (Compliance-Vorgabe kennt fremde Schlüssel nur so)
+        var byFingerprint = change.Kind == SystemChangeKind.UserRemoveSshKey && ComplianceParsers.IsFingerprint(change.SshKey);
+        if (!byFingerprint && !ComplianceParsers.IsValidPublicKey(change.SshKey))
         {
             return Rejected("Not a valid public SSH key (one line, e.g. 'ssh-ed25519 AAAA... comment', no options).");
         }
@@ -471,10 +526,11 @@ public sealed class LinuxCompliance(ComplianceStore store) : IComplianceProvider
 
         var key = change.SshKey!.Trim();
         var lines = File.Exists(file) ? (await File.ReadAllTextAsync(file, ct)).Replace("\r", "").Split('\n').Where(l => l.Length > 0).ToList() : [];
-        var data = ComplianceParsers.KeyData(key);
+        var fingerprint = byFingerprint ? key : ComplianceParsers.KeyOf(key)?.Fingerprint;
+        bool Same(string line) => ComplianceParsers.KeyOf(line)?.Fingerprint is { } f && f == fingerprint;
         if (change.Kind == SystemChangeKind.UserAddSshKey)
         {
-            if (lines.Any(l => ComplianceParsers.KeyData(l) == data))
+            if (lines.Any(Same))
             {
                 return new JobExecutionResult(JobOutcome.Succeeded, $"Key already present for {name}.");
             }
@@ -484,7 +540,7 @@ public sealed class LinuxCompliance(ComplianceStore store) : IComplianceProvider
         else
         {
             var before = lines.Count;
-            lines.RemoveAll(l => ComplianceParsers.KeyData(l) == data);
+            lines.RemoveAll(Same);
             if (lines.Count == before)
             {
                 return new JobExecutionResult(JobOutcome.Succeeded, $"Key was not present for {name}.");
@@ -496,7 +552,7 @@ public sealed class LinuxCompliance(ComplianceStore store) : IComplianceProvider
         File.SetUnixFileMode(sshDir, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
         File.SetUnixFileMode(file, UnixFileMode.UserRead | UnixFileMode.UserWrite);
         await RunAsync(log, "chown", ["-h", $"{entry.Uid}:{entry.Gid}", sshDir, file], "");
-        var comment = key.Split(' ').Length > 2 ? key.Split(' ', 3)[2] : "";
+        var comment = byFingerprint ? key : key.Split(' ').Length > 2 ? key.Split(' ', 3)[2] : "";
         return new JobExecutionResult(JobOutcome.Succeeded,
             change.Kind == SystemChangeKind.UserAddSshKey ? $"SSH key {comment} added for {name}." : $"SSH key {comment} removed for {name}.");
     }

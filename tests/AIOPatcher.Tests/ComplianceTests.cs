@@ -147,6 +147,46 @@ public sealed class ComplianceTests
         Assert.False(ComplianceParsers.SshConfigIncludesDropIns("Port 22\n"));
     }
 
+    [Fact]
+    public void Ssh_SetValuesMergeWithExistingDropIn_PortReported()
+    {
+        var existing = ComplianceParsers.SshDropIn(["ssh.permitRootLogin"]);
+        var values = ComplianceParsers.SshDropInValues(existing + "Port 2222\n# comment\nUnknownKey 1\n");
+        values["PermitRootLogin"] = "no";
+        values["PasswordAuthentication"] = "no";
+        var dropIn = ComplianceParsers.SshDropIn(values);
+        Assert.Contains("PermitRootLogin no\n", dropIn);
+        Assert.Contains("Port 2222\n", dropIn);
+        Assert.DoesNotContain("UnknownKey", dropIn);
+        Assert.Contains("ssh.port", ComplianceParsers.SshDropInIds(dropIn));
+
+        Assert.True(ComplianceParsers.SshSettable["ssh.permitRootLogin"].Valid("prohibit-password"));
+        Assert.False(ComplianceParsers.SshSettable["ssh.passwordAuthentication"].Valid("maybe"));
+        Assert.False(ComplianceParsers.SshSettable["ssh.port"].Valid("70000"));
+
+        var settings = ComplianceParsers.EvaluateSsh(ComplianceParsers.ParseSshdEffective("port 2222\npermitrootlogin no\n"), true, null);
+        Assert.Equal("2222", settings.Single(s => s.Id == "ssh.port").Value);
+    }
+
+    // --- SSH-Schlüssel --------------------------------------------------------------------------------
+
+    // Mit ssh-keygen erzeugt (nur für den Test, privater Teil verworfen); Fingerabdruck laut "ssh-keygen -lf".
+    private const string TestKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIrZ1ds9i3zqA5JY12ZH4g5tX0/S1F1jEAhHelelcH1D test@homelab";
+    private const string TestFingerprint = "SHA256:pnIk4Obq8WxN/vcOemRNwfTYMGfp7lessHef7fybw6o";
+
+    [Fact]
+    public void AuthorizedKeys_FingerprintLikeSshKeygen_WithOptionsAndComments()
+    {
+        var keys = ComplianceParsers.ParseAuthorizedKeys(
+            "# admin keys\n" + TestKey + "\n\nfrom=\"10.0.0.0/8\",no-pty " + TestKey.Replace(" test@homelab", "") + "\ngarbage line\nssh-rsa notbase64!!\n");
+        Assert.Equal(2, keys.Count);
+        Assert.All(keys, k => Assert.Equal(TestFingerprint, k.Fingerprint));
+        Assert.Equal(("ssh-ed25519", "test@homelab"), (keys[0].Type, keys[0].Comment));
+        Assert.Null(keys[1].Comment);
+        Assert.True(ComplianceParsers.IsFingerprint(TestFingerprint));
+        Assert.False(ComplianceParsers.IsFingerprint("SHA256:short"));
+    }
+
     // --- Benutzer -------------------------------------------------------------------------------------
 
     private const string Passwd = "root:x:0:0:root:/root:/bin/bash\ndaemon:x:1:1:daemon:/usr/sbin:/usr/sbin/nologin\nalice:x:1000:1000:Alice Admin,,,:/home/alice:/bin/bash\nbob:x:1001:1001::/home/bob:/bin/bash\nnobody:x:65534:65534:nobody:/nonexistent:/usr/sbin/nologin\n";
@@ -156,7 +196,8 @@ public sealed class ComplianceTests
     [Fact]
     public void LinuxUsers_RootAdminsAndLockedAccounts()
     {
-        var users = ComplianceParsers.BuildLinuxUsers(Passwd, Shadow, Group, new Dictionary<string, int> { ["alice"] = 2 },
+        var users = ComplianceParsers.BuildLinuxUsers(Passwd, Shadow, Group,
+            new Dictionary<string, IReadOnlyList<SshKeyInfo>> { ["alice"] = ComplianceParsers.ParseAuthorizedKeys(TestKey + "\n" + TestKey.Replace("test@homelab", "second")) },
             new Dictionary<string, DateTime?>(), new DateTime(2026, 11, 17));
         Assert.Equal(["root", "alice", "bob"], users.Select(u => u.Name));
 
@@ -168,6 +209,8 @@ public sealed class ComplianceTests
         Assert.True(alice.IsAdmin);
         Assert.Equal("Alice Admin", alice.FullName);
         Assert.Equal(2, alice.SshKeys);
+        Assert.Equal(TestFingerprint, alice.Keys![0].Fingerprint);
+        Assert.Empty(users[2].Keys!);
 
         var bob = users[2];
         Assert.False(bob.Enabled); // Ablaufdatum gesetzt (usermod -e 1)

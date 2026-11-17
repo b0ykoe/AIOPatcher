@@ -179,24 +179,68 @@ public static partial class ComplianceParsers
             effective["kbdinteractiveauthentication"] = cr;
         }
 
-        return SshChecks.Select(c =>
+        var settings = SshChecks.Select(c =>
         {
             effective.TryGetValue(c.Key, out var value);
             return new RemoteAccessSetting(c.Id, value, c.Ok(value), fixable, note);
         }).ToList();
+
+        // Port: keine Empfehlung, aber Compliance-Vorgaben können ihn vorschreiben
+        if (effective.TryGetValue("port", out var port))
+        {
+            settings.Add(new RemoteAccessSetting("ssh.port", port.Split(' ')[0], true, fixable, note));
+        }
+
+        return settings;
     }
 
-    /// <summary>Inhalt der Drop-in-Datei mit den angewendeten Empfehlungen (bestehende plus neue).</summary>
-    public static string SshDropIn(IEnumerable<string> ids)
+    /// <summary>Setzbare SSH-Werte (Compliance-Vorgaben): Id → (sshd-Schlüssel, gültiger Wert?).</summary>
+    public static readonly IReadOnlyDictionary<string, (string Key, Func<string, bool> Valid)> SshSettable = new Dictionary<string, (string, Func<string, bool>)>
     {
-        var chosen = SshChecks.Where(c => ids.Contains(c.Id)).ToList();
-        return "# Managed by AIOPatcher (Dashboard: Host -> Compliance). Remove this file to undo.\n"
-               + string.Concat(chosen.Select(c => $"{c.Key} {c.Recommended}\n"));
+        ["ssh.permitRootLogin"] = ("PermitRootLogin", v => v is "yes" or "no" or "prohibit-password" or "forced-commands-only"),
+        ["ssh.passwordAuthentication"] = ("PasswordAuthentication", YesNo),
+        ["ssh.kbdInteractiveAuthentication"] = ("KbdInteractiveAuthentication", YesNo),
+        ["ssh.permitEmptyPasswords"] = ("PermitEmptyPasswords", YesNo),
+        ["ssh.maxAuthTries"] = ("MaxAuthTries", v => int.TryParse(v, out var n) && n is >= 1 and <= 20),
+        ["ssh.x11Forwarding"] = ("X11Forwarding", YesNo),
+        ["ssh.port"] = ("Port", v => int.TryParse(v, out var n) && n is >= 1 and <= 65535),
+    };
+
+    private static bool YesNo(string v) => v is "yes" or "no";
+
+    /// <summary>Inhalt der Drop-in-Datei: sshd-Schlüssel → Wert (Empfehlungen und Sollwerte aus Vorgaben).</summary>
+    public static string SshDropIn(IReadOnlyDictionary<string, string> keyValues) =>
+        "# Managed by AIOPatcher (Dashboard: Host -> Compliance). Remove this file to undo.\n"
+        + string.Concat(keyValues.OrderBy(kv => kv.Key, StringComparer.Ordinal).Select(kv => $"{kv.Key} {kv.Value}\n"));
+
+    /// <summary>Drop-in mit den empfohlenen Werten für diese Ids.</summary>
+    public static string SshDropIn(IEnumerable<string> ids) =>
+        SshDropIn(SshChecks.Where(c => ids.Contains(c.Id)).ToDictionary(c => c.Key, c => c.Recommended));
+
+    /// <summary>sshd-Schlüssel → Wert aus einer vorhandenen Drop-in-Datei (nur bekannte Schlüssel).</summary>
+    public static Dictionary<string, string> SshDropInValues(string content)
+    {
+        var known = SshChecks.Select(c => c.Key).Concat(SshSettable.Values.Select(s => s.Key)).Distinct().ToList();
+        var values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var line in content.Replace("\r", "").Split('\n'))
+        {
+            var parts = line.Trim().Split(' ', 2, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (parts.Length == 2 && !parts[0].StartsWith('#') && known.FirstOrDefault(k => k.Equals(parts[0], StringComparison.OrdinalIgnoreCase)) is { } key)
+            {
+                values[key] = parts[1];
+            }
+        }
+
+        return values;
     }
 
     /// <summary>Ids, die in einer vorhandenen Drop-in-Datei schon gesetzt sind.</summary>
-    public static List<string> SshDropInIds(string content) =>
-        SshChecks.Where(c => content.Replace("\r", "").Split('\n').Any(l => l.StartsWith(c.Key + " ", StringComparison.OrdinalIgnoreCase))).Select(c => c.Id).ToList();
+    public static List<string> SshDropInIds(string content)
+    {
+        var keys = SshDropInValues(content).Keys.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return SshChecks.Select(c => (c.Id, c.Key)).Concat(SshSettable.Select(s => (Id: s.Key, s.Value.Key)))
+            .Where(x => keys.Contains(x.Key)).Select(x => x.Id).Distinct().ToList();
+    }
 
     [GeneratedRegex(@"^\s*Include\s+.*sshd_config\.d/\*\.conf", RegexOptions.Multiline | RegexOptions.IgnoreCase)]
     private static partial Regex SshIncludeLine();
@@ -249,7 +293,7 @@ public static partial class ComplianceParsers
     };
 
     /// <summary>Menschen und root: UID 0 und UIDs ab 1000 (ohne nobody). Dienstkonten bleiben außen vor.</summary>
-    public static List<LocalUser> BuildLinuxUsers(string passwd, string shadow, string group, IReadOnlyDictionary<string, int> sshKeys,
+    public static List<LocalUser> BuildLinuxUsers(string passwd, string shadow, string group, IReadOnlyDictionary<string, IReadOnlyList<SshKeyInfo>> sshKeys,
         IReadOnlyDictionary<string, DateTime?> lastLogons, DateTime today)
     {
         var shadowEntries = ParseShadow(shadow);
@@ -272,8 +316,9 @@ public static partial class ComplianceParsers
                     IsBuiltIn: p.Uid == 0,
                     PasswordState: PasswordState(s.Password),
                     LastLogonUtc: lastLogons.GetValueOrDefault(p.Name),
-                    SshKeys: sshKeys.GetValueOrDefault(p.Name),
-                    FullName: p.Gecos.Split(',')[0] is { Length: > 0 } full ? full : null);
+                    SshKeys: sshKeys.GetValueOrDefault(p.Name)?.Count ?? 0,
+                    FullName: p.Gecos.Split(',')[0] is { Length: > 0 } full ? full : null,
+                    Keys: sshKeys.GetValueOrDefault(p.Name) ?? []);
             })
             .OrderBy(u => u.IsBuiltIn ? 0 : 1).ThenBy(u => u.Name)
             .ToList();
@@ -308,8 +353,14 @@ public static partial class ComplianceParsers
         return result;
     }
 
-    public static int CountAuthorizedKeys(string content) =>
-        content.Replace("\r", "").Split('\n').Count(l => l.Trim() is { Length: > 0 } t && !t.StartsWith('#'));
+    public static int CountAuthorizedKeys(string content) => ParseAuthorizedKeys(content).Count;
+
+    /// <summary>Eine Zeile (authorized_keys oder öffentlicher Schlüssel) → Typ, Fingerabdruck, Kommentar; sonst null.</summary>
+    public static SshKeyInfo? KeyOf(string line) => SshPublicKeys.KeyOf(line);
+
+    /// <summary>Schlüssel aus authorized_keys, auch mit Optionen davor (from="…",command="…"). Zeilen ohne Schlüssel zählen nicht.</summary>
+    public static List<SshKeyInfo> ParseAuthorizedKeys(string content) =>
+        content.Replace("\r", "").Split('\n').Select(SshPublicKeys.KeyOf).OfType<SshKeyInfo>().ToList();
 
     // --- Eingaben vom Server ------------------------------------------------------------------------
 
@@ -327,6 +378,8 @@ public static partial class ComplianceParsers
 
     /// <summary>Genau eine Zeile authorized_keys ohne Optionen (keine command="...", kein from=...).</summary>
     public static bool IsValidPublicKey(string? key) => key is not null && PublicKey().IsMatch(key.Trim());
+
+    public static bool IsFingerprint(string? value) => SshPublicKeys.IsFingerprint(value);
 
     /// <summary>Schlüsselteil (Base64) einer authorized_keys-Zeile, zum Vergleichen.</summary>
     public static string? KeyData(string line) => line.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries) is { Length: >= 2 } parts ? parts[1] : null;

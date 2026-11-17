@@ -88,8 +88,43 @@ public sealed class JobExecutor(
             return new JobExecutionResult(JobOutcome.Rejected, "System changes are not available in this agent.");
         }
 
-        log($"[agent] Change: {change.Kind}{(change.UserName is null ? "" : $" ({change.UserName})")}");
-        return await compliance.ApplyAsync(change, ServerReachableAsync, log, ct);
+        if (change.Kind != SystemChangeKind.Batch)
+        {
+            log($"[agent] Change: {change.Kind}{(change.UserName is null ? "" : $" ({change.UserName})")}");
+            return await compliance.ApplyAsync(change, ServerReachableAsync, log, ct);
+        }
+
+        return await BatchAsync(change.Steps ?? [], log, ct);
+    }
+
+    /// <summary>Compliance-Vorgabe angleichen: Schritte nacheinander, beim ersten Fehler Schluss (Rest bleibt offen).</summary>
+    private async Task<JobExecutionResult> BatchAsync(IReadOnlyList<SystemChange> steps, Action<string> log, CancellationToken ct)
+    {
+        if (steps.Count is 0 or > 50 || steps.Any(s => s.Kind is SystemChangeKind.Batch || NativeAutoUpdates.IsChange(s)))
+        {
+            return new JobExecutionResult(JobOutcome.Rejected, "Batch must contain 1 to 50 plain changes.");
+        }
+
+        var done = new List<string>();
+        for (var i = 0; i < steps.Count; i++)
+        {
+            var step = steps[i];
+            log($"[agent] Step {i + 1}/{steps.Count}: {step.Kind}{(step.UserName is null ? "" : $" ({step.UserName})")}");
+            var result = await compliance!.ApplyAsync(step, ServerReachableAsync, log, ct);
+            log($"[agent] -> {result.Outcome}: {result.Summary}");
+            if (result.Outcome != JobOutcome.Succeeded)
+            {
+                return result with
+                {
+                    Summary = $"Step {i + 1}/{steps.Count} ({step.Kind}) {result.Outcome.ToString().ToLowerInvariant()}: {result.Summary}"
+                              + (done.Count > 0 ? $" Done before: {string.Join(" ", done)}" : ""),
+                };
+            }
+
+            done.Add(result.Summary);
+        }
+
+        return new JobExecutionResult(JobOutcome.Succeeded, string.Join(" ", done));
     }
 
     /// <summary>Meldet sich der Server mit unserem Zertifikat? (Nach Firewall-Änderungen, sonst Rollback.)</summary>

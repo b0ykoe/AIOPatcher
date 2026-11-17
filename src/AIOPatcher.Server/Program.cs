@@ -232,6 +232,7 @@ app.MapReportEndpoints();
 app.MapIpamEndpoints();
 app.MapCheckEndpoints();
 app.MapComplianceEndpoints();
+app.MapComplianceBaselineEndpoints();
 app.MapSsoEndpoints();
 app.MapSoftwareEndpoints();
 app.MapVulnerabilityEndpoints();

@@ -67,7 +67,7 @@ public static class AgentModules
     public static string ForChange(SystemChangeKind kind) => kind switch
     {
         SystemChangeKind.FirewallApply or SystemChangeKind.FirewallRestoreOriginal => Firewall,
-        SystemChangeKind.RemoteAccessFix or SystemChangeKind.RemoteAccessRevert => RemoteAccess,
+        SystemChangeKind.RemoteAccessFix or SystemChangeKind.RemoteAccessRevert or SystemChangeKind.RemoteAccessSet => RemoteAccess,
         SystemChangeKind.AutoUpdatesOff or SystemChangeKind.AutoUpdatesOn => Updates,
         _ => Users,
     };

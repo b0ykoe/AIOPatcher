@@ -48,3 +48,34 @@ public sealed class FirewallProfileVersion
     public required string CreatedBy { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
+
+/// <summary>
+/// Compliance-Vorgabe (Soll-Zustand): SSH/RDP-Werte, Benutzer, SSH-Schlüssel, Firewall-Regelsatz. Ein Host hat höchstens
+/// eine: ausgewählt (Hosts), sonst über Tags/Site, sonst die Vorgabe für "alle übrigen".
+/// </summary>
+public sealed class ComplianceBaseline
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public required string Name { get; set; }
+    public string? Description { get; set; }
+
+    /// <summary><see cref="AIOPatcher.Server.Services.BaselineRules"/> als JSON.</summary>
+    public required string RulesJson { get; set; }
+
+    /// <summary>Komma-getrennt; ein Treffer genügt.</summary>
+    public string? MemberTags { get; set; }
+    public Guid? MemberSiteId { get; set; }
+    public bool IncludeOthers { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+    public List<ComplianceBaselineHost> Hosts { get; set; } = [];
+}
+
+/// <summary>Ausdrücklich ausgewählter Host. Ein Host steht in höchstens einer Vorgabe (Schlüssel = HostId).</summary>
+public sealed class ComplianceBaselineHost
+{
+    public Guid HostId { get; set; }
+    public ManagedHost? Host { get; set; }
+    public Guid BaselineId { get; set; }
+    public ComplianceBaseline? Baseline { get; set; }
+}

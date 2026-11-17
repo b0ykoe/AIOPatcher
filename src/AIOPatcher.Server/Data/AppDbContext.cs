@@ -38,6 +38,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<HostMetricSample> MetricSamples => Set<HostMetricSample>();
     public DbSet<SsoSettingsRecord> SsoSettings => Set<SsoSettingsRecord>();
     public DbSet<FirewallProfile> FirewallProfiles => Set<FirewallProfile>();
+    public DbSet<ComplianceBaseline> ComplianceBaselines => Set<ComplianceBaseline>();
+    public DbSet<ComplianceBaselineHost> ComplianceBaselineHosts => Set<ComplianceBaselineHost>();
     public DbSet<FirewallProfileVersion> FirewallProfileVersions => Set<FirewallProfileVersion>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
@@ -266,6 +268,21 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             e.Property(x => x.Name).HasMaxLength(100);
             e.HasIndex(x => x.Name).IsUnique();
             e.Property(x => x.Description).HasMaxLength(500);
+        });
+
+        b.Entity<ComplianceBaseline>(e =>
+        {
+            e.Property(x => x.Name).HasMaxLength(100);
+            e.HasIndex(x => x.Name).IsUnique();
+            e.Property(x => x.Description).HasMaxLength(500);
+            e.Property(x => x.MemberTags).HasMaxLength(500);
+        });
+
+        b.Entity<ComplianceBaselineHost>(e =>
+        {
+            e.HasKey(x => x.HostId);
+            e.HasOne(x => x.Host).WithOne().HasForeignKey<ComplianceBaselineHost>(x => x.HostId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Baseline).WithMany(x => x.Hosts).HasForeignKey(x => x.BaselineId).OnDelete(DeleteBehavior.Cascade);
         });
 
         b.Entity<FirewallProfileVersion>(e =>

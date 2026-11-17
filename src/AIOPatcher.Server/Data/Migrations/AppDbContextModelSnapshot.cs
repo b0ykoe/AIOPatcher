@@ -147,6 +147,64 @@ namespace AIOPatcher.Server.Data.Migrations
                     b.ToTable("AuditEntries");
                 });
 
+            modelBuilder.Entity("AIOPatcher.Server.Data.ComplianceBaseline", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IncludeOthers")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid?>("MemberSiteId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("MemberTags")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RulesJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("ComplianceBaselines");
+                });
+
+            modelBuilder.Entity("AIOPatcher.Server.Data.ComplianceBaselineHost", b =>
+                {
+                    b.Property<Guid>("HostId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("BaselineId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("HostId");
+
+                    b.HasIndex("BaselineId");
+
+                    b.ToTable("ComplianceBaselineHosts");
+                });
+
             modelBuilder.Entity("AIOPatcher.Server.Data.ContainerInfo", b =>
                 {
                     b.Property<long>("Id")
@@ -1704,6 +1762,25 @@ namespace AIOPatcher.Server.Data.Migrations
                     b.Navigation("Host");
                 });
 
+            modelBuilder.Entity("AIOPatcher.Server.Data.ComplianceBaselineHost", b =>
+                {
+                    b.HasOne("AIOPatcher.Server.Data.ComplianceBaseline", "Baseline")
+                        .WithMany("Hosts")
+                        .HasForeignKey("BaselineId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("AIOPatcher.Server.Data.ManagedHost", "Host")
+                        .WithOne()
+                        .HasForeignKey("AIOPatcher.Server.Data.ComplianceBaselineHost", "HostId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Baseline");
+
+                    b.Navigation("Host");
+                });
+
             modelBuilder.Entity("AIOPatcher.Server.Data.ContainerInfo", b =>
                 {
                     b.HasOne("AIOPatcher.Server.Data.ManagedHost", "Host")
@@ -1993,6 +2070,11 @@ namespace AIOPatcher.Server.Data.Migrations
                         .OnDelete(DeleteBehavior.Cascade);
 
                     b.Navigation("Host");
+                });
+
+            modelBuilder.Entity("AIOPatcher.Server.Data.ComplianceBaseline", b =>
+                {
+                    b.Navigation("Hosts");
                 });
 
             modelBuilder.Entity("AIOPatcher.Server.Data.FirewallProfile", b =>

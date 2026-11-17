@@ -29,12 +29,20 @@ public static class ComplianceEndpoints
         int RemoteAccessIssues,
         int Users,
         int Admins,
-        bool BuiltInAdminActive);
+        bool BuiltInAdminActive,
+        Guid? BaselineId = null,
+        string? BaselineName = null,
+        int BaselineViolations = 0,
+        int BaselineUnknown = 0);
 
     /// <param name="Drift">Der Host meldet einen anderen Stand als die zuletzt ausgerollte Version (lokal geändert oder Original wiederhergestellt).</param>
     public sealed record FirewallVersionRefDto(Guid VersionId, Guid ProfileId, string ProfileName, int Number, DateTime? AppliedAt);
 
-    public sealed record HostComplianceDto(ComplianceReport? Report, DateTime? CollectedAt, FirewallVersionRefDto? FirewallVersion, bool FirewallDrift, bool HasPendingChange);
+    public sealed record HostComplianceDto(ComplianceReport? Report, DateTime? CollectedAt, FirewallVersionRefDto? FirewallVersion, bool FirewallDrift, bool HasPendingChange,
+        HostBaselineDto? Baseline = null);
+
+    /// <summary>Vorgabe des Hosts mit Soll/Ist je Regel.</summary>
+    public sealed record HostBaselineDto(Guid Id, string Name, PlanVia Via, IReadOnlyList<RuleResult> Results);
 
     public sealed record FirewallVersionDto(Guid Id, int Number, FirewallConfig Config, string Hash, string? Note, string CreatedBy, DateTime CreatedAt, int Hosts);
 
@@ -89,14 +97,18 @@ public static class ComplianceEndpoints
 
     public static IDataProtector SecretProtector(IDataProtectionProvider provider) => provider.CreateProtector("AIOPatcher.JobSecrets.v1");
 
-    public static Feature? FeatureFor(PatchJob job) => Deserialize(job.Payload)?.Kind switch
-    {
-        null => null,
-        SystemChangeKind.FirewallApply or SystemChangeKind.FirewallRestoreOriginal => Feature.FirewallManagement,
-        SystemChangeKind.RemoteAccessFix or SystemChangeKind.RemoteAccessRevert => Feature.RemoteAccessFixes,
-        SystemChangeKind.AutoUpdatesOff or SystemChangeKind.AutoUpdatesOn => Feature.AutoUpdateControl,
-        _ => Feature.UserManagement,
-    };
+    /// <summary>Schalter, die für diese Änderung an sein müssen (Sammel-Job: die aller Schritte).</summary>
+    public static IReadOnlyList<Feature> FeaturesFor(SystemChange change) =>
+        change.Kind == SystemChangeKind.Batch
+            ? (change.Steps ?? []).Select(s => ComplianceBaselines.FeatureFor(s.Kind)).Distinct().ToList()
+            : [ComplianceBaselines.FeatureFor(change.Kind)];
+
+    /// <summary>Hauptschalter einer Änderung (Sammel-Job: der des ersten Schritts).</summary>
+    public static Feature? FeatureFor(PatchJob job) => Deserialize(job.Payload) is { } change ? FeaturesFor(change).Cast<Feature?>().FirstOrDefault() : null;
+
+    /// <summary>Erster ausgeschaltete Schalter, den dieser Job braucht (null = darf laufen).</summary>
+    public static Feature? BlockedFeature(PatchJob job, FeatureFlags features) =>
+        Deserialize(job.Payload) is { } change ? FeaturesFor(change).Cast<Feature?>().FirstOrDefault(f => !features.IsOn(f!.Value)) : null;
 
     /// <summary>Änderung für den Agent: Payload plus entschlüsseltes Geheimnis. Das Geheimnis wird dabei vom Job gelöscht.</summary>
     public static SystemChange? TakeChange(PatchJob job, IDataProtector? secrets)
@@ -120,7 +132,11 @@ public static class ComplianceEndpoints
 
     public static void OnChangeSucceeded(ManagedHost host, PatchJob job)
     {
-        switch (Deserialize(job.Payload)?.Kind)
+        var change = Deserialize(job.Payload);
+        var kind = change?.Kind == SystemChangeKind.Batch && change.Steps?.Any(s => s.Kind == SystemChangeKind.FirewallApply) == true
+            ? SystemChangeKind.FirewallApply
+            : change?.Kind;
+        switch (kind)
         {
             case SystemChangeKind.FirewallApply:
                 host.FirewallVersionId = job.FirewallVersionId;
@@ -209,14 +225,45 @@ public static class ComplianceEndpoints
         var hosts = await db.Hosts.AsNoTracking().Include(h => h.Site).Where(h => !h.IsRevoked).OrderBy(h => h.Name).ToListAsync(ct);
         var rows = await db.HostCompliance.AsNoTracking().ToDictionaryAsync(r => r.HostId, ct);
         var refs = await VersionRefsAsync(db, hosts, ct);
+        var checks = await BaselineChecksAsync(db, hosts, rows, ct);
         return Results.Ok(hosts.Select(h =>
         {
             rows.TryGetValue(h.Id, out var r);
             refs.TryGetValue(h.Id, out var v);
+            checks.TryGetValue(h.Id, out var b);
             return new ComplianceSummaryDto(h.Id, h.Name, h.Site!.Name, h.OsFamily, r?.CollectedAt, r?.FirewallProduct, r?.FirewallEnabled ?? false,
                 r?.FirewallManageable ?? false, v.Ref, v.Ref is not null && r is not null && r.AppliedFirewallHash != v.Hash,
-                r?.RemoteAccessIssues ?? 0, r?.Users ?? 0, r?.Admins ?? 0, r?.BuiltInAdminActive ?? false);
+                r?.RemoteAccessIssues ?? 0, r?.Users ?? 0, r?.Admins ?? 0, r?.BuiltInAdminActive ?? false,
+                b?.Id, b?.Name, b?.Results.Count(x => x.State == RuleState.Violation) ?? 0, b?.Results.Count(x => x.State == RuleState.Unknown) ?? 0);
         }).ToList());
+    }
+
+    /// <summary>Soll/Ist aller Hosts mit Vorgabe (Bericht aus HostCompliance).</summary>
+    public static async Task<Dictionary<Guid, HostBaselineDto>> BaselineChecksAsync(AppDbContext db, IReadOnlyList<ManagedHost> hosts,
+        IReadOnlyDictionary<Guid, HostCompliance> rows, CancellationToken ct)
+    {
+        var (baselines, members) = await ComplianceBaselines.LoadAsync(db, ct);
+        if (members.Count == 0)
+        {
+            return [];
+        }
+
+        var rules = baselines.ToDictionary(b => b.Id, b => ComplianceBaselines.Parse(b.RulesJson));
+        var firewall = await ComplianceBaselines.FirewallTargetsAsync(db, rules.Values, ct);
+        var result = new Dictionary<Guid, HostBaselineDto>();
+        foreach (var host in hosts)
+        {
+            if (!members.TryGetValue(host.Id, out var member))
+            {
+                continue;
+            }
+
+            var report = rows.TryGetValue(host.Id, out var row) ? JsonSerializer.Deserialize(row.Json, AgentJsonContext.Default.ComplianceReport) : null;
+            result[host.Id] = new HostBaselineDto(member.BaselineId, member.BaselineName, member.Via,
+                ComplianceBaselines.Evaluate(rules[member.BaselineId], host.OsFamily, report, host.FirewallVersionId, firewall));
+        }
+
+        return result;
     }
 
     private static async Task<IResult> ForHost(Guid id, AppDbContext db, FeatureFlags features, CancellationToken ct)
@@ -237,7 +284,9 @@ public static class ComplianceEndpoints
         refs.TryGetValue(id, out var v);
         var report = row is null ? null : JsonSerializer.Deserialize(row.Json, AgentJsonContext.Default.ComplianceReport);
         var pending = await db.Jobs.AnyAsync(j => j.HostId == id && j.Type == JobType.SystemChange && (j.Status == JobStatus.Queued || j.Status == JobStatus.Running), ct);
-        return Results.Ok(new HostComplianceDto(report, row?.CollectedAt, v.Ref, v.Ref is not null && row is not null && row.AppliedFirewallHash != v.Hash, pending));
+        var checks = await BaselineChecksAsync(db, [host], row is null ? new Dictionary<Guid, HostCompliance>() : new() { [id] = row }, ct);
+        return Results.Ok(new HostComplianceDto(report, row?.CollectedAt, v.Ref, v.Ref is not null && row is not null && row.AppliedFirewallHash != v.Hash, pending,
+            checks.GetValueOrDefault(id)));
     }
 
     // --- Firewall-Profile -----------------------------------------------------------------------------
@@ -443,8 +492,7 @@ public static class ComplianceEndpoints
     private static async Task<IResult> CreateChangeAsync(AppDbContext db, AuditLog audit, FeatureFlags features, ClaimsPrincipal user, Guid hostId,
         SystemChange change, string? protectedSecret, Guid? firewallVersionId, string label, CancellationToken ct)
     {
-        var feature = FeatureFor(new PatchJob { Payload = JsonSerializer.Serialize(change, AgentJsonContext.Default.SystemChange), RequestedBy = "" })!.Value;
-        if (Disabled(features, feature) is { } off)
+        if (FeaturesFor(change).Select(f => Disabled(features, f)).FirstOrDefault(r => r is not null) is { } off)
         {
             return off;
         }
@@ -461,7 +509,7 @@ public static class ComplianceEndpoints
         return Results.Ok(new ChangeResultDto(1, [], job.Id));
     }
 
-    private static async Task<(PatchJob? Job, JobPlanner.Skip? Skip)> PlanChangeAsync(AppDbContext db, Guid hostId, SystemChange change, string? protectedSecret,
+    internal static async Task<(PatchJob? Job, JobPlanner.Skip? Skip)> PlanChangeAsync(AppDbContext db, Guid hostId, SystemChange change, string? protectedSecret,
         Guid? firewallVersionId, string label, ClaimsPrincipal user, CancellationToken ct)
     {
         var host = await db.Hosts.SingleOrDefaultAsync(h => h.Id == hostId, ct);

@@ -199,7 +199,9 @@ public sealed class WindowsCompliance(ComplianceStore store) : IComplianceProvid
             SystemChangeKind.FirewallApply when change.Firewall is { } config => ApplyFirewallAsync(config, serverReachable, log, ct),
             SystemChangeKind.FirewallRestoreOriginal => RestoreOriginalAsync(log, ct),
             SystemChangeKind.RemoteAccessFix => Task.FromResult(RdpFix(change.Settings ?? [], log)),
+            SystemChangeKind.RemoteAccessSet => Task.FromResult(RdpSet(change.Values ?? new Dictionary<string, string>(), log)),
             SystemChangeKind.RemoteAccessRevert => Task.FromResult(RdpRevert(log)),
+            SystemChangeKind.UserCreate => UserCreateAsync(change, log, ct),
             SystemChangeKind.UserAddSshKey or SystemChangeKind.UserRemoveSshKey =>
                 Task.FromResult(Rejected("SSH keys are managed on Linux hosts only.")),
             >= SystemChangeKind.UserLock and <= SystemChangeKind.UserRemoveSshKey => UserChangeAsync(change, log, ct),
@@ -331,6 +333,60 @@ public sealed class WindowsCompliance(ComplianceStore store) : IComplianceProvid
         return new JobExecutionResult(JobOutcome.Succeeded, $"RDP: {string.Join(", ", chosen.Select(c => c.Id))} applied. New sessions use them, open sessions stay connected.");
     }
 
+    /// <summary>Setzbare RDP-Werte (Compliance-Vorgaben): Id → (Registry-Wert, Wert aus dem Dashboard → DWORD oder null = ungültig).</summary>
+    public static readonly IReadOnlyDictionary<string, (string Value, Func<string, int?> Parse)> RdpSettable = new Dictionary<string, (string, Func<string, int?>)>
+    {
+        ["rdp.enabled"] = (DenyConnections, v => v switch { "on" => 0, "off" => 1, _ => null }),
+        ["rdp.nla"] = ("UserAuthentication", v => v is "0" or "1" ? int.Parse(v) : null),
+        ["rdp.securityLayer"] = ("SecurityLayer", v => v is "0" or "1" or "2" ? int.Parse(v) : null),
+        ["rdp.encryption"] = ("MinEncryptionLevel", v => v is "1" or "2" or "3" or "4" ? int.Parse(v) : null),
+    };
+
+    /// <summary>fDenyTSConnections liegt unter "Terminal Server", nicht unter RDP-Tcp: in den Originalen mit Präfix gemerkt.</summary>
+    private const string DenyConnections = "ts:fDenyTSConnections";
+
+    private JobExecutionResult RdpSet(IReadOnlyDictionary<string, string> values, Action<string> log)
+    {
+        var rdpValues = values.Where(v => v.Key.StartsWith("rdp.", StringComparison.Ordinal)).ToList();
+        var parsed = rdpValues.Select(v => (v.Key, Setting: RdpSettable.TryGetValue(v.Key, out var s) ? s : default, Raw: v.Value)).ToList();
+        var invalid = parsed.Where(p => p.Setting.Parse is null || p.Setting.Parse(p.Raw) is null).Select(p => $"{p.Key}={p.Raw}").ToList();
+        if (rdpValues.Count == 0 || invalid.Count > 0)
+        {
+            return Rejected(rdpValues.Count == 0 ? "No RDP value given (SSH on Windows is read-only)." : $"Invalid RDP value(s): {string.Join(", ", invalid)}.");
+        }
+
+        using var policy = Registry.LocalMachine.OpenSubKey(RdpPolicyKey);
+        var byPolicy = parsed.Where(p => !p.Setting.Value.StartsWith("ts:", StringComparison.Ordinal) && policy?.GetValue(p.Setting.Value) is not null).Select(p => p.Key).ToList();
+        if (byPolicy.Count > 0)
+        {
+            return Rejected($"{string.Join(", ", byPolicy)} set by group policy; change it there.");
+        }
+
+        using var rdp = Registry.LocalMachine.OpenSubKey(RdpKey, writable: true);
+        using var ts = Registry.LocalMachine.OpenSubKey(TsKey, writable: true);
+        if (rdp is null || ts is null)
+        {
+            return Rejected("Remote Desktop is not installed.");
+        }
+
+        var originals = LoadOriginals();
+        foreach (var (id, setting, raw) in parsed)
+        {
+            var (key, name) = setting.Value.StartsWith("ts:", StringComparison.Ordinal) ? (ts, setting.Value[3..]) : (rdp, setting.Value);
+            if (!originals.ContainsKey(setting.Value))
+            {
+                originals[setting.Value] = key.GetValue(name) as int?;
+            }
+
+            key.SetValue(name, setting.Parse(raw)!.Value, RegistryValueKind.DWord);
+            log($"[agent] RDP {name} = {setting.Parse(raw)} ({id}={raw})");
+        }
+
+        Directory.CreateDirectory(store.Root);
+        File.WriteAllText(store.RemoteAccessOriginal, JsonSerializer.Serialize(originals, Maintenance.UpdateStateJsonContext.Default.DictionaryStringNullableInt32));
+        return new JobExecutionResult(JobOutcome.Succeeded, $"RDP: {string.Join(", ", parsed.Select(p => $"{p.Key}={p.Raw}"))} applied. Open sessions stay connected.");
+    }
+
     private JobExecutionResult RdpRevert(Action<string> log)
     {
         var originals = LoadOriginals();
@@ -339,9 +395,11 @@ public sealed class WindowsCompliance(ComplianceStore store) : IComplianceProvid
             return new JobExecutionResult(JobOutcome.Succeeded, "No RDP settings from AIOPatcher present.");
         }
 
-        using var rdp = Registry.LocalMachine.OpenSubKey(RdpKey, writable: true);
-        foreach (var (value, original) in originals)
+        using var rdpKey = Registry.LocalMachine.OpenSubKey(RdpKey, writable: true);
+        using var tsKey = Registry.LocalMachine.OpenSubKey(TsKey, writable: true);
+        foreach (var (stored, original) in originals)
         {
+            var (rdp, value) = stored.StartsWith("ts:", StringComparison.Ordinal) ? (tsKey, stored[3..]) : (rdpKey, stored);
             if (original is { } v)
             {
                 rdp?.SetValue(value, v, RegistryValueKind.DWord);
@@ -356,6 +414,29 @@ public sealed class WindowsCompliance(ComplianceStore store) : IComplianceProvid
 
         File.Delete(store.RemoteAccessOriginal);
         return new JobExecutionResult(JobOutcome.Succeeded, "RDP settings restored to the state before AIOPatcher.");
+    }
+
+    /// <summary>Lokalen Benutzer ohne Passwort anlegen (Anmeldung erst nach "Passwort setzen"), optional Administrator.</summary>
+    private async Task<JobExecutionResult> UserCreateAsync(SystemChange change, Action<string> log, CancellationToken ct)
+    {
+        var name = change.UserName;
+        if (!ComplianceParsers.IsValidUserName(name, windows: true))
+        {
+            return Rejected("Invalid user name.");
+        }
+
+        if ((await UsersAsync(ct)).Any(u => string.Equals(u.Name, name, StringComparison.OrdinalIgnoreCase)))
+        {
+            return new JobExecutionResult(JobOutcome.Succeeded, $"User {name} already exists.");
+        }
+
+        var script = $"$ErrorActionPreference = 'Stop'\nNew-LocalUser -Name {Q(name!)} -NoPassword | Out-Null" +
+                     (change.Admin ? $"\nAdd-LocalGroupMember -SID '{AdminsSid}' -Member {Q(name!)}" : "");
+        log($"[agent] {script.Replace("\n", "; ")}");
+        var result = await RunScriptAsync(script, ct);
+        return result.Success
+            ? new JobExecutionResult(JobOutcome.Succeeded, $"User {name} created{(change.Admin ? " as administrator" : "")}; set a password before it can log in.")
+            : new JobExecutionResult(JobOutcome.Failed, $"Failed: {FirstLine(result.StandardError)}");
     }
 
     private async Task<JobExecutionResult> UserChangeAsync(SystemChange change, Action<string> log, CancellationToken ct)
