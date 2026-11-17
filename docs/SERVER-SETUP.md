@@ -179,7 +179,7 @@ cd /opt/aiopatcher
 sudo tee /opt/aiopatcher/docker-compose.yml > /dev/null <<'EOF'
 services:
   aiopatcher:
-    image: ghcr.io/OWNER/aiopatcher-server:latest
+    image: ghcr.io/b0ykoe/aiopatcher-server:latest
     container_name: aiopatcher
     restart: unless-stopped
     network_mode: host

@@ -17,7 +17,7 @@
 #   ufw delete allow from 10.99.0.0/24 to any port 9443 proto tcp   # 9443 braucht jetzt nur noch Traefik (lokal)
 services:
   aiopatcher:
-    image: ghcr.io/OWNER/aiopatcher-server:latest # für Produktion feste Version, z. B. :0.3.0
+    image: ghcr.io/b0ykoe/aiopatcher-server:latest # für Produktion feste Version, z. B. :0.3.0
     container_name: aiopatcher
     restart: unless-stopped
     network_mode: host
@@ -30,7 +30,7 @@ services:
       AIOPatcher__AgentPort: "8443"
       AIOPatcher__TrustedProxies: "127.0.0.1" # nur Traefik darf die Client-IP weitergeben (Login-Bremse, Audit-Log)
       AIOPatcher__Language: de
-      AIOPatcher__UpdateCheckRepository: OWNER/AIOPatcher
+      AIOPatcher__UpdateCheckRepository: b0ykoe/AIOPatcher
       TZ: Europe/Berlin
 
   traefik:

@@ -10,7 +10,7 @@
 # Aktualisieren dann mit:  docker compose pull && docker compose up -d
 services:
   aiopatcher:
-    image: ghcr.io/OWNER/aiopatcher-server:latest # für Produktion besser eine feste Version, z. B. :0.3.0
+    image: ghcr.io/b0ykoe/aiopatcher-server:latest # für Produktion besser eine feste Version, z. B. :0.3.0
     container_name: aiopatcher
     restart: unless-stopped
     network_mode: host # damit ufw-Regeln greifen (Docker-Port-Mappings würden ufw umgehen)
@@ -24,7 +24,7 @@ services:
       AIOPatcher__Language: de
       # AIOPatcher__TrustedProxies: "127.0.0.1" # nur mit Reverse Proxy vor dem Dashboard, siehe docs/REVERSE-PROXY.md
       # AIOPatcher__LockedFeatures: "AppUpdates,OpnsenseUpdates" # nie einschaltbar, auch nicht im Dashboard
-      AIOPatcher__UpdateCheckRepository: OWNER/AIOPatcher # Hinweis auf neue Versionen; leer lassen = aus
+      AIOPatcher__UpdateCheckRepository: b0ykoe/AIOPatcher # Hinweis auf neue Versionen; leer lassen = aus
       TZ: Europe/Berlin
     # Healthcheck ist im Image eingebaut (/healthz). "docker ps" zeigt "healthy".
     labels:

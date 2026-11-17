@@ -17,6 +17,12 @@ DNS-Name für ihn. Ohne eigene Domain geht `<ip-mit-bindestrichen>.nip.io`, z. B
 git archive --format=tar.gz -o aiopatcher.tar.gz main && scp aiopatcher.tar.gz root@1.2.3.4:/root/
 ```
 
+Oder direkt auf dem Server aus GitHub (öffentliches Repo; privat: mit Zugangs-Token), dann weiter mit dem Setup-Befehl:
+
+```bash
+git clone https://github.com/b0ykoe/AIOPatcher.git /opt/aiopatcher/src
+```
+
 **2. Auf dem Server entpacken und das Setup starten:**
 
 ```bash
