@@ -8,24 +8,30 @@
 #
 # Updates von AIOPatcher selbst: Das Dashboard zeigt an, wenn eine neue Version da ist (UpdateCheckRepository).
 # Aktualisieren dann mit:  docker compose pull && docker compose up -d
+#
+# Einstellungen kommen aus Umgebungsvariablen (Shell, .env neben dieser Datei oder Portainer "Environment variables").
+# Nicht gesetzt = der Wert hinter ":-" bzw. "-".
 services:
   aiopatcher:
-    image: ghcr.io/b0ykoe/aiopatcher-server:latest # für Produktion besser eine feste Version, z. B. :0.3.0
+    image: ghcr.io/b0ykoe/aiopatcher-server:${AIOPATCHER_VERSION:-latest} # für Produktion besser eine feste Version, z. B. 0.3.0
     container_name: aiopatcher
     restart: unless-stopped
     network_mode: host # damit ufw-Regeln greifen (Docker-Port-Mappings würden ufw umgehen)
     volumes:
-      - /opt/aiopatcher/data:/data
+      - ${AIOPATCHER_DATA_PATH:-/opt/aiopatcher/data}:/data
     environment:
-      AIOPatcher__PublicHostname: patch.example.com # DNS-Name, unter dem Agents den Server erreichen
+      AIOPatcher__PublicHostname: ${AIOPATCHER_HOSTNAME:-patch.example.com} # DNS-Name, unter dem Agents den Server erreichen
       AIOPatcher__DataDirectory: /data
-      AIOPatcher__DashboardPort: "9443" # nur intern/VPN freigeben
-      AIOPatcher__AgentPort: "8443" # darf öffentlich erreichbar sein (mTLS)
-      AIOPatcher__Language: de
-      # AIOPatcher__TrustedProxies: "127.0.0.1" # nur mit Reverse Proxy vor dem Dashboard, siehe docs/REVERSE-PROXY.md
-      # AIOPatcher__LockedFeatures: "AppUpdates,OpnsenseUpdates" # nie einschaltbar, auch nicht im Dashboard
-      AIOPatcher__UpdateCheckRepository: b0ykoe/AIOPatcher # Hinweis auf neue Versionen; leer lassen = aus
-      TZ: Europe/Berlin
+      AIOPatcher__DashboardPort: "${AIOPATCHER_DASHBOARD_PORT:-9443}" # nur intern/VPN freigeben
+      AIOPatcher__AgentPort: "${AIOPATCHER_AGENT_PORT:-8443}" # darf öffentlich erreichbar sein (mTLS)
+      AIOPatcher__Language: ${AIOPATCHER_LANGUAGE:-de}
+      # nur mit Reverse Proxy vor dem Dashboard, z. B. "127.0.0.1", siehe docs/REVERSE-PROXY.md; leer = kein Proxy
+      AIOPatcher__TrustedProxies: ${AIOPATCHER_TRUSTED_PROXIES:-}
+      # nie einschaltbar, auch nicht im Dashboard, z. B. "AppUpdates,OpnsenseUpdates"; leer = nichts gesperrt
+      AIOPatcher__LockedFeatures: ${AIOPATCHER_LOCKED_FEATURES:-}
+      # Hinweis auf neue Versionen; auf leer setzen (AIOPATCHER_UPDATE_CHECK_REPOSITORY=) = aus
+      AIOPatcher__UpdateCheckRepository: ${AIOPATCHER_UPDATE_CHECK_REPOSITORY-b0ykoe/AIOPatcher}
+      TZ: ${TZ:-Europe/Berlin}
     # Healthcheck ist im Image eingebaut (/healthz). "docker ps" zeigt "healthy".
     labels:
       - autoheal=true # nur relevant, wenn der autoheal-Container unten aktiv ist

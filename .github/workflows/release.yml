@@ -69,7 +69,7 @@ jobs:
           (cd dist && sha256sum * > SHA256SUMS)
           # Stack-Dateien mit fester Version (Portainer: Stacks → Add stack → Upload)
           sed "s|\${AIOPATCHER_VERSION:-latest}|\${AIOPATCHER_VERSION:-${{ steps.version.outputs.version }}}|" deploy/portainer-stack.yml > dist/portainer-stack.yml
-          sed "s|aiopatcher-server:latest|aiopatcher-server:${{ steps.version.outputs.version }}|" deploy/docker-compose.yml > dist/docker-compose.yml
+          sed "s|\${AIOPATCHER_VERSION:-latest}|\${AIOPATCHER_VERSION:-${{ steps.version.outputs.version }}}|" deploy/docker-compose.yml > dist/docker-compose.yml
 
       - uses: softprops/action-gh-release@v2
         with:

@@ -15,26 +15,30 @@
 #   docker compose -f docker-compose.traefik.yml up -d
 #   ufw allow 80,443/tcp   # 80 nur für die HTTP→HTTPS-Umleitung und die Let's-Encrypt-Prüfung
 #   ufw delete allow from 10.99.0.0/24 to any port 9443 proto tcp   # 9443 braucht jetzt nur noch Traefik (lokal)
+#
+# Einstellungen kommen aus Umgebungsvariablen (Shell, .env neben dieser Datei oder Portainer "Environment variables").
+# Nicht gesetzt = der Wert hinter ":-" bzw. "-".
 services:
   aiopatcher:
-    image: ghcr.io/b0ykoe/aiopatcher-server:latest # für Produktion feste Version, z. B. :0.3.0
+    image: ghcr.io/b0ykoe/aiopatcher-server:${AIOPATCHER_VERSION:-latest} # für Produktion feste Version, z. B. 0.3.0
     container_name: aiopatcher
     restart: unless-stopped
     network_mode: host
     volumes:
-      - /opt/aiopatcher/data:/data
+      - ${AIOPATCHER_DATA_PATH:-/opt/aiopatcher/data}:/data
     environment:
-      AIOPatcher__PublicHostname: patch.example.com # Agents: https://patch.example.com:8443, Dashboard: https://patch.example.com
+      AIOPatcher__PublicHostname: ${AIOPATCHER_HOSTNAME:-patch.example.com} # Agents: https://<Hostname>:8443, Dashboard: https://<Hostname>
       AIOPatcher__DataDirectory: /data
-      AIOPatcher__DashboardPort: "9443"
-      AIOPatcher__AgentPort: "8443"
-      AIOPatcher__TrustedProxies: "127.0.0.1" # nur Traefik darf die Client-IP weitergeben (Login-Bremse, Audit-Log)
-      AIOPatcher__Language: de
-      AIOPatcher__UpdateCheckRepository: b0ykoe/AIOPatcher
-      TZ: Europe/Berlin
+      AIOPatcher__DashboardPort: "${AIOPATCHER_DASHBOARD_PORT:-9443}" # bei Änderung auch in traefik/dynamic.yml anpassen
+      AIOPatcher__AgentPort: "${AIOPATCHER_AGENT_PORT:-8443}"
+      AIOPatcher__TrustedProxies: "${AIOPATCHER_TRUSTED_PROXIES:-127.0.0.1}" # nur Traefik darf die Client-IP weitergeben (Login-Bremse, Audit-Log)
+      AIOPatcher__Language: ${AIOPATCHER_LANGUAGE:-de}
+      AIOPatcher__LockedFeatures: ${AIOPATCHER_LOCKED_FEATURES:-} # z. B. "AppUpdates,OpnsenseUpdates"; leer = nichts gesperrt
+      AIOPatcher__UpdateCheckRepository: ${AIOPATCHER_UPDATE_CHECK_REPOSITORY-b0ykoe/AIOPatcher} # leer = aus
+      TZ: ${TZ:-Europe/Berlin}
 
   traefik:
-    image: traefik:v3.4 # aktuelle v3-Version eintragen
+    image: traefik:${TRAEFIK_VERSION:-v3.4} # aktuelle v3-Version eintragen
     container_name: traefik
     restart: unless-stopped
     network_mode: host
@@ -46,7 +50,7 @@ services:
       - --entrypoints.websecure.http.tls=true
       - --providers.file.filename=/etc/traefik/dynamic.yml
       - --providers.file.watch=true
-      - --certificatesresolvers.le.acme.email=admin@example.com
+      - --certificatesresolvers.le.acme.email=${ACME_EMAIL:-admin@example.com}
       - --certificatesresolvers.le.acme.storage=/letsencrypt/acme.json
       # Dashboard öffentlich erreichbar (443 offen): TLS-Challenge reicht.
       - --certificatesresolvers.le.acme.tlschallenge=true
@@ -56,12 +60,12 @@ services:
       - --log.level=WARN
       - --accesslog=true
     volumes:
-      - /opt/aiopatcher/traefik/dynamic.yml:/etc/traefik/dynamic.yml:ro
-      - /opt/aiopatcher/traefik/letsencrypt:/letsencrypt
+      - ${TRAEFIK_CONFIG_PATH:-/opt/aiopatcher/traefik}/dynamic.yml:/etc/traefik/dynamic.yml:ro
+      - ${TRAEFIK_CONFIG_PATH:-/opt/aiopatcher/traefik}/letsencrypt:/letsencrypt
       # Nur das CA-Zertifikat (nicht den Schlüssel!), damit Traefik das Dashboard-Zertifikat prüfen kann.
       # create_host_path: false: Fehlt die Datei noch, bricht der Start ab, statt einen leeren Ordner anzulegen.
       - type: bind
-        source: /opt/aiopatcher/data/ca/ca.crt
+        source: ${AIOPATCHER_DATA_PATH:-/opt/aiopatcher/data}/ca/ca.crt
         target: /etc/traefik/aiopatcher-ca.crt
         read_only: true
         bind:
