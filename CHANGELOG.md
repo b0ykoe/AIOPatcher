@@ -8,6 +8,8 @@ Geschrieben für Anwender, nicht als Commit-Liste.
 
 ## [Unveröffentlicht]
 
+## [0.8.2] - 2026-11-17
+
 ### Verbessert
 - **Agent auf neuen Server umziehen:** Den Installationsbefehl aus dem neuen Dashboard auf einem Host ausführen, der noch
   bei einem anderen AIOPatcher-Server registriert ist, registriert ihn jetzt automatisch neu (neuer Schlüssel, neues
