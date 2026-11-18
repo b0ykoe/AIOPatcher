@@ -1,34 +1,34 @@
 <#
-AIOPatcher-Agent: Installation, Update und Deinstallation fuer Windows
-(Windows Server 2019/2022/2025, Windows 10/11). Laeuft mit Windows PowerShell 5.1.
+AIOPatcher agent: installation, update and uninstall for Windows
+(Windows Server 2019/2022/2025, Windows 10/11). Runs on Windows PowerShell 5.1.
 
-Erstinstallation (Befehl kommt fertig aus dem Dashboard, "Host hinzufuegen"):
+First installation (the dashboard provides the complete command under "Add host"):
   install.ps1 -Server https://patch.example.com:8443 -Token <token> -Fingerprint <sha256>
-Host ausserhalb (Cloud), Server nur intern erreichbar: zusaetzlich oeffentliche Adresse und Pruefsumme
+Host outside (cloud), server only reachable internally: additionally the public address and checksum
   install.ps1 -Server https://10.0.0.5:8443 -PublicUrl https://agents.example.com -Sha256 win-x64=<sha256> -Token <token> -Fingerprint <sha256>
-Update (Agent bleibt registriert):
+Update (agent stays enrolled):
   install.ps1 -Server https://patch.example.com:8443 -Fingerprint <sha256>
-Deinstallation:
+Uninstall:
   install.ps1 -Uninstall [-Purge]
 
-Hinweis: Diese Datei enthaelt bewusst keine Umlaute (PowerShell 5.1 liest Skripte ohne BOM als ANSI).
+Note: this file is deliberately pure ASCII (PowerShell 5.1 reads scripts without BOM as ANSI).
 #>
 [CmdletBinding()]
 param(
     [string]$Server,
     [string]$Fingerprint,
     [string]$Token,
-    # Oeffentliche Adresse ueber den Reverse Proxy (Ausweichweg, wenn -Server nicht erreichbar ist)
+    # Public address via the reverse proxy (fallback when -Server is not reachable)
     [string]$PublicUrl,
-    # Pruefsummen der Agent-Builds aus dem Dashboard ("win-x64=<sha256>"), noetig fuer den Download ueber -PublicUrl
+    # Checksums of the agent builds from the dashboard ("win-x64=<sha256>"), required for the download via -PublicUrl
     [string]$Sha256,
     [switch]$Force,
     [switch]$Uninstall,
     [switch]$Purge,
     [string]$DownloadOnly,
-    # Firewall-, RDP- und Benutzer-Aenderungen aus dem Dashboard erlauben (policy.json allowSystemChanges; ab Werk aus)
+    # Allow firewall, RDP and user changes from the dashboard (policy.json allowSystemChanges; off by default)
     [switch]$AllowSystemChanges,
-    # Lite-Agent (PowerShell) erzwingen. Auf Server 2008 R2 / Windows 7 automatisch.
+    # Force the lite agent (PowerShell). Automatic on Server 2008 R2 / Windows 7.
     [switch]$Lite
 )
 
@@ -42,9 +42,9 @@ $StateDir = Join-Path $env:ProgramData 'AIOPatcher\Agent'
 
 function Info([string]$Message) { Write-Host "==> $Message" }
 
-# HTTPS-Abruf mit eigener Zertifikatspruefung NUR fuer diesen Request (nicht global),
-# ohne Keep-Alive und in eigener Verbindungsgruppe, damit keine Verbindung wiederverwendet wird.
-# Ohne Validator: normale Pruefung durch Windows (oeffentliche Adresse mit Zertifikat des Reverse Proxys).
+# HTTPS fetch with its own certificate check ONLY for this request (not global),
+# without keep-alive and in its own connection group, so no connection is reused.
+# Without a validator: normal validation by Windows (public address with the reverse proxy's certificate).
 function Invoke-Fetch([string]$Url, [scriptblock]$Validator, [string]$Group, [string]$OutFile, [int]$TimeoutMs = 600000) {
     $request = [Net.HttpWebRequest]::Create($Url)
     $request.KeepAlive = $false
@@ -65,11 +65,11 @@ function Invoke-Fetch([string]$Url, [scriptblock]$Validator, [string]$Group, [st
         $response.Dispose()
     }
 }
-function Fail([string]$Message) { Write-Host "Fehler: $Message" -ForegroundColor Red; exit 1 }
+function Fail([string]$Message) { Write-Host "Error: $Message" -ForegroundColor Red; exit 1 }
 
-# --- Lite-Agent fuer alte Windows-Versionen ------------------------------------------------------
-# Der normale Agent (.NET 10) laeuft erst ab Server 2012. Davor: PowerShell-Agent, nur Updates und Neustarts,
-# gestartet als Aufgabe (SYSTEM, beim Systemstart, Neustart nach Absturz).
+# --- Lite agent for old Windows versions ---------------------------------------------------------
+# The regular agent (.NET 10) needs Server 2012 or newer. Before that: PowerShell agent, updates and reboots only,
+# started as a scheduled task (SYSTEM, at system startup, restart after a crash).
 
 function Enable-Tls12 {
     $changed = $false
@@ -99,43 +99,43 @@ function Get-LiteTask {
 }
 
 function Install-LiteAgent {
-    Info 'Altes Windows: installiere den Lite-Agent (Updates scannen und installieren, Neustarts).'
+    Info 'Old Windows: installing the lite agent (scans and installs updates, reboots).'
     $file = Join-Path $tmp 'aiopatcher-agent-lite.ps1'
     try {
         Invoke-Fetch -Url "$Server/agent/download/lite-windows" -OutFile $file -Validator $pinnedValidator -Group 'aiopatcher-pinned' | Out-Null
         $expected = (Invoke-Fetch -Url "$Server/agent/download/lite-windows/sha256" -Validator $pinnedValidator -Group 'aiopatcher-pinned').Trim().ToUpperInvariant()
     } catch {
-        Fail "Download fehlgeschlagen: $($_.Exception.Message)"
+        Fail "Download failed: $($_.Exception.Message)"
     }
     $got = (Get-FileHash -Path $file -Algorithm SHA256).Hash.ToUpperInvariant()
-    if (-not $expected -or $got -ne $expected) { Fail "Pruefsumme stimmt nicht (erwartet $expected, erhalten $got)." }
+    if (-not $expected -or $got -ne $expected) { Fail "Checksum mismatch (expected $expected, got $got)." }
 
     $liteFile = Join-Path $InstallDir 'aiopatcher-agent-lite.ps1'
     $ps = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
     $task = Get-LiteTask
-    if ($task -and $task.State -eq 4) { Info 'Halte laufenden Agent fuer das Update an ...'; $task.Stop(0) }
+    if ($task -and $task.State -eq 4) { Info 'Stopping the running agent for the update ...'; $task.Stop(0) }
     New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
     Copy-Item -Path $file -Destination $liteFile -Force
 
     if ((Test-Path (Join-Path $StateDir 'agent.json')) -and -not $Force) {
-        Info 'Agent ist bereits bei diesem Server registriert, nur Programm aktualisiert (neu registrieren: -Force).'
+        Info 'Agent is already enrolled with this server, only the program was updated (to re-enroll: -Force).'
     } else {
-        if (-not $Token) { Fail '-Token fehlt (noetig fuer die Erstregistrierung).' }
+        if (-not $Token) { Fail '-Token is missing (required for the first enrollment).' }
         $enrollArgs = @('enroll', '-Server', $Server, '-Token', $Token, '-Fingerprint', $Fingerprint, '-StateDir', $StateDir)
         if ($Force) { $enrollArgs += '-Force' }
         if ($Force) { Remove-Item (Join-Path $StateDir 'pending-result.json') -Force -ErrorAction SilentlyContinue }
         & $ps -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $liteFile @enrollArgs
-        if ($LASTEXITCODE -ne 0) { Fail 'Registrierung fehlgeschlagen.' }
+        if ($LASTEXITCODE -ne 0) { Fail 'Enrollment failed.' }
     }
 
-    Info 'Selbsttest ...'
+    Info 'Self-test ...'
     & $ps -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $liteFile selftest -StateDir $StateDir
-    if ($LASTEXITCODE -ne 0) { Fail 'Selbsttest fehlgeschlagen (siehe oben). Wurde TLS 1.2 gerade erst eingeschaltet: Server neu starten und den Befehl erneut ausfuehren.' }
+    if ($LASTEXITCODE -ne 0) { Fail 'Self-test failed (see above). If TLS 1.2 was only just enabled: reboot the server and run the command again.' }
 
     $xml = @"
 <?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
-  <RegistrationInfo><Description>AIOPatcher Lite-Agent: meldet Updates an den AIOPatcher-Server und fuehrt freigegebene Patch-Jobs aus.</Description></RegistrationInfo>
+  <RegistrationInfo><Description>AIOPatcher lite agent: reports updates to the AIOPatcher server and runs approved patch jobs.</Description></RegistrationInfo>
   <Triggers><BootTrigger><Enabled>true</Enabled><Delay>PT1M</Delay></BootTrigger></Triggers>
   <Principals><Principal id="Author"><UserId>S-1-5-18</UserId><RunLevel>HighestAvailable</RunLevel></Principal></Principals>
   <Settings>
@@ -153,13 +153,13 @@ function Install-LiteAgent {
     $xmlPath = Join-Path $tmp 'task.xml'
     [IO.File]::WriteAllText($xmlPath, $xml, [Text.Encoding]::Unicode)
     & schtasks.exe /Create /TN $ServiceName /XML $xmlPath /F | Out-Null
-    if ($LASTEXITCODE -ne 0) { Fail 'Aufgabe konnte nicht angelegt werden (schtasks).' }
+    if ($LASTEXITCODE -ne 0) { Fail 'Could not create the scheduled task (schtasks).' }
 
-    # Crash-Check wie beim normalen Agent: laeuft die Aufgabe stabil und meldet sie sich beim Server?
+    # Crash check as for the regular agent: does the task run stably and check in with the server?
     $started = Get-Date
     $lastCheckin = Join-Path $StateDir 'last-checkin'
     & schtasks.exe /Run /TN $ServiceName | Out-Null
-    Info 'Pruefe, ob der Agent stabil laeuft und sich beim Server meldet (bis 90 s) ...'
+    Info 'Checking that the agent runs stably and checks in with the server (up to 90 s) ...'
     $result = 'timeout'
     for ($i = 0; $i -lt 45; $i++) {
         Start-Sleep -Seconds 2
@@ -169,27 +169,27 @@ function Install-LiteAgent {
     }
     $logFile = Join-Path $StateDir 'agent-lite.log'
     switch ($result) {
-        'ok' { Info 'Agent laeuft und hat sich beim Server gemeldet.' }
+        'ok' { Info 'Agent is running and has checked in with the server.' }
         'crashed' {
             if (Test-Path $logFile) { Get-Content $logFile -Tail 20 | ForEach-Object { Write-Host $_ } }
-            Fail 'Der Agent ist nach dem Start beendet worden. Die Aufgabe startet ihn nach 1 Minute neu; Ursache im Log oben.'
+            Fail 'The agent exited after starting. The task restarts it after 1 minute; see the log above for the cause.'
         }
         default {
             if (Test-Path $logFile) { Get-Content $logFile -Tail 20 | ForEach-Object { Write-Host $_ } }
-            Fail 'Der Agent laeuft, hat sich aber nach 90 s noch nicht beim Server gemeldet (Firewall, TLS 1.2, Netzfreigabe der Site?).'
+            Fail 'The agent is running but has not checked in with the server after 90 s (firewall, TLS 1.2, network access for the site?).'
         }
     }
-    Info "Autostart: Aufgabe '$ServiceName' (SYSTEM, beim Systemstart, Neustart nach Absturz nach 1 Minute)."
-    Info "Fertig. Log: $logFile"
+    Info "Autostart: scheduled task '$ServiceName' (SYSTEM, at system startup, restart 1 minute after a crash)."
+    Info "Done. Log: $logFile"
 }
 
 $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
 $isAdmin = (New-Object Security.Principal.WindowsPrincipal $identity).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-if (-not $DownloadOnly -and -not $isAdmin) { Fail 'Bitte PowerShell als Administrator starten.' }
+if (-not $DownloadOnly -and -not $isAdmin) { Fail 'Please run PowerShell as Administrator.' }
 
-# --- Deinstallation ------------------------------------------------------------------------------
+# --- Uninstall -----------------------------------------------------------------------------------
 if ($Uninstall) {
-    Info 'Entferne AIOPatcher-Agent ...'
+    Info 'Removing the AIOPatcher agent ...'
     $svc = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
     if ($svc) {
         if ($svc.Status -ne 'Stopped') { Stop-Service -Name $ServiceName -Force }
@@ -199,61 +199,61 @@ if ($Uninstall) {
     if (Test-Path $InstallDir) { Remove-Item $InstallDir -Recurse -Force }
     if ($Purge) {
         if (Test-Path $StateDir) { Remove-Item $StateDir -Recurse -Force }
-        Info 'Registrierung geloescht. Den Host im Dashboard ebenfalls loeschen.'
+        Info 'Enrollment deleted. Delete the host in the dashboard as well.'
     } else {
-        Info "Registrierung bleibt in $StateDir (mit -Purge entfernen)."
+        Info "Enrollment kept in $StateDir (remove with -Purge)."
     }
     exit 0
 }
 
-# --- Pruefungen ----------------------------------------------------------------------------------
+# --- Checks --------------------------------------------------------------------------------------
 $UseLite = $Lite -or ([Environment]::OSVersion.Version -lt [Version]'6.2')
 if ($UseLite) {
     if ($PSVersionTable.PSVersion.Major -lt 5) {
-        Fail 'Windows PowerShell 5.1 fehlt: WMF 5.1 installieren (https://aka.ms/wmf51download), neu starten und den Befehl erneut ausfuehren.'
+        Fail 'Windows PowerShell 5.1 is missing: install WMF 5.1 (https://aka.ms/wmf51download), reboot and run the command again.'
     }
     $netRelease = (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full' -ErrorAction SilentlyContinue).Release
     if (-not $netRelease -or $netRelease -lt 528040) {
-        Fail '.NET Framework 4.8 fehlt: installieren (https://dotnet.microsoft.com/download/dotnet-framework/net48), neu starten und den Befehl erneut ausfuehren.'
+        Fail '.NET Framework 4.8 is missing: install it (https://dotnet.microsoft.com/download/dotnet-framework/net48), reboot and run the command again.'
     }
-    if (Enable-Tls12) { Info 'TLS 1.2 in SChannel eingeschaltet. Scheitert gleich die Verbindung: Server neu starten und Befehl erneut ausfuehren.' }
+    if (Enable-Tls12) { Info 'TLS 1.2 enabled in SChannel. If the connection fails next: reboot the server and run the command again.' }
 }
-if (-not $Server) { Fail '-Server fehlt.' }
-if (-not $Fingerprint) { Fail '-Fingerprint fehlt.' }
+if (-not $Server) { Fail '-Server is missing.' }
+if (-not $Fingerprint) { Fail '-Fingerprint is missing.' }
 $Server = $Server.TrimEnd('/')
-if (-not $Server.StartsWith('https://')) { Fail '-Server muss mit https:// beginnen.' }
+if (-not $Server.StartsWith('https://')) { Fail '-Server must start with https://.' }
 if ($PublicUrl) {
     $PublicUrl = $PublicUrl.TrimEnd('/')
-    if (-not $PublicUrl.StartsWith('https://')) { Fail '-PublicUrl muss mit https:// beginnen.' }
+    if (-not $PublicUrl.StartsWith('https://')) { Fail '-PublicUrl must start with https://.' }
 }
 $Fingerprint = ($Fingerprint -replace '[^0-9A-Fa-f]', '').ToUpperInvariant()
-if (-not [Environment]::Is64BitOperatingSystem) { Fail 'Nur 64-Bit-Windows wird unterstuetzt.' }
+if (-not [Environment]::Is64BitOperatingSystem) { Fail 'Only 64-bit Windows is supported.' }
 
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
 $tmp = Join-Path ([IO.Path]::GetTempPath()) ('aiopatcher-' + [Guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $tmp | Out-Null
 try {
-    # --- 1. CA holen und gegen den Fingerprint pruefen (Pinning) ----------------------------------
-    # Nur dieser eine Abruf laeuft ohne Zertifikatspruefung; die Antwort wird sofort gegen den
-    # Fingerprint aus dem Dashboard geprueft. Alles danach nur noch gegen genau diese CA.
+    # --- 1. Fetch the CA and verify it against the fingerprint (pinning) --------------------------
+    # Only this one fetch runs without certificate validation; the response is immediately checked
+    # against the fingerprint from the dashboard. Everything after that only against exactly this CA.
     #
-    # Wichtig: .NET Framework haelt TLS-Verbindungen offen und verwendet sie wieder. Ohne Gegenmassnahme
-    # liefe der Agent-Download ueber die ungepruefte Verbindung des CA-Abrufs (Pruefung wuerde nie
-    # ausgefuehrt). Deshalb: Pruefung pro Request, kein Keep-Alive, getrennte Verbindungsgruppen.
-    Info 'Pruefe Server-CA ...'
-    # Ueber die oeffentliche Adresse gehoert TLS dem Reverse Proxy: dort zaehlt ebenfalls nur der Fingerprint der CA,
-    # der Agent wird gegen die Pruefsumme aus dem Installationsbefehl geprueft.
+    # Important: .NET Framework keeps TLS connections open and reuses them. Without a countermeasure
+    # the agent download would run over the unverified connection of the CA fetch (validation would never
+    # run). Therefore: validation per request, no keep-alive, separate connection groups.
+    Info 'Verifying the server CA ...'
+    # Via the public address, TLS belongs to the reverse proxy: there, too, only the CA fingerprint counts,
+    # and the agent is verified against the checksum from the install command.
     $viaPublic = $false
     try {
         $caPem = Invoke-Fetch -Url "$Server/agent/ca" -Validator { $true } -Group 'aiopatcher-unverified' -TimeoutMs 15000
     } catch {
-        if (-not $PublicUrl) { Fail "Server nicht erreichbar: $Server ($($_.Exception.Message))" }
-        Info "$Server nicht erreichbar, nutze die oeffentliche Adresse $PublicUrl."
+        if (-not $PublicUrl) { Fail "Server not reachable: $Server ($($_.Exception.Message))" }
+        Info "$Server not reachable, using the public address $PublicUrl."
         try {
             $caPem = Invoke-Fetch -Url "$PublicUrl/agent/ca" -Group 'aiopatcher-public' -TimeoutMs 30000
         } catch {
-            Fail "Auch $PublicUrl nicht erreichbar ($($_.Exception.Message)). Reverse Proxy und DNS pruefen."
+            Fail "$PublicUrl is not reachable either ($($_.Exception.Message)). Check the reverse proxy and DNS."
         }
         $viaPublic = $true
     }
@@ -262,12 +262,12 @@ try {
     $pinnedCa = New-Object Security.Cryptography.X509Certificates.X509Certificate2 -ArgumentList (, [Convert]::FromBase64String($caBase64))
     $sha256 = [Security.Cryptography.SHA256]::Create()
     $actual = [BitConverter]::ToString($sha256.ComputeHash($pinnedCa.RawData)) -replace '-', ''
-    if ($actual -ne $Fingerprint) { Fail "CA-Fingerprint stimmt nicht! Erwartet $Fingerprint, Server liefert $actual. Abbruch." }
+    if ($actual -ne $Fingerprint) { Fail "CA fingerprint mismatch! Expected $Fingerprint, server delivers $actual. Aborting." }
     $caPath = Join-Path $tmp 'ca.crt'
     Set-Content -Path $caPath -Value $caPem -Encoding Ascii
 
-    # Schon registriert, aber bei einem anderen Server (andere CA, z. B. neu aufgesetzte Instanz)? Dann mit dem Token
-    # aus dem neuen Dashboard neu registrieren: neuer Schluessel, neues Zertifikat, neue CA. policy.json bleibt.
+    # Already enrolled, but with a different server (different CA, e.g. a freshly set up instance)? Then re-enroll
+    # with the token from the new dashboard: new key, new certificate, new CA. policy.json is kept.
     if ((Test-Path (Join-Path $StateDir 'agent.json')) -and -not $Force) {
         $oldFingerprint = 'none'
         $oldCaPath = Join-Path $StateDir 'ca.crt'
@@ -279,8 +279,8 @@ try {
             } catch { $oldFingerprint = 'unreadable' }
         }
         if ($oldFingerprint -ne $Fingerprint) {
-            if (-not $Token) { Fail 'Dieser Host ist bei einem anderen AIOPatcher-Server registriert. Zum Wechseln den Installationsbefehl (mit Token) aus dem neuen Dashboard verwenden.' }
-            Info "Bisher bei einem anderen Server registriert: registriere neu bei $Server (policy.json bleibt erhalten)."
+            if (-not $Token) { Fail 'This host is enrolled with a different AIOPatcher server. To switch, use the install command (with token) from the new dashboard.' }
+            Info "Previously enrolled with a different server: re-enrolling with $Server (policy.json is kept)."
             $Force = $true
         }
     }
@@ -299,14 +299,14 @@ try {
         return ($root.Thumbprint -eq $pinnedCa.Thumbprint)
     }.GetNewClosure()
 
-    if ($UseLite -and $viaPublic) { Fail 'Der Lite-Agent (alte Systeme) geht nur direkt bzw. per VPN zum Server, nicht ueber die oeffentliche Adresse.' }
+    if ($UseLite -and $viaPublic) { Fail 'The lite agent (old systems) only connects to the server directly or via VPN, not via the public address.' }
     if ($UseLite) {
         Install-LiteAgent
         exit 0
     }
 
-    # --- 2. Agent herunterladen und Pruefsumme kontrollieren --------------------------------------
-    Info 'Lade Agent (win-x64) ...'
+    # --- 2. Download the agent and verify the checksum --------------------------------------------
+    Info 'Downloading agent (win-x64) ...'
     $exeTmp = Join-Path $tmp 'aiopatcher-agent.exe'
     try {
         if ($viaPublic) {
@@ -315,82 +315,82 @@ try {
                 $kv = $pair.Trim() -split '=', 2
                 if ($kv.Count -eq 2 -and $kv[0] -eq 'win-x64') { $expected = $kv[1].Trim().ToUpperInvariant() }
             }
-            if (-not $expected) { Fail 'Fuer win-x64 fehlt die Pruefsumme (-Sha256). Installationsbefehl neu aus dem Dashboard holen.' }
+            if (-not $expected) { Fail 'The checksum (-Sha256) for win-x64 is missing. Get the install command again from the dashboard.' }
             Invoke-Fetch -Url "$PublicUrl/agent/download/win-x64" -OutFile $exeTmp -Group 'aiopatcher-public' | Out-Null
         } else {
             Invoke-Fetch -Url "$Server/agent/download/win-x64" -OutFile $exeTmp -Validator $pinnedValidator -Group 'aiopatcher-pinned' | Out-Null
             $expected = (Invoke-Fetch -Url "$Server/agent/download/win-x64/sha256" -Validator $pinnedValidator -Group 'aiopatcher-pinned').Trim().ToUpperInvariant()
         }
     } catch {
-        Fail "Download fehlgeschlagen: $($_.Exception.Message)"
+        Fail "Download failed: $($_.Exception.Message)"
     }
     $got = (Get-FileHash -Path $exeTmp -Algorithm SHA256).Hash.ToUpperInvariant()
-    if (-not $expected -or $got -ne $expected) { Fail "Pruefsumme stimmt nicht (erwartet $expected, erhalten $got)." }
+    if (-not $expected -or $got -ne $expected) { Fail "Checksum mismatch (expected $expected, got $got)." }
     $version = & $exeTmp version
-    if ($LASTEXITCODE -ne 0) { Fail 'Der Agent startet auf diesem System nicht.' }
-    Info "Agent $version geprueft (SHA-256 $got)."
+    if ($LASTEXITCODE -ne 0) { Fail 'The agent does not start on this system.' }
+    Info "Agent $version verified (SHA-256 $got)."
 
     if ($DownloadOnly) {
         New-Item -ItemType Directory -Force -Path $DownloadOnly | Out-Null
         Copy-Item -Path $exeTmp, $caPath -Destination $DownloadOnly -Force
-        Info "Nur heruntergeladen nach $DownloadOnly, nichts installiert."
+        Info "Only downloaded to $DownloadOnly, nothing installed."
         exit 0
     }
 
-    # --- 3. Installieren (bei Update: Dienst kurz anhalten) ---------------------------------------
+    # --- 3. Install (on update: briefly stop the service) -----------------------------------------
     $svc = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
     if ($svc -and $svc.Status -ne 'Stopped') {
-        Info 'Halte laufenden Agent fuer das Update an ...'
+        Info 'Stopping the running agent for the update ...'
         Stop-Service -Name $ServiceName -Force
         (Get-Service -Name $ServiceName).WaitForStatus('Stopped', [TimeSpan]::FromSeconds(60))
     }
     New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
     Copy-Item -Path $exeTmp -Destination $Exe -Force
-    # Reste eines automatischen Updates: sonst wuerde dessen Waechter die gerade installierte Version ueberschreiben.
+    # Leftovers of an automatic update: otherwise its watchdog would overwrite the version just installed.
     foreach ($leftover in @((Join-Path $StateDir 'update-pending.json'), "$Exe.bak", (Join-Path $InstallDir 'aiopatcher-agent.new.exe'))) {
         Remove-Item -LiteralPath $leftover -Force -ErrorAction SilentlyContinue
     }
 
-    # --- 4. Registrieren (nur wenn noetig) --------------------------------------------------------
+    # --- 4. Enroll (only if needed) ---------------------------------------------------------------
     if ((Test-Path (Join-Path $StateDir 'agent.json')) -and -not $Force) {
-        Info 'Agent ist bereits bei diesem Server registriert, nur Programm aktualisiert (neu registrieren: -Force).'
+        Info 'Agent is already enrolled with this server, only the program was updated (to re-enroll: -Force).'
     } else {
-        if (-not $Token) { Fail '-Token fehlt (noetig fuer die Erstregistrierung).' }
+        if (-not $Token) { Fail '-Token is missing (required for the first enrollment).' }
         $enrollArgs = @('enroll', '--server', $Server, '--token', $Token, '--fingerprint', $Fingerprint, '--state-dir', $StateDir)
         if ($PublicUrl) { $enrollArgs += @('--public-url', $PublicUrl) }
         if ($Force) { $enrollArgs += '--force' }
         if ($Force) { Remove-Item (Join-Path $StateDir 'pending-result.json') -Force -ErrorAction SilentlyContinue }
         & $Exe @enrollArgs
-        if ($LASTEXITCODE -ne 0) { Fail 'Registrierung fehlgeschlagen.' }
+        if ($LASTEXITCODE -ne 0) { Fail 'Enrollment failed.' }
     }
 
     if ($AllowSystemChanges) {
         & $Exe policy set allowSystemChanges true --state-dir $StateDir | Out-Null
-        Info 'Aenderungen an Firewall, RDP und Benutzern aus dem Dashboard erlaubt (policy.json).'
+        Info 'Changes to firewall, RDP and users from the dashboard allowed (policy.json).'
     }
 
-    # --- 5. Selbsttest vor dem Dienststart --------------------------------------------------------
-    # Startet der Agent, liest er seine Registrierung, erreicht er den Server mit seinem Zertifikat?
-    Info 'Selbsttest ...'
+    # --- 5. Self-test before starting the service -------------------------------------------------
+    # Does the agent start, read its enrollment, and reach the server with its certificate?
+    Info 'Self-test ...'
     & $Exe selftest --state-dir $StateDir
-    if ($LASTEXITCODE -ne 0) { Fail 'Selbsttest fehlgeschlagen (siehe oben). Der Dienst wurde nicht gestartet.' }
+    if ($LASTEXITCODE -ne 0) { Fail 'Self-test failed (see above). The service was not started.' }
 
-    # --- 6. Windows-Dienst ------------------------------------------------------------------------
+    # --- 6. Windows service -----------------------------------------------------------------------
     if (-not $svc) {
         New-Service -Name $ServiceName -DisplayName 'AIOPatcher Agent' `
-            -Description 'Meldet Updates an den AIOPatcher-Server und fuehrt freigegebene Patch-Jobs aus.' `
+            -Description 'Reports updates to the AIOPatcher server and runs approved patch jobs.' `
             -BinaryPathName "`"$Exe`" run --state-dir `"$StateDir`"" -StartupType Automatic | Out-Null
     }
     & sc.exe config $ServiceName start= delayed-auto | Out-Null
-    # Nach Absturz neu starten, immer wieder (Zaehler nach 1 Tag zurueck). failureflag 1: auch bei Beenden mit Fehlercode.
+    # Restart after a crash, again and again (counter resets after 1 day). failureflag 1: also on exit with an error code.
     & sc.exe failure $ServiceName reset= 86400 actions= restart/30000/restart/30000/restart/60000 | Out-Null
     & sc.exe failureflag $ServiceName 1 | Out-Null
 
-    # --- 7. Crash-Check: laeuft der Dienst stabil und meldet er sich beim Server? -------------------
+    # --- 7. Crash check: does the service run stably and check in with the server? ----------------
     $started = Get-Date
     $lastCheckin = Join-Path $StateDir 'last-checkin'
     function Show-AgentLog {
-        Write-Host '--- Letzte Eintraege (Ereignisanzeige, Anwendung) ---' -ForegroundColor Yellow
+        Write-Host '--- Latest entries (Event Viewer, Application) ---' -ForegroundColor Yellow
         $events = @()
         $events += Get-WinEvent -FilterHashtable @{ LogName = 'Application'; ProviderName = 'AIOPatcherAgent'; StartTime = $started } -MaxEvents 20 -ErrorAction SilentlyContinue
         $events += Get-WinEvent -FilterHashtable @{ LogName = 'Application'; ProviderName = '.NET Runtime', 'Application Error'; StartTime = $started } -MaxEvents 20 -ErrorAction SilentlyContinue |
@@ -402,10 +402,10 @@ try {
         Start-Service -Name $ServiceName
     } catch {
         Show-AgentLog
-        Fail "Dienst startet nicht: $($_.Exception.Message)"
+        Fail "Service does not start: $($_.Exception.Message)"
     }
 
-    Info 'Pruefe, ob der Agent stabil laeuft und sich beim Server meldet (bis 90 s) ...'
+    Info 'Checking that the agent runs stably and checks in with the server (up to 90 s) ...'
     $firstPid = (Get-CimInstance Win32_Service -Filter "Name='$ServiceName'").ProcessId
     $result = 'timeout'
     for ($i = 0; $i -lt 45; $i++) {
@@ -416,26 +416,26 @@ try {
     }
 
     switch ($result) {
-        'ok' { Info 'Agent laeuft und hat sich beim Server gemeldet.' }
+        'ok' { Info 'Agent is running and has checked in with the server.' }
         'crashed' {
             Show-AgentLog
-            Fail 'Der Agent ist nach dem Start abgestuerzt. Windows startet ihn nach 30 s neu; Ursache in der Ereignisanzeige (siehe oben).'
+            Fail 'The agent crashed after starting. Windows restarts it after 30 s; see Event Viewer (above) for the cause.'
         }
         default {
             Show-AgentLog
-            Fail 'Der Dienst laeuft, hat sich aber nach 90 s noch nicht beim Server gemeldet (Firewall, Netzfreigabe der Site?). Er versucht es weiter.'
+            Fail 'The service is running but has not checked in with the server after 90 s (firewall, network access for the site?). It keeps trying.'
         }
     }
 
     if ((Get-Service -Name $ServiceName).StartType.ToString() -like 'Automatic*') {
-        Info 'Autostart: aktiv (verzoegerter Start mit Windows, Neustart nach Absturz nach 30 s).'
+        Info 'Autostart: active (delayed start with Windows, restart 30 s after a crash).'
     } else {
-        Fail "Autostart ist nicht aktiv: Set-Service -Name $ServiceName -StartupType Automatic"
+        Fail "Autostart is not active: Set-Service -Name $ServiceName -StartupType Automatic"
     }
 
-    Info "Fertig. Status: Get-Service $ServiceName"
-    Info 'Logs: Ereignisanzeige > Windows-Protokolle > Anwendung, Quelle AIOPatcherAgent'
-    Info "Lokale Policy (Patchen/Neustarts einschraenken): $StateDir\policy.json"
+    Info "Done. Status: Get-Service $ServiceName"
+    Info 'Logs: Event Viewer > Windows Logs > Application, source AIOPatcherAgent'
+    Info "Local policy (restrict patching/reboots): $StateDir\policy.json"
 } finally {
     [Net.ServicePointManager]::ServerCertificateValidationCallback = $null
     Remove-Item -Path $tmp -Recurse -Force -ErrorAction SilentlyContinue

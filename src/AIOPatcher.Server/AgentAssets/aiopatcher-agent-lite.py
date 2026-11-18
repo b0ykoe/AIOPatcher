@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-AIOPatcher Lite-Agent für alte Linux-Systeme (Ubuntu 16.04, Debian 9 und neuer), auf denen der normale Agent
-(.NET 10) nicht läuft. Pull-Agent wie der große: holt Aufträge ab und antwortet nur darauf.
+AIOPatcher lite agent for old Linux systems (Ubuntu 16.04, Debian 9 and newer) that the regular agent
+(.NET 10) does not run on. Pull agent like the full one: fetches tasks and only answers them.
 
-Module: system (describe), updates (scan, install, reboot), agent (renew). Sonst nichts.
-Voraussetzungen: Python 3.5+, openssl, apt-get. Nur Standardbibliothek.
+Modules: system (describe), updates (scan, install, reboot), agent (renew). Nothing else.
+Requirements: Python 3.5+, openssl, apt-get. Standard library only.
 
-Befehle:
+Commands:
   aiopatcher-agent-lite.py enroll --server URL --token TOKEN --fingerprint SHA256 [--state-dir DIR] [--force]
   aiopatcher-agent-lite.py run [--state-dir DIR]
   aiopatcher-agent-lite.py selftest [--state-dir DIR]
@@ -70,13 +70,13 @@ def run(cmd, timeout=None, env_extra=None, input_text=None):
 
 
 def tls_context(verify=True):
-    """TLS 1.2+; Python 3.7+ über PROTOCOL_TLS_CLIENT, 3.5/3.6 über PROTOCOL_TLSv1_2."""
+    """TLS 1.2+; Python 3.7+ via PROTOCOL_TLS_CLIENT, 3.5/3.6 via PROTOCOL_TLSv1_2."""
     if hasattr(ssl, "TLSVersion"):
         ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
         ctx.minimum_version = ssl.TLSVersion.TLSv1_2
     else:
         ctx = ssl.SSLContext(ssl.PROTOCOL_TLSv1_2)
-    ctx.check_hostname = False  # Echtheit über die gepinnte CA, nicht über den Namen
+    ctx.check_hostname = False  # authenticity via the pinned CA, not via the name
     ctx.verify_mode = ssl.CERT_REQUIRED if verify else ssl.CERT_NONE
     return ctx
 
@@ -97,7 +97,7 @@ def read_json(path, default=None):
         return default
 
 
-# --- Verbindung (gepinnte CA, Client-Zertifikat) ------------------------------------------------------
+# --- Connection (pinned CA, client certificate) ------------------------------------------------------
 
 class Server(object):
     def __init__(self, state_dir):
@@ -110,7 +110,7 @@ class Server(object):
         self.host = url.hostname
         self.port = url.port or 443
         ctx = tls_context()
-        # Nur die eigene CA ist vertrauenswürdig (Pinning).
+        # Only our own CA is trusted (pinning).
         ctx.load_verify_locations(os.path.join(state_dir, "ca.crt"))
         ctx.load_cert_chain(os.path.join(state_dir, "client.crt"), os.path.join(state_dir, "client.key"))
         self.ctx = ctx
@@ -175,7 +175,7 @@ def uptime_seconds():
 
 
 def timespan(seconds):
-    """.NET TimeSpan-Format: [d.]hh:mm:ss"""
+    """.NET TimeSpan format: [d.]hh:mm:ss"""
     seconds = int(seconds)
     d, rest = divmod(seconds, 86400)
     h, rest = divmod(rest, 3600)
@@ -305,7 +305,7 @@ def install(payload, policy, out):
     return "Succeeded", summary, {"updates": after}, False
 
 
-# --- Zustand über Neustarts ---------------------------------------------------------------------------
+# --- State across reboots ----------------------------------------------------------------------------
 
 def pending_path(state_dir):
     return os.path.join(state_dir, "pending-result.json")
@@ -338,7 +338,7 @@ def deliver_pending(server, state_dir):
     return None
 
 
-# --- Schlüssel und Zertifikat ------------------------------------------------------------------------
+# --- Key and certificate -----------------------------------------------------------------------------
 
 def new_key_and_csr(workdir):
     key = os.path.join(workdir, "new.key")
@@ -360,7 +360,7 @@ def install_certificate(state_dir, key_path, cert_pem):
     write_file(os.path.join(state_dir, "client.crt"), cert_pem.strip() + "\n")
 
 
-# --- Befehle -----------------------------------------------------------------------------------------
+# --- Commands ----------------------------------------------------------------------------------------
 
 def enroll(args):
     server_url = (args_get(args, "--server") or "").rstrip("/")
@@ -376,7 +376,7 @@ def enroll(args):
     os.chmod(state_dir, 0o700)
 
     url = urllib.parse.urlparse(server_url)
-    insecure = tls_context(verify=False)  # nur für den CA-Abruf, sofort gegen den Fingerprint geprüft
+    insecure = tls_context(verify=False)  # only for fetching the CA, checked against the fingerprint right away
     conn = http.client.HTTPSConnection(url.hostname, url.port or 443, context=insecure, timeout=30)
     conn.request("GET", "/agent/ca")
     ca_pem = conn.getresponse().read().decode()
@@ -480,7 +480,7 @@ def run_task(server, state_dir, task):
                     os.rmdir(workdir)
                     log("Client certificate renewed. Restarting.")
                     sys.exit(75)
-    except Exception as e:  # noqa: BLE001 - Agent darf nicht sterben, Fehler geht als Antwort raus
+    except Exception as e:  # noqa: BLE001 - agent must not die, the error is sent back as the result
         outcome, summary, data = "Failed", "Error in lite agent: {0}".format(e), None
 
     if reboot:

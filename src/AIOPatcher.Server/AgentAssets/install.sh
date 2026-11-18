@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
-# AIOPatcher-Agent: Installation, Update und Deinstallation für Linux mit systemd
+# AIOPatcher agent: installation, update and uninstall for Linux with systemd
 # (Debian, Ubuntu, Proxmox VE, Proxmox Backup Server).
 #
-# Erstinstallation (Befehl kommt fertig aus dem Dashboard, "Host hinzufügen"):
+# First installation (the dashboard provides the ready-made command, "Add host"):
 #   install.sh --server https://patch.example.com:8443 --token <token> --fingerprint <sha256>
-# Host außerhalb (Cloud), Server nur intern erreichbar: zusätzlich die öffentliche Adresse und die Prüfsummen
+# Host outside (cloud), server reachable only internally: additionally the public address and the checksums
 #   install.sh --server https://10.0.0.5:8443 --public-url https://agents.example.com --sha256 linux-x64=<sha256>,... \
 #              --token <token> --fingerprint <sha256>
-# Update (Agent bleibt registriert, Token nicht nötig):
+# Update (agent stays enrolled, no token needed):
 #   install.sh --server https://patch.example.com:8443 --fingerprint <sha256>
-# Deinstallation:
+# Uninstall:
 #   install.sh --uninstall [--purge]
 set -euo pipefail
 
@@ -31,25 +31,25 @@ DOWNLOAD_ONLY=""
 ALLOW_SYSTEM_CHANGES=0
 FORCE_LITE=0
 
-die() { echo "Fehler: $*" >&2; exit 1; }
+die() { echo "Error: $*" >&2; exit 1; }
 info() { echo "==> $*"; }
 
 usage() {
   cat <<'EOF'
-Optionen:
-  --server URL          Agent-API des AIOPatcher-Servers, z. B. https://patch.example.com:8443
-  --fingerprint SHA256  Fingerprint der AIOPatcher-CA (aus dem Dashboard)
-  --public-url URL      Öffentliche Adresse über den Reverse Proxy (Ausweichweg, wenn --server nicht erreichbar ist)
-  --sha256 RID=HASH,... Prüfsummen der Agent-Builds (aus dem Dashboard), nötig für den Download über --public-url
-  --token TOKEN         Enrollment-Token (nur für die Erstregistrierung)
-  --force               Neu registrieren, auch wenn der Agent schon registriert ist
-  --uninstall           Dienst und Programm entfernen (Registrierung bleibt erhalten)
-  --purge               Mit --uninstall: auch Zertifikate, Schlüssel und Policy löschen
-  --download-only DIR   Nur herunterladen und prüfen, nichts installieren (Test)
-  --allow-system-changes  Firewall-, SSH- und Benutzer-Änderungen aus dem Dashboard erlauben
-  --lite                Lite-Agent (Python) erzwingen. Wird auf alten Systemen (glibc < 2.27,
-                        OpenSSL < 1.1.1, z. B. Ubuntu 16.04, Debian 9) automatisch gewählt.
-                        (policy.json allowSystemChanges; ab Werk aus)
+Options:
+  --server URL          Agent API of the AIOPatcher server, e.g. https://patch.example.com:8443
+  --fingerprint SHA256  Fingerprint of the AIOPatcher CA (from the dashboard)
+  --public-url URL      Public address via the reverse proxy (fallback when --server is not reachable)
+  --sha256 RID=HASH,... Checksums of the agent builds (from the dashboard), required for downloading via --public-url
+  --token TOKEN         Enrollment token (only for the first enrollment)
+  --force               Re-enroll, even if the agent is already enrolled
+  --uninstall           Remove service and program (enrollment is kept)
+  --purge               With --uninstall: also delete certificates, keys and policy
+  --download-only DIR   Only download and verify, install nothing (test)
+  --allow-system-changes  Allow firewall, SSH and user changes from the dashboard
+                        (policy.json allowSystemChanges; off by default)
+  --lite                Force the lite agent (Python). Chosen automatically on old systems (glibc < 2.27,
+                        OpenSSL < 1.1.1, e.g. Ubuntu 16.04, Debian 9).
 EOF
 }
 
@@ -67,17 +67,17 @@ while [ $# -gt 0 ]; do
     --allow-system-changes) ALLOW_SYSTEM_CHANGES=1; shift ;;
     --lite) FORCE_LITE=1; shift ;;
     -h|--help) usage; exit 0 ;;
-    *) usage; die "Unbekannte Option: $1" ;;
+    *) usage; die "Unknown option: $1" ;;
   esac
 done
 
 if [ -z "$DOWNLOAD_ONLY" ] && [ "$(id -u)" -ne 0 ]; then
-  die "Bitte als root ausführen (sudo)."
+  die "Please run as root (sudo)."
 fi
 
-# --- Deinstallation --------------------------------------------------------------------------------
+# --- Uninstall -------------------------------------------------------------------------------------
 if [ "$UNINSTALL" -eq 1 ]; then
-  info "Entferne AIOPatcher-Agent ..."
+  info "Removing AIOPatcher agent ..."
   if command -v systemctl >/dev/null 2>&1; then
     systemctl disable --now "$SERVICE" 2>/dev/null || true
   fi
@@ -85,34 +85,34 @@ if [ "$UNINSTALL" -eq 1 ]; then
   command -v systemctl >/dev/null 2>&1 && systemctl daemon-reload
   if [ "$PURGE" -eq 1 ]; then
     rm -rf "$STATE"
-    info "Registrierung gelöscht. Den Host im Dashboard ebenfalls löschen."
+    info "Enrollment deleted. Delete the host in the dashboard as well."
   else
-    info "Registrierung bleibt in $STATE (mit --purge entfernen)."
+    info "Enrollment kept in $STATE (remove with --purge)."
   fi
   exit 0
 fi
 
-# --- Prüfungen -------------------------------------------------------------------------------------
-[ -n "$SERVER" ] || { usage; die "--server fehlt."; }
-[ -n "$FINGERPRINT" ] || { usage; die "--fingerprint fehlt."; }
+# --- Checks ---------------------------------------------------------------------------------------
+[ -n "$SERVER" ] || { usage; die "--server is missing."; }
+[ -n "$FINGERPRINT" ] || { usage; die "--fingerprint is missing."; }
 SERVER="${SERVER%/}"
-case "$SERVER" in https://*) ;; *) die "--server muss mit https:// beginnen." ;; esac
+case "$SERVER" in https://*) ;; *) die "--server must start with https://." ;; esac
 PUBLIC="${PUBLIC%/}"
-case "$PUBLIC" in ""|https://*) ;; *) die "--public-url muss mit https:// beginnen." ;; esac
+case "$PUBLIC" in ""|https://*) ;; *) die "--public-url must start with https://." ;; esac
 FINGERPRINT="$(printf '%s' "$FINGERPRINT" | tr -d ': ' | tr 'a-f' 'A-F')"
 
 for tool in curl sha256sum base64 sed tr; do
-  command -v "$tool" >/dev/null 2>&1 || die "'$tool' fehlt (z. B. apt-get install curl)."
+  command -v "$tool" >/dev/null 2>&1 || die "'$tool' is missing (e.g. apt-get install curl)."
 done
 
 case "$(uname -m)" in
   x86_64|amd64) RID=linux-x64 ;;
   aarch64|arm64) RID=linux-arm64 ;;
-  *) die "Architektur $(uname -m) wird nicht unterstützt." ;;
+  *) die "Architecture $(uname -m) is not supported." ;;
 esac
 
-# Alte Systeme: Der normale Agent (.NET 10) braucht glibc 2.27+ und OpenSSL 1.1.1+. Sonst der Lite-Agent
-# (Python 3.5+, nur Updates scannen/installieren und Neustarts).
+# Old systems: the regular agent (.NET 10) needs glibc 2.27+ and OpenSSL 1.1.1+. Otherwise the lite agent
+# (Python 3.5+, only scanning/installing updates and reboots).
 version_lt() { [ "$1" != "$2" ] && [ "$(printf '%s\n%s\n' "$1" "$2" | sort -V | head -n1)" = "$1" ]; }
 LITE=$FORCE_LITE
 GLIBC="$(getconf GNU_LIBC_VERSION 2>/dev/null | awk '{print $2}')"
@@ -121,102 +121,102 @@ if [ -n "$GLIBC" ] && version_lt "$GLIBC" "2.27"; then LITE=1; fi
 if [ -n "$OSSL" ] && version_lt "$OSSL" "1.1.1"; then LITE=1; fi
 if [ "$LITE" -eq 1 ]; then
   RID=lite-linux
-  command -v python3 >/dev/null 2>&1 || die "python3 fehlt (apt-get install python3)."
-  python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 5) else 1)' || die "Python 3.5 oder neuer nötig."
-  command -v openssl >/dev/null 2>&1 || die "openssl fehlt (apt-get install openssl)."
-  info "Altes System (glibc ${GLIBC:-?}, OpenSSL ${OSSL:-?}): installiere den Lite-Agent (Updates scannen und installieren, Neustarts)."
+  command -v python3 >/dev/null 2>&1 || die "python3 is missing (apt-get install python3)."
+  python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 5) else 1)' || die "Python 3.5 or newer required."
+  command -v openssl >/dev/null 2>&1 || die "openssl is missing (apt-get install openssl)."
+  info "Old system (glibc ${GLIBC:-?}, OpenSSL ${OSSL:-?}): installing the lite agent (scan and install updates, reboots)."
 fi
 
-# Agent aufrufen (Lite: über python3)
+# Call the agent (lite: via python3)
 AGENT_PATH=""
 agent() { if [ "$LITE" -eq 1 ]; then python3 "$AGENT_PATH" "$@"; else "$AGENT_PATH" "$@"; fi; }
 
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
-# --- 1. CA holen und gegen den Fingerprint prüfen (Pinning) ---------------------------------------
-# Nur dieser eine Abruf geht ohne Zertifikatsprüfung: Die Antwort wird sofort gegen den Fingerprint
-# aus dem Dashboard geprüft. Alles danach läuft ausschließlich gegen diese CA.
-# Über die öffentliche Adresse gehört TLS dem Reverse Proxy (Let's Encrypt, Cloudflare): Dort zählt ebenfalls nur
-# der Fingerprint der gelieferten CA, der Agent selbst wird gegen die Prüfsumme aus dem Installationsbefehl geprüft.
-info "Prüfe Server-CA ..."
+# --- 1. Fetch the CA and verify it against the fingerprint (pinning) ------------------------------
+# Only this one request skips certificate verification: the response is immediately checked against the
+# fingerprint from the dashboard. Everything after that runs exclusively against this CA.
+# Via the public address, TLS belongs to the reverse proxy (Let's Encrypt, Cloudflare): there too, only the
+# fingerprint of the delivered CA counts; the agent itself is checked against the checksum from the install command.
+info "Verifying server CA ..."
 VIA_PUBLIC=0
 if ! curl -fsS --insecure --connect-timeout 8 --max-time 30 "$SERVER/agent/ca" -o "$TMP/ca.crt"; then
-  [ -n "$PUBLIC" ] || die "Server nicht erreichbar: $SERVER (Firewall/VPN prüfen oder im Dashboard die öffentliche Adresse einrichten)."
-  info "$SERVER nicht erreichbar, nutze die öffentliche Adresse $PUBLIC."
+  [ -n "$PUBLIC" ] || die "Server not reachable: $SERVER (check firewall/VPN or set up the public address in the dashboard)."
+  info "$SERVER not reachable, using the public address $PUBLIC."
   curl -fsS --max-time 30 "$PUBLIC/agent/ca" -o "$TMP/ca.crt" \
-    || die "Auch $PUBLIC nicht erreichbar (Reverse Proxy und DNS prüfen, Einstellungen → Öffentlicher Zugang)."
+    || die "$PUBLIC not reachable either (check reverse proxy and DNS, Settings → Public access)."
   VIA_PUBLIC=1
 fi
-# SHA-256 einer CA-Datei (PEM), wie im Dashboard angezeigt
+# SHA-256 of a CA file (PEM), as shown in the dashboard
 ca_fingerprint() { sed -e '/-----BEGIN/d' -e '/-----END/d' "$1" | tr -d '\r\n' | base64 -d | sha256sum | cut -c1-64 | tr 'a-f' 'A-F'; }
 ACTUAL="$(ca_fingerprint "$TMP/ca.crt")"
-[ "$ACTUAL" = "$FINGERPRINT" ] || die "CA-Fingerprint stimmt nicht! Erwartet $FINGERPRINT, Server liefert $ACTUAL. Abbruch."
+[ "$ACTUAL" = "$FINGERPRINT" ] || die "CA fingerprint does not match! Expected $FINGERPRINT, server delivers $ACTUAL. Aborting."
 
-# Schon registriert, aber bei einem anderen Server (andere CA, z. B. neu aufgesetzte Instanz)? Dann mit dem Token aus
-# dem neuen Dashboard neu registrieren: neuer Schlüssel, neues Zertifikat, neue CA. Die lokale policy.json bleibt.
+# Already enrolled, but with a different server (different CA, e.g. a freshly set up instance)? Then re-enroll with
+# the token from the new dashboard: new key, new certificate, new CA. The local policy.json is kept.
 if [ -f "$STATE/agent.json" ] && [ "$FORCE" -eq 0 ]; then
   OLD_CA="none"
   [ -f "$STATE/ca.crt" ] && OLD_CA="$(ca_fingerprint "$STATE/ca.crt" 2>/dev/null || echo unreadable)"
   if [ "$OLD_CA" != "$FINGERPRINT" ]; then
-    [ -n "$TOKEN" ] || die "Dieser Host ist bei einem anderen AIOPatcher-Server registriert. Zum Wechseln den Installationsbefehl (mit Token) aus dem neuen Dashboard verwenden."
-    info "Bisher bei einem anderen Server registriert: registriere neu bei $SERVER (policy.json bleibt erhalten)."
+    [ -n "$TOKEN" ] || die "This host is enrolled with a different AIOPatcher server. To switch, use the install command (with token) from the new dashboard."
+    info "Previously enrolled with a different server: re-enrolling with $SERVER (policy.json is kept)."
     FORCE=1
   fi
 fi
 
 pinned_curl() { curl -fsS --cacert "$TMP/ca.crt" "$@"; }
 
-# --- 2. Agent herunterladen und Prüfsumme kontrollieren --------------------------------------------
+# --- 2. Download the agent and verify the checksum ------------------------------------------------
 download_agent() {
-  info "Lade Agent ($RID) ..."
+  info "Downloading agent ($RID) ..."
   if [ "$VIA_PUBLIC" -eq 1 ]; then
-    [ "$RID" != lite-linux ] || die "Der Lite-Agent (alte Systeme) geht nur direkt bzw. per VPN zum Server, nicht über die öffentliche Adresse."
+    [ "$RID" != lite-linux ] || die "The lite agent (old systems) only works directly or via VPN to the server, not via the public address."
     EXPECTED="$(printf '%s' "$HASHES" | tr ',' '\n' | sed -n "s/^$RID=//p" | tr -d '[:space:]' | tr 'a-f' 'A-F')"
-    [ -n "$EXPECTED" ] || die "Für $RID fehlt die Prüfsumme (--sha256). Installationsbefehl neu aus dem Dashboard holen."
+    [ -n "$EXPECTED" ] || die "The checksum for $RID is missing (--sha256). Get the install command again from the dashboard."
     curl -fsS --max-time 600 "$PUBLIC/agent/download/$RID" -o "$TMP/aiopatcher-agent" \
-      || die "Download über $PUBLIC fehlgeschlagen."
+      || die "Download via $PUBLIC failed."
   else
     pinned_curl --max-time 600 "$SERVER/agent/download/$RID" -o "$TMP/aiopatcher-agent" \
-      || die "Download fehlgeschlagen. Liegt auf dem Server ein Agent-Build für $RID?"
+      || die "Download failed. Is there an agent build for $RID on the server?"
     EXPECTED="$(pinned_curl --max-time 30 "$SERVER/agent/download/$RID/sha256" | tr -d '[:space:]' | tr 'a-f' 'A-F')"
   fi
   GOT="$(sha256sum "$TMP/aiopatcher-agent" | cut -c1-64 | tr 'a-f' 'A-F')"
-  [ -n "$EXPECTED" ] && [ "$EXPECTED" = "$GOT" ] || die "Prüfsumme stimmt nicht (erwartet $EXPECTED, erhalten $GOT)."
+  [ -n "$EXPECTED" ] && [ "$EXPECTED" = "$GOT" ] || die "Checksum does not match (expected $EXPECTED, got $GOT)."
   chmod 755 "$TMP/aiopatcher-agent"
   AGENT_PATH="$TMP/aiopatcher-agent"
 }
 
 download_agent
 if ! VERSION="$(agent version 2>"$TMP/start-error")"; then
-  # Normaler Agent startet nicht (z. B. zu alte glibc): auf den Lite-Agent ausweichen, wenn möglich.
+  # Regular agent does not start (e.g. glibc too old): fall back to the lite agent if possible.
   if [ "$LITE" -eq 0 ] && command -v python3 >/dev/null 2>&1 && command -v openssl >/dev/null 2>&1 \
      && python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 5) else 1)'; then
     warn_text="$(head -n 2 "$TMP/start-error" | tr '\n' ' ')"
-    info "Der normale Agent startet hier nicht ($warn_text). Nehme den Lite-Agent (Updates scannen und installieren, Neustarts)."
+    info "The regular agent does not start here ($warn_text). Using the lite agent (scan and install updates, reboots)."
     LITE=1
     RID=lite-linux
     download_agent
-    VERSION="$(agent version)" || die "Auch der Lite-Agent startet nicht."
+    VERSION="$(agent version)" || die "The lite agent does not start either."
   else
     cat "$TMP/start-error" >&2
-    die "Der Agent startet auf diesem System nicht (siehe oben). Für den Lite-Agent python3 (3.5+) und openssl installieren."
+    die "The agent does not start on this system (see above). For the lite agent, install python3 (3.5+) and openssl."
   fi
 fi
-info "Agent $VERSION geprüft (SHA-256 $GOT)."
+info "Agent $VERSION verified (SHA-256 $GOT)."
 
 if [ -n "$DOWNLOAD_ONLY" ]; then
   mkdir -p "$DOWNLOAD_ONLY"
   cp "$TMP/aiopatcher-agent" "$TMP/ca.crt" "$DOWNLOAD_ONLY/"
-  info "Nur heruntergeladen nach $DOWNLOAD_ONLY, nichts installiert."
+  info "Only downloaded to $DOWNLOAD_ONLY, nothing installed."
   exit 0
 fi
 
-command -v systemctl >/dev/null 2>&1 || die "systemd wird benötigt."
+command -v systemctl >/dev/null 2>&1 || die "systemd is required."
 
-# --- 3. Installieren (bei Update: Dienst kurz anhalten) --------------------------------------------
+# --- 3. Install (on update: stop the service briefly) ---------------------------------------------
 if systemctl is-active --quiet "$SERVICE"; then
-  info "Halte laufenden Agent für das Update an ..."
+  info "Stopping the running agent for the update ..."
   systemctl stop "$SERVICE"
 fi
 if [ "$LITE" -eq 1 ]; then
@@ -233,40 +233,40 @@ else
   EXEC_START="$BIN run --state-dir $STATE"
   UNIT_TYPE=notify
 fi
-# Reste eines automatischen Updates: Sonst würde dessen Wächter die gerade installierte Version wieder überschreiben.
+# Leftovers of an automatic update: otherwise its watchdog would overwrite the version just installed.
 rm -f "$STATE/update-pending.json" "$BIN.bak" "$BIN.new"
 
-# --- 4. Registrieren (nur wenn nötig) --------------------------------------------------------------
+# --- 4. Enroll (only if needed) -------------------------------------------------------------------
 if [ -f "$STATE/agent.json" ] && [ "$FORCE" -eq 0 ]; then
-  info "Agent ist bereits bei diesem Server registriert, nur Programm aktualisiert (neu registrieren: --force)."
+  info "Agent is already enrolled with this server, only the program was updated (to re-enroll: --force)."
 else
-  [ -n "$TOKEN" ] || die "--token fehlt (nötig für die Erstregistrierung)."
+  [ -n "$TOKEN" ] || die "--token is missing (required for the first enrollment)."
   ARGS=(enroll --server "$SERVER" --token "$TOKEN" --fingerprint "$FINGERPRINT" --state-dir "$STATE")
   [ -n "$PUBLIC" ] && [ "$LITE" -eq 0 ] && ARGS+=(--public-url "$PUBLIC")
   [ "$FORCE" -eq 1 ] && ARGS+=(--force)
-  # Eine offene Antwort auf einen Auftrag des bisherigen Servers ist nach dem Neu-Registrieren wertlos
+  # A pending response to a job from the previous server is worthless after re-enrolling
   [ "$FORCE" -eq 1 ] && rm -f "$STATE/pending-result.json"
   agent "${ARGS[@]}"
 fi
 
 if [ "$ALLOW_SYSTEM_CHANGES" -eq 1 ] && [ "$LITE" -eq 1 ]; then
-  info "Lite-Agent: --allow-system-changes hat keine Wirkung (keine Firewall-/SSH-/Benutzer-Module)."
+  info "Lite agent: --allow-system-changes has no effect (no firewall/SSH/user modules)."
 elif [ "$ALLOW_SYSTEM_CHANGES" -eq 1 ]; then
   "$BIN" policy set allowSystemChanges true --state-dir "$STATE" >/dev/null
-  info "Änderungen an Firewall, SSH und Benutzern aus dem Dashboard erlaubt (policy.json)."
+  info "Changes to firewall, SSH and users from the dashboard allowed (policy.json)."
 fi
 
-# --- 5. Selbsttest vor dem Dienststart ------------------------------------------------------------
-# Startet der Agent, liest er seine Registrierung, erreicht er den Server mit seinem Zertifikat?
-info "Selbsttest ..."
+# --- 5. Self-test before starting the service -----------------------------------------------------
+# Does the agent start, does it read its enrollment, does it reach the server with its certificate?
+info "Self-test ..."
 if ! agent selftest --state-dir "$STATE"; then
-  die "Selbsttest fehlgeschlagen (siehe oben). Der Dienst wurde nicht gestartet."
+  die "Self-test failed (see above). The service was not started."
 fi
 
-# --- 6. systemd-Dienst -----------------------------------------------------------------------------
-# KillMode=process: Wird der Dienst gestoppt oder neu gestartet, beendet systemd nur den Agent,
-# nicht ein gerade laufendes apt/dpkg (sonst bliebe das Paketsystem halb aktualisiert zurück).
-# StartLimitIntervalSec=0: systemd gibt nach Abstürzen nie auf, sondern startet alle 30 s neu.
+# --- 6. systemd service ---------------------------------------------------------------------------
+# KillMode=process: when the service is stopped or restarted, systemd only ends the agent,
+# not an apt/dpkg that is currently running (otherwise the package system would be left half updated).
+# StartLimitIntervalSec=0: systemd never gives up after crashes but restarts every 30 s.
 cat > "$UNIT" <<EOF
 [Unit]
 Description=AIOPatcher Agent
@@ -282,7 +282,7 @@ Restart=always
 RestartSec=30
 KillMode=process
 TimeoutStopSec=30
-# Start dauert normal wenige Sekunden; Puffer für langsame Hosts, bevor systemd den Start abbricht
+# Startup normally takes a few seconds; buffer for slow hosts before systemd aborts the start
 TimeoutStartSec=180
 User=root
 UMask=0077
@@ -294,19 +294,19 @@ EOF
 systemctl daemon-reload
 
 show_log() {
-  echo "--- Letzte Log-Zeilen (journalctl -u $SERVICE) ---" >&2
+  echo "--- Last log lines (journalctl -u $SERVICE) ---" >&2
   journalctl -u "$SERVICE" --since "@$STARTED" -n 30 --no-pager >&2 || true
 }
 
-# --- 7. Crash-Check: läuft der Dienst stabil und meldet er sich beim Server? ------------------------
+# --- 7. Crash check: does the service run stably and report to the server? ------------------------
 STARTED="$(date +%s)"
 RESTARTS_BEFORE="$(systemctl show -p NRestarts --value "$SERVICE" 2>/dev/null || echo 0)"
 if ! systemctl enable --now "$SERVICE"; then
   show_log
-  die "Dienst startet nicht (siehe Log oben)."
+  die "Service does not start (see log above)."
 fi
 
-info "Prüfe, ob der Agent stabil läuft und sich beim Server meldet (bis 90 s) ..."
+info "Checking that the agent runs stably and reports to the server (up to 90 s) ..."
 RESULT=timeout
 for _ in $(seq 1 45); do
   sleep 2
@@ -324,23 +324,23 @@ done
 
 case "$RESULT" in
   ok)
-    info "Agent läuft und hat sich beim Server gemeldet."
+    info "Agent is running and has reported to the server."
     ;;
   crashed)
     show_log
-    die "Der Agent ist nach dem Start abgestürzt. systemd startet ihn alle 30 s neu; Ursache im Log oben."
+    die "The agent crashed after starting. systemd restarts it every 30 s; see the log above for the cause."
     ;;
   *)
     show_log
-    die "Der Dienst läuft, hat sich aber nach 90 s noch nicht beim Server gemeldet (Firewall, Netzfreigabe der Site?). Er versucht es weiter."
+    die "The service is running but has not reported to the server after 90 s (firewall, site network restriction?). It keeps trying."
     ;;
 esac
 
 if systemctl is-enabled --quiet "$SERVICE"; then
-  info "Autostart: aktiv (startet mit dem System, Neustart nach Absturz nach 30 s)."
+  info "Autostart: active (starts with the system, restart 30 s after a crash)."
 else
-  die "Autostart ist nicht aktiv: systemctl enable $SERVICE"
+  die "Autostart is not active: systemctl enable $SERVICE"
 fi
 
-info "Fertig. Status: systemctl status $SERVICE | Log: journalctl -u $SERVICE -f"
-info "Lokale Policy (Patchen/Neustarts einschränken): $STATE/policy.json"
+info "Done. Status: systemctl status $SERVICE | Log: journalctl -u $SERVICE -f"
+info "Local policy (restrict patching/reboots): $STATE/policy.json"

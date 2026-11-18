@@ -8,6 +8,11 @@ Written for users, not as a list of commits.
 
 ## [Unreleased]
 
+### Improved
+- **Agent install scripts in English:** The Linux and Windows install commands from "Add host" now report in English
+  (checks, enrollment, re-enrollment on a server change, uninstall, self-test), and the comments in the install scripts
+  and lite agents are English too. Nothing changes in how they work.
+
 ## [0.8.5] - 2026-11-18
 
 ### Added

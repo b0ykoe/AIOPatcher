@@ -1,16 +1,16 @@
 <#
-AIOPatcher Lite-Agent fuer alte Windows-Systeme (Server 2008 R2 SP1, Windows 7 SP1), auf denen der normale
-Agent (.NET 10) nicht laeuft. Pull-Agent wie der grosse: holt Auftraege ab und antwortet nur darauf.
+AIOPatcher lite agent for old Windows systems (Server 2008 R2 SP1, Windows 7 SP1) that the regular
+agent (.NET 10) does not run on. Pull agent like the full one: fetches tasks and only answers them.
 
-Module: system (describe), updates (scan, install, reboot), agent (renew). Sonst nichts.
-Voraussetzungen: Windows PowerShell 5.1 (WMF 5.1) und .NET Framework 4.8, TLS 1.2 in SChannel aktiv.
+Modules: system (describe), updates (scan, install, reboot), agent (renew). Nothing else.
+Requirements: Windows PowerShell 5.1 (WMF 5.1) and .NET Framework 4.8, TLS 1.2 enabled in SChannel.
 
   aiopatcher-agent-lite.ps1 enroll -Server https://... -Token ... -Fingerprint <sha256> [-StateDir DIR] [-Force]
   aiopatcher-agent-lite.ps1 run [-StateDir DIR]
   aiopatcher-agent-lite.ps1 selftest [-StateDir DIR]
   aiopatcher-agent-lite.ps1 version
 
-Hinweis: Diese Datei enthaelt bewusst keine Umlaute (PowerShell 5.1 liest Skripte ohne BOM als ANSI).
+Note: this file is deliberately pure ASCII (PowerShell 5.1 reads scripts without a BOM as ANSI).
 #>
 param(
     [Parameter(Position = 0)][string]$Command = 'run',
@@ -54,10 +54,10 @@ function Write-Json([string]$Path, $Value) {
 
 function UtcNow { return [DateTime]::UtcNow.ToString('o') }
 
-# --- Schluessel, Zertifikat, Verbindung ---------------------------------------------------------------
+# --- Key, certificate, connection --------------------------------------------------------------------
 
 function New-AgentKey {
-    # Persistenter CNG-Maschinenschluessel: SChannel braucht fuer Client-Zertifikate einen gespeicherten Schluessel.
+    # Persistent CNG machine key: SChannel needs a stored key for client certificates.
     $params = New-Object Security.Cryptography.CngKeyCreationParameters
     $params.KeyCreationOptions = [Security.Cryptography.CngKeyCreationOptions]::MachineKey
     $params.ExportPolicy = [Security.Cryptography.CngExportPolicies]::None
@@ -267,7 +267,7 @@ function Install-Updates($Payload, $Policy, [scriptblock]$Log) {
     $installer.AllowSourcePrompts = $false
     $installer.Updates = $toInstall
     $result = $installer.Install()
-    $ok = $result.ResultCode -in @(2, 3) # 2 = erfolgreich, 3 = mit Fehlern teilweise
+    $ok = $result.ResultCode -in @(2, 3) # 2 = succeeded, 3 = succeeded with errors
     $after = Get-PendingUpdates
     $summary = "$($toInstall.Count) update(s) installed (result code $($result.ResultCode)). Still pending afterwards: $($after.Count)."
     $reboot = [bool]$result.RebootRequired
@@ -278,7 +278,7 @@ function Install-Updates($Payload, $Policy, [scriptblock]$Log) {
     return @{ outcome = $(if ($ok) { 'Succeeded' } else { 'Failed' }); summary = $summary; updates = $after }
 }
 
-# --- Auftraege ---------------------------------------------------------------------------------------
+# --- Tasks -------------------------------------------------------------------------------------------
 
 function Send-Log([string]$TaskId, $Lines) {
     if ($Lines.Count -gt 0) { [void](Invoke-Agent 'POST' "/agent/v2/tasks/$TaskId/log" @{ lines = @($Lines) }) }
@@ -376,7 +376,7 @@ function Send-PendingResult {
     return $null
 }
 
-# --- Befehle -----------------------------------------------------------------------------------------
+# --- Commands ----------------------------------------------------------------------------------------
 
 function Invoke-Enroll {
     if (-not $Server -or -not $Token -or -not $Fingerprint) { throw 'enroll -Server https://... -Token ... -Fingerprint <sha256>' }
@@ -418,7 +418,7 @@ function Invoke-Enroll {
     if (-not (Test-Path (Join-Path $StateDir 'policy.json'))) {
         Write-Json (Join-Path $StateDir 'policy.json') @{ allowPatch = 'All'; allowReboot = $true; disabledModules = @() }
     }
-    # Offene Antwort an einen frueheren Server ist nach dem Neu-Registrieren wertlos
+    # A pending result for a previous server is worthless after re-enrolling
     Remove-Item (Join-Path $StateDir 'pending-result.json') -Force -ErrorAction SilentlyContinue
     Write-Host "Enrolled. Host ID $($data.hostId), data in $StateDir"
 }
