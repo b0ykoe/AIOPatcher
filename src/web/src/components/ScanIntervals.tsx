@@ -22,7 +22,7 @@ function useHourOptions(settings: ScanSettings | null) {
 }
 
 /** Einstellungen → Allgemein: wie oft Agents nach Updates suchen und der Server nach neuen Container-Images fragt. */
-export function ScanSettingsCard() {
+export function ScanSettingsCard({ className }: { className?: string }) {
   const { t } = useTranslation();
   const can = useCan();
   const [settings, setSettings] = useScanSettings();
@@ -42,7 +42,7 @@ export function ScanSettingsCard() {
   };
 
   return (
-    <Card>
+    <Card className={className}>
       <CardTitle icon={<IconRadar size={18} />}>{t("scan.title")}</CardTitle>
       <Stack gap="sm">
         <Text size="sm" c="dimmed">{t("scan.intro")}</Text>

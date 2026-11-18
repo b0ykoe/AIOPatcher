@@ -35,7 +35,7 @@ export function GeneralSettings() {
         <Text size="xs" c="dimmed">{t("settings.generalTimeZoneHint")}</Text>
       </Card>
 
-      <ScanSettingsCard />
+      <ScanSettingsCard className="card-tall" />
 
       <Card>
         <CardTitle>{t("settings.generalCve")}</CardTitle>

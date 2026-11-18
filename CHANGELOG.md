@@ -27,6 +27,8 @@ Written for users, not as a list of commits.
   with the entries side by side instead of one long list that pushed the charts far down.
 - On the Utilization page, host cards and Proxmox nodes now fill the full width in equal columns instead of
   stopping short of the right edge on wide screens.
+- Cards side by side (settings, plans, sites, integrations, notifications, utilization) are equally high per row, so
+  their bottom edges line up; Settings → General has no empty gap next to the cards anymore.
 
 ### Fixed
 - Utilization: the 7-day charts showed scattered dots instead of a line and area, because every data point was

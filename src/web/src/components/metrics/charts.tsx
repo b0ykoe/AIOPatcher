@@ -33,7 +33,7 @@ export function percentOf(used: number | null | undefined, total: number | null 
 
 /**
  * Wertezeile wie bei Proxmox (Styleguide 8): Icon + Name links, Prozent fett und Details rechts, dünner Balken darunter.
- * In Karten untereinander; die Karte selbst bleibt schmal (metric-grid), damit Balken nicht über den Bildschirm laufen.
+ * In Karten untereinander (metric-grid, Spalten über die volle Breite).
  */
 export function UsageMeter({ label, percent, detail, size = "md", icon }: {
   label: string; percent: number | null; detail?: string; size?: "sm" | "md"; icon?: ReactNode;

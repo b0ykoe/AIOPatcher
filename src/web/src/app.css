@@ -395,11 +395,16 @@
   display: grid;
   gap: var(--mantine-spacing-md);
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 22rem), 1fr));
-  align-items: start;
+  align-items: stretch; /* Karten einer Reihe gleich hoch, Unterkanten liegen auf einer Linie */
 }
 
 .card-grid-wide {
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 30rem), 1fr));
+}
+
+/* Hohe Karte über zwei Reihen, damit daneben keine Lücke bleibt (z. B. Einstellungen → Allgemein) */
+.card-grid > .card-tall {
+  grid-row: span 2;
 }
 
 /* Zwei große Abschnitte nebeneinander, sobald jeder ~640 px bekommt (Regeln). */
@@ -476,7 +481,7 @@
   display: grid;
   gap: var(--mantine-spacing-md);
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 20rem), 1fr));
-  align-items: start;
+  align-items: stretch;
 }
 
 /* Wertezeilen in einer Karte; .metric-columns zweispaltig, sobald die Karte doppelt breit sein darf */

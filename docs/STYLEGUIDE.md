@@ -56,6 +56,12 @@ Every grid spans the full width and splits it into equal columns; cards never ge
 screens get more columns, not wider cards. Everything that belongs together on a page (e.g. value cards and charts)
 sits in **one** grid, so edges line up.
 
+- Cards in one row are equally high (the grids stretch them), so their bottom edges line up too.
+- No gaps: if a row stays half empty, change the layout instead of accepting the hole, e.g. a tall card spans two
+  rows (`card-tall` in `card-grid`) or cards are merged.
+- Never constrain a page or a card with `maw`; `maw` is only for running text (intros, hints), forms in dialogs
+  and the sign-in/setup cards.
+
 ## 5. Typography
 
 | Element | Style |
@@ -147,7 +153,8 @@ Use the status components, do not rebuild them: `HostStatusLabel`, `JobStatusBad
 1. Correct page type (section 2), content in `Stack gap="md"`.
 2. Only theme defaults and tokens, no repeated default props.
 3. Colors and badges per sections 6/7, existing status components used.
-4. Values with bars as `MetricRow`, cards no wider than needed.
+4. Values with bars as `MetricRow`; cards in a full-width grid, equally high per row, no holes (section 4).
 5. Empty, loading and error states present.
 6. Texts in `de.ts` and `en.ts`.
-7. Checked in the browser: wide, ~1280 px and 375 px.
+7. Checked in the browser: wide (~1800 px), ~1280 px and 375 px, on the real page or a test page **without** any
+   extra width limit; the right edge of the last column lines up with the page edge.
