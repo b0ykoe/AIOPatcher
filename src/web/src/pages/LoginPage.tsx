@@ -1,11 +1,12 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Alert, Button, Card, Center, Divider, PasswordInput, Stack, Text, TextInput } from "@mantine/core";
-import { IconAlertTriangle, IconKey, IconLogin } from "@tabler/icons-react";
+import { IconAlertTriangle, IconFingerprint, IconKey, IconLogin } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import { api } from "../api";
 import { Brand } from "../App";
 import { TotpCodeInput } from "../components/TotpCodeInput";
 import { errorText } from "../components/ui";
+import { isCancelled, passkeySupport, signInWithPasskey } from "../passkeys";
 
 export function LoginPage({ onLoggedIn }: { onLoggedIn: () => void }) {
   const { t } = useTranslation();
@@ -16,6 +17,22 @@ export function LoginPage({ onLoggedIn }: { onLoggedIn: () => void }) {
   const [busy, setBusy] = useState(false);
   const [sso, setSso] = useState<{ enabled: boolean; displayName: string } | null>(null);
   const ssoState = new URLSearchParams(window.location.search).get("sso");
+  // Passkey-Knopf nur, wo der Browser es erlaubt: Aufruf über einen Namen mit vertrauenswürdigem https
+  const passkeys = passkeySupport() === "ok";
+  const [passkeyBusy, setPasskeyBusy] = useState(false);
+
+  const passkeyLogin = async () => {
+    setError(null);
+    setPasskeyBusy(true);
+    try {
+      await signInWithPasskey();
+      onLoggedIn();
+    } catch (err) {
+      if (!isCancelled(err)) setError(errorText(err));
+    } finally {
+      setPasskeyBusy(false);
+    }
+  };
 
   useEffect(() => {
     api.get<{ enabled: boolean; displayName: string }>("/api/auth/sso/info").then(setSso).catch(() => setSso(null));
@@ -47,12 +64,19 @@ export function LoginPage({ onLoggedIn }: { onLoggedIn: () => void }) {
             <Text ta="center" c="dimmed" size="sm" mt={-8}>
               {t("login.intro")}
             </Text>
-            {sso?.enabled && (
+            {(passkeys || sso?.enabled) && (
               <>
-                <Button component="a" href="/api/auth/sso/login" size="md" variant="light" leftSection={<IconKey size={18} />}>
-                  {t("login.sso", { name: sso.displayName })}
-                </Button>
-                <Divider label={t("login.orLocal")} labelPosition="center" />
+                {passkeys && (
+                  <Button size="md" variant="light" leftSection={<IconFingerprint size={18} />} loading={passkeyBusy} onClick={() => void passkeyLogin()}>
+                    {t("login.passkey")}
+                  </Button>
+                )}
+                {sso?.enabled && (
+                  <Button component="a" href="/api/auth/sso/login" size="md" variant="light" leftSection={<IconKey size={18} />}>
+                    {t("login.sso", { name: sso.displayName })}
+                  </Button>
+                )}
+                <Divider label={t(passkeys ? "login.orPassword" : "login.orLocal")} labelPosition="center" />
               </>
             )}
             {ssoState && (
@@ -60,7 +84,7 @@ export function LoginPage({ onLoggedIn }: { onLoggedIn: () => void }) {
                 {ssoState === "denied" ? t("login.ssoDenied") : t("login.ssoError")}
               </Alert>
             )}
-            <TextInput label={t("common.username")} value={username} onChange={(e) => setUsername(e.currentTarget.value)} autoComplete="username" autoFocus={!sso?.enabled} required />
+            <TextInput label={t("common.username")} value={username} onChange={(e) => setUsername(e.currentTarget.value)} autoComplete="username" autoFocus={!sso?.enabled && !passkeys} required />
             <PasswordInput label={t("common.password")} value={password} onChange={(e) => setPassword(e.currentTarget.value)} autoComplete="current-password" required />
             <TotpCodeInput value={code} onChange={setCode} required />
             {error && (

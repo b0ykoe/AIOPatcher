@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { api, type Me } from "../api";
 import { useMe } from "../App";
 import { TotpCodeInput } from "../components/TotpCodeInput";
+import { PasskeysCard } from "../components/PasskeysCard";
 import { CardTitle, errorText, notifySuccess, PageHeader } from "../components/ui";
 import { setLanguage, type Language } from "../i18n";
 
@@ -25,6 +26,7 @@ export function AccountPage({ onMeChanged }: { onMeChanged: (me: Me) => void }) 
   return (
     <>
       <PageHeader title={t("account.title")} description={t("account.description", { name: me.username, role: t(`roles.${me.role}`) })} />
+      <Stack gap="md">
       <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
         <Stack gap="md">
           <Card>
@@ -61,6 +63,8 @@ export function AccountPage({ onMeChanged }: { onMeChanged: (me: Me) => void }) 
         </Stack>
         <PasswordCard />
       </SimpleGrid>
+      <PasskeysCard />
+      </Stack>
     </>
   );
 }

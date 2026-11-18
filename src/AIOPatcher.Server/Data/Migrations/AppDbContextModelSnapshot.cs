@@ -1754,6 +1754,60 @@ namespace AIOPatcher.Server.Data.Migrations
                     b.ToTable("AdminUsers", (string)null);
                 });
 
+            modelBuilder.Entity("AIOPatcher.Server.Data.UserPasskey", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("BackedUp")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<byte[]>("CredentialId")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("BLOB");
+
+                    b.Property<DateTime?>("LastUsedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<byte[]>("PublicKey")
+                        .IsRequired()
+                        .HasColumnType("BLOB");
+
+                    b.Property<string>("RpId")
+                        .IsRequired()
+                        .HasMaxLength(253)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("SignCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Transports")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CredentialId")
+                        .IsUnique();
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("UserPasskeys", (string)null);
+                });
+
             modelBuilder.Entity("AIOPatcher.Server.Data.VulnLookup", b =>
                 {
                     b.Property<string>("Key")
@@ -2140,6 +2194,17 @@ namespace AIOPatcher.Server.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("Site");
+                });
+
+            modelBuilder.Entity("AIOPatcher.Server.Data.UserPasskey", b =>
+                {
+                    b.HasOne("AIOPatcher.Server.Data.UserAccount", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("AIOPatcher.Server.Data.VulnerabilityAck", b =>

@@ -9,6 +9,11 @@ Written for users, not as a list of commits.
 ## [Unreleased]
 
 ### Added
+- **Passkeys:** Sign in with fingerprint, face recognition, device PIN or a password manager instead of password and
+  code. Add passkeys under **My account → Passkeys**, then use **Sign in with a passkey** on the sign-in page.
+  Password and code keep working as a fallback. A passkey works for the name you opened the dashboard with (e.g.
+  `patch.example.com`); browsers require a name (not an IP address) and a trusted https certificate, for example
+  through your reverse proxy or after importing the AIOPatcher CA. Inviting a user again removes their passkeys.
 - **Release notes for updates:** An *i* next to each pending update shows what it fixes or changes. On Linux these
   are the package's release notes from `apt-get changelog` (Debian, Ubuntu and Proxmox, also with the enterprise
   repo), limited to what is new since the installed version. The agent fetches them right after each scan, so they

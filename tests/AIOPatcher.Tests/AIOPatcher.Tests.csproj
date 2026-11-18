@@ -15,6 +15,11 @@
     <Using Include="Xunit" />
   </ItemGroup>
 
+  <!-- wie der Server: Pakete aus dem ASP.NET-Framework (z. B. System.Formats.Cbor über Fido2) nicht als alte NuGet-Version ziehen -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\..\src\AIOPatcher.Server\AIOPatcher.Server.csproj" />
     <ProjectReference Include="..\..\src\AIOPatcher.Agent\AIOPatcher.Agent.csproj" />

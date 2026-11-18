@@ -75,7 +75,9 @@ public static class UserEndpoints
         }
 
         var token = UserAccounts.StartInvite(user, DateTime.UtcNow);
-        audit.Add("user.reinvited", user.Username);
+        // Neu einladen = Zugang verloren (z. B. neues Gerät): auch alle Passkeys entfernen
+        var passkeys = await db.Passkeys.Where(p => p.UserId == user.Id).ExecuteDeleteAsync(ct);
+        audit.Add("user.reinvited", passkeys > 0 ? $"{user.Username} ({passkeys} passkeys removed)" : user.Username);
         await db.SaveChangesAsync(ct);
         return Results.Ok(new InviteResponse(ToDto(user), UserAccounts.InviteUrl(options, token), user.InviteExpiresAt!.Value));
     }

@@ -341,6 +341,22 @@ Realm roles work instead of groups too: claim `realm_access.roles`. If Keycloak 
 enter its SHA-256 fingerprint under *Advanced*. SAML is not supported (yet); Keycloak and most
 other providers speak OpenID Connect.
 
+## Passkeys
+
+Local accounts can sign in with a **passkey** instead of password and code: fingerprint, face recognition, device
+PIN or a password manager (Bitwarden, 1Password, iCloud Keychain, Google Password Manager …). Add one under
+**My account → Passkeys**; the sign-in page then shows **Sign in with a passkey**. Password and code stay as a
+fallback, and you can add several passkeys (e.g. laptop and phone) and remove them again.
+
+- **A passkey belongs to the name you opened the dashboard with.** One created at `patch.example.com` does not
+  work at `patch.lan:9443`; add a separate passkey for each name you use.
+- **Name and trusted certificate required:** browsers only offer passkeys when the dashboard is opened by name (not
+  by IP address) over https with a certificate they trust, i.e. through your reverse proxy with Let's Encrypt, or
+  directly on port 9443 after importing the AIOPatcher CA on the device. With a certificate warning or via an IP
+  address the account page explains why passkeys are not available.
+- **SSO-only accounts** get no passkeys (their role comes from the identity provider at every login).
+- **Lost device:** an admin invites the user again under *Users*; this also removes all of the user's passkeys.
+
 ## Hosts outside (cloud) through your own reverse proxy
 
 The server runs internally (e.g. `10.0.0.5`). Hosts in the network or on VPN connect directly. Hosts outside go through

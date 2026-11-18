@@ -13,6 +13,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<IpAddressEntry> IpAddresses => Set<IpAddressEntry>();
     public DbSet<EnrollmentToken> EnrollmentTokens => Set<EnrollmentToken>();
     public DbSet<UserAccount> Users => Set<UserAccount>();
+    public DbSet<UserPasskey> Passkeys => Set<UserPasskey>();
     public DbSet<AuditEntry> AuditEntries => Set<AuditEntry>();
     public DbSet<Runbook> Runbooks => Set<Runbook>();
     public DbSet<RunbookWave> RunbookWaves => Set<RunbookWave>();
@@ -151,6 +152,14 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             e.Property(x => x.Language).HasMaxLength(8);
             e.Property(x => x.SecurityStamp).HasMaxLength(64);
             e.HasIndex(x => x.InviteTokenHash);
+        });
+
+        b.Entity<UserPasskey>(e =>
+        {
+            e.ToTable("UserPasskeys");
+            e.HasIndex(x => x.CredentialId).IsUnique();
+            e.Property(x => x.CredentialId).HasMaxLength(1024);
+            e.HasOne(x => x.User).WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
         });
 
         b.Entity<NotificationChannel>(e =>

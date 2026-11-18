@@ -349,7 +349,7 @@ public static class AuthEndpoints
     public static async Task<UserAccount?> CurrentAsync(ClaimsPrincipal principal, AppDbContext db, CancellationToken ct) =>
         Guid.TryParse(principal.FindFirstValue(ClaimTypes.NameIdentifier), out var id) ? await db.Users.FindAsync([id], ct) : null;
 
-    private static MeResponse ToMe(UserAccount u) => new(u.Id, u.Username, u.Role, u.Language, u.UiMode);
+    internal static MeResponse ToMe(UserAccount u) => new(u.Id, u.Username, u.Role, u.Language, u.UiMode);
 
     private static byte[] NewTotpSecret(IDataProtectionProvider dataProtection, UserAccount user)
     {

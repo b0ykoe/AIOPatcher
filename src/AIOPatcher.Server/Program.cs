@@ -180,6 +180,7 @@ builder.Services.AddHostedService<ContainerUpdateService>();
 builder.Services.AddSingleton<PublicAccess>();
 builder.Services.AddSingleton<ScanSchedule>();
 builder.Services.AddSingleton<UpdateChangelogs>();
+builder.Services.AddMemoryCache();
 builder.Services.AddSingleton<ReleaseCheck>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<ReleaseCheck>());
 
@@ -252,6 +253,7 @@ app.MapFeatureEndpoints();
 app.MapPublicAccessEndpoints();
 app.MapScanSettingsEndpoints();
 app.MapChangelogEndpoints();
+app.MapPasskeyEndpoints();
 app.MapOpenApi("/api/openapi/{documentName}.json").RequireAuthorization();
 app.MapAgentEndpoints();
 app.MapAgentDownloadEndpoints();
