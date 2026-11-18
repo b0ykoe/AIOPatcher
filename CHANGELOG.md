@@ -8,6 +8,11 @@ Written for users, not as a list of commits.
 
 ## [Unreleased]
 
+### Improved
+- **Documentation in English:** README, server setup, reverse proxy guide and architecture notes are now in English,
+  as are the comments in `docker-compose.yml`, `.env.example` and the Portainer app template. The roadmap is up to
+  date again.
+
 ## [0.8.4] - 2026-11-18
 
 ### Improved

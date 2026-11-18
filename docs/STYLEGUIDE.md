@@ -1,147 +1,147 @@
-# Styleguide (Weboberfläche)
+# Style guide (web interface)
 
-Verbindlich für alle Seiten in `src/web`. Ziel: Homelab und kleine Firmen sehen auf einen Blick, was los ist und was
-zu tun ist. **Kompakt wie Proxmox/Portainer, aber freundlich.** Wer eine Seite baut oder ändert, hält sich an diese
-Regeln; Abweichungen nur mit Begründung im Commit.
+Binding for all pages in `src/web`. Goal: homelabs and small companies see at a glance what is going on and what needs
+to be done. **Compact like Proxmox/Portainer, but friendly.** Anyone who builds or changes a page follows these
+rules; deviations only with a reason in the commit.
 
-## 1. Grundsätze
+## 1. Principles
 
-- **Zustand vor Detail:** Oben steht, ob alles gut ist und was jemanden braucht; Details kommen darunter oder in Reitern.
-- **Eine Hauptaktion je Bereich** (Verlaufsknopf), alles andere ist sekundär.
-- **Gleiches sieht gleich aus:** Ein Status hat überall dieselbe Farbe, Größe und Formulierung (Abschnitt 6).
-- **Theme statt Einzelwerte:** Was das Theme (`theme.ts`) schon vorgibt, wird nicht wiederholt (kein `withBorder` auf
-  Card, kein `variant="light"` auf Badge/Alert, kein `withArrow` auf Tooltip, kein `verticalSpacing` auf Table).
-- **Texte** auf Deutsch in Du-Form, kurz, ohne Fachjargon wo es geht; jede neue Zeichenkette in `i18n/de.ts` und `en.ts`.
+- **State before detail:** At the top: whether everything is fine and what needs someone's attention; details go below or in tabs.
+- **One main action per area** (gradient button), everything else is secondary.
+- **The same thing looks the same:** A status has the same color, size and wording everywhere (section 6).
+- **Theme instead of individual values:** What the theme (`theme.ts`) already sets is not repeated (no `withBorder` on
+  Card, no `variant="light"` on Badge/Alert, no `withArrow` on Tooltip, no `verticalSpacing` on Table).
+- **Texts** short and without jargon where possible; German in the informal "du" form, English plain and direct; every new string goes in `i18n/de.ts` and `en.ts`.
 
-## 2. Seitenaufbau
+## 2. Page layout
 
-| Seitentyp | Aufbau |
+| Page type | Layout |
 |---|---|
-| Bereichsseite (Hosts, Auslastung, Berichte …) | `PageHeader` (Titel, eine Zeile Beschreibung, Aktionen rechts), darunter Inhalt |
-| Bereich mit Unterseiten (Sicherheit, Auto-Patch, Inventar) | `SectionPage`: Titel + Reiter, aktiver Reiter in `?tab=`; Unterseiten nutzen eigene Parameter (z. B. `?view=`) |
-| Detailseite (Host, Job, Lauf, Plan, CVE) | `DetailHeader`: Zurück-Link (`BackLink`), Icon, Titel + Status, **eine** Zeile Metadaten, Aktionen rechts; darunter Reiter oder Inhalt |
-| Einstellungen | Seitenmenü links (ab md), darunter `Select` auf dem Handy |
+| Area page (Hosts, Utilization, Reports …) | `PageHeader` (title, one line of description, actions on the right), content below |
+| Area with subpages (Security, Auto-patch, Inventory) | `SectionPage`: title + tabs, active tab in `?tab=`; subpages use their own parameters (e.g. `?view=`) |
+| Detail page (host, job, run, plan, CVE) | `DetailHeader`: back link (`BackLink`), icon, title + status, **one** line of metadata, actions on the right; tabs or content below |
+| Settings | Side menu on the left (from md), a `Select` instead on phones |
 
-- Inhalt einer Seite steht in einem `Stack gap="md"`; keine Ketten aus `mb` an jedem Kind.
-- Keine feste Maximalbreite für Seiten; breite Bildschirme werden mit Rastern genutzt (Abschnitt 4), nicht mit
-  gestreckten Elementen.
+- The content of a page sits in a `Stack gap="md"`; no chains of `mb` on every child.
+- No fixed maximum width for pages; wide screens are used with grids (section 4), not with
+  stretched elements.
 
-## 3. Abstände und Dichte (kompakt)
+## 3. Spacing and density (compact)
 
-Nur Mantine-Tokens: `xs` 10 px, `sm` 12 px, `md` 16 px, `lg` 20 px, `xl` 32 px. Zahlen nur für Feinabstände in einer
-Zeile (Icon ↔ Text: `4`–`6`).
+Mantine tokens only: `xs` 10 px, `sm` 12 px, `md` 16 px, `lg` 20 px, `xl` 32 px. Numbers only for fine spacing within a
+row (icon ↔ text: `4`–`6`).
 
-| Wo | Wert |
+| Where | Value |
 |---|---|
-| Abschnitte einer Seite | `gap="md"` |
-| Karten-Innenabstand | Theme-Standard `md` (nicht setzen) |
-| Karte mit Tabelle | `p={0}`, Kopfzeile mit `CardTitle inset` (px `md`, py `sm`) |
-| Elemente in einer Zeile (Badges, Knöpfe) | `gap="xs"` |
-| Icon neben Text | `gap={6}` |
-| Kartentitel → Inhalt | `mb="sm"` |
-| Tabellenzeilen | Theme-Standard (kompakt, `xs`) |
+| Sections of a page | `gap="md"` |
+| Card padding | Theme default `md` (do not set) |
+| Card with table | `p={0}`, header row with `CardTitle inset` (px `md`, py `sm`) |
+| Elements in a row (badges, buttons) | `gap="xs"` |
+| Icon next to text | `gap={6}` |
+| Card title → content | `mb="sm"` |
+| Table rows | Theme default (compact, `xs`) |
 
-## 4. Raster
+## 4. Grids
 
-| Inhalt | Raster |
+| Content | Grid |
 |---|---|
-| Kennzahlen (`StatCard`) | `SimpleGrid cols={{ base: 2, md: 4 }}` (6 Werte: `{ base: 2, md: 3, xl: 6 }`) |
-| Gleich wichtige Karten nebeneinander | `SimpleGrid cols={{ base: 1, md: 2 }}` bzw. `md: 3` |
-| Viele gleichartige Karten (Pläne, Sites) | `card-grid` (ab 22rem) bzw. `card-grid-wide` (ab 30rem) |
-| Kleine Kacheln (Hosts auf der Startseite) | `host-grid` (ab 15rem) |
-| Zwei große Abschnitte | `split-grid` |
+| Key figures (`StatCard`) | `SimpleGrid cols={{ base: 2, md: 4 }}` (6 values: `{ base: 2, md: 3, xl: 6 }`) |
+| Equally important cards side by side | `SimpleGrid cols={{ base: 1, md: 2 }}` or `md: 3` |
+| Many cards of the same kind (plans, sites) | `card-grid` (from 22rem) or `card-grid-wide` (from 30rem) |
+| Small tiles (hosts on the home page) | `host-grid` (from 15rem) |
+| Two large sections | `split-grid` |
 
-Karten mit Wertezeilen (Abschnitt 8) sind höchstens ~560 px breit; mehr Platz wird mit weiteren Karten gefüllt.
+Cards with value rows (section 8) are at most ~560 px wide; extra space is filled with more cards.
 
-## 5. Typografie
+## 5. Typography
 
-| Element | Stil |
+| Element | Style |
 |---|---|
-| Seitentitel | `PageHeader` (Title order 2) |
-| Titel Detailseite | `DetailHeader` (26 px, fw 800) |
-| Kartentitel | `CardTitle` (Text fw 700, optional Icon/Badge, Aktionen rechts, eine Hinweiszeile per `description`, `mb="sm"`) |
-| Dialogtitel | `Text fw={800}` |
-| Zeilentext / Primärtext in Listen | `size="sm"`, wichtig `fw={600}` |
-| Hinweise, Metadaten | `size="xs" c="dimmed"` (in Fließtext-Absätzen `sm`) |
-| Überschrift-Label (selten) | `size="xs" fw={700} tt="uppercase"`, Buchstabenabstand 0.6 |
-| IDs, Namen, Pfade, Versionen | `ff="monospace"` bzw. `Code` |
-| Zahlen in Spalten/Werten | `fontVariantNumeric: "tabular-nums"`, rechtsbündig |
+| Page title | `PageHeader` (Title order 2) |
+| Detail page title | `DetailHeader` (26 px, fw 800) |
+| Card title | `CardTitle` (Text fw 700, optional icon/badge, actions on the right, one hint line via `description`, `mb="sm"`) |
+| Dialog title | `Text fw={800}` |
+| Row text / primary text in lists | `size="sm"`, important ones `fw={600}` |
+| Hints, metadata | `size="xs" c="dimmed"` (`sm` in running-text paragraphs) |
+| Heading label (rare) | `size="xs" fw={700} tt="uppercase"`, letter spacing 0.6 |
+| IDs, names, paths, versions | `ff="monospace"` or `Code` |
+| Numbers in columns/values | `fontVariantNumeric: "tabular-nums"`, right-aligned |
 
-## 6. Farben (Bedeutung)
+## 6. Colors (meaning)
 
-| Farbe | Bedeutung | Beispiele |
+| Color | Meaning | Examples |
 |---|---|---|
-| **teal** | in Ordnung, erfolgreich, aktuell | online, Succeeded, aktuell, erfüllt, Update da (behebbar) |
-| **rot** | kritisch, Fehler, aktiv ausgenutzt | offline, Failed, KEV (immer gefüllt), CRITICAL, Firewall aus |
-| **orange** | Abweichung, abgelehnt, Achtung | Drift, Abweichung, Rejected, übersprungen, aktive Patch-Pause, doppelt patchen |
-| **gelb** | Neustart nötig, Warnung | „Neustart nötig“, Paused, Warnstufe der Auslastung, eigene Update-Automatik aktiv |
-| **pink** | Security-Updates | „n Sec“, Security-Kennzahl |
-| **blau** | Update/neue Version verfügbar | neues Image, neuere Programmversion, OPNsense-Update, neue Release |
-| **cyan** | läuft gerade | Running (mit `dot-live`), Wartungsfenster offen |
-| **violett** | Plan, Marke, Auslastung normal | Patch-Plan, Freigabe nötig, Admin, Auslastungsbalken bis 75 % |
-| **grape** | eingebaut/privilegiert | root/Administrator, SSO, Snapshot |
-| **grau** | neutral, geplant, vorbei | Warteschlange (Queued), geplant, abgebrochen, unbekannt, Tags, „+n“ |
+| **teal** | OK, successful, up to date | online, Succeeded, up to date, met, update available (fixable) |
+| **red** | critical, error, actively exploited | offline, Failed, KEV (always filled), CRITICAL, firewall off |
+| **orange** | deviation, rejected, caution | drift, deviation, Rejected, skipped, active patch pause, double patching |
+| **yellow** | reboot required, warning | "Reboot required", Paused, warning level of utilization, host's own update automation active |
+| **pink** | security updates | "n Sec", security key figure |
+| **blue** | update/new version available | new image, newer program version, OPNsense update, new release |
+| **cyan** | currently running | Running (with `dot-live`), maintenance window open |
+| **violet** | plan, brand, utilization normal | patch plan, approval required, Admin, utilization bars up to 75 % |
+| **grape** | built-in/privileged | root/Administrator, SSO, snapshot |
+| **gray** | neutral, scheduled, past | queue (Queued), scheduled, cancelled, unknown, tags, "+n" |
 
-Status-Komponenten benutzen, nicht nachbauen: `HostStatusLabel`, `JobStatusBadge`, `RunStatusBadge`,
-`levelOf`/`levelColor` (Auslastung: ab 75 % gelb, ab 90 % rot).
+Use the status components, do not rebuild them: `HostStatusLabel`, `JobStatusBadge`, `RunStatusBadge`,
+`levelOf`/`levelColor` (utilization: yellow from 75 %, red from 90 %).
 
 ## 7. Badges
 
-- Variante: Theme-Standard (light); `filled` nur für KEV, `outline` für Tags und „akzeptiert“.
-- Größe: **`sm` in Tabellen und Listen**, `xs` in kleinen Kacheln, `md` nur im Kopf einer Detailseite.
-- Ein Badge = ein kurzer Zustand (1–3 Wörter). Erklärungen gehören in einen Tooltip.
+- Variant: theme default (light); `filled` only for KEV, `outline` for tags and "accepted".
+- Size: **`sm` in tables and lists**, `xs` in small tiles, `md` only in the header of a detail page.
+- One badge = one short state (1–3 words). Explanations belong in a tooltip.
 
-## 8. Werte und Balken (wie Proxmox)
+## 8. Values and bars (like Proxmox)
 
-- **`MetricRow`:** Icon + Name links, Wert rechts (`59 % (4,3 / 7,2 GB)`), darunter ein dünner Balken (6 px).
-  Mehrere Zeilen untereinander in einer Karte („Aktuell“, „Datenträger“), Karte höchstens ~560 px breit.
-- Werte ohne Balken (Uptime, Load, IPs) als `MetricRow` ohne Prozent.
-- In Tabellen: kurzer Balken (höchstens 160 px) mit Wert daneben, nie über die ganze Spalte gestreckt;
-  in Listenspalten `UsageCompact`.
-- Farben nur über `levelOf`/`levelColor`; ab Warnstufe zusätzlich das Warnsymbol.
+- **`MetricRow`:** icon + name on the left, value on the right (`59 % (4,3 / 7,2 GB)`), a thin bar (6 px) below.
+  Several rows stacked in one card ("Current", "Disks"), card at most ~560 px wide.
+- Values without a bar (uptime, load, IPs) as a `MetricRow` without a percentage.
+- In tables: a short bar (at most 160 px) with the value next to it, never stretched across the whole column;
+  in list columns `UsageCompact`.
+- Colors only via `levelOf`/`levelColor`; from the warning level on, also the warning icon.
 
-## 9. Knöpfe
+## 9. Buttons
 
-| Zweck | Stil |
+| Purpose | Style |
 |---|---|
-| Hauptaktion einer Seite/eines Dialogs (Bestätigen, Speichern) | `variant="gradient" className="gradient-button"` |
-| Gefährliche Bestätigung (Löschen, Neustart) | `color="red"` (gefüllt), in `confirmAction` mit `danger` |
-| Sekundäre Aktion | `variant="light"` |
-| Abbrechen im Dialog | `variant="default"` |
-| Aktion in Karte, Liste oder Tabellenzeile | `size="compact-xs" variant="light"` |
-| Mehrere Aktionen je Tabellenzeile | „…“-Menü (`ActionIcon` + `Menu`) in der letzten Spalte |
-| Entfernen in einer Zeile | rotes `ActionIcon` mit Mülleimer und Tooltip |
+| Main action of a page/dialog (confirm, save) | `variant="gradient" className="gradient-button"` |
+| Dangerous confirmation (delete, reboot) | `color="red"` (filled), in `confirmAction` with `danger` |
+| Secondary action | `variant="light"` |
+| Cancel in a dialog | `variant="default"` |
+| Action in a card, list or table row | `size="compact-xs" variant="light"` |
+| Several actions per table row | "…" menu (`ActionIcon` + `Menu`) in the last column |
+| Remove in a row | red `ActionIcon` with a trash can and tooltip |
 
-## 10. Tabellen
+## 10. Tables
 
-- In einer Karte mit `p={0}`, Kopfzeile per `CardTitle inset`, Tabelle in `Table.ScrollContainer`
-  (`minWidth` 600 / 760 / 960 je nach Spaltenzahl).
-- Zahlen rechtsbündig; Aktionen in der letzten Spalte; Zeilen sind nicht klickbar, Navigation über Links.
-- Auf dem Handy (unter `sm`) lange Tabellen als Kartenliste (`mobile-row`), siehe Hostliste.
+- In a card with `p={0}`, header row via `CardTitle inset`, table in `Table.ScrollContainer`
+  (`minWidth` 600 / 760 / 960 depending on the number of columns).
+- Numbers right-aligned; actions in the last column; rows are not clickable, navigation via links.
+- On phones (below `sm`) long tables as a card list (`mobile-row`), see the host list.
 
-## 11. Zustände
+## 11. States
 
-| Zustand | Darstellung |
+| State | Display |
 |---|---|
-| Lädt | `Loader` an der Stelle des Inhalts |
-| Leer | `EmptyState` (Icon, Titel, ein Satz, optional eine Aktion) |
-| Fehler beim Laden | `Alert color="red"` mit `errorText` |
-| Funktion abgeschaltet | `FeatureOffHint` |
-| Hinweis / Erklärung | `Alert color="blue"` (Info) bzw. Text `c="dimmed"` |
-| Rückmeldung nach Aktion | `notifySuccess` / `notifyError`, Rückfragen über `confirmAction` |
+| Loading | `Loader` in place of the content |
+| Empty | `EmptyState` (icon, title, one sentence, optionally one action) |
+| Error while loading | `Alert color="red"` with `errorText` |
+| Feature turned off | `FeatureOffHint` |
+| Hint / explanation | `Alert color="blue"` (info) or text `c="dimmed"` |
+| Feedback after an action | `notifySuccess` / `notifyError`, confirmations via `confirmAction` |
 
-## 12. Handy
+## 12. Phone
 
-- Navigation als Burger unter `sm`; Kopf-Aktionen stapeln sich unter 48em (`page-header`).
-- Raster fallen auf eine Spalte; kein waagrechtes Scrollen der Seite (Tabellen scrollen in sich).
-- Jede neue Seite bei 375 px prüfen (`document.documentElement.scrollWidth === innerWidth`).
+- Navigation as a burger menu below `sm`; header actions stack below 48em (`page-header`).
+- Grids collapse to one column; no horizontal scrolling of the page (tables scroll within themselves).
+- Check every new page at 375 px (`document.documentElement.scrollWidth === innerWidth`).
 
-## Checkliste für neue oder geänderte Seiten
+## Checklist for new or changed pages
 
-1. Richtiger Seitentyp (Abschnitt 2), Inhalt in `Stack gap="md"`.
-2. Nur Theme-Standards und Tokens, keine wiederholten Standard-Props.
-3. Farben und Badges nach Abschnitt 6/7, vorhandene Status-Komponenten benutzt.
-4. Werte mit Balken als `MetricRow`, Karten nicht breiter als nötig.
-5. Leer-, Lade- und Fehlerzustand vorhanden.
-6. Texte in `de.ts` und `en.ts`.
-7. Im Browser geprüft: breit, ~1280 px und 375 px.
+1. Correct page type (section 2), content in `Stack gap="md"`.
+2. Only theme defaults and tokens, no repeated default props.
+3. Colors and badges per sections 6/7, existing status components used.
+4. Values with bars as `MetricRow`, cards no wider than needed.
+5. Empty, loading and error states present.
+6. Texts in `de.ts` and `en.ts`.
+7. Checked in the browser: wide, ~1280 px and 375 px.

@@ -5,8 +5,8 @@
       "type": 3,
       "title": "AIOPatcher",
       "name": "aiopatcher",
-      "description": "Selbst gehostetes Patch- und Schwachstellen-Dashboard für Linux- und Windows-Server (Agents per mTLS, Auto-Patch, CVE-Abgleich). Dashboard auf Port 9443, Agents auf 8443.",
-      "note": "Nach dem Deploy: Container <b>aiopatcher</b> → Logs → Zeile mit <b>Setup token</b> suchen, dann <b>https://&lt;Hostname&gt;:9443</b> öffnen. Port 8443 (Agents) darf öffentlich sein, 9443 nur intern/VPN.",
+      "description": "Self-hosted patch and vulnerability dashboard for Linux and Windows servers (agents via mTLS, auto-patch, CVE matching). Dashboard on port 9443, agents on 8443.",
+      "note": "After deploying: container <b>aiopatcher</b> → Logs → look for the line with <b>Setup token</b>, then open <b>https://&lt;hostname&gt;:9443</b>. Port 8443 (agents) may be public, 9443 internal/VPN only.",
       "categories": ["Security", "Tools"],
       "platform": "linux",
       "repository": {
@@ -16,12 +16,12 @@
       "env": [
         {
           "name": "AIOPATCHER_HOSTNAME",
-          "label": "Hostname oder IP",
-          "description": "DNS-Name oder IP, unter der die Agents diesen Server erreichen (z. B. patch.example.com)"
+          "label": "Hostname or IP",
+          "description": "DNS name or IP under which the agents reach this server (e.g. patch.example.com)"
         },
         {
           "name": "AIOPATCHER_LANGUAGE",
-          "label": "Sprache",
+          "label": "Language",
           "select": [
             { "text": "Deutsch", "value": "de", "default": true },
             { "text": "English", "value": "en" }
@@ -29,19 +29,19 @@
         },
         {
           "name": "TZ",
-          "label": "Zeitzone",
+          "label": "Time zone",
           "default": "Europe/Berlin"
         },
         {
           "name": "AIOPATCHER_VERSION",
           "label": "Version",
-          "description": "latest = immer die neueste Version beim Deploy; oder fest, z. B. 0.6.1",
+          "description": "latest = always the newest version on deploy; or pinned, e.g. 0.6.1",
           "default": "latest"
         },
         {
           "name": "AIOPATCHER_DATA_PATH",
-          "label": "Daten",
-          "description": "Docker-Volume (Name) oder Ordner auf dem Host, z. B. /opt/aiopatcher/data",
+          "label": "Data",
+          "description": "Docker volume (name) or folder on the host, e.g. /opt/aiopatcher/data",
           "default": "aiopatcher-data"
         }
       ]

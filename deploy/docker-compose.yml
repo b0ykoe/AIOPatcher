@@ -1,55 +1,55 @@
-# AIOPatcher: Server + Dashboard in einem Container. Eine Datei für Docker Compose und Portainer;
-# alle Einstellungen kommen aus der .env daneben (Vorlage: .env.example) bzw. aus Portainers "Environment variables".
+# AIOPatcher: server + dashboard in one container. One file for Docker Compose and Portainer;
+# all settings come from the .env next to it (template: .env.example) or from Portainer's "Environment variables".
 #
 # Docker Compose:
 #   mkdir -p /opt/aiopatcher && cd /opt/aiopatcher
-#   docker-compose.yml und .env.example hierher kopieren, .env.example → .env, AIOPATCHER_HOSTNAME eintragen
+#   copy docker-compose.yml and .env.example here, .env.example → .env, fill in AIOPATCHER_HOSTNAME
 #   docker compose up -d && docker compose logs aiopatcher | grep -i "setup token"
 #
-# Portainer: App-Template (README → "Mit Portainer") oder Stacks → Add stack → Repository bzw. Upload,
-#   Variablen per "Load variables from .env file" aus der .env übernehmen.
+# Portainer: app template (README → "With Portainer") or Stacks → Add stack → Repository or Upload,
+#   import the variables from the .env via "Load variables from .env file".
 #
-# Ausführlich (VM, Firewall, Backups): docs/SERVER-SETUP.md. Mit Traefik: deploy/docker-compose.traefik.yml.
+# In detail (VM, firewall, backups): docs/SERVER-SETUP.md. With Traefik: deploy/docker-compose.traefik.yml.
 # nginx / Nginx Proxy Manager: docs/REVERSE-PROXY.md.
 #
-# Updates: Das Dashboard zeigt an, wenn eine neue Version da ist. Jedes "docker compose up -d" bzw. jeder Deploy in
-# Portainer holt das aktuelle Image (AIOPATCHER_PULL_POLICY, Standard always).
+# Updates: the dashboard shows when a new version is available. Every "docker compose up -d" or every deploy in
+# Portainer pulls the current image (AIOPATCHER_PULL_POLICY, default always).
 #
-# Nicht gesetzte Variablen = der Wert hinter ":-" bzw. "-". Nur AIOPATCHER_HOSTNAME ist Pflicht.
+# Unset variables = the value after ":-" or "-". Only AIOPATCHER_HOSTNAME is required.
 services:
   aiopatcher:
-    image: ghcr.io/b0ykoe/aiopatcher-server:${AIOPATCHER_VERSION:-latest} # für Produktion besser eine feste Version, z. B. 0.6.1
-    pull_policy: ${AIOPATCHER_PULL_POLICY:-always} # never bei selbst gebautem Image (aiopatcher-server:local)
+    image: ghcr.io/b0ykoe/aiopatcher-server:${AIOPATCHER_VERSION:-latest} # for production, better pin a version, e.g. 0.6.1
+    pull_policy: ${AIOPATCHER_PULL_POLICY:-always} # never for a self-built image (aiopatcher-server:local)
     container_name: aiopatcher
     restart: unless-stopped
-    network_mode: host # damit ufw-Regeln greifen (Docker-Port-Mappings würden ufw umgehen)
+    network_mode: host # so that ufw rules apply (Docker port mappings would bypass ufw)
     volumes:
-      # Host-Ordner (Standard) oder Name eines Docker-Volumes (z. B. aiopatcher-data, so legt es das Portainer-Template an)
+      # Host folder (default) or name of a Docker volume (e.g. aiopatcher-data, which is what the Portainer template creates)
       - ${AIOPATCHER_DATA_PATH:-/opt/aiopatcher/data}:/data
     environment:
-      AIOPatcher__PublicHostname: ${AIOPATCHER_HOSTNAME:?AIOPATCHER_HOSTNAME setzen (DNS-Name oder IP, unter der die Agents den Server erreichen)}
+      AIOPatcher__PublicHostname: ${AIOPATCHER_HOSTNAME:?set AIOPATCHER_HOSTNAME (DNS name or IP under which the agents reach the server)}
       AIOPatcher__DataDirectory: /data
-      AIOPatcher__DashboardPort: "${AIOPATCHER_DASHBOARD_PORT:-9443}" # nur intern/VPN freigeben
-      AIOPatcher__AgentPort: "${AIOPATCHER_AGENT_PORT:-8443}" # darf öffentlich erreichbar sein (mTLS)
-      # HTTP für deinen eigenen Reverse Proxy (Hosts außerhalb, Einstellungen → Öffentlicher Zugang); nur im LAN freigeben, 0 = aus
+      AIOPatcher__DashboardPort: "${AIOPATCHER_DASHBOARD_PORT:-9443}" # expose internally/VPN only
+      AIOPatcher__AgentPort: "${AIOPATCHER_AGENT_PORT:-8443}" # may be publicly reachable (mTLS)
+      # HTTP for your own reverse proxy (hosts outside, Settings → Public access); expose on the LAN only, 0 = off
       AIOPatcher__AgentProxyPort: "${AIOPATCHER_PROXY_PORT:-8080}"
       AIOPatcher__Language: ${AIOPATCHER_LANGUAGE:-de}
-      # nur mit Reverse Proxy vor dem Dashboard, z. B. "127.0.0.1", siehe docs/REVERSE-PROXY.md; leer = kein Proxy
+      # only with a reverse proxy in front of the dashboard, e.g. "127.0.0.1", see docs/REVERSE-PROXY.md; empty = no proxy
       AIOPatcher__TrustedProxies: ${AIOPATCHER_TRUSTED_PROXIES:-}
-      # nie einschaltbar, auch nicht im Dashboard, z. B. "AppUpdates,OpnsenseUpdates"; leer = nichts gesperrt
+      # can never be turned on, not even in the dashboard, e.g. "AppUpdates,OpnsenseUpdates"; empty = nothing locked
       AIOPatcher__LockedFeatures: ${AIOPATCHER_LOCKED_FEATURES:-}
-      # Hinweis auf neue Versionen; auf leer setzen (AIOPATCHER_UPDATE_CHECK_REPOSITORY=) = aus
+      # notice about new versions; set to empty (AIOPATCHER_UPDATE_CHECK_REPOSITORY=) = off
       AIOPatcher__UpdateCheckRepository: ${AIOPATCHER_UPDATE_CHECK_REPOSITORY-b0ykoe/AIOPatcher}
       TZ: ${TZ:-Europe/Berlin}
-    # Healthcheck ist im Image eingebaut (/healthz). "docker ps" zeigt "healthy".
+    # The healthcheck is built into the image (/healthz). "docker ps" shows "healthy".
     labels:
-      - autoheal=true # nur relevant, wenn der autoheal-Container unten aktiv ist
+      - autoheal=true # only relevant if the autoheal container below is enabled
 
-  # --- Optional: Watchdog --------------------------------------------------------------------------
-  # Docker startet abgestürzte Container selbst neu (restart: unless-stopped), aber keine, die nur "unhealthy" sind.
-  # autoheal startet Container mit Label autoheal=true neu, wenn der Healthcheck dauerhaft fehlschlägt.
+  # --- Optional: watchdog --------------------------------------------------------------------------
+  # Docker restarts crashed containers on its own (restart: unless-stopped), but not ones that are merely "unhealthy".
+  # autoheal restarts containers labeled autoheal=true when their healthcheck keeps failing.
   # autoheal:
-  #   image: willfarrell/autoheal:latest # für Produktion feste Version eintragen
+  #   image: willfarrell/autoheal:latest # pin a version for production
   #   container_name: autoheal
   #   restart: unless-stopped
   #   environment:
@@ -57,10 +57,10 @@ services:
   #   volumes:
   #     - /var/run/docker.sock:/var/run/docker.sock
 
-  # --- Optional: über neue Images benachrichtigen (empfohlen: Diun) ---------------------------------
-  # Diun meldet neue Images nur (ntfy, Mail, Telegram …) und aktualisiert nichts. Passt zu "nichts passiert unbeaufsichtigt".
+  # --- Optional: get notified about new images (recommended: Diun) ---------------------------------
+  # Diun only reports new images (ntfy, mail, Telegram …) and updates nothing. Fits "nothing happens unattended".
   # diun:
-  #   image: crazymax/diun:latest # für Produktion feste Version eintragen
+  #   image: crazymax/diun:latest # pin a version for production
   #   container_name: diun
   #   restart: unless-stopped
   #   volumes:
@@ -71,11 +71,11 @@ services:
   #     DIUN_WATCH_SCHEDULE: "0 7 * * *"
   #     DIUN_PROVIDERS_DOCKER: "true"
   #     DIUN_NOTIF_NTFY_ENDPOINT: "https://ntfy.sh"
-  #     DIUN_NOTIF_NTFY_TOPIC: "DEIN-GEHEIMES-TOPIC"
+  #     DIUN_NOTIF_NTFY_TOPIC: "YOUR-SECRET-TOPIC"
 
-  # --- Optional: automatisch aktualisieren (nur wenn du das wirklich willst) ------------------------
-  # Watchtower (gepflegter Fork) zieht neue Images und startet neu. Ein Patch-Tool, das sich nachts selbst
-  # aktualisiert, ist bequem, aber riskant. WATCHTOWER_MONITOR_ONLY=true = nur melden.
+  # --- Optional: update automatically (only if you really want that) ------------------------------
+  # Watchtower (maintained fork) pulls new images and restarts. A patch tool that updates itself at night
+  # is convenient, but risky. WATCHTOWER_MONITOR_ONLY=true = report only.
   # watchtower:
   #   image: nickfedor/watchtower:latest
   #   container_name: watchtower
@@ -85,9 +85,9 @@ services:
   #   environment:
   #     WATCHTOWER_MONITOR_ONLY: "true"
   #     WATCHTOWER_SCHEDULE: "0 0 7 * * *"
-  #     WATCHTOWER_NOTIFICATION_URL: "ntfy://ntfy.sh/DEIN-GEHEIMES-TOPIC"
+  #     WATCHTOWER_NOTIFICATION_URL: "ntfy://ntfy.sh/YOUR-SECRET-TOPIC"
   #     TZ: Europe/Berlin
 
-# Nur genutzt, wenn AIOPATCHER_DATA_PATH ein Volume-Name statt eines Ordners ist.
+# Only used if AIOPATCHER_DATA_PATH is a volume name instead of a folder.
 volumes:
   aiopatcher-data:

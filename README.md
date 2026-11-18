@@ -1,30 +1,30 @@
 # AIOPatcher
 
-Schlankes, selbst gehostetes Patch-Dashboard für Homelabs und kleine IT-Umgebungen:
-Linux- (Ubuntu/Debian/Proxmox VE/PBS) und Windows-Server patchen, mehrere Sites, IPAM light.
+Lean, self-hosted patch dashboard for homelabs and small IT environments:
+patch Linux (Ubuntu/Debian/Proxmox VE/PBS) and Windows servers, multiple sites, IPAM light.
 
-- Architektur & Entscheidungen: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
-- Server aufsetzen (VM, Docker, Backups, Updates): [docs/SERVER-SETUP.md](docs/SERVER-SETUP.md)
+- Architecture & decisions: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+- Setting up the server (VM, Docker, backups, updates): [docs/SERVER-SETUP.md](docs/SERVER-SETUP.md)
 
-## Schnellstart (Setup-Skript, ca. 15 Minuten)
+## Quick start (setup script, about 15 minutes)
 
-Voraussetzungen: ein Debian/Ubuntu-Server mit x64 (z. B. Hetzner CX22 oder eine VM im Homelab, 2–4 GB RAM) und
-einen Namen oder eine feste IP für ihn: einen DNS-Namen (intern z. B. per Override in der OPNsense: `patch.home.arpa`)
-oder einfach die IP. Let's Encrypt braucht einen öffentlichen Namen; ohne eigene Domain geht `<ip-mit-bindestrichen>.nip.io`, z. B. `1-2-3-4.nip.io`.
+Requirements: a Debian/Ubuntu server on x64 (e.g. Hetzner CX22 or a VM in the homelab, 2–4 GB RAM) and
+a name or a fixed IP for it: a DNS name (internally e.g. via an override in OPNsense: `patch.home.arpa`)
+or simply the IP. Let's Encrypt needs a public name; without your own domain, `<ip-with-dashes>.nip.io` works, e.g. `1-2-3-4.nip.io`.
 
-**1. Code auf den Server bringen** (vom eigenen Rechner aus dem Repo, IP anpassen):
+**1. Get the code onto the server** (from your own machine, in the repo; adjust the IP):
 
 ```bash
 git archive --format=tar.gz -o aiopatcher.tar.gz main && scp aiopatcher.tar.gz root@1.2.3.4:/root/
 ```
 
-Oder direkt auf dem Server aus GitHub (öffentliches Repo; privat: mit Zugangs-Token), dann weiter mit dem Setup-Befehl:
+Or directly on the server from GitHub (public repo; private: with an access token), then continue with the setup command:
 
 ```bash
 git clone https://github.com/b0ykoe/AIOPatcher.git /opt/aiopatcher/src
 ```
 
-**2. Auf dem Server entpacken und das Setup starten:**
+**2. Unpack on the server and start the setup:**
 
 ```bash
 mkdir -p /opt/aiopatcher/src && tar -xzf /root/aiopatcher.tar.gz -C /opt/aiopatcher/src
@@ -34,162 +34,162 @@ mkdir -p /opt/aiopatcher/src && tar -xzf /root/aiopatcher.tar.gz -C /opt/aiopatc
 sudo bash /opt/aiopatcher/src/deploy/setup.sh
 ```
 
-Das Skript fragt:
+The script asks:
 
-| Frage | Auswahl |
+| Question | Choices |
 |---|---|
-| Name oder IP | Vorschlag aus dem Rechnernamen bzw. `<ip>.nip.io`; eine IP geht auch (dann ohne Let's Encrypt) |
-| Dashboard-Zugang | **direkt** auf 9443 · **Traefik** auf 443 · **nginx** auf 443 · **vorhandener Proxy** (Nginx Proxy Manager o. ä.) |
-| Zertifikat (bei Traefik/nginx) | **Let's Encrypt** (öffentlich erreichbar) · **intern** (AIOPatcher-CA, fürs Homelab) · **eigene Dateien** |
-| Netze fürs Dashboard | private Netze plus die IP, von der du per SSH kommst |
-| Firewall | ufw: SSH, Agents (8443), Dashboard nur aus diesen Netzen |
+| Name or IP | Suggestion from the hostname or `<ip>.nip.io`; an IP works too (then without Let's Encrypt) |
+| Dashboard access | **direct** on 9443 · **Traefik** on 443 · **nginx** on 443 · **existing proxy** (Nginx Proxy Manager or similar) |
+| Certificate (with Traefik/nginx) | **Let's Encrypt** (publicly reachable) · **internal** (AIOPatcher CA, for the homelab) · **own files** |
+| Networks for the dashboard | private networks plus the IP you are connecting from via SSH |
+| Firewall | ufw: SSH, agents (8443), dashboard only from these networks |
 
-Danach installiert es Docker (falls nötig), baut das Image, schreibt `/opt/aiopatcher/docker-compose.yml` (und die
-Traefik- bzw. nginx-Konfiguration), richtet die Firewall ein, startet alles und zeigt **Dashboard-URL, Setup-Token und
-CA-Fingerprint**. Im Dashboard: Token eingeben, Konto und Authenticator einrichten, dann *Host hinzufügen*.
+It then installs Docker (if needed), builds the image, writes `/opt/aiopatcher/docker-compose.yml` (and the
+Traefik or nginx configuration), sets up the firewall, starts everything and shows the **dashboard URL, setup token and
+CA fingerprint**. In the dashboard: enter the token, set up your account and authenticator, then *Add host*.
 
-- Alles auch ohne Fragen, z. B. `setup.sh --yes --hostname patch.example.com --proxy traefik --tls letsencrypt --email ich@example.com`
-  (`--help` zeigt alle Optionen). `--dry-run` erzeugt nur die Dateien zum Ansehen.
-- Erneut ausführen ist gefahrlos: Die Antworten vom letzten Lauf (`/opt/aiopatcher/setup.conf`) sind die Vorschläge,
-  Konfigurationen werden vorher gesichert, Daten bleiben. Für Updates ist das nicht nötig (siehe unten).
-- Hetzner: zusätzlich zur ufw ggf. die Cloud-Firewall öffnen (8443 für alle, Dashboard nur für dich).
-- Manuell statt Skript: [deploy/docker-compose.yml](deploy/docker-compose.yml) plus [deploy/.env.example](deploy/.env.example)
-  als `.env` daneben (nur `AIOPATCHER_HOSTNAME` ist Pflicht), gehärtete Variante in
-  [docs/SERVER-SETUP.md](docs/SERVER-SETUP.md), Proxys in [docs/REVERSE-PROXY.md](docs/REVERSE-PROXY.md).
+- Everything also works without questions, e.g. `setup.sh --yes --hostname patch.example.com --proxy traefik --tls letsencrypt --email ich@example.com`
+  (`--help` shows all options). `--dry-run` only generates the files for review.
+- Running it again is safe: the answers from the last run (`/opt/aiopatcher/setup.conf`) become the suggestions,
+  configurations are backed up first, data is kept. Updates do not need it (see below).
+- Hetzner: in addition to ufw, you may need to open the Cloud Firewall (8443 for everyone, dashboard only for you).
+- Manually instead of the script: [deploy/docker-compose.yml](deploy/docker-compose.yml) plus [deploy/.env.example](deploy/.env.example)
+  as `.env` next to it (only `AIOPATCHER_HOSTNAME` is required), hardened variant in
+  [docs/SERVER-SETUP.md](docs/SERVER-SETUP.md), proxies in [docs/REVERSE-PROXY.md](docs/REVERSE-PROXY.md).
 
-**Mit Portainer** (fertiges Image, ohne Setup-Skript), per App-Template:
+**With Portainer** (prebuilt image, no setup script), via app template:
 
-1. Einmalig unter *Settings → App Templates → URL* eintragen und speichern:
+1. Once, enter under *Settings → App Templates → URL* and save:
    `https://raw.githubusercontent.com/b0ykoe/AIOPatcher/main/deploy/portainer-templates.json`
-2. *App Templates* → nach „AIOPatcher“ suchen → *Hostname oder IP* ausfüllen (unter dem die Agents den Server
-   erreichen) → *Deploy the stack*.
+2. *App Templates* → search for "AIOPatcher" → fill in *Hostname or IP* (the one the agents use to reach the
+   server) → *Deploy the stack*.
 
-Der Setup-Token steht in den Logs des Containers `aiopatcher`, das Dashboard läuft auf `https://<host>:9443`. Daten liegen
-im Volume `aiopatcher-data`. Jeder Deploy holt das aktuelle Image (`pull_policy: always`); Update also einfach den Stack
-neu deployen. Firewall: 8443 für die Agents, 9443 nur intern/VPN. Ohne Template: dieselbe
-[deploy/docker-compose.yml](deploy/docker-compose.yml) wie bei Docker Compose unter *Stacks → Add stack → Repository*
-(Compose path `deploy/docker-compose.yml`) oder *Upload* nehmen und die Variablen aus
-[deploy/.env.example](deploy/.env.example) per *Load variables from .env file* laden.
+The setup token is in the logs of the `aiopatcher` container, the dashboard runs on `https://<host>:9443`. Data lives
+in the `aiopatcher-data` volume. Every deploy pulls the current image (`pull_policy: always`), so to update, simply
+redeploy the stack. Firewall: 8443 for the agents, 9443 only internal/VPN. Without the template: use the same
+[deploy/docker-compose.yml](deploy/docker-compose.yml) as with Docker Compose under *Stacks → Add stack → Repository*
+(Compose path `deploy/docker-compose.yml`) or *Upload*, and load the variables from
+[deploy/.env.example](deploy/.env.example) via *Load variables from .env file*.
 
-**Updates von AIOPatcher** – ohne Setup, ein Befehl:
+**Updating AIOPatcher** – no setup, one command:
 
 ```bash
 sudo aiopatcher-update
 ```
 
-Holt den neuen Code (`git pull`), baut das Image, während der alte Container weiterläuft, sichert dann den Datenordner
-(`/opt/aiopatcher/backups`, die letzten drei), startet neu und wartet, bis AIOPatcher gesund ist. Startet die neue
-Version nicht, kommen altes Image und Daten automatisch zurück. Die Versionsnummer eigener Builds folgt dem letzten
-Release-Tag (genau auf `v0.7.0`: `0.7.0`, drei Commits danach: `0.7.0.3`), passt also zu den GitHub-Releases; die Agents
-bekommen das Update ebenfalls angeboten. `--check` zeigt nur, ob es Neues gibt; `--force` baut auch
-ohne neuen Code. Nachts automatisch: beim Setup „Auto-Update“ wählen (systemd-Timer, Log: `journalctl -u aiopatcher-update`).
-Mit fertigem Image (`--image`) holt der Befehl stattdessen das neue Image (`docker compose pull`).
+Fetches the new code (`git pull`), builds the image while the old container keeps running, then backs up the data folder
+(`/opt/aiopatcher/backups`, the last three), restarts and waits until AIOPatcher is healthy. If the new
+version does not start, the old image and data are restored automatically. The version number of your own builds follows the latest
+release tag (exactly on `v0.7.0`: `0.7.0`, three commits later: `0.7.0.3`), so it matches the GitHub releases; the agents
+are offered the update as well. `--check` only shows whether there is something new; `--force` builds even
+without new code. Automatically at night: choose "Auto-Update" during setup (systemd timer, log: `journalctl -u aiopatcher-update`).
+With a prebuilt image (`--image`), the command pulls the new image instead (`docker compose pull`).
 
-Installationen von vor diesem Befehl: einmal `cd /opt/aiopatcher/src && sudo git pull && sudo bash deploy/update.sh`,
-danach gibt es `aiopatcher-update`. Code per `tar` statt Git: neuen Stand nach `/opt/aiopatcher/src` entpacken, dann
+Installations from before this command: once run `cd /opt/aiopatcher/src && sudo git pull && sudo bash deploy/update.sh`,
+after that `aiopatcher-update` is available. Code via `tar` instead of Git: unpack the new version to `/opt/aiopatcher/src`, then
 `sudo aiopatcher-update`.
 
-Vor jeder Datenbank-Migration legt AIOPatcher selbst eine Sicherung unter `/opt/aiopatcher/data/backups` an.
-Der Container hat einen eingebauten Healthcheck (`docker ps` zeigt `healthy`). In der Compose-Datei stehen
-auskommentiert: **autoheal** (startet bei dauerhaftem „unhealthy“ neu), **Diun** (meldet neue Images, ändert nichts,
-empfohlen) und **Watchtower** (aktualisiert automatisch, nur wenn du das wirklich willst).
+Before every database migration, AIOPatcher itself creates a backup under `/opt/aiopatcher/data/backups`.
+The container has a built-in healthcheck (`docker ps` shows `healthy`). The compose file contains, commented
+out: **autoheal** (restarts on a persistent "unhealthy"), **Diun** (reports new images, changes nothing,
+recommended) and **Watchtower** (updates automatically, only if you really want that).
 
-## Stand
+## Status
 
-v0.2 (alles lauffähig und getestet; Linux-Agent, Docker-Image und echte Proxmox/Hetzner/OPNsense-APIs sind noch nicht
-gegen echte Systeme getestet, sondern gegen nachgebaute APIs und Unit-Tests):
+v0.2 (everything runs and is tested; the Linux agent, Docker image and real Proxmox/Hetzner/OPNsense APIs have not yet been
+tested against real systems, but against mocked APIs and unit tests):
 
-**Grundlagen**
-- Eigene CA, getrennte Listener (Dashboard / Agent-API mit mTLS), SQLite mit Migrationen und Backup vor jeder Migration
-- Agents für Debian/Ubuntu/Proxmox VE/PBS (apt) und Windows Server/10/11 (Windows-Update-API, WSUS-fähig)
-- Jobs (Scan, Patch, Neustart) mit Live-Log, Ergebnis auch nach Neustart; lokale `policy.json` hat Vorrang
+**Basics**
+- Own CA, separate listeners (dashboard / agent API with mTLS), SQLite with migrations and a backup before every migration
+- Agents for Debian/Ubuntu/Proxmox VE/PBS (apt) and Windows Server/10/11 (Windows Update API, WSUS-capable)
+- Jobs (scan, patch, reboot) with live log, result kept even after a reboot; the local `policy.json` takes precedence
 
-**Bedienung**
-- Übersichtliche Navigation: **Übersicht · Hosts · Auslastung · Sicherheit · Auto-Patch · Inventar · Berichte ·
-  Einstellungen**. Verwandtes steckt als Reiter darin (Sicherheit: Lücken, CVE-Suche, Compliance; Auto-Patch: Pläne,
-  Regeln, Jobs; Inventar: Programme, Netzwerk). Einstellungen mit Seitenmenü (Betrieb, Zugang, Verbindungen).
-- **Startseite**: ein Satz zum Stand („Alles im grünen Bereich“ / „3 Dinge brauchen dich“), darunter die To-dos mit je
-  einer Aktion, Host-Karten mit Auslastung, nächste Wartungsfenster und letzte Jobs
-- **Einrichtungsassistent**: Site → erster Host → Patch-Plan aus Vorlage → Benachrichtigung; startet beim ersten Login
-  von selbst, später unter *Einstellungen → Allgemein*
-- **Einfacher und erweiterter Modus** pro Benutzer: Einfach zeigt Übersicht, Hosts, Auslastung, Sicherheit und Auto-Patch
-- **Prüfen** (Einstellungen): Server, externe Dienste, Benachrichtigungen, Integrationen, pro Host Agent, Backup,
-  Wiederherstellbarkeit (PBS-Verify) und Test-Snapshot, API-Token
-- Anleitungen direkt im Dashboard (Proxmox, Hetzner, OPNsense, alle Benachrichtigungskanäle) und **API-Seite**
-  mit allen Endpunkten (OpenAPI unter `/api/openapi/v1.json`)
-- Dashboard (Mantine, dunkel/hell), Deutsch und Englisch (Browsersprache, umstellbar pro Benutzer)
-- Mehrfachauswahl, Tags mit Filter, Befehlspalette (Strg+K), geführte Ersteinrichtung
+**Usage**
+- Clear navigation: **Overview · Hosts · Utilization · Security · Auto-patch · Inventory · Reports ·
+  Settings**. Related pages live in them as tabs (Security: Vulnerabilities, CVE lookup, Compliance; Auto-patch: Patch plans,
+  Rules, Jobs; Inventory: Programs, Network). Settings with a side menu (Operation, Access, Connections).
+- **Start page**: one sentence on the state ("All good" / "3 things need you"), below it the to-dos, each with
+  one action, host cards with utilization, upcoming maintenance windows and recent jobs
+- **Setup wizard**: site → first host → patch plan from a template → notifications; starts on its own at the first login,
+  later under *Settings → General*
+- **Simple and advanced mode** per user: Simple shows Overview, Hosts, Utilization, Security and Auto-patch
+- **Checks** (Settings): server, external services, notifications, integrations, per host agent, backup,
+  restorability (PBS verify) and test snapshot, API tokens
+- Guides right in the dashboard (Proxmox, Hetzner, OPNsense, all notification channels) and an **API page**
+  with all endpoints (OpenAPI under `/api/openapi/v1.json`)
+- Dashboard (Mantine, dark/light), German and English (browser language, switchable per user)
+- Multi-select, tags with filter, command palette (Ctrl+K), guided first-time setup
 
-**Benutzer**
-- Mehrere Benutzer mit Rollen (Admin, Operator, Betrachter), Einladung per Link, Passwort + TOTP für jeden,
-  Sitzungen enden sofort bei Rollen-/Passwortwechsel, Notfallzugang per CLI
+**Users**
+- Multiple users with roles (Admin, Operator, Viewer), invitation by link, password + TOTP for everyone,
+  sessions end immediately on role/password change, emergency access via CLI
 
-**Automatisch patchen**
-- **Patch-Pläne** mit Vorlagen (Homelab wöchentlich, Security täglich, Test-Host zuerst, Proxmox sicher): Zeitplan und
-  Gruppen in Reihenfolge, Hosts per Auswahl, Tag, Site oder „alle übrigen“; Pause zwischen Gruppen, Freigabe,
-  Prüfung nach jedem Host, **Snapshot vor dem Patch** (Proxmox-API bzw. Hetzner Cloud) und **Vorbedingung „Backup jünger
-  als X Std.“**
-- **Patchpausen** (z. B. Jahreswechsel) und **zurückgehaltene Updates** (Paket/KB, global, pro Site oder Host)
+**Automatic patching**
+- **Patch plans** with templates (Homelab weekly, Security daily, Test host first, Proxmox safe): schedule and
+  groups in order, hosts by selection, tag, site or "all others"; pause between groups, approval,
+  check after every host, **snapshot before patching** (Proxmox API or Hetzner Cloud) and **precondition "backup younger
+  than X hours"**
+- **Patch freezes** (e.g. around New Year) and **held updates** (package/KB, global, per site or host)
 
-**Sicherheit & Überblick**
-- **Sicherheitsseite**: alle Lücken über alle Hosts mit Quellen-Links (NVD, OSV, Debian/Ubuntu, MSRC, KEV, EPSS)
-- **CVE-Zuordnung** für offene Updates (OSV.dev für Debian/Ubuntu, Microsoft MSRC für Windows-KBs),
-  Bewertung mit **CISA KEV** (aktiv ausgenutzt) und **EPSS**; dazu **Lücken ohne Update** in installierten Paketen
-  (nur KEV oder EPSS ≥ 5 %, sonst wäre allein der Kernel tausende Einträge)
-- **CVE-Suche** mit **lokaler CVE-Datenbank** (alle CVEs aus den NVD-Datenfeeds, Abgleich alle 2 Stunden, Volltextsuche
-  ohne Anfrage nach außen): CVE-Nummer oder Stichwort (Hersteller, Produkt, Paket) nachschlagen: Beschreibung und CVSS,
-  behoben in welcher Paketversion je Debian/Ubuntu-Release (OSV.dev) bzw. durch welches KB je Windows-Version
-  (Microsoft), KEV/EPSS und welche eigenen Hosts betroffen sind. Auch per Strg+K und CVE-Nummer.
-- **Programm-Inventar**: dpkg/snap und Windows-Programme, mit verfügbarer Version und Links (winget-Manifest,
-  Debian-Tracker, Launchpad, Hersteller); unter Windows **Programm-Updates per winget** (Windows 10/11, Server 2025)
-- **Docker-Container**: erkennt neuere Images in der Registry (nur Anzeige/Meldung, aktualisiert nichts). Der Agent meldet
-  seine Container alle 30 Minuten und nach jedem Scan, die Registry wird pro Image alle 6 Stunden gefragt; *Neu prüfen* im
-  Reiter Container fragt beides sofort ab. Aktuell ist ein Container, wenn einer der lokalen Digests seines Images
-  (auch über andere Tags gezogen) dem Digest des Tags in der Registry entspricht.
-- **Benachrichtigungen**: ntfy, E-Mail, Discord, Slack, Telegram, Webhook (HMAC-signiert)
-- **Berichte**: Konformität pro Site und Zeitraum, CSV und Druck/PDF
-- **IPAM light**: Subnetze, Belegung, nächste freie Adresse, Konflikte; Adressen aus Agents, OPNsense-ARP und manuell
-- **OPNsense**: Firmware-Stand, Update-Hinweis, Update per Klick
+**Security & overview**
+- **Security page**: all vulnerabilities across all hosts with source links (NVD, OSV, Debian/Ubuntu, MSRC, KEV, EPSS)
+- **CVE mapping** for pending updates (OSV.dev for Debian/Ubuntu, Microsoft MSRC for Windows KBs),
+  rated with **CISA KEV** (actively exploited) and **EPSS**; plus **vulnerabilities without an update** in installed packages
+  (only KEV or EPSS ≥ 5 %, otherwise the kernel alone would be thousands of entries)
+- **CVE lookup** with a **local CVE database** (all CVEs from the NVD data feeds, synced every 2 hours, full-text search
+  without any outbound request): look up a CVE number or keyword (vendor, product, package): description and CVSS,
+  fixed in which package version per Debian/Ubuntu release (OSV.dev) or by which KB per Windows version
+  (Microsoft), KEV/EPSS and which of your own hosts are affected. Also via Ctrl+K and the CVE number.
+- **Program inventory**: dpkg/snap and Windows programs, with available version and links (winget manifest,
+  Debian tracker, Launchpad, vendor); on Windows **program updates via winget** (Windows 10/11, Server 2025)
+- **Docker containers**: detects newer images in the registry (display/notification only, updates nothing). The agent reports
+  its containers every 30 minutes and after every scan, the registry is queried every 6 hours per image; *Check again* in
+  the Containers tab queries both right away. A container is up to date when one of the local digests of its image
+  (also pulled via other tags) matches the digest of the tag in the registry.
+- **Notifications**: ntfy, email, Discord, Slack, Telegram, webhook (HMAC-signed)
+- **Reports**: compliance per site and period, CSV and print/PDF
+- **IPAM light**: subnets, usage, next free address, conflicts; addresses from agents, OPNsense ARP and manual entries
+- **OPNsense**: firmware status, update notice, update by click
 
-**Betrieb**
-- Docker-Image mit eingebautem Healthcheck, Hinweis im Dashboard bei neuer AIOPatcher-Version
-- **API-Tokens** (Betrachter/Operator) für Skripte, z. B. `curl -H "Authorization: Bearer aiop_…" …/api/overview`
-- **Agent-Self-Update**: signiert (Release-Schlüssel oder Schlüssel des Servers), Selbsttest vor dem Tausch, automatischer
-  Rollback, wenn die neue Version abstürzt; **automatische Erneuerung** der Agent-Zertifikate
-- CI (Build, Tests) und Release-Workflow (Docker-Image nach ghcr.io, signierte Agents am GitHub-Release)
+**Operations**
+- Docker image with built-in healthcheck, notice in the dashboard when a new AIOPatcher version is available
+- **API tokens** (Viewer/Operator) for scripts, e.g. `curl -H "Authorization: Bearer aiop_…" …/api/overview`
+- **Agent self-update**: signed (release key or the server's key), self-test before the swap, automatic
+  rollback if the new version crashes; **automatic renewal** of the agent certificates
+- CI (build, tests) and release workflow (Docker image to ghcr.io, signed agents on the GitHub release)
 
-## Unterstützte Systeme
+## Supported systems
 
 | System | Agent |
 |---|---|
-| Ubuntu 18.04–26.04, Debian 10–13, Proxmox VE/PBS (x64, arm64) | normaler Agent (alle Module) |
-| Windows Server 2012 – 2025, Windows 10/11 (x64) | normaler Agent (alle Module); 2012/2012 R2 brauchen das VC++-2015-2019-Paket |
-| Ubuntu 16.04, Debian 9 (alte glibc/OpenSSL) | **Lite-Agent** (Python 3.5+) |
-| Windows Server 2008 R2 SP1, Windows 7 SP1 | **Lite-Agent** (PowerShell 5.1 und .NET Framework 4.8) |
+| Ubuntu 18.04–26.04, Debian 10–13, Proxmox VE/PBS (x64, arm64) | regular agent (all modules) |
+| Windows Server 2012 – 2025, Windows 10/11 (x64) | regular agent (all modules); 2012/2012 R2 need the VC++ 2015-2019 package |
+| Ubuntu 16.04, Debian 9 (old glibc/OpenSSL) | **Lite agent** (Python 3.5+) |
+| Windows Server 2008 R2 SP1, Windows 7 SP1 | **Lite agent** (PowerShell 5.1 and .NET Framework 4.8) |
 
-Den Lite-Agent wählen die Installationsbefehle automatisch (erzwingen: `--lite` bzw. `-Lite`). Er kann nur das
-Nötigste: Systemdaten, Updates scannen und installieren, Neustarts, Zertifikat erneuern. Kein Self-Update (Update per
-Installationsbefehl), keine Programme, Container oder Compliance. Er ist ein Pull-Agent wie der große.
+The install commands pick the Lite agent automatically (to force it: `--lite` or `-Lite`). It only does the
+essentials: system data, scanning and installing updates, reboots, certificate renewal. No self-update (update via the
+install command), no programs, containers or compliance. It is a pull agent like the full one.
 
-- **Linux:** Python 3.5+ und `openssl` sind auf Ubuntu 16.04/Debian 9 vorinstalliert. Dienst `aiopatcher-agent`
-  wie beim normalen Agent.
-- **Windows 2008 R2:** vorher WMF 5.1 und .NET Framework 4.8 installieren (der Befehl prüft das und nennt die Links).
-  TLS 1.2 schaltet er in SChannel selbst ein. Danach ist eventuell ein Neustart nötig, dann den Befehl erneut ausführen.
-  Statt eines Dienstes läuft eine Aufgabe „AIOPatcherAgent“ (SYSTEM, beim Systemstart, Neustart nach Absturz),
-  Log unter `C:\ProgramData\AIOPatcher\Agent\agent-lite.log`. Server 2008 ohne R2 wird nicht unterstützt.
+- **Linux:** Python 3.5+ and `openssl` are preinstalled on Ubuntu 16.04/Debian 9. Service `aiopatcher-agent`
+  as with the regular agent.
+- **Windows 2008 R2:** install WMF 5.1 and .NET Framework 4.8 first (the command checks this and gives the links).
+  It enables TLS 1.2 in SChannel itself. A reboot may be needed afterwards; then run the command again.
+  Instead of a service, a scheduled task "AIOPatcherAgent" runs (SYSTEM, at system startup, restart after a crash),
+  log under `C:\ProgramData\AIOPatcher\Agent\agent-lite.log`. Server 2008 without R2 is not supported.
 
-## Agent auf Linux installieren
+## Installing the agent on Linux
 
-Im Dashboard unter *Hosts → Host hinzufügen* die Site wählen und den angezeigten Befehl in die Shell des Hosts
-einfügen (Debian, Ubuntu, Proxmox VE/PBS; x64 und arm64). Er
+In the dashboard under *Hosts → Add host*, pick the site and paste the displayed command into the host's
+shell (Debian, Ubuntu, Proxmox VE/PBS; x64 and arm64). It
 
-1. lädt die CA vom Server und vergleicht sie mit dem Fingerprint aus dem Befehl,
-2. lädt `install.sh` und den Agent nur noch über diese CA und prüft die SHA-256-Prüfsumme,
-3. installiert `/usr/local/bin/aiopatcher-agent`, registriert den Host und richtet den systemd-Dienst `aiopatcher-agent` ein,
-4. prüft, ob alles läuft: Selbsttest vor dem Start (Registrierung, Zertifikat, Verbindung zum Server), danach bis zu 90 s,
-   ob der Dienst stabil läuft und sich beim Server meldet. Stürzt er ab, zeigt das Skript die letzten Log-Zeilen.
+1. downloads the CA from the server and compares it with the fingerprint from the command,
+2. downloads `install.sh` and the agent only through this CA and checks the SHA-256 checksum,
+3. installs `/usr/local/bin/aiopatcher-agent`, registers the host and sets up the systemd service `aiopatcher-agent`,
+4. checks that everything runs: a self-test before starting (registration, certificate, connection to the server), then for up to 90 s
+   whether the service runs stably and reports to the server. If it crashes, the script shows the last log lines.
 
-Voraussetzungen auf dem Host: `curl`, ausgehend HTTPS zum Agent-Port des Servers.
+Requirements on the host: `curl`, outbound HTTPS to the server's agent port.
 
 ```bash
 systemctl status aiopatcher-agent
@@ -199,304 +199,304 @@ systemctl status aiopatcher-agent
 journalctl -u aiopatcher-agent -f
 ```
 
-**Update:** automatisch (siehe [Agent-Updates](#agent-updates)) oder denselben Befehl erneut ausführen. Ist der Host
-bei diesem Server registriert, wird nur das Programm ersetzt.
-**Neuer Server (neu aufgesetzte Instanz):** einfach den Installationsbefehl aus dem neuen Dashboard ausführen. Das
-Skript erkennt an der CA, dass es ein anderer Server ist, und registriert den Host neu (neuer Schlüssel, neues
-Zertifikat, neue CA). Die lokale `policy.json` bleibt, eine offene Job-Antwort an den alten Server wird verworfen.
-Gegen denselben Server erzwingt `--force` eine neue Registrierung.
-**Selbsttest von Hand:** `sudo aiopatcher-agent selftest`
-**Entfernen:** `install.sh --uninstall` (mit `--purge` auch Zertifikate und Policy löschen); den Host danach im Dashboard löschen.
+**Update:** automatic (see [Agent updates](#agent-updates)) or run the same command again. If the host is
+registered with this server, only the program is replaced.
+**New server (freshly set up instance):** simply run the install command from the new dashboard. The
+script recognizes from the CA that it is a different server and registers the host again (new key, new
+certificate, new CA). The local `policy.json` is kept; a pending job response to the old server is discarded.
+Against the same server, `--force` forces a new registration.
+**Self-test by hand:** `sudo aiopatcher-agent selftest`
+**Remove:** `install.sh --uninstall` (with `--purge` also deletes certificates and policy); then delete the host in the dashboard.
 
-## Agent auf Windows installieren
+## Installing the agent on Windows
 
-Windows Server 2019/2022/2025 und Windows 10/11 (64 Bit). Im Dashboard unter *Host hinzufügen* den Windows-Block
-kopieren und in **Windows PowerShell als Administrator** einfügen. Er
+Windows Server 2019/2022/2025 and Windows 10/11 (64-bit). In the dashboard under *Add host*, copy the Windows block
+and paste it into **Windows PowerShell as Administrator**. It
 
-1. lädt `install.ps1` und führt es nur aus, wenn dessen SHA-256 zu dem Wert im Befehl passt,
-2. prüft die CA gegen den Fingerprint und lädt den Agent nur noch über diese CA (Prüfung pro Verbindung),
-3. installiert nach `C:\Program Files\AIOPatcher\`, registriert den Host (Daten in `C:\ProgramData\AIOPatcher\Agent\`,
-   nur für SYSTEM und Administratoren lesbar) und richtet den Dienst `AIOPatcherAgent` ein (verzögerter Autostart,
-   Neustart bei Fehlern),
-4. prüft wie unter Linux per Selbsttest und bis zu 90 s nach dem Start, ob der Dienst stabil läuft und sich beim Server
-   meldet. Bei einem Absturz zeigt es die passenden Einträge aus der Ereignisanzeige.
+1. downloads `install.ps1` and runs it only if its SHA-256 matches the value in the command,
+2. checks the CA against the fingerprint and downloads the agent only through this CA (checked per connection),
+3. installs to `C:\Program Files\AIOPatcher\`, registers the host (data in `C:\ProgramData\AIOPatcher\Agent\`,
+   readable only by SYSTEM and Administrators) and sets up the service `AIOPatcherAgent` (delayed auto-start,
+   restart on failure),
+4. checks, as on Linux, via self-test and for up to 90 s after the start whether the service runs stably and reports
+   to the server. On a crash it shows the matching entries from Event Viewer.
 
-Logs: Ereignisanzeige → Windows-Protokolle → Anwendung, Quelle `AIOPatcherAgent`.
-Update: automatisch (siehe [Agent-Updates](#agent-updates)) oder denselben Befehl erneut ausführen. Neuer Server: den
-Befehl aus dem neuen Dashboard ausführen, der Host wird automatisch neu registriert (wie unter Linux; `-Force` erzwingt
-es gegen denselben Server). Entfernen: `install.ps1 -Uninstall` (mit `-Purge` inkl. Registrierung).
+Logs: Event Viewer → Windows Logs → Application, source `AIOPatcherAgent`.
+Update: automatic (see [Agent updates](#agent-updates)) or run the same command again. New server: run the
+command from the new dashboard; the host is registered again automatically (as on Linux; `-Force` forces
+it against the same server). Remove: `install.ps1 -Uninstall` (with `-Purge` including the registration).
 
-Windows installiert Updates standardmäßig auch selbst. Für Hosts, die AIOPatcher patchen soll, per GPO
-„Automatische Updates konfigurieren“ auf „Herunterladen und benachrichtigen“ stellen; das Dashboard zeigt einen Hinweis,
-solange das nicht der Fall ist.
+By default, Windows also installs updates on its own. For hosts that AIOPatcher should patch, set the GPO
+"Configure Automatic Updates" to "Auto download and notify for install"; the dashboard shows a notice
+as long as that is not the case.
 
-## Kaputte Paketquellen (apt)
+## Broken package sources (apt)
 
-Eine einzelne Fremdquelle, die es nicht mehr gibt (z. B. NodeSource `node_18.x`: 404, „no longer has a Release file“),
-lässt `apt-get update` mit Fehler enden. AIOPatcher geht damit so um:
+A single third-party source that no longer exists (e.g. NodeSource `node_18.x`: 404, "no longer has a Release file")
+makes `apt-get update` end with an error. AIOPatcher handles this as follows:
 
-- **Vorabprüfung:** Jeder Scan wertet `apt-get update` aus. Nicht ladbare Quellen stehen auf der Host-Seite, mit Datei und
-  ob sie dauerhaft kaputt (404) oder vermutlich nur vorübergehend (DNS, Timeout) ist.
-- **Patchen trotzdem:** Sind die übrigen Quellen geladen, patcht der Agent mit Warnung im Log und im Ergebnis. Abgebrochen wird
-  nur bei Sperre, unterbrochenem dpkg, unbekanntem Fehler oder wenn gar keine Quelle ladbar ist.
-- **Automatisch reparieren:** Vor dem Patchen verschiebt der Agent dauerhaft kaputte Fremdquellen nach
-  `/etc/apt/aiopatcher-disabled/` und lädt die Listen neu. Nur Dateien in `/etc/apt/sources.list.d`, in denen *alle*
-  Einträge kaputt sind; Quellen von Debian, Ubuntu und Proxmox nie. Zurück: `mv` des Backups (steht im Job-Log).
-  Abschalten: Schalter *Kaputte Paketquellen deaktivieren* bzw. pro Host `aiopatcher-agent policy set allowSourceFixes false`.
+- **Pre-check:** every scan evaluates `apt-get update`. Sources that cannot be loaded are listed on the host page, with the file and
+  whether they are permanently broken (404) or probably only temporarily unavailable (DNS, timeout).
+- **Patching anyway:** if the remaining sources loaded, the agent patches with a warning in the log and in the result. It only aborts
+  on a lock, an interrupted dpkg, an unknown error, or if no source at all can be loaded.
+- **Automatic repair:** before patching, the agent moves permanently broken third-party sources to
+  `/etc/apt/aiopatcher-disabled/` and reloads the lists. Only files in `/etc/apt/sources.list.d` in which *all*
+  entries are broken; never sources from Debian, Ubuntu or Proxmox. To undo: `mv` the backup (listed in the job log).
+  To turn off: the *Disable broken package sources* switch, or per host `aiopatcher-agent policy set allowSourceFixes false`.
 
-## Auslastung (CPU, RAM, Speicher)
+## Utilization (CPU, RAM, storage)
 
-Seite *Auslastung* und Reiter *Auslastung* auf jeder Host-Seite:
+The *Utilization* page and the *Utilization* tab on every host page:
 
-- **Hosts mit Agent:** alle 5 Minuten CPU (Mittel seit der letzten Messung), RAM, Swap, Load und jeder Datenträger
-  (echte Dateisysteme, ohne tmpfs/overlay und ohne die Volumes der Proxmox-Gäste). Auf Docker-Hosts zusätzlich CPU und
-  RAM je Container. Verlauf 24 Stunden bzw. 7 Tage, danach wird er gelöscht. Ab 75 % gelb, ab 90 % rot.
-- **Proxmox (über die Integration, ohne Agent):** Knoten, Storages und alle VMs und LXC-Container mit CPU, RAM und
-  (bei LXC) Plattenbelegung, live alle 30 Sekunden. Gäste ohne Agent sind als „nicht eingetragen“ markiert, eingetragene
-  verlinken auf ihre Host-Seite. Proxmox meldet bei VMs nur die Plattengröße, nicht die Belegung; die steht mit Agent auf der
-  Host-Seite. Die Rechte der Integration reichen dafür schon (`VM.Audit`, `Sys.Audit`, `Datastore.Audit`).
-- Abschalten: Schalter *Auslastung erfassen*; pro Host das Modul `metrics` (Host → *Agent & Module*).
+- **Hosts with an agent:** every 5 minutes CPU (average since the last measurement), RAM, swap, load and every disk
+  (real file systems, without tmpfs/overlay and without the volumes of the Proxmox guests). On Docker hosts, additionally CPU and
+  RAM per container. History of 24 hours or 7 days, after that it is deleted. Yellow from 75 %, red from 90 %.
+- **Proxmox (through the integration, without an agent):** nodes, storages and all VMs and LXC containers with CPU, RAM and
+  (for LXC) disk usage, live every 30 seconds. Guests without an agent are marked "not enrolled", enrolled ones
+  link to their host page. For VMs, Proxmox only reports the disk size, not the usage; with an agent, the usage is on the
+  host page. The integration's permissions already cover this (`VM.Audit`, `Sys.Audit`, `Datastore.Audit`).
+- To turn off: the *Collect utilization* switch; per host the `metrics` module (host → *Agent & modules*).
 
-## Dienste nach Neustart prüfen
+## Checking services after a reboot
 
-Läuft nach einem Neustart alles wieder? AIOPatcher vergleicht laufende Dienste und Container vor und nach jedem Neustart,
-egal ob er vom Patch-Job, vom Dashboard oder von Hand kam:
+Is everything running again after a reboot? AIOPatcher compares running services and containers before and after every reboot,
+whether it came from a patch job, from the dashboard or was done by hand:
 
-- **Vorher:** Der Agent meldet alle 30 Minuten und direkt vor jedem Neustart- bzw. Patch-Job mit Neustart, was läuft
-  (Modul `services`, nur Namen).
-- **Nachher:** 5 Minuten nach dem Systemstart (Zeit für langsame Dienste) fragt der Server erneut und vergleicht. Was
-  vorher lief und jetzt nicht, steht rot auf der Host-Seite und geht als Benachrichtigung *Dienste fehlen nach Neustart*
-  raus. Kommt ein Dienst später doch noch hoch, verschwindet er aus der Liste. Läuft alles, zeigt die Host-Seite einen Tag
-  lang „Neustart geprüft: alles läuft wieder“.
-- **Was zählt:** Linux: laufende systemd-Dienste, die aktiviert sind (`enabled`); fehlgeschlagene sind markiert. Windows:
-  laufende Dienste mit Starttyp *Automatisch*, ohne verzögerten Start, Trigger-Start und Benutzerdienste (die starten bzw.
-  enden von selbst und wären nur Fehlalarme). Docker: laufende Container; Container ohne Restart-Policy sind markiert,
-  weil sie nach einem Neustart nie von selbst starten.
-- Absichtlich entfernt? Auf der Host-Seite *Ausblenden*. Abschalten: Schalter *Dienste nach Neustart prüfen*.
+- **Before:** the agent reports what is running every 30 minutes and right before every reboot job or patch job with a reboot
+  (module `services`, names only).
+- **After:** 5 minutes after system startup (time for slow services), the server asks again and compares. Whatever
+  ran before and does not now is shown in red on the host page and is sent as the notification *Services missing after reboot*.
+  If a service comes up later after all, it disappears from the list. If everything runs, the host page shows
+  "Reboot checked: everything is running again" for one day.
+- **What counts:** Linux: running systemd services that are enabled (`enabled`); failed ones are marked. Windows:
+  running services with startup type *Automatic*, without delayed start, trigger start and user services (they start or
+  stop on their own and would only cause false alarms). Docker: running containers; containers without a restart policy are marked,
+  because they never start on their own after a reboot.
+- Removed on purpose? *Dismiss* on the host page. To turn off: the *Check services after reboot* switch.
 
-## Auto-Patch (Patch-Pläne)
+## Auto-patch
 
-Unter *Auto-Patch → Patch-Pläne*. Ein Plan legt fest, **wann** gepatcht wird (Wochentage, Startzeit, Wartungsfenster)
-und **in welcher Reihenfolge**: Gruppen laufen nacheinander, die nächste startet erst, wenn die vorige fertig ist und sich
-alle Hosts danach zurückgemeldet haben. Jeder Host ist in höchstens einem Plan; Hosts ohne Plan werden nicht automatisch
-gepatcht, die Startseite erinnert daran.
+Under *Auto-patch → Patch plans*. A plan defines **when** patching happens (weekdays, start time, maintenance window)
+and **in which order**: groups run one after another; the next one only starts when the previous one is finished and
+all its hosts have reported back. Each host is in at most one plan; hosts without a plan are not patched
+automatically, and the start page reminds you of that.
 
-- **Vorlagen** füllen den Plan vor: *Homelab wöchentlich* (sonntags 3–7 Uhr, alles, Neustart erlaubt), *Security
-  täglich* (nachts 2–4 Uhr, nur Sicherheitsupdates, kein Neustart), *Test-Host zuerst* (Hosts mit Tag `test`, 1 Stunde
-  Pause, dann der Rest; hält bei Fehlern an), *Proxmox sicher* (VMs/LXC mit Snapshot und Backup-Prüfung, der
-  Proxmox-Host zuletzt und nur nach Freigabe).
-- **Wer gehört dazu**: ausgewählte Hosts, Hosts mit einem Tag und/oder einer Site, oder „alle übrigen Hosts“ (nur eine
-  Gruppe insgesamt; neue Hosts kommen automatisch dazu). Ausgewählte Hosts haben Vorrang vor Regeln; ein Host, der in einem
-  Plan ausgewählt wird, verlässt andere Pläne. Auf der Host-Seite und in der Hostliste: *Plan ändern* / *Patch-Pläne*.
-- **Wie**: Umfang (nur Security / alle), Neustart erlaubt, Freigabe vor der Gruppe, Snapshot, Backup-Prüfung, Pause danach,
-  bei Fehlern sofort anhalten oder die Gruppe zu Ende führen.
-- Pro Fenster startet höchstens ein Lauf. Hosts, die laut frischem Scan (24 Stunden) nichts zu installieren haben,
-  werden ohne Job übersprungen; ein ausstehender Neustart wird nachgeholt, wenn er erlaubt ist.
-- Ist ein Host im Fenster offline, wird sein Job am Fensterende verworfen. Außerhalb des Fensters startet keine neue
-  Gruppe; der Lauf hält an und lässt sich fortsetzen. *Jetzt ausführen* startet einen Plan sofort.
-- Fenster dürfen über Mitternacht gehen und gehören zum Tag, an dem sie beginnen. Sommerzeit wird berücksichtigt. Zeiten
-  gelten in der Zeitzone des Servers (`TZ` im Container).
-- Die lokale `policy.json` hat weiterhin Vorrang.
-- **Umstieg**: Das frühere Auto-Patch pro Host wird beim ersten Start zu Plänen (je gleichem Zeitplan, Umfang und Neustart),
-  frühere Abläufe sind jetzt Patch-Pläne. Alte Adressen (`/runbooks`, `/jobs`, `/rules` …) leiten weiter.
+- **Templates** prefill the plan: *Homelab weekly* (Sundays 3–7 am, everything, reboot allowed), *Security
+  daily* (at night 2–4 am, security updates only, no reboot), *Test host first* (hosts with the tag `test`, 1 hour
+  pause, then the rest; stops on errors), *Proxmox safe* (VMs/LXC with snapshot and backup check, the
+  Proxmox host last and only after approval).
+- **Who belongs to it**: selected hosts, hosts with a tag and/or a site, or "All other hosts" (only one
+  group in total; new hosts are added automatically). Selected hosts take precedence over rules; a host that is selected in a
+  plan leaves other plans. On the host page and in the host list: *Change plan* / *Patch plans*.
+- **How**: scope (security only / all), reboot allowed, approval before the group, snapshot, backup check, pause afterwards,
+  on errors stop immediately or finish the group.
+- At most one run starts per window. Hosts that have nothing to install according to a fresh scan (24 hours)
+  are skipped without a job; a pending reboot is done if it is allowed.
+- If a host is offline during the window, its job is discarded at the end of the window. Outside the window, no new
+  group starts; the run stops and can be resumed. *Run now* starts a plan immediately.
+- Windows may span midnight and belong to the day they start on. Daylight saving time is taken into account. Times
+  are in the server's time zone (`TZ` in the container).
+- The local `policy.json` still takes precedence.
+- **Migration**: the former per-host auto-patch is turned into plans on the first start (one per identical schedule, scope and reboot setting);
+  former runbooks are now patch plans. Old addresses (`/runbooks`, `/jobs`, `/rules` …) redirect.
 
-**Eigene Update-Automatik des Hosts:** Installiert der Host zusätzlich selbst Updates (unattended-upgrades bzw. Windows
-Update), zeigt die Host-Seite das an. Mit *Abschalten* (Host-Seite → Überblick bzw. Einstellungen, Karte Patch-Plan) patcht danach nur noch AIOPatcher, *Einschalten*
-nimmt es zurück:
+**The host's own automatic updates:** if the host also installs updates on its own (unattended-upgrades or Windows
+Update), the host page shows it. With *Turn off* (host page → Overview or Settings, Patch plan card), only AIOPatcher patches from then on; *Turn on*
+reverts it:
 
-- Linux: Der Agent schreibt `/etc/apt/apt.conf.d/99aiopatcher-auto-upgrades` mit `APT::Periodic::Unattended-Upgrade "0"`
-  (übersteuert `20auto-upgrades`). Datei löschen = wieder die Einstellung der Distribution.
-- Windows: Richtlinie *Herunterladen, Installation manuell* (`AUOptions` 3 unter
-  `HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU`); Einschalten entfernt die Werte wieder. Eine Domänen-GPO
-  hat Vorrang.
-- Schalter *Update-Automatik der Hosts steuern*; pro Host sperren mit `aiopatcher-agent policy set allowAutoUpdateChanges false`.
+- Linux: the agent writes `/etc/apt/apt.conf.d/99aiopatcher-auto-upgrades` with `APT::Periodic::Unattended-Upgrade "0"`
+  (overrides `20auto-upgrades`). Delete the file = back to the distribution's setting.
+- Windows: policy *download, install manually* (`AUOptions` 3 under
+  `HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU`); turning it back on removes the values. A domain GPO
+  takes precedence.
+- Switch *Control hosts' automatic updates*; lock per host with `aiopatcher-agent policy set allowAutoUpdateChanges false`.
 
-## Anmeldung per SSO (Keycloak & Co.)
+## Sign-in via SSO (Keycloak & co.)
 
-Unter *Einstellungen → Anmeldung (SSO)* lässt sich ein Identity-Provider per OpenID Connect anbinden: Keycloak,
-Authentik, Entra ID, Google, Authelia, Zitadel … Die Rolle (Admin, Operator, Betrachter) kommt **bei jedem Login** aus
-den Gruppen des Anbieters. Bei mehreren passenden Gruppen gewinnt die höchste Rolle, ohne passende Gruppe wird
-abgelehnt (oder eine Standardrolle vergeben).
+Under *Settings → Sign-in (SSO)* you can connect an identity provider via OpenID Connect: Keycloak,
+Authentik, Entra ID, Google, Authelia, Zitadel … The role (Admin, Operator, Viewer) comes from the provider's groups
+**at every login**. If several groups match, the highest role wins; without a matching group, the login is
+rejected (or a default role is assigned).
 
-- **Verknüpfen:** Beim ersten SSO-Login wird ein bestehender lokaler Benutzer mit gleichem Benutzernamen verknüpft.
-  Passwort und TOTP bleiben dann als Notfallzugang.
-- **Neue Benutzer:** Unbekannte Benutzer mit passender Gruppe bekommen automatisch ein Konto (nur SSO, ohne Passwort).
-  Beides lässt sich abschalten. Die Benutzerliste zeigt verknüpfte Konten; die Verknüpfung lässt sich dort lösen.
+- **Linking:** at the first SSO login, an existing local user with the same username is linked.
+  Password and TOTP then remain as emergency access.
+- **New users:** unknown users with a matching group automatically get an account (SSO only, without a password).
+  Both can be turned off. The user list shows linked accounts; the link can be removed there.
 
-**Keycloak in Kürze:**
+**Keycloak in brief:**
 
-1. Client anlegen: Client-ID `aiopatcher`, *Client authentication* an, *Standard flow* an, Redirect-URI
-   `https://patch.example.com:9443/signin-oidc` (steht in den SSO-Einstellungen).
-2. *Client scopes → aiopatcher-dedicated → Add mapper → Group Membership*: Name `groups`, Token Claim Name `groups`,
-   *Full group path* egal (`/admins` und `admins` werden beide erkannt), zu ID-Token und Userinfo hinzufügen.
-3. In AIOPatcher: Issuer-URL `https://sso.example.com/realms/<realm>`, Client-ID, Client-Secret (aus dem Reiter
-   *Credentials*), Gruppen zuordnen, z. B. `aiopatcher-admins` → Admin, `aiopatcher-ops` → Operator.
+1. Create a client: client ID `aiopatcher`, *Client authentication* on, *Standard flow* on, redirect URI
+   `https://patch.example.com:9443/signin-oidc` (shown in the SSO settings).
+2. *Client scopes → aiopatcher-dedicated → Add mapper → Group Membership*: name `groups`, Token Claim Name `groups`,
+   *Full group path* does not matter (`/admins` and `admins` are both recognized), add to ID token and userinfo.
+3. In AIOPatcher: issuer URL `https://sso.example.com/realms/<realm>`, client ID, client secret (from the
+   *Credentials* tab), map groups, e.g. `aiopatcher-admins` → Admin, `aiopatcher-ops` → Operator.
 
-Statt Gruppen gehen auch Realm-Rollen: Claim `realm_access.roles`. Hat Keycloak ein selbstsigniertes Zertifikat,
-den SHA-256-Fingerprint unter *Erweitert* eintragen. SAML wird (noch) nicht unterstützt; Keycloak und die meisten
-anderen Anbieter sprechen OpenID Connect.
+Realm roles work instead of groups too: claim `realm_access.roles`. If Keycloak has a self-signed certificate,
+enter its SHA-256 fingerprint under *Advanced*. SAML is not supported (yet); Keycloak and most
+other providers speak OpenID Connect.
 
-## Hosts außerhalb (Cloud) über den eigenen Reverse Proxy
+## Hosts outside (cloud) through your own reverse proxy
 
-Der Server läuft intern (z. B. `10.0.0.5`). Hosts im Netz oder per VPN verbinden sich direkt. Hosts außerhalb gehen über
-eine öffentliche Adresse deines eigenen Reverse Proxys (nginx, Caddy, Nginx Proxy Manager, Traefik, Cloudflare Tunnel)
-auf den Proxy-Port 8080 (nur LAN). Einrichten im Dashboard unter **Einstellungen → Öffentlicher Zugang** (Assistent mit
-fertigen Konfigurationen und Test). Anfragen sind signiert, Antworten vom Server unterschrieben und Geheimnisse nur für
-den Agent verschlüsselt, das funktioniert auch hinter Cloudflare. Agents nehmen zuerst die interne Adresse und weichen
-automatisch auf die öffentliche aus. Details: [docs/REVERSE-PROXY.md](docs/REVERSE-PROXY.md#agents-von-außen-über-den-eigenen-reverse-proxy).
+The server runs internally (e.g. `10.0.0.5`). Hosts in the network or on VPN connect directly. Hosts outside go through
+a public address of your own reverse proxy (nginx, Caddy, Nginx Proxy Manager, Traefik, Cloudflare Tunnel)
+to the proxy port 8080 (LAN only). Set it up in the dashboard under **Settings → Public access** (wizard with
+ready-made configurations and a test). Requests are signed, responses from the server are signed and secrets are encrypted for
+the agent only, so this also works behind Cloudflare. Agents try the internal address first and fall back
+to the public one automatically. Details: [docs/REVERSE-PROXY.md](docs/REVERSE-PROXY.md#agents-from-outside-through-your-own-reverse-proxy).
 
-## Reverse Proxy (Traefik, nginx, Nginx Proxy Manager)
+## Reverse proxy (Traefik, nginx, Nginx Proxy Manager)
 
-Das Dashboard kann hinter einem Reverse Proxy laufen (Port 443, Let's-Encrypt-Zertifikat), die Agents bleiben direkt auf 8443.
-Anleitung: [docs/REVERSE-PROXY.md](docs/REVERSE-PROXY.md), fertiges Traefik-Beispiel:
-[deploy/docker-compose.traefik.yml](deploy/docker-compose.traefik.yml). Wichtig: den Proxy in `AIOPatcher__TrustedProxies`
-eintragen. Die Prüfen-Seite (Einstellungen) zeigt, ob das stimmt.
+The dashboard can run behind a reverse proxy (port 443, Let's Encrypt certificate); the agents stay directly on 8443.
+Guide: [docs/REVERSE-PROXY.md](docs/REVERSE-PROXY.md), ready-made Traefik example:
+[deploy/docker-compose.traefik.yml](deploy/docker-compose.traefik.yml). Important: add the proxy to `AIOPatcher__TrustedProxies`.
+The Checks page (Settings) shows whether this is right.
 
-## Funktionen & Sicherheit
+## Features & security
 
-Unter *Einstellungen → Funktionen & Sicherheit* legt ein Admin fest, was AIOPatcher überhaupt darf. Der Server setzt
-jeden Schalter selbst durch, auch für API-Tokens und Patch-Pläne; ausgeblendete Knöpfe sind nur Komfort.
+Under *Settings → Features & security*, an admin decides what AIOPatcher is allowed to do at all. The server enforces
+every switch itself, also for API tokens and patch plans; hidden buttons are only a convenience.
 
-| Schalter | Ab Werk | Wirkung, wenn aus |
+| Switch | Default | Effect when off |
 |---|---|---|
-| Automatisch patchen | an | **Notaus**: Patch-Pläne starten nicht und laufende bleiben stehen, wartende Auto-Jobs bleiben liegen. Manuelle Jobs gehen weiter. |
-| Updates installieren | an | Patch-Jobs werden abgelehnt, AIOPatcher zeigt nur an. |
-| Neustarts | an | Neustart-Jobs werden abgelehnt, Patches laufen ohne Neustart. |
-| Programm-Updates per winget | **aus** | Programm-Updates werden abgelehnt. |
-| Agent-Self-Update | an | Agents bekommen keine Updates angeboten. |
-| Alter Agent-Check-in | an | Agents vor dem Pull-Protokoll werden abgewiesen (erst abschalten, wenn alle aktualisiert sind). |
-| Update-Automatik der Hosts steuern | an | Kein Ab-/Einschalten von unattended-upgrades bzw. Windows Update aus dem Dashboard. |
-| Auslastung erfassen | an | Keine Messwerte der Hosts, keine Proxmox-Übersicht. |
-| Dienste nach Neustart prüfen | an | Kein Vergleich vor/nach Neustarts, keine Liste laufender Dienste. |
-| Kaputte Paketquellen deaktivieren | an | Dauerhaft kaputte Fremdquellen bleiben, wo sie sind; gepatcht wird trotzdem, mit Warnung. |
-| Test-Snapshots | an | Kein Test-Snapshot auf der Prüfen-Seite (Einstellungen). |
-| OPNsense-Firmware-Update per Klick | **aus** | Firmware-Updates nur in der OPNsense selbst. |
-| API-Tokens | an | Jeder Token wird abgewiesen (bleibt gespeichert). |
-| CVE-Abgleich, Container-Prüfung, Versionsprüfung | an | Keine Verbindungen zu den jeweiligen Diensten. |
-| Compliance-Prüfung | **aus** | Agents melden Firewall, SSH/RDP und Benutzer nicht. |
-| Firewall verwalten | **aus** | Regelsätze können nicht ausgerollt werden. |
-| SSH/RDP korrigieren | **aus** | Empfehlungen lassen sich nicht per Klick anwenden. |
-| Benutzer verwalten | **aus** | Keine Sperren, Adminrechte, Passwörter oder SSH-Schlüssel über das Dashboard. |
+| Automatic patching | on | **Emergency stop**: patch plans do not start and running ones stop, waiting auto jobs stay queued. Manual jobs continue. |
+| Install updates | on | Patch jobs are rejected, AIOPatcher only displays. |
+| Reboots | on | Reboot jobs are rejected, patches run without a reboot. |
+| Program and container updates | **off** | Program updates are rejected. |
+| Agent self-update | on | Agents are not offered any updates. |
+| Legacy agent check-in | on | Agents from before the pull protocol are rejected (only turn off once all of them are updated). |
+| Control hosts' automatic updates | on | No turning unattended-upgrades or Windows Update off/on from the dashboard. |
+| Collect utilization | on | No host metrics, no Proxmox overview. |
+| Check services after reboot | on | No before/after comparison of reboots, no list of running services. |
+| Disable broken package sources | on | Permanently broken third-party sources stay where they are; patching still happens, with a warning. |
+| Test snapshots | on | No test snapshot on the Checks page (Settings). |
+| OPNsense firmware update by click | **off** | Firmware updates only in OPNsense itself. |
+| API tokens | on | Every token is rejected (stays stored). |
+| CVE lookup, Container checks, Version check | on | No connections to the respective services. |
+| Compliance checks | **off** | Agents do not report firewall, SSH/RDP and users. |
+| Manage firewalls | **off** | Rule sets cannot be rolled out. |
+| Fix SSH/RDP | **off** | Recommendations cannot be applied by click. |
+| Manage users | **off** | No locking, admin rights, passwords or SSH keys via the dashboard. |
 
-Jede Änderung landet im Audit-Log. Schalter ändern geht nur mit Browser-Login als Admin, nicht per API-Token.
-Was nie eingeschaltet werden soll, sperrst du auf dem Server, z. B. in der `.env` neben der `docker-compose.yml`:
+Every change ends up in the audit log. Changing switches only works with a browser login as admin, not with an API token.
+Anything that should never be turned on, you lock on the server, e.g. in the `.env` next to the `docker-compose.yml`:
 
 ```bash
 AIOPATCHER_LOCKED_FEATURES=AppUpdates,OpnsenseUpdates
 ```
 
-(Bei Installationen per `setup.sh` steht stattdessen `AIOPatcher__LockedFeatures: "AppUpdates,OpnsenseUpdates"` direkt in
-der `docker-compose.yml`.)
+(For installations via `setup.sh`, `AIOPatcher__LockedFeatures: "AppUpdates,OpnsenseUpdates"` goes directly into
+the `docker-compose.yml` instead.)
 
-Gesperrte Funktionen sind aus und lassen sich im Dashboard nicht einschalten, auch nicht von einem Admin.
+Locked features are off and cannot be turned on in the dashboard, not even by an admin.
 
-## Pull-Agent und Module
+## Pull agent and modules
 
-Der Agent ist ein reiner **Pull-Agent**: Er fragt den Server nach Aufträgen (`GET /agent/v2/poll`) und schickt Daten nur als
-Antwort auf genau einen Auftrag (Log-Zeilen und Ergebnis). Ungefragt sendet er nichts, auch kein Inventar. Der Server
-entscheidet, welche Daten er wann braucht, z. B. Systemdaten alle 15 Minuten, Container alle 30 Minuten, Auslastung alle
-5 Minuten und Updates, Programme und Compliance alle 6 Stunden, nach einer Installation sofort.
+The agent is a pure **pull agent**: it asks the server for tasks (`GET /agent/v2/poll`) and only sends data as a
+response to exactly one task (log lines and result). It sends nothing unasked, not even inventory. The server
+decides which data it needs when, e.g. system data every 15 minutes, containers every 30 minutes, utilization every
+5 minutes and updates, programs and compliance every 6 hours, right after an installation.
 
-Jede Funktion ist ein **Modul** mit festen Aktionen. Andere Aufträge lehnt der Agent ab:
+Every function is a **module** with fixed actions. The agent rejects any other task:
 
-| Modul | Aktionen |
+| Module | Actions |
 |---|---|
-| `system` | `describe`: OS, IPs, Neustart nötig, Module, Ergebnis des letzten Self-Updates |
-| `updates` | `scan`, `install`, `reboot` (apt bzw. Windows Update), `change` (eigene Update-Automatik an/aus) |
+| `system` | `describe`: OS, IPs, reboot required, modules, result of the last self-update |
+| `updates` | `scan`, `install`, `reboot` (apt or Windows Update), `change` (own automatic updates on/off) |
 | `software` | `inventory`, `appupdate` (winget) |
-| `docker` | `inventory`, `appupdate` (einen Compose-Container auf ein neues Image heben) |
-| `services` | `list`: laufende Autostart-Dienste und Container (Vergleich vor/nach Neustart) |
-| `metrics` | `sample`: CPU, RAM, Datenträger, Container-Auslastung |
+| `docker` | `inventory`, `appupdate` (move a Compose container to a new image) |
+| `services` | `list`: running autostart services and containers (before/after reboot comparison) |
+| `metrics` | `sample`: CPU, RAM, disks, container utilization |
 | `firewall`, `remoteaccess` | `status`, `change` |
 | `users` | `list`, `change` |
-| `agent` | `update` (Self-Update), `renew` (Client-Zertifikat) |
+| `agent` | `update` (self-update), `renew` (client certificate) |
 
-Module lassen sich **pro Host** im Dashboard abschalten (Host → *Agent & Module*). Dann vergibt der Server dafür keine
-Aufträge mehr. Auf dem Host selbst sperrt `policy.json` Module endgültig:
+Modules can be turned off **per host** in the dashboard (host → *Agent & modules*). The server then no longer assigns
+tasks for them. On the host itself, `policy.json` locks modules for good:
 
 ```bash
 sudo aiopatcher-agent policy set disabledModules docker,users
 ```
 
-`system` und `agent` lassen sich nicht abschalten.
+`system` and `agent` cannot be turned off.
 
-**Übergang:** Agents vor dem Pull-Protokoll checken weiter wie bisher ein und aktualisieren sich per Self-Update. Die
-Prüfen-Seite (Einstellungen) zeigt, welche noch alt sind. Danach unter *Funktionen & Sicherheit* „Alter Agent-Check-in“ abschalten.
+**Transition:** agents from before the pull protocol keep checking in as before and update themselves via self-update. The
+Checks page (Settings) shows which ones are still old. After that, turn off "Legacy agent check-in" under *Features & security*.
 
-## Agent-Updates
+## Agent updates
 
-Hat der Server eine neuere Agent-Version, aktualisieren sich die Agents selbst, sobald sie nichts zu tun haben:
+When the server has a newer agent version, the agents update themselves as soon as they have nothing to do:
 
-1. **Signatur prüfen.** Das Image bringt Release-Signaturen mit (GitHub-Release oder eigener Build mit Schlüssel, siehe
-   [SERVER-SETUP](docs/SERVER-SETUP.md#agent-updates-signieren-eigene-builds)). Fehlen sie, signiert der Server selbst; den
-   Schlüssel dafür legt er beim ersten Start neben der CA an (`ca/update-signing.key`), die Agents merken sich ihn beim
-   ersten Check-in. Agents mit eingebautem Release-Schlüssel nehmen nur Release-Signaturen an.
-2. **Selbsttest.** Die neue Version startet einmal mit `selftest`: Läuft sie hier, liest sie die Registrierung, erreicht sie
-   den Server, meldet sie die erwartete Version? Wenn nicht, bleibt die alte Version, und das Dashboard zeigt den Grund.
-3. **Tausch mit Sicherung.** Die alte Version wird als `.bak` gesichert, der Agent startet neu.
-4. **Rollback.** Ein Wächter außerhalb des Agents (systemd-Timer bzw. PowerShell) prüft nach 5 Minuten, ob sich die neue
-   Version beim Server gemeldet hat. Wenn nicht (abgestürzt, hängt), spielt er die Sicherung zurück und startet den Dienst neu.
+1. **Check the signature.** The image ships release signatures (GitHub release or your own build with a key, see
+   [SERVER-SETUP](docs/SERVER-SETUP.md#signing-agent-updates-own-builds)). If they are missing, the server signs itself; it
+   creates the key for this next to the CA on first start (`ca/update-signing.key`), and the agents remember it at their
+   first check-in. Agents with a built-in release key only accept release signatures.
+2. **Self-test.** The new version starts once with `selftest`: does it run here, can it read the registration, reach
+   the server, does it report the expected version? If not, the old version stays and the dashboard shows the reason.
+3. **Swap with backup.** The old version is backed up as `.bak`, the agent restarts.
+4. **Rollback.** A watchdog outside the agent (systemd timer or PowerShell) checks after 5 minutes whether the new
+   version has reported to the server. If not (crashed, hanging), it restores the backup and restarts the service.
 
-Gescheiterte Updates erscheinen auf der Host-Seite und als Benachrichtigung („Agent-Update fehlgeschlagen“). Die Version
-wird dem Host nicht erneut angeboten, bis du dort auf *Erneut versuchen* klickst.
+Failed updates appear on the host page and as a notification ("Agent update failed"). The version
+is not offered to the host again until you click *Retry* there.
 
-**Abwägung beim Server-Schlüssel:** Wer den AIOPatcher-Server übernimmt, kann damit eigenen Code auf alle Hosts bringen,
-deren Agent keinen Release-Schlüssel hat. Für besonders wichtige Hosts (Proxmox-Host, OPNsense) in `policy.json`
-`"trustServerUpdates": false` setzen und dort per Installationsbefehl aktualisieren, oder Agents mit eigenem
-Release-Schlüssel bauen. Ganz abschalten: *Funktionen & Sicherheit → Agent-Self-Update*.
+**Trade-off with the server key:** whoever takes over the AIOPatcher server can use it to push their own code to all hosts
+whose agent has no release key. For particularly important hosts (Proxmox host, OPNsense), set
+`"trustServerUpdates": false` in `policy.json` and update them there via the install command, or build agents with your own
+release key. To turn it off completely: *Features & security → Agent self-update*.
 
-## Compliance (Firewall, SSH/RDP, Benutzer)
+## Compliance (firewall, SSH/RDP, users)
 
-Unter *Compliance* (und pro Host im Reiter *Compliance*) zeigt AIOPatcher für jeden Host:
+Under *Compliance* (and per host in the *Compliance* tab), AIOPatcher shows for every host:
 
-- **Firewall**: an/aus und Regeln. Erkannt werden ufw, firewalld, nftables/iptables, die Proxmox-Firewall und die
-  Windows-Firewall. Verwalten kann AIOPatcher ufw und die Windows-Firewall.
-- **SSH/Remotedesktop**: effektive OpenSSH-Konfiguration (`sshd -T`) bzw. RDP-Einstellungen mit Empfehlungen
-  (Root nur mit Schlüssel, keine Passwort-Anmeldung, NLA, TLS …).
-- **Benutzer**: lokale Konten mit Status, Adminrechten (sudo/wheel bzw. Administratoren), root bzw. eingebautem
-  Administrator, Passwortstatus, SSH-Schlüsseln und letzter Anmeldung.
+- **Firewall**: on/off and rules. Detected are ufw, firewalld, nftables/iptables, the Proxmox firewall and the
+  Windows Firewall. AIOPatcher can manage ufw and the Windows Firewall.
+- **SSH/Remote Desktop**: effective OpenSSH configuration (`sshd -T`) or RDP settings with recommendations
+  (root only with a key, no password login, NLA, TLS …).
+- **Users**: local accounts with status, admin rights (sudo/wheel or Administrators), root or the built-in
+  Administrator, password status, SSH keys and last login.
 
-Alles ist ab Werk aus. Lesen braucht den Schalter *Compliance-Prüfung*, jede Art Änderung ihren eigenen Schalter
-(*Firewall verwalten*, *SSH/RDP korrigieren*, *Benutzer verwalten*) und die Rolle Admin. **Zusätzlich** muss jeder Host
-Änderungen selbst erlauben, sonst lehnt der Agent ab:
+Everything is off by default. Reading needs the *Compliance checks* switch, each kind of change its own switch
+(*Manage firewalls*, *Fix SSH/RDP*, *Manage users*) and the Admin role. **In addition**, every host must
+allow changes itself, otherwise the agent refuses:
 
 ```bash
 sudo aiopatcher-agent policy set allowSystemChanges true
 ```
 
-Oder gleich bei der Installation: `install.sh … --allow-system-changes` bzw. `install.ps1 … -AllowSystemChanges`.
+Or right at installation: `install.sh … --allow-system-changes` or `install.ps1 … -AllowSystemChanges`.
 
-**Firewall-Regelsätze** (*Compliance → Firewall-Regelsätze*) beschreiben die komplette Firewall: an/aus, Standard für
-eingehend/ausgehend und Regeln wie „443/tcp von überall“ oder „alles aus 10.99.0.0/24“. Jede Änderung wird eine neue
-Version; jede ältere Version lässt sich wieder ausrollen. Beim Ausrollen:
+**Firewall rule sets** (*Compliance → Firewall rule sets*) describe the complete firewall: on/off, default for
+inbound/outbound and rules such as "443/tcp from anywhere" or "everything from 10.99.0.0/24". Every change creates a new
+version; any older version can be rolled out again. When rolling out:
 
-1. prüft der Agent die Regeln selbst noch einmal (nur Ports, IPs/Netze, feste Aktionen, keine Befehle vom Server),
-2. sichert den aktuellen Stand (ufw-Dateien bzw. `netsh advfirewall export`) und beim ersten Mal zusätzlich das
-   **Original** (wiederherstellbar per Klick),
-3. setzt die Regeln: ufw wird komplett neu aufgebaut; unter Windows verwaltet AIOPatcher die Regelgruppe
-   „AIOPatcher“, mit *exklusiv* schaltet es alle anderen eingehenden Regeln ab (nicht löschen),
-4. prüft, ob er den Server noch erreicht. Wenn nicht, stellt er den alten Stand sofort wieder her. Ein Wächter
-   außerhalb des Agents tut das nach 3 Minuten auch, falls der Agent dabei abstürzt.
+1. the agent checks the rules itself once more (only ports, IPs/networks, fixed actions, no commands from the server),
+2. backs up the current state (ufw files or `netsh advfirewall export`) and, the first time, additionally the
+   **original** (restorable by click),
+3. applies the rules: ufw is rebuilt completely; on Windows, AIOPatcher manages the rule group
+   "AIOPatcher", and with *exclusive* it disables all other inbound rules (without deleting them),
+4. checks whether it can still reach the server. If not, it restores the old state immediately. A watchdog
+   outside the agent does the same after 3 minutes in case the agent crashes along the way.
 
-Der Agent verbindet sich nach außen und kann deshalb nicht prüfen, ob *du* noch per SSH/RDP hinkommst. Das Dashboard
-warnt, wenn ein Regelsatz Port 22 oder 3389 nicht erlaubt. Auf Proxmox-Hosts verwaltet AIOPatcher keine Firewall
-(ufw würde sich mit der Proxmox-Firewall beißen).
+The agent connects outbound and therefore cannot check whether *you* can still get in via SSH/RDP. The dashboard
+warns when a rule set does not allow port 22 or 3389. On Proxmox hosts, AIOPatcher does not manage a firewall
+(ufw would clash with the Proxmox firewall).
 
-**SSH/RDP**: Empfehlungen werden über eine eigene Datei `/etc/ssh/sshd_config.d/00-aiopatcher.conf` gesetzt, vorher mit
-`sshd -t` geprüft; offene Sitzungen bleiben bestehen. *Zurücknehmen* entfernt sie wieder. Passwort-Anmeldung lässt sich
-nur abschalten, wenn ein Admin einen SSH-Schlüssel hat. RDP-Werte stehen in der Registry; die ursprünglichen Werte
-merkt sich der Agent fürs Zurücknehmen. Per Gruppenrichtlinie gesetzte Werte fasst AIOPatcher nicht an.
+**SSH/RDP**: recommendations are applied via a separate file `/etc/ssh/sshd_config.d/00-aiopatcher.conf`, checked beforehand with
+`sshd -t`; open sessions stay connected. *Revert* removes them again. Password login can
+only be turned off if an admin has an SSH key. RDP values are stored in the registry; the agent remembers the original values
+for reverting. AIOPatcher does not touch values set by Group Policy.
 
-**Benutzer**: sperren/entsperren, Adminrechte geben/entziehen, Passwort setzen, SSH-Schlüssel hinzufügen/entfernen
-(Linux). Den letzten Admin, der sich anmelden kann, sperrt der Agent nicht. root wird nur per Passwort gesperrt
-(Schlüssel, Cronjobs und `su` aus sudo bleiben). Passwörter liegen auf dem Server nur verschlüsselt bis zur Übergabe
-an den Agent, stehen nie im Log oder Audit-Log und werden auch bei abgebrochenen oder abgelehnten Jobs gelöscht.
+**Users**: lock/unlock, grant/revoke admin rights, set a password, add/remove SSH keys
+(Linux). The agent does not lock the last admin who can log in. root is only locked by password
+(keys, cron jobs and `su` from sudo remain). Passwords are stored on the server only in encrypted form until they are handed
+to the agent, never appear in the log or audit log, and are deleted even for cancelled or rejected jobs.
 
-## Lokale Policy auf dem Host
+## Local policy on the host
 
-Beim Registrieren legt der Agent `policy.json` neben seinen Zertifikaten an
+When registering, the agent creates `policy.json` next to its certificates
 (Linux: `/var/lib/aiopatcher-agent/`, Windows: `C:\ProgramData\AIOPatcher\Agent\`).
-Der Server kann sie nicht ändern; sie wird bei jedem Job neu gelesen.
+The server cannot change it; it is read again for every job.
 
 ```json
 {
@@ -512,21 +512,21 @@ Der Server kann sie nicht ändern; sie wird bei jedem Job neu gelesen.
 }
 ```
 
-`allowPatch`: `None`, `Security` oder `All`. `allowReboot: false` verhindert jeden Neustart durch AIOPatcher,
-z. B. auf dem Proxmox-Host selbst oder der OPNsense-VM. `"allowSelfUpdate": false` verhindert, dass der Agent
-signierte Updates selbst installiert. `"trustServerUpdates": false` lässt nur Updates mit Release-Signatur zu
-(siehe [Agent-Updates](#agent-updates)). `"allowSystemChanges": true` erlaubt Änderungen an Firewall, SSH/RDP und
-Benutzern (siehe [Compliance](#compliance-firewall-sshrdp-benutzer), ab Werk aus). `"allowSourceFixes": false` verhindert, dass der Agent kaputte Paketquellen deaktiviert (siehe [Kaputte Paketquellen](#kaputte-paketquellen-apt)). `"allowAutoUpdateChanges": false` verhindert, dass das Dashboard unattended-upgrades bzw. Windows Update ab- oder einschaltet (siehe [Auto-Patch](#auto-patch)). `"allowAppUpdates": false` verbietet Programm-Updates per winget und Container-Updates auf diesem Host
-(beide brauchen außerdem `allowPatch: All`). Die Policy gilt zusätzlich zu den Schaltern im Dashboard: ausgeführt wird nur,
-was beide erlauben.
+`allowPatch`: `None`, `Security` or `All`. `allowReboot: false` prevents any reboot by AIOPatcher,
+e.g. on the Proxmox host itself or the OPNsense VM. `"allowSelfUpdate": false` prevents the agent from installing
+signed updates itself. `"trustServerUpdates": false` only allows updates with a release signature
+(see [Agent updates](#agent-updates)). `"allowSystemChanges": true` allows changes to the firewall, SSH/RDP and
+users (see [Compliance](#compliance-firewall-sshrdp-users), off by default). `"allowSourceFixes": false` prevents the agent from disabling broken package sources (see [Broken package sources](#broken-package-sources-apt)). `"allowAutoUpdateChanges": false` prevents the dashboard from turning unattended-upgrades or Windows Update off or on (see [Auto-patch](#auto-patch)). `"allowAppUpdates": false` forbids program updates via winget and container updates on this host
+(both also need `allowPatch: All`). The policy applies in addition to the switches in the dashboard: only what both
+allow is executed.
 
-## Agent (Entwicklung)
+## Agent (development)
 
 ```bash
 dotnet build src/AIOPatcher.Agent
 ```
 
-Im Dashboard unter *Hosts → Host hinzufügen* einen Token erzeugen, dann:
+In the dashboard under *Hosts → Add host*, generate a token, then:
 
 ```bash
 src/AIOPatcher.Agent/bin/Debug/net10.0/aiopatcher-agent enroll --server https://localhost:7444 --token <token> --fingerprint <sha256> --state-dir ./agent-dev
@@ -536,37 +536,37 @@ src/AIOPatcher.Agent/bin/Debug/net10.0/aiopatcher-agent enroll --server https://
 src/AIOPatcher.Agent/bin/Debug/net10.0/aiopatcher-agent run --state-dir ./agent-dev
 ```
 
-`aiopatcher-agent scan` zeigt ohne Server, was der Agent melden würde. Für schnelle Tests den Server mit
-`AIOPatcher__AgentCheckinIntervalSeconds=10` starten (Standard: 60).
+`aiopatcher-agent scan` shows, without a server, what the agent would report. For quick tests, start the server with
+`AIOPatcher__AgentCheckinIntervalSeconds=10` (default: 60).
 
-Releases: `dotnet publish src/AIOPatcher.Agent -c Release -r linux-x64` (bzw. `linux-arm64`, `win-x64`) ergibt je eine
-Datei ohne installierte .NET-Runtime. Native AOT nur mit `-p:AgentNativeAot=true` (läuft dann erst ab der glibc des Build-Rechners).
+Releases: `dotnet publish src/AIOPatcher.Agent -c Release -r linux-x64` (or `linux-arm64`, `win-x64`) produces a single
+file each that needs no installed .NET runtime. Native AOT only with `-p:AgentNativeAot=true` (then only runs on the glibc of the build machine or newer).
 
-## Entwicklung
+## Development
 
-Voraussetzungen: .NET SDK 10, Node.js 24.
+Requirements: .NET SDK 10, Node.js 24.
 
 ```bash
 dotnet tool restore
 npm --prefix src/web install
 ```
 
-Server starten (lokal Dashboard auf `https://localhost:7443`, Agent-API auf `https://localhost:7444`;
-lokale Daten landen in `src/AIOPatcher.Server/runtime-data/`):
+Start the server (locally the dashboard on `https://localhost:7443`, agent API on `https://localhost:7444`;
+local data goes to `src/AIOPatcher.Server/runtime-data/`):
 
 ```bash
 dotnet run --project src/AIOPatcher.Server
 ```
 
-Den Setup-Token für die Ersteinrichtung gibt der Server beim Start im Log aus.
+The server prints the setup token for the first-time setup to the log at startup.
 
-Frontend mit Hot-Reload (leitet `/api` an den Server weiter):
+Frontend with hot reload (forwards `/api` to the server):
 
 ```bash
 npm --prefix src/web run dev
 ```
 
-Danach http://localhost:5173 öffnen. `npm --prefix src/web run build` baut das Frontend nach `src/AIOPatcher.Server/wwwroot`.
+Then open http://localhost:5173. `npm --prefix src/web run build` builds the frontend into `src/AIOPatcher.Server/wwwroot`.
 
 Tests:
 
@@ -574,25 +574,25 @@ Tests:
 dotnet test AIOPatcher.slnx
 ```
 
-Neue Datenbank-Migration:
+New database migration:
 
 ```bash
 dotnet ef migrations add <Name> -p src/AIOPatcher.Server -o Data/Migrations
 ```
 
-> Lokal 7443/7444 statt 9443/8443, weil 8443 unter Windows häufig in einem von Hyper-V reservierten
-> Portbereich liegt (`netsh int ipv4 show excludedportrange protocol=tcp`).
+> Locally 7443/7444 instead of 9443/8443, because on Windows 8443 often lies in a port range reserved by
+> Hyper-V (`netsh int ipv4 show excludedportrange protocol=tcp`).
 
-## Container bauen
+## Building the container
 
-Baut Server, Frontend und alle Agents (linux-x64, linux-arm64, win-x64, jeweils als einzelne Datei ohne installierte .NET-Runtime).
+Builds the server, frontend and all agents (linux-x64, linux-arm64, win-x64, each as a single file without an installed .NET runtime).
 
 ```bash
 docker build -t aiopatcher-server .
 ```
 
-Lokal ohne Docker: Agent-Builds nach `src/AIOPatcher.Server/runtime-data/agents/<rid>/` legen, dann liefert der
-Entwicklungsserver sie aus. Unter Windows gebaut (ohne AOT):
+Locally without Docker: put agent builds into `src/AIOPatcher.Server/runtime-data/agents/<rid>/`, and the
+development server serves them. Built on Windows (without AOT):
 
 ```bash
 dotnet publish src/AIOPatcher.Agent -c Release -r linux-x64 -p:AgentNativeAot=false -o src/AIOPatcher.Server/runtime-data/agents/linux-x64
