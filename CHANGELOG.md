@@ -8,6 +8,8 @@ Geschrieben für Anwender, nicht als Commit-Liste.
 
 ## [Unveröffentlicht]
 
+## [0.8.3] - 2026-11-18
+
 ### Neu
 - **Agent-Update im Blick:** Der Steckbrief auf der Host-Seite zeigt, ob der Agent aktuell ist, wann das Update kommt,
   ob es gerade läuft, gescheitert ist oder warum keins möglich ist (z. B. Lite-Agent, Self-Update abgeschaltet, kein
