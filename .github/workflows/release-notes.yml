@@ -1,12 +1,12 @@
 # Patchnotes vorhandener Releases aus CHANGELOG.md neu schreiben (z. B. nach einer Korrektur im CHANGELOG).
-# Start: Actions → "Patchnotes aktualisieren" → Run workflow; Version leer = alle Versionen im CHANGELOG mit Release.
-name: Patchnotes aktualisieren
+# Start: Actions → "Update release notes" → Run workflow; Version leer = alle Versionen im CHANGELOG mit Release.
+name: Update release notes
 
 on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version ohne v, z. B. 0.7.2 (leer = alle)"
+        description: "Version without v, e.g. 0.7.2 (empty = all)"
         required: false
         default: ""
 
@@ -32,10 +32,10 @@ jobs:
           fi
           for v in $versions; do
             if ! gh release view "v$v" >/dev/null 2>&1; then
-              echo "v$v: keine Release, übersprungen"
+              echo "v$v: no release, skipped"
               continue
             fi
             bash tools/release-notes.sh "$v" "$image" > "$RUNNER_TEMP/notes-$v.md"
             gh release edit "v$v" --notes-file "$RUNNER_TEMP/notes-$v.md"
-            echo "v$v: Patchnotes aktualisiert"
+            echo "v$v: release notes updated"
           done

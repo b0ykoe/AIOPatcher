@@ -1,176 +1,175 @@
-# Patchnotes
+# Changelog
 
-Alle nennenswerten Änderungen an AIOPatcher, neueste zuerst. Jede Version hat einen eigenen Abschnitt; der
-Release-Workflow übernimmt ihn als Text der GitHub-Release (ohne Abschnitt bricht der Release ab).
+All notable changes to AIOPatcher, newest first. Every version has its own section; the release workflow uses it as
+the text of the GitHub release (without a section the release fails).
 
-Aufbau eines Abschnitts: **Neu**, **Verbessert**, **Behoben**, **Hinweise zum Update** (nur was zutrifft).
-Geschrieben für Anwender, nicht als Commit-Liste.
+Section layout: **Added**, **Improved**, **Fixed**, **Upgrade notes** (only what applies).
+Written for users, not as a list of commits.
 
-## [Unveröffentlicht]
+## [Unreleased]
 
 ## [0.8.4] - 2026-11-18
 
-### Verbessert
-- **Authenticator-Code in einem Feld:** Bei Anmeldung, Ersteinrichtung, Einladung und Passwortwechsel steht der
-  6-stellige Code jetzt in einem einzigen Feld statt in sechs Kästchen. Passwort-Manager wie Bitwarden, 1Password oder
-  KeePassXC können ihn so zuverlässig eintragen; Leerzeichen und Bindestriche im eingefügten Code werden ignoriert.
+### Improved
+- **Authenticator code in one field:** At sign-in, first-time setup, invitations and password changes, the 6-digit
+  code now goes into a single field instead of six boxes. Password managers such as Bitwarden, 1Password or KeePassXC
+  can fill it in reliably; spaces and dashes in a pasted code are ignored.
 
 ## [0.8.3] - 2026-11-18
 
-### Neu
-- **Agent-Update im Blick:** Der Steckbrief auf der Host-Seite zeigt, ob der Agent aktuell ist, wann das Update kommt,
-  ob es gerade läuft, gescheitert ist oder warum keins möglich ist (z. B. Lite-Agent, Self-Update abgeschaltet, kein
-  Build für die Architektur, Server kann nicht signieren). **„Jetzt aktualisieren“** bietet das Update beim nächsten
-  Abruf an, statt bis zu 6 Stunden zu warten, und hebt eine Sperre nach einem gescheiterten Versuch auf.
-- Die Hostliste markiert Hosts mit veraltetem Agent („Agent 0.6.2“) bzw. gescheitertem Agent-Update.
+### Added
+- **Agent updates at a glance:** The facts card on the host page shows whether the agent is up to date, when the update
+  will arrive, whether it is running right now, has failed, or why none is possible (e.g. lite agent, self-update
+  turned off, no build for the architecture, server cannot sign). **"Update now"** offers the update on the next poll
+  instead of waiting up to 6 hours, and lifts the block after a failed attempt.
+- The host list marks hosts with an outdated agent ("Agent 0.6.2") or a failed agent update.
 
 ## [0.8.2] - 2026-11-17
 
-### Verbessert
-- **Agent auf neuen Server umziehen:** Den Installationsbefehl aus dem neuen Dashboard auf einem Host ausführen, der noch
-  bei einem anderen AIOPatcher-Server registriert ist, registriert ihn jetzt automatisch neu (neuer Schlüssel, neues
-  Zertifikat, neue CA) statt still mit dem alten Server verbunden zu bleiben. Die lokale `policy.json` bleibt erhalten,
-  eine offene Job-Antwort an den alten Server wird verworfen. Gilt für Linux und Windows, auch für den Lite-Agent.
+### Improved
+- **Moving an agent to a new server:** Running the install command from the new dashboard on a host that is still
+  enrolled with another AIOPatcher server now re-enrolls it automatically (new key, new certificate, new CA) instead of
+  silently staying connected to the old server. The local `policy.json` is kept, a pending job result for the old
+  server is discarded. Applies to Linux and Windows, including the lite agent.
 
-### Hinweise zum Update
-- Die Erkennung steckt im Installationsskript, das der Server ausliefert: Sie greift, sobald der neue Server diese
-  Version hat; auf den Hosts muss vorher nichts aktualisiert werden.
+### Upgrade notes
+- The detection is part of the install script the server delivers: it works as soon as the new server runs this
+  version; nothing needs to be updated on the hosts first.
 
 ## [0.8.1] - 2026-11-17
 
-### Verbessert
-- **Neuer Styleguide, kompakter und einheitlicher:** Karten und Tabellen enger, Farben haben überall dieselbe
-  Bedeutung (z. B. „Neustart nötig“ immer gelb, Warteschlange grau, verfügbare Updates blau).
-- **Auslastung wie bei Proxmox:** „Aktuell“ (CPU, RAM, Swap, Laufzeit, Load) und „Datenträger“ als schmale Karten mit
-  Zeilen untereinander statt Balken über die ganze Bildschirmbreite; in Tabellen kurze Balken mit Wert daneben.
-- **Alle Seiten nach dem Styleguide überarbeitet:** einheitliche Kartenüberschriften, gleiche Abstände, Badges in
-  Tabellen und Listen gleich groß (z. B. KEV und „akzeptiert“ überall gleich), Tabellen in Karten mit Kopfzeile,
-  Hauptaktionen als Verlaufsknopf, Aktionen in Zeilen klein. Fehler beim Laden von Listen (Benutzer, Sites, API-Tokens,
-  Integrationen, Benachrichtigungen, Berichte) stehen jetzt als Hinweis an Ort und Stelle; leere Ergebnisse zeigen
-  einen Leer-Zustand.
-- Host-Seite: Der Compliance-Reiter hat keinen doppelten Rahmen mehr. Firewall-Regelsatz ausrollen ist als riskante
-  Aktion rot.
-- Host-, Job-, Lauf- und Plan-Seite haben denselben Kopf (Zurück-Link, Titel mit Status, Metadaten, Aktionen rechts);
-  Hauptaktionen in Dialogen sehen überall gleich aus.
+### Improved
+- **New style guide, more compact and consistent:** Tighter cards and tables, and colors mean the same everywhere
+  (e.g. "Reboot required" is always yellow, queued is gray, available updates are blue).
+- **Utilization like Proxmox:** "Current" (CPU, RAM, swap, uptime, load) and "Disks" as narrow cards with rows stacked
+  instead of bars across the whole screen; tables show short bars with the value next to them.
+- **All pages reworked to the style guide:** consistent card titles, equal spacing, badges in tables and lists the same
+  size (e.g. KEV and "accepted" look alike everywhere), tables in cards with a header row, main actions as gradient
+  buttons, small row actions. Errors while loading lists (users, sites, API tokens, integrations, notifications,
+  reports) now show as a notice in place; empty results show an empty state.
+- Host page: the compliance tab no longer has a double border. Rolling out a firewall rule set is shown in red as a
+  risky action.
+- Host, job, run and plan pages share the same header (back link, title with status, metadata, actions on the right);
+  main actions in dialogs look the same everywhere.
 
-### Behoben
-- Der Zurück-Link oben auf Host-, Job-, Plan- und Lauf-Seiten war über die ganze Bildschirmbreite klickbar; jetzt nur
-  noch der Text selbst. Der Lauf führt zurück zu Auto-Patch.
+### Fixed
+- The back link at the top of host, job, plan and run pages was clickable across the whole screen width; now only the
+  text itself is. A run leads back to Auto-patch.
 
 ## [0.8.0] - 2026-11-17
 
-### Neu
-- **Öffentlicher Zugang für Hosts außerhalb (Cloud):** Der Server läuft intern, Hosts im Netz oder per VPN verbinden
-  sich wie bisher direkt. Hosts außerhalb erreichen ihn über eine öffentliche Adresse deines eigenen Reverse Proxys.
-  Einrichten unter **Einstellungen → Öffentlicher Zugang**: Assistent mit fertiger Konfiguration für nginx, Caddy,
-  Nginx Proxy Manager, Traefik, Cloudflare Tunnel und die Portweiterleitung auf der OPNsense, dazu ein Test-Befehl,
-  dessen Ergebnis live angezeigt wird (auch hinter Cloudflare). Optional auch das Dashboard unter eigenem Namen.
-- Sicher auch durch fremde Proxys: Jede Anfrage eines Agents ist signiert, jede Antwort vom Server unterschrieben, und
-  Geheimnisse wie neue Passwörter sind nur für den Agent verschlüsselt. Wer den Proxy kontrolliert, kann nichts auslösen.
-- Agents kennen beide Adressen, nehmen zuerst die interne und weichen automatisch auf die öffentliche aus. Die Host-Seite
-  zeigt, wenn ein Host über die öffentliche Adresse verbunden ist.
-- **Host hinzufügen → „Außerhalb (Cloud)“:** Installationsbefehl für Hosts ohne Weg ins LAN; Skript und Agent werden
-  gegen Prüfsummen aus dem Befehl geprüft.
+### Added
+- **Public access for hosts outside your network (cloud):** The server runs internally; hosts on the network or via
+  VPN connect directly as before. Hosts outside reach it through a public address on your own reverse proxy. Set it up
+  under **Settings → Public access**: a wizard with ready-made configuration for nginx, Caddy, Nginx Proxy Manager,
+  Traefik, Cloudflare Tunnel and port forwarding on OPNsense, plus a test command whose result is shown live (also
+  behind Cloudflare). Optionally the dashboard under its own name as well.
+- Safe even through third-party proxies: every agent request is signed, every server response is signed, and secrets
+  such as new passwords are encrypted for the agent only. Whoever controls the proxy cannot trigger anything.
+- Agents know both addresses, try the internal one first and fall back to the public one automatically. The host page
+  shows when a host is connected through the public address.
+- **Add host → "Outside (cloud)":** install command for hosts with no route into the LAN; script and agent are verified
+  against checksums contained in the command.
 
-### Verbessert
-- Release-Seiten zeigen jetzt Patchnotes statt nur der Installationsanleitung.
-- Dokumentation: Container-Updates und die Policy `allowAppUpdates` (gilt auch für Container) beschrieben.
+### Improved
+- Release pages now show release notes instead of only the installation guide.
+- Documentation: container updates and the `allowAppUpdates` policy (which also applies to containers) are described.
 
-### Hinweise zum Update
-- Neuer Proxy-Port **8080** (HTTP, `AIOPATCHER_PROXY_PORT`, 0 = aus): nur im LAN freigeben, er ist das Ziel für
-  deinen Reverse Proxy. Er antwortet erst, wenn im Dashboard eine öffentliche Adresse eingerichtet ist.
-- Agents brauchen diese Version für den Ausweichweg; sie aktualisieren sich wie gewohnt selbst und lernen die Adresse
-  bei der nächsten Abfrage. Der Lite-Agent für sehr alte Systeme verbindet sich weiterhin nur direkt.
-- Das Setup-Skript schlägt jetzt immer den internen Betrieb vor (Dashboard direkt auf 9443).
+### Upgrade notes
+- New proxy port **8080** (HTTP, `AIOPATCHER_PROXY_PORT`, 0 = off): expose it on the LAN only, it is the target for
+  your reverse proxy. It only answers once a public address is set up in the dashboard.
+- Agents need this version for the fallback; they update themselves as usual and learn the address on their next
+  poll. The lite agent for very old systems still connects directly only.
+- The setup script now always suggests internal operation (dashboard directly on 9443).
 
 ## [0.7.2] - 2026-11-17
 
-### Neu
-- **Compliance-Vorgaben (Soll-Zustand):** benannte Vorgaben für SSH/RDP-Werte, Benutzer (muss da sein, muss Admin sein,
-  darf nicht aktiv sein, nur diese Admins), SSH-Schlüssel je Benutzer und Firewall-Regelsatz. Gelten wie Patch-Pläne für
-  ausgewählte Hosts, Tags, Sites oder „alle übrigen“. Abweichungen werden je Host als Soll/Ist angezeigt, „Angleichen“
-  startet einen Job in sicherer Reihenfolge (nur Admins, nur wenn der Host `allowSystemChanges` erlaubt).
-  Vorlagen: „Linux-Server hart“, „Homelab locker“, „Windows Standard“.
-- **Container aktualisieren per Klick:** Bei Docker-Compose-Containern mit neuem Image zieht der Agent das Image und
-  erstellt nur diesen Dienst neu (`pull` + `up -d --no-deps`), danach prüft er, ob er wieder läuft. Portainer-Stacks,
-  `docker run`-Container und fehlende Compose-Dateien werden erkannt und erklärt.
-- **Schnell-Plan:** Patch-Plan ohne Editor anlegen – Hosts wählen, nur Security oder alle Updates, Neustart ja/nein,
-  täglich oder Wochentag, Uhrzeit. Auf der Patch-Plan-Seite, in der Vorlagenauswahl und auf der Host-Seite.
+### Added
+- **Compliance baselines (desired state):** named baselines for SSH/RDP settings, users (must exist, must be admin,
+  must not be active, only these admins), SSH keys per user and firewall rule sets. Like patch plans, they apply to
+  selected hosts, tags, sites or "all others". Deviations are shown per host as desired/actual, "Align" starts a job in
+  a safe order (admins only, and only if the host allows `allowSystemChanges`). Templates: "Hardened Linux server",
+  "Relaxed homelab", "Windows standard".
+- **Update containers with one click:** For Docker Compose containers with a new image, the agent pulls the image and
+  recreates only that service (`pull` + `up -d --no-deps`), then checks that it is running again. Portainer stacks,
+  `docker run` containers and missing compose files are detected and explained.
+- **Quick plan:** create a patch plan without the editor – pick hosts, security only or all updates, reboot yes/no,
+  daily or a weekday, time. On the patch plans page, in the template picker and on the host page.
 
-### Verbessert
-- **Startseite:** oben drei gleich große Karten (was dich braucht, nächste Wartungsfenster, letzte Jobs), darunter
-  kleine Host-Kacheln mit CPU, RAM und Speicher nebeneinander.
-- **Auslastung je Host:** aktuelle Werte untereinander (wie bei Proxmox) und Datenträger in zwei halben Karten, die
-  Verlaufsdiagramme nutzen die volle Breite.
-- Der Funktionsschalter heißt jetzt „Programm- und Container-Updates“.
+### Improved
+- **Home page:** three equal cards at the top (what needs you, next maintenance windows, recent jobs), below them small
+  host tiles with CPU, RAM and storage side by side.
+- **Utilization per host:** current values stacked (like Proxmox) and disks in two half-width cards; the history charts
+  use the full width.
+- The feature switch is now called "Program and container updates".
 
-### Behoben
-- Sicherheit → Compliance: Die Reiter „Übersicht“ und „Firewall-Regelsätze“ sprangen auf „Lücken“.
+### Fixed
+- Security → Compliance: the "Overview" and "Firewall rule sets" tabs jumped to "Vulnerabilities".
 
-### Hinweise zum Update
-- Container-Updates brauchen den Schalter „Programm- und Container-Updates“ sowie in der `policy.json` des Hosts
-  `allowAppUpdates: true` und `allowPatch: All`.
-- Agents holen sich die neue Version per Self-Update; erst danach melden sie die Compose-Herkunft der Container und die
-  Fingerabdrücke der SSH-Schlüssel.
+### Upgrade notes
+- Container updates need the "Program and container updates" switch, plus `allowAppUpdates: true` and
+  `allowPatch: All` in the host's `policy.json`.
+- Agents get the new version through self-update; only then do they report the compose origin of containers and the
+  fingerprints of SSH keys.
 
 ## [0.7.1] - 2026-11-17
 
-### Neu
-- **Lücken akzeptieren:** je Host, für alle betroffenen Hosts oder überall, befristet (30/90/365 Tage) oder dauerhaft,
-  mit Begründung. Akzeptierte Lücken werden ausgeblendet und nicht mitgezählt.
-- **„Prüfen, ob behebbar“** bei Lücken ohne Update: gleicht sofort neu ab und sagt je Host, ob es ein Fehlalarm ist,
-  ob die Distribution einen Fix veröffentlicht hat (startet dann einen Scan) oder ob es noch keinen Fix gibt.
-- Container: „Neu prüfen“ fragt die Registry sofort ab, dazu Anzeige, wann zuletzt gemeldet und geprüft wurde.
+### Added
+- **Accept vulnerabilities:** per host, for all affected hosts or everywhere, for a limited time (30/90/365 days) or
+  permanently, with a reason. Accepted vulnerabilities are hidden and not counted.
+- **"Check if fixable"** for vulnerabilities without an update: re-matches immediately and tells you per host whether
+  it is a false positive, whether the distribution has published a fix (then starts a scan) or whether there is no fix
+  yet.
+- Containers: "Check again" queries the registry immediately, and shows when they were last reported and checked.
 
-### Behoben
-- **CVE-Fehlalarme auf Debian/Proxmox:** Bibliotheken wie `libldb2` (aus dem Samba-Quellpaket) wurden mit ihrer eigenen
-  Versionsnummer statt der Samba-Version geprüft und galten als anfällig für uralte Samba-CVEs. Abgeglichen wird jetzt die
-  Version des Quellpakets.
-- Container zeigten nach einem Update weiter „neues Image“: Es werden jetzt alle Digests eines Images verglichen, und die
-  Container werden öfter (alle 30 Minuten und nach jedem Scan) neu gemeldet.
-- Selbst gebaute Images zeigten eine falsche Version (z. B. 0.1.33); sie nehmen die Version jetzt aus dem Release-Tag.
-- Startseite: Wartungsfenster und letzte Jobs standen verloren in einer rechten Spalte.
+### Fixed
+- **CVE false positives on Debian/Proxmox:** Libraries such as `libldb2` (from the Samba source package) were checked
+  with their own version number instead of the Samba version and were considered vulnerable to ancient Samba CVEs.
+  Matching now uses the version of the source package.
+- Containers kept showing "new image" after an update: all digests of an image are now compared, and containers are
+  reported more often (every 30 minutes and after every scan).
+- Self-built images showed a wrong version (e.g. 0.1.33); they now take the version from the release tag.
+- Home page: maintenance windows and recent jobs sat lost in a right-hand column.
 
-### Hinweise zum Update
-- Für exakte CVE-Ergebnisse den Agent aktualisieren (Self-Update); ältere Agents werden bis dahin bestmöglich geschätzt.
+### Upgrade notes
+- For exact CVE results, update the agent (self-update); until then older agents are estimated as well as possible.
 
 ## [0.7.0] - 2026-11-17
 
-### Neu
-- **Neue Oberfläche:** Navigation auf acht Bereiche verdichtet (Übersicht, Hosts, Auslastung, Sicherheit, Auto-Patch,
-  Inventar, Berichte, Einstellungen); verwandte Seiten sind Reiter, alte Adressen leiten weiter. Einstellungen mit
-  Seitenmenü.
-- **Patch-Pläne** ersetzen Abläufe und Auto-Patch pro Host: Gruppen in Reihenfolge, Mitglieder per Auswahl, Tag, Site
-  oder „alle übrigen“, Pause zwischen Gruppen, Snapshot, Backup-Prüfung, Freigabe. Vorlagen: Homelab wöchentlich,
-  Security täglich, Test-Host zuerst, Proxmox sicher.
-- **Einrichtungsassistent** (Site, Host, Plan, Benachrichtigung).
-- Startseite mit To-dos, Host-Karten mit Auslastung, nächsten Wartungsfenstern und letzten Jobs; Hostliste mit
-  CPU/RAM/Disk-Balken; Host-Seite mit Reitern.
+### Added
+- **New interface:** navigation condensed into eight areas (Overview, Hosts, Utilization, Security, Auto-patch,
+  Inventory, Reports, Settings); related pages are tabs, old addresses redirect. Settings with a side menu.
+- **Patch plans** replace sequences and per-host auto-patch: groups in order, members by selection, tag, site or "all
+  others", pause between groups, snapshot, backup check, approval. Templates: Homelab weekly, Security daily, Test host
+  first, Proxmox safe.
+- **Setup wizard** (site, host, plan, notification).
+- Home page with to-dos, host cards with utilization, next maintenance windows and recent jobs; host list with
+  CPU/RAM/disk bars; host page with tabs.
 
-### Hinweise zum Update
-- Bisheriges Auto-Patch pro Host wird beim ersten Start automatisch in Patch-Pläne übernommen.
+### Upgrade notes
+- Existing per-host auto-patch settings are moved into patch plans automatically on first start.
 
 ## [0.6.2] - 2026-11-17
 
-### Neu
-- **Auslastung:** CPU, RAM und Speicher der Hosts sowie der Proxmox-Gäste (auch ohne Agent).
-- **Dienste und Container nach Neustarts prüfen:** Was vorher lief und danach fehlt, wird angezeigt bzw. gemeldet.
-- Update-Automatik der Hosts (unattended-upgrades, Windows Update) aus dem Dashboard schalten.
-- Eine `docker-compose.yml` mit `.env` für Docker Compose und Portainer, dazu ein Portainer-App-Template.
-- Version unten in der Navigation.
+### Added
+- **Utilization:** CPU, RAM and storage of hosts and of Proxmox guests (even without an agent).
+- **Check services and containers after reboots:** whatever ran before and is missing afterwards is shown and reported.
+- Switch the hosts' automatic updates (unattended-upgrades, Windows Update) from the dashboard.
+- A `docker-compose.yml` with `.env` for Docker Compose and Portainer, plus a Portainer app template.
+- Version at the bottom of the navigation.
 
-### Verbessert
-- Container-Liste sortierbar, breite Bildschirme besser genutzt, SSO- und Prüfen-Seite zweispaltig.
+### Improved
+- Container list sortable, wide screens used better, SSO and check pages in two columns.
 
-### Behoben
-- Agent startet unter systemd sofort statt erst nach über 90 Sekunden.
+### Fixed
+- The agent starts immediately under systemd instead of after more than 90 seconds.
 
 ## [0.6.1] - 2026-11-17
 
-### Behoben
-- Der Container gibt `/data` selbst dem Dienst-Benutzer (kein `chown` von Hand mehr).
-- Die Uptime stimmt nach einem Neustart sofort.
+### Fixed
+- The container hands `/data` to the service user itself (no manual `chown` anymore).
+- Uptime is correct immediately after a reboot.
 
-## Ältere Versionen
+## Older versions
 
-Siehe Git-Historie.
+See the Git history.

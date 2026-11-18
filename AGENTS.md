@@ -14,12 +14,15 @@ Verbindliche Arbeitsweise in diesem Repository. Antworten an den Maintainer auf 
 
 ## Patchnotes (CHANGELOG.md)
 
-- **Jede Änderung mit Wirkung für Anwender** kommt im selben Commit unter `## [Unveröffentlicht]` in `CHANGELOG.md`.
-- **Jede Release bekommt ordentliche Patchnotes:** vor dem Taggen `## [Unveröffentlicht]` in `## [x.y.z] - JJJJ-MM-TT`
-  umbenennen, Text glätten, einen neuen leeren `## [Unveröffentlicht]` darüber anlegen, committen, dann `vx.y.z` taggen.
+- **Sprache: Englisch.** CHANGELOG und damit die Texte der GitHub-Releases sind englisch (öffentliches Publikum);
+  Commit-Nachrichten und Antworten an den Maintainer bleiben deutsch. Begriffe aus der Oberfläche so schreiben, wie
+  sie in `i18n/en.ts` stehen (z. B. „Update now“, „Settings → Public access“).
+- **Jede Änderung mit Wirkung für Anwender** kommt im selben Commit unter `## [Unreleased]` in `CHANGELOG.md`.
+- **Jede Release bekommt ordentliche Patchnotes:** vor dem Taggen `## [Unreleased]` in `## [x.y.z] - JJJJ-MM-TT`
+  umbenennen, Text glätten, einen neuen leeren `## [Unreleased]` darüber anlegen, committen, dann `vx.y.z` taggen.
 - Der Release-Workflow übernimmt genau diesen Abschnitt als Text der GitHub-Release (`tools/release-notes.sh`) und
-  **bricht ohne Abschnitt ab**. Nachträglich korrigieren: CHANGELOG ändern, pushen, Workflow „Patchnotes aktualisieren“.
-- Stil: Abschnitte **Neu**, **Verbessert**, **Behoben**, **Hinweise zum Update** (nur was zutrifft). Für Anwender
+  **bricht ohne Abschnitt ab**. Nachträglich korrigieren: CHANGELOG ändern, pushen, Workflow „Update release notes“.
+- Stil: Abschnitte **Added**, **Improved**, **Fixed**, **Upgrade notes** (nur was zutrifft). Für Anwender
   geschrieben (was ändert sich für mich, was muss ich tun), keine Commit-Liste, keine internen Dateinamen.
 - Versionen: Fehlerbehebungen und kleine Funktionen = Patch (`0.7.2` → `0.7.3`), größere Umbauten = Minor.
 

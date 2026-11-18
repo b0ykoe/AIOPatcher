@@ -5,8 +5,8 @@
 #   tools/release-notes.sh 0.7.2 ghcr.io/owner/aiopatcher-server > notes.md
 set -euo pipefail
 
-version="${1:?Version fehlt, z. B. 0.7.2}"
-image="${2:?Image-Name fehlt, z. B. ghcr.io/owner/aiopatcher-server}"
+version="${1:?version missing, e.g. 0.7.2}"
+image="${2:?image name missing, e.g. ghcr.io/owner/aiopatcher-server}"
 changelog="$(dirname "$0")/../CHANGELOG.md"
 
 notes="$(awk -v v="$version" '
@@ -16,7 +16,7 @@ notes="$(awk -v v="$version" '
 ' "$changelog")"
 
 if [ -z "$(printf '%s' "$notes" | tr -d '[:space:]')" ]; then
-  echo "CHANGELOG.md hat keinen Abschnitt \"## [$version]\" mit Inhalt. Bitte Patchnotes eintragen und neu taggen." >&2
+  echo "CHANGELOG.md has no section \"## [$version]\" with content. Add release notes and tag again." >&2
   exit 1
 fi
 
@@ -31,17 +31,17 @@ cat <<EOF
 ---
 
 <details>
-<summary>Installation und Update</summary>
+<summary>Installation and update</summary>
 
-**Docker-Image:** \`$image:$version\` (auch \`:latest\`)
+**Docker image:** \`$image:$version\` (also \`:latest\`)
 
-**Docker Compose:** \`docker-compose.yml\` und \`env.example\` herunterladen, \`env.example\` in \`.env\` umbenennen, \`AIOPATCHER_HOSTNAME\` eintragen (DNS-Name oder IP des Servers), dann \`docker compose up -d\`.
+**Docker Compose:** download \`docker-compose.yml\` and \`env.example\`, rename \`env.example\` to \`.env\`, set \`AIOPATCHER_HOSTNAME\` (DNS name or IP of the server), then \`docker compose up -d\`.
 Update: \`docker compose pull && docker compose up -d\`.
 
-**Portainer:** App-Template (siehe README) oder \`docker-compose.yml\` unter *Stacks → Add stack → Upload* hochladen und die \`.env\` per *Load variables from .env file* laden. Update: Stack neu deployen.
+**Portainer:** app template (see README) or upload \`docker-compose.yml\` under *Stacks → Add stack → Upload* and load the \`.env\` via *Load variables from .env file*. Update: redeploy the stack.
 
-Den Setup-Token zeigen die Logs des Containers \`aiopatcher\`; Dashboard: \`https://<host>:9443\`. Setup-Skript: siehe README.
-Die Agents aktualisieren sich danach selbst.
+The setup token is shown in the logs of the \`aiopatcher\` container; dashboard: \`https://<host>:9443\`. Setup script: see README.
+The agents update themselves afterwards.
 
 </details>
 EOF
