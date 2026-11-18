@@ -1,9 +1,10 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { Alert, Button, Card, Center, Divider, PasswordInput, PinInput, Stack, Text, TextInput } from "@mantine/core";
+import { Alert, Button, Card, Center, Divider, PasswordInput, Stack, Text, TextInput } from "@mantine/core";
 import { IconAlertTriangle, IconKey, IconLogin } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import { api } from "../api";
 import { Brand } from "../App";
+import { TotpCodeInput } from "../components/TotpCodeInput";
 import { errorText } from "../components/ui";
 
 export function LoginPage({ onLoggedIn }: { onLoggedIn: () => void }) {
@@ -61,19 +62,7 @@ export function LoginPage({ onLoggedIn }: { onLoggedIn: () => void }) {
             )}
             <TextInput label={t("common.username")} value={username} onChange={(e) => setUsername(e.currentTarget.value)} autoComplete="username" autoFocus={!sso?.enabled} required />
             <PasswordInput label={t("common.password")} value={password} onChange={(e) => setPassword(e.currentTarget.value)} autoComplete="current-password" required />
-            <Stack gap={6}>
-              <Text size="sm" fw={500}>
-                {t("common.totpCode")}
-              </Text>
-              <PinInput
-                length={6}
-                type="number"
-                oneTimeCode
-                value={code}
-                onChange={setCode}
-                aria-label={t("common.totpAria")}
-              />
-            </Stack>
+            <TotpCodeInput value={code} onChange={setCode} required />
             {error && (
               <Alert color="red" icon={<IconAlertTriangle size={18} />}>
                 {error}

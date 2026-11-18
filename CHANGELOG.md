@@ -8,6 +8,11 @@ Geschrieben für Anwender, nicht als Commit-Liste.
 
 ## [Unveröffentlicht]
 
+### Verbessert
+- **Authenticator-Code in einem Feld:** Bei Anmeldung, Ersteinrichtung, Einladung und Passwortwechsel steht der
+  6-stellige Code jetzt in einem einzigen Feld statt in sechs Kästchen. Passwort-Manager wie Bitwarden, 1Password oder
+  KeePassXC können ihn so zuverlässig eintragen; Leerzeichen und Bindestriche im eingefügten Code werden ignoriert.
+
 ## [0.8.3] - 2026-11-18
 
 ### Neu

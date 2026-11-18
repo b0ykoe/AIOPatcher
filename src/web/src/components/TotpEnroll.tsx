@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import QRCode from "qrcode";
-import { Code, Image, PinInput, Stack, Text } from "@mantine/core";
+import { Code, Image, Stack, Text } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 import type { SetupStartResponse } from "../api";
+import { TotpCodeInput } from "./TotpCodeInput";
 
 /** QR-Code + manuelles Secret + Code-Eingabe; gemeinsam für Ersteinrichtung und Einladung. */
 export function TotpEnroll({ totp, code, onCodeChange }: { totp: SetupStartResponse; code: string; onCodeChange: (code: string) => void }) {
@@ -22,7 +23,7 @@ export function TotpEnroll({ totp, code, onCodeChange }: { totp: SetupStartRespo
       <Text size="xs" c="dimmed">
         {t("common.totpManual")} <Code>{totp.totpSecret}</Code>
       </Text>
-      <PinInput length={6} type="number" oneTimeCode size="lg" value={code} onChange={onCodeChange} autoFocus aria-label={t("common.totpAria")} />
+      <TotpCodeInput value={code} onChange={onCodeChange} autoFocus w="100%" maw={260} />
     </Stack>
   );
 }

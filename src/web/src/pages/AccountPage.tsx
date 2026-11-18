@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { Alert, Button, Card, Group, PasswordInput, PinInput, SegmentedControl, SimpleGrid, Stack, Text } from "@mantine/core";
+import { Alert, Button, Card, Group, PasswordInput, SegmentedControl, SimpleGrid, Stack, Text } from "@mantine/core";
 import { IconDeviceMobile, IconKey, IconLanguage, IconLayoutDashboard } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import { api, type Me } from "../api";
 import { useMe } from "../App";
+import { TotpCodeInput } from "../components/TotpCodeInput";
 import { CardTitle, errorText, notifySuccess, PageHeader } from "../components/ui";
 import { setLanguage, type Language } from "../i18n";
 
@@ -99,10 +100,7 @@ function PasswordCard() {
         <PasswordInput label={t("account.currentPassword")} value={current} onChange={(e) => setCurrent(e.currentTarget.value)} autoComplete="current-password" />
         <PasswordInput label={t("account.newPassword")} description={t("common.passwordMin")} value={next} onChange={(e) => setNext(e.currentTarget.value)} autoComplete="new-password" />
         <PasswordInput label={t("common.passwordRepeat")} value={repeat} onChange={(e) => setRepeat(e.currentTarget.value)} autoComplete="new-password" />
-        <Stack gap={6}>
-          <Text size="sm" fw={500}>{t("common.totpCode")}</Text>
-          <PinInput length={6} type="number" oneTimeCode value={code} onChange={setCode} aria-label={t("common.totpAria")} />
-        </Stack>
+        <TotpCodeInput value={code} onChange={setCode} />
         {error && <Alert color="red">{error}</Alert>}
         <Group justify="flex-end">
           <Button variant="gradient" className="gradient-button" loading={busy} disabled={!current || !next || code.length !== 6} onClick={() => void submit()}>
