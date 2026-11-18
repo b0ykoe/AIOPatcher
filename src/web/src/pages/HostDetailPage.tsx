@@ -26,6 +26,7 @@ import {
 } from "@tabler/icons-react";
 import { api, ApiError, formatDateTime, kbOf, splitTags, formatRelative, formatUptime, isActiveJob, type HostDetail, type Job, type JobType, type PatchScope } from "../api";
 import { HostScanCard } from "../components/ScanIntervals";
+import { ChangelogModal } from "../components/ChangelogModal";
 import { useTranslation } from "react-i18next";
 import { useCan, useSimple } from "../App";
 import { useFeatures } from "../features";
@@ -60,6 +61,7 @@ export function HostDetailPage() {
   const [updateFilter, setUpdateFilter] = useState("all");
   const [allowReboot, setAllowReboot] = useState(false);
   const [holdFor, setHoldFor] = useState<{ pattern: string; hostId: string } | undefined>(undefined);
+  const [changelogFor, setChangelogFor] = useState<string | null>(null);
   const [knownTags, setKnownTags] = useState<string[]>([]);
 
   useEffect(() => {
@@ -286,6 +288,7 @@ export function HostDetailPage() {
         </>}
       />
 
+      <ChangelogModal hostId={h.id} name={changelogFor} onClose={() => setChangelogFor(null)} />
       <HoldModal opened={holdFor !== undefined} sites={[]} hosts={[h]} initial={holdFor} onClose={() => setHoldFor(undefined)} onSaved={() => void load()} />
 
       <Stack gap="md">
@@ -413,7 +416,24 @@ export function HostDetailPage() {
                             <Table.Td><CveCell update={up} /></Table.Td>
                             <Table.Td><Text size="xs" c="dimmed" lineClamp={1}>{up.classification}</Text></Table.Td>
                             <Table.Td><Text size="xs" c="dimmed">{formatRelative(up.firstSeenAt)}</Text></Table.Td>
-                            <Table.Td w={40}>
+                            <Table.Td w={72}>
+                              <Group gap={2} wrap="nowrap" justify="flex-end">
+                              {h.osFamily === "Windows" ? (
+                                kbOf(up.name) && (
+                                  <Tooltip label={t("changelog.kb")}>
+                                    <ActionIcon size="sm" variant="subtle" color="gray" component="a" target="_blank" rel="noreferrer"
+                                      href={`https://support.microsoft.com/help/${kbOf(up.name)!.slice(2)}`} aria-label={t("changelog.kb")}>
+                                      <IconInfoCircle size={14} />
+                                    </ActionIcon>
+                                  </Tooltip>
+                                )
+                              ) : (
+                                <Tooltip label={t("changelog.show")}>
+                                  <ActionIcon size="sm" variant="subtle" color="gray" onClick={() => setChangelogFor(up.name)} aria-label={t("changelog.show")}>
+                                    <IconInfoCircle size={14} />
+                                  </ActionIcon>
+                                </Tooltip>
+                              )}
                               {can.operate && !simple && !up.isHeld && (
                                 <Tooltip label={t("rules.holdThis")}>
                                   <ActionIcon size="sm" variant="subtle" color="gray" onClick={() => setHoldFor({ pattern: kbOf(up.name) ?? up.name, hostId: h.id })} aria-label={t("rules.holdThis")}>
@@ -421,6 +441,7 @@ export function HostDetailPage() {
                                   </ActionIcon>
                                 </Tooltip>
                               )}
+                              </Group>
                             </Table.Td>
                           </Table.Tr>
                         ))}

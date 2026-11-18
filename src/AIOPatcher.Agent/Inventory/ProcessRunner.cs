@@ -61,6 +61,7 @@ public static class ProcessRunner
         psi.Environment["DEBIAN_FRONTEND"] = "noninteractive";
         psi.Environment["APT_LISTCHANGES_FRONTEND"] = "none";
         psi.Environment["UCF_FORCE_CONFFOLD"] = "1";
+        psi.Environment["PAGER"] = "cat"; // apt-get changelog: Text ausgeben statt einen Pager zu öffnen
         // needrestart (Ubuntu) nur auflisten lassen: ein automatischer Dienst-Neustart könnte sonst den Agent
         // samt laufendem dpkg beenden.
         psi.Environment["NEEDRESTART_MODE"] = "l";

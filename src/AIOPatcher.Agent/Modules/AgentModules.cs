@@ -4,6 +4,7 @@ using AIOPatcher.Agent.Inventory;
 using AIOPatcher.Agent.Platforms;
 using AIOPatcher.Agent.Jobs;
 using AIOPatcher.Agent.Maintenance;
+using AIOPatcher.Agent.Platforms.Apt;
 using AIOPatcher.Agent.Platforms.Docker;
 using AIOPatcher.Contracts;
 
@@ -48,10 +49,23 @@ public sealed class UpdatesModule(JobExecutor executor) : IAgentModule
 {
     public string Id => AgentModules.Updates;
     public bool Available => true;
-    public IReadOnlyList<string> Actions { get; } = [ModuleActions.Scan, ModuleActions.Install, ModuleActions.Reboot, ModuleActions.Change];
+    public IReadOnlyList<string> Actions { get; } = AptChangelog.Supported
+        ? [ModuleActions.Scan, ModuleActions.Install, ModuleActions.Reboot, ModuleActions.Change, ModuleActions.Changelog]
+        : [ModuleActions.Scan, ModuleActions.Install, ModuleActions.Reboot, ModuleActions.Change];
 
     public async Task<TaskOutcome> ExecuteAsync(AgentTask task, TaskContext context, CancellationToken ct)
     {
+        if (task.Action == ModuleActions.Changelog)
+        {
+            if (!AptChangelog.Supported || PullJsonContext.FromElement(task.Payload, PullJsonContext.Default.ChangelogRequest) is not { } request)
+            {
+                return TaskOutcome.Rejected("Changelogs are only available with apt.");
+            }
+
+            var changelogs = await AptChangelog.FetchAsync(request.Packages, ct);
+            return Json.Ok($"{changelogs.Count(c => c.Text is not null)} of {changelogs.Count} changelogs", new ChangelogResult(changelogs), PullJsonContext.Default.ChangelogResult);
+        }
+
         if (task.Action == ModuleActions.Change)
         {
             var change = PullJsonContext.FromElement(task.Payload, PullJsonContext.Default.SystemChange);

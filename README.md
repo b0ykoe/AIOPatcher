@@ -140,6 +140,10 @@ tested against real systems, but against mocked APIs and unit tests):
   without any outbound request): look up a CVE number or keyword (vendor, product, package): description and CVSS,
   fixed in which package version per Debian/Ubuntu release (OSV.dev) or by which KB per Windows version
   (Microsoft), KEV/EPSS and which of your own hosts are affected. Also via Ctrl+K and the CVE number.
+- **Release notes for pending updates**: the *i* next to a Linux update shows what the new version changes compared
+  to the installed one (Debian changelog, via `apt-get changelog` on the host, so Debian, Ubuntu and Proxmox work,
+  including the enterprise repo). The agent fetches them right after each scan; for Windows updates the *i* opens
+  the KB article at Microsoft.
 - **Program inventory**: dpkg/snap and Windows programs, with available version and links (winget manifest,
   Debian tracker, Launchpad, vendor); on Windows **program updates via winget** (Windows 10/11, Server 2025)
 - **Docker containers**: detects newer images in the registry (display/notification only, updates nothing). The agent reports
@@ -409,7 +413,7 @@ Every function is a **module** with fixed actions. The agent rejects any other t
 | Module | Actions |
 |---|---|
 | `system` | `describe`: OS, IPs, reboot required, modules, result of the last self-update |
-| `updates` | `scan`, `install`, `reboot` (apt or Windows Update), `change` (own automatic updates on/off) |
+| `updates` | `scan`, `install`, `reboot` (apt or Windows Update), `change` (own automatic updates on/off), `changelog` (release notes of pending apt updates, read-only) |
 | `software` | `inventory`, `appupdate` (winget) |
 | `docker` | `inventory`, `appupdate` (move a Compose container to a new image) |
 | `services` | `list`: running autostart services and containers (before/after reboot comparison) |

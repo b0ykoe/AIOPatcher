@@ -179,6 +179,7 @@ builder.Services.AddSingleton<CveLookupService>();
 builder.Services.AddHostedService<ContainerUpdateService>();
 builder.Services.AddSingleton<PublicAccess>();
 builder.Services.AddSingleton<ScanSchedule>();
+builder.Services.AddSingleton<UpdateChangelogs>();
 builder.Services.AddSingleton<ReleaseCheck>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<ReleaseCheck>());
 
@@ -250,6 +251,7 @@ app.MapCveLookupEndpoints();
 app.MapFeatureEndpoints();
 app.MapPublicAccessEndpoints();
 app.MapScanSettingsEndpoints();
+app.MapChangelogEndpoints();
 app.MapOpenApi("/api/openapi/{documentName}.json").RequireAuthorization();
 app.MapAgentEndpoints();
 app.MapAgentDownloadEndpoints();

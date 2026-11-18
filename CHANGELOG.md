@@ -8,6 +8,16 @@ Written for users, not as a list of commits.
 
 ## [Unreleased]
 
+### Added
+- **Release notes for updates:** An *i* next to each pending update shows what it fixes or changes. On Linux these
+  are the package's release notes from `apt-get changelog` (Debian, Ubuntu and Proxmox, also with the enterprise
+  repo), limited to what is new since the installed version. The agent fetches them right after each scan, so they
+  usually open instantly. For Windows updates the *i* opens the KB article at Microsoft.
+
+### Upgrade notes
+- Release notes need the new agent version; agents update themselves as usual. The lite agent for very old systems
+  does not support them.
+
 ## [0.8.6] - 2026-11-18
 
 ### Improved

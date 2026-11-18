@@ -19,7 +19,8 @@ public sealed class ModuleContext(
     CertificateAuthority? ca,
     DateTime now,
     IReadOnlyDictionary<(string Module, string Action), DateTime> lastRequested,
-    ScanSchedule? schedule = null)
+    ScanSchedule? schedule = null,
+    UpdateChangelogs? changelogs = null)
 {
     public AppDbContext Db => db;
     public Notifier Notifier => notifier;
@@ -27,6 +28,9 @@ public sealed class ModuleContext(
     public AgentDownloads Downloads => downloads;
     public CertificateAuthority? Ca => ca;
     public DateTime Now => now;
+
+    /// <summary>Changelogs anstehender Updates (null in Tests ohne diesen Teil).</summary>
+    public UpdateChangelogs? Changelogs => changelogs;
 
     /// <summary>Update-Scan-Intervall des Hosts (Einstellungen bzw. je Host; ohne Schedule der feste Standard).</summary>
     public TimeSpan UpdateScanInterval(ManagedHost host) => schedule?.UpdateScanInterval(host) ?? ServerModule.InventoryInterval;
@@ -137,16 +141,42 @@ public sealed class UpdatesServerModule : ServerModule
         // Nach Installation/Neustart gleich neu scannen, sonst im eingestellten Intervall (Standard 6 Stunden).
         var lastScan = context.LastRequested(Id, ModuleActions.Scan);
         var lastChange = new[] { context.LastRequested(Id, ModuleActions.Install), context.LastRequested(Id, ModuleActions.Reboot) }.Max();
-        return lastScan is null || context.Now - lastScan >= context.UpdateScanInterval(host) || lastChange > lastScan
-            ? new PlannedTask(ModuleActions.Scan)
-            : null;
+        if (lastScan is null || context.Now - lastScan >= context.UpdateScanInterval(host) || lastChange > lastScan)
+        {
+            return new PlannedTask(ModuleActions.Scan);
+        }
+
+        // Patchnotes vorgemerkter Updates holen (nach einem Scan oder auf Klick auf "i")
+        if (context.Changelogs is { } changelogs && changelogs.HasPending(host.Id) && ModuleJson.Supports(host, Id, ModuleActions.Changelog)
+            && changelogs.TakePending(host.Id, 40) is { Count: > 0 } packages)
+        {
+            return new PlannedTask(ModuleActions.Changelog, PullJsonContext.ToElement(new ChangelogRequest(packages), PullJsonContext.Default.ChangelogRequest));
+        }
+
+        return null;
     }
 
     public override async Task<JsonElement?> HandleAsync(ModuleContext context, ManagedHost host, AgentTaskRecord task, TaskResultRequest result, CancellationToken ct)
     {
+        if (task.Action == ModuleActions.Changelog)
+        {
+            if (PullJsonContext.FromElement(result.Payload, PullJsonContext.Default.ChangelogResult) is { } changelogs)
+            {
+                context.Changelogs?.Store(changelogs.Changelogs.Take(100), context.Now);
+            }
+
+            return null;
+        }
+
         if (PullJsonContext.FromElement(result.Payload, PullJsonContext.Default.UpdateScanResult) is not { } scan)
         {
             return null;
+        }
+
+        // Patchnotes der angebotenen Versionen vormerken (nur was noch nicht da ist); der nächste Abruf holt sie
+        if (context.Changelogs is { } cache && ModuleJson.Supports(host, Id, ModuleActions.Changelog))
+        {
+            cache.Request(host.Id, scan.Updates.Where(u => !string.IsNullOrEmpty(u.AvailableVersion)).Select(u => (u.Name, u.AvailableVersion!)), context.Now);
         }
 
         host.BrokenAptSources = scan.BrokenSources is { Count: > 0 } broken

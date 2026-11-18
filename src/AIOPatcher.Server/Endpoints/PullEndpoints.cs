@@ -37,6 +37,7 @@ public static class PullEndpoints
         IDataProtectionProvider protection,
         PublicAccess publicAccess,
         ScanSchedule schedule,
+        UpdateChangelogs changelogs,
         CancellationToken ct)
     {
         var host = (ManagedHost)http.Items[AgentEndpoints.HostItemKey]!;
@@ -49,7 +50,7 @@ public static class PullEndpoints
         AgentTask? task = null;
         if (running is null)
         {
-            task = await NextTaskAsync(db, host, notifier, features, downloads, ComplianceEndpoints.SecretProtector(protection), polledVersion, now, ct, schedule);
+            task = await NextTaskAsync(db, host, notifier, features, downloads, ComplianceEndpoints.SecretProtector(protection), polledVersion, now, ct, schedule, changelogs);
         }
 
         // Über den Proxy sieht der Proxy (evtl. Cloudflare) den Inhalt: Geheimnisse nur für den Agent verschlüsselt
@@ -104,7 +105,7 @@ public static class PullEndpoints
     /// Offene Aufträge ohne Antwort gelten als verloren (der Agent arbeitet immer nur einen ab).
     /// </summary>
     public static async Task<AgentTask?> NextTaskAsync(AppDbContext db, ManagedHost host, Notifier notifier, FeatureFlags features, AgentDownloads downloads,
-        IDataProtector? secrets, string? polledVersion, DateTime now, CancellationToken ct, ScanSchedule? schedule = null)
+        IDataProtector? secrets, string? polledVersion, DateTime now, CancellationToken ct, ScanSchedule? schedule = null, UpdateChangelogs? changelogs = null)
     {
         var lost = await db.AgentTasks.Where(t => t.HostId == host.Id && t.Status == JobStatus.Running).ToListAsync(ct);
         foreach (var t in lost)
@@ -147,7 +148,7 @@ public static class PullEndpoints
                 .Select(g => new { g.Key.Module, g.Key.Action, Last = g.Max(t => t.CreatedAt) })
                 .ToListAsync(ct))
             .ToDictionary(x => (x.Module, x.Action), x => x.Last);
-        var context = new ModuleContext(db, notifier, features, downloads, null, now, history, schedule);
+        var context = new ModuleContext(db, notifier, features, downloads, null, now, history, schedule, changelogs);
 
         foreach (var module in ServerModule.All)
         {
@@ -261,11 +262,12 @@ public static class PullEndpoints
         AgentDownloads downloads,
         CertificateAuthority ca,
         ILoggerFactory loggerFactory,
+        UpdateChangelogs changelogs,
         CancellationToken ct)
     {
         var host = (ManagedHost)http.Items[AgentEndpoints.HostItemKey]!;
         var (status, answer) = await ApplyResultAsync(db, audit, notifier, features, downloads, ca, host, taskId, request,
-            loggerFactory.CreateLogger("AIOPatcher.Pull"), ct);
+            loggerFactory.CreateLogger("AIOPatcher.Pull"), ct, changelogs);
         return status switch
         {
             StatusCodes.Status404NotFound => Results.NotFound(),
@@ -276,7 +278,8 @@ public static class PullEndpoints
 
     /// <summary>Antwort auf einen Auftrag übernehmen. Rückgabe: HTTP-Status und Daten für den Agent.</summary>
     public static async Task<(int Status, JsonElement? Answer)> ApplyResultAsync(AppDbContext db, AuditLog audit, Notifier notifier, FeatureFlags features,
-        AgentDownloads downloads, CertificateAuthority? ca, ManagedHost host, Guid taskId, TaskResultRequest request, ILogger logger, CancellationToken ct)
+        AgentDownloads downloads, CertificateAuthority? ca, ManagedHost host, Guid taskId, TaskResultRequest request, ILogger logger, CancellationToken ct,
+        UpdateChangelogs? changelogs = null)
     {
         var task = await db.AgentTasks.SingleOrDefaultAsync(t => t.Id == taskId && t.HostId == host.Id, ct);
         if (task is null)
@@ -311,7 +314,7 @@ public static class PullEndpoints
         {
             try
             {
-                var context = new ModuleContext(db, notifier, features, downloads, ca, now, new Dictionary<(string, string), DateTime>());
+                var context = new ModuleContext(db, notifier, features, downloads, ca, now, new Dictionary<(string, string), DateTime>(), changelogs: changelogs);
                 answer = await module.HandleAsync(context, host, task, request, ct);
             }
             catch (Exception ex) when (ex is JsonException or System.Security.Cryptography.CryptographicException or InvalidOperationException)

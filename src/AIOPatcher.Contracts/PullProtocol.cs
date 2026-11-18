@@ -87,7 +87,19 @@ public static class ModuleActions
     public const string Update = "update";
     public const string Renew = "renew";
     public const string Sample = "sample";
+    public const string Changelog = "changelog";
 }
+
+/// <summary>updates.changelog: Changelogs dieser Pakete in der angebotenen Version holen (apt-get changelog).</summary>
+public sealed record ChangelogRequest(IReadOnlyList<ChangelogPackage> Packages);
+
+public sealed record ChangelogPackage(string Name, string Version);
+
+/// <param name="Text">Anfang des Changelogs (neueste Einträge zuerst, gekürzt); null, wenn keiner zu haben war.</param>
+/// <param name="Error">Warum es keinen gibt (z. B. Quelle bietet keine Changelogs an).</param>
+public sealed record PackageChangelog(string Name, string Version, string? Text, string? Error);
+
+public sealed record ChangelogResult(IReadOnlyList<PackageChangelog> Changelogs);
 
 /// <param name="Task">Höchstens ein Auftrag pro Abfrage. Der Agent fragt nach Erledigung sofort wieder.</param>
 /// <param name="UpdateKey">Öffentlicher Update-Schlüssel des Servers (siehe <see cref="CheckinResponse"/>).</param>
@@ -195,6 +207,8 @@ public sealed record RenewAnswer(string CertificateSigningRequestPem);
 [JsonSerializable(typeof(List<BrokenAptSource>))]
 [JsonSerializable(typeof(InstallRequest))]
 [JsonSerializable(typeof(AppUpdateRequest))]
+[JsonSerializable(typeof(ChangelogRequest))]
+[JsonSerializable(typeof(ChangelogResult))]
 [JsonSerializable(typeof(SoftwareList))]
 [JsonSerializable(typeof(ContainerList))]
 [JsonSerializable(typeof(RunningServices))]
