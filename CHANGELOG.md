@@ -8,6 +8,8 @@ Written for users, not as a list of commits.
 
 ## [Unreleased]
 
+## [0.8.5] - 2026-11-18
+
 ### Added
 - **Adjustable scan intervals:** Under **Settings → General → Scan intervals** you choose how often agents look for
   new updates and how often the server checks the registry for new container images: every 1, 2, 3, 6, 12 or 24 hours
@@ -21,7 +23,6 @@ Written for users, not as a list of commits.
   date again.
 - **Setup and update scripts in English:** `setup.sh` and `aiopatcher-update` now ask and report in English, and the
   configuration files they generate carry English comments. Answering "j"/"ja" still works.
-
 - **Utilization tidied up:** "Current", "Disks" and the three charts below share the same three columns, so their
   edges line up. Hosts with many mount points (e.g. ZFS datasets on Proxmox) show the disks card two columns wide
   with the entries side by side instead of one long list that pushed the charts far down.
