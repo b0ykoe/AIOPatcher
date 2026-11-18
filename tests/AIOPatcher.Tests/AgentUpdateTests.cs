@@ -6,6 +6,7 @@ using AIOPatcher.Server.Endpoints;
 using AIOPatcher.Server.Options;
 using AIOPatcher.Server.Security;
 using AIOPatcher.Server.Services;
+using AIOPatcher.Server.Services.Modules;
 using AIOPatcher.Server.Services.Notifications;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -252,5 +253,32 @@ public sealed class AgentUpdateTests : IDisposable
         Assert.Null(AgentUpdateStatus.Evaluate(host, downloads, on, rejected, now).NextOfferAt);
 
         static (string, DateTime?) Pair(AgentUpdateStatus.Result r) => (r.State, r.NextOfferAt);
+    }
+
+    [Fact]
+    public void OfferInterval_FollowsTheSetting()
+    {
+        using var key = UpdateSigningKey.LoadOrCreate(Path.Combine(_dir, "ca"), NullLogger.Instance);
+        var downloads = Downloads(key, releaseSignature: false);
+        var on = new FeatureFlags(new AIOPatcherOptions());
+        var now = DateTime.UtcNow;
+        var host = StatusHost("0.0.1");
+        var module = new AgentServerModule(renewOnly: false);
+        var history = new Dictionary<(string, string), DateTime> { [(AgentModules.Agent, ModuleActions.Update)] = now.AddMinutes(-30) };
+
+        // Standard 6 Stunden: vor 30 Minuten angeboten, also noch nicht wieder
+        var schedule = new ScanSchedule();
+        Assert.Null(module.Due(host, new ModuleContext(null!, new Notifier(), on, downloads, null, now, history, schedule), null));
+
+        // 15 Minuten eingestellt: jetzt wieder anbieten
+        schedule.Use(new ScanSettingsRecord { AgentUpdateMinutes = 15 });
+        Assert.Equal(ModuleActions.Update, module.Due(host, new ModuleContext(null!, new Notifier(), on, downloads, null, now, history, schedule), null)?.Action);
+
+        // Anzeige: nächstes Angebot im eingestellten Abstand nach dem letzten
+        var rejected = new AgentTaskRecord { HostId = host.Id, Module = AgentModules.Agent, Action = ModuleActions.Update, CreatedAt = now.AddMinutes(-5), Status = JobStatus.Rejected };
+        Assert.Equal(rejected.CreatedAt.AddMinutes(15), AgentUpdateStatus.Evaluate(host, downloads, on, rejected, now, schedule.AgentUpdateInterval).NextOfferAt);
+
+        Assert.True(ScanSchedule.IsAllowedAgentMinutes(15));
+        Assert.False(ScanSchedule.IsAllowedAgentMinutes(0));
     }
 }

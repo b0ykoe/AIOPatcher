@@ -14,6 +14,9 @@ public sealed class ScanSchedule
 
     public const int DefaultHours = 6;
 
+    /// <summary>Wählbare Abstände für Agent-Update-Angebote in Minuten.</summary>
+    public static readonly int[] AllowedAgentMinutes = [15, 60, 120, 180, 360, 720, 1440];
+
     private volatile ScanSettingsRecord _current = new();
 
     public ScanSettingsRecord Current => _current;
@@ -27,6 +30,11 @@ public sealed class ScanSchedule
 
     /// <param name="hostHours">Abweichender Wert des Hosts, auf dem das Image läuft (null = Standard).</param>
     public TimeSpan ImageCheckInterval(int? hostHours) => TimeSpan.FromHours(hostHours ?? _current.ImageCheckHours);
+
+    /// <summary>Wie oft einem Agent eine neuere Version angeboten wird (läuft ein Update, wartet das nächste Angebot so lange).</summary>
+    public TimeSpan AgentUpdateInterval => TimeSpan.FromMinutes(_current.AgentUpdateMinutes);
+
+    public static bool IsAllowedAgentMinutes(int minutes) => AllowedAgentMinutes.Contains(minutes);
 
     /// <summary>null (= Standard) oder einer der wählbaren Werte.</summary>
     public static bool IsAllowed(int? hours) => hours is null || AllowedHours.Contains(hours.Value);

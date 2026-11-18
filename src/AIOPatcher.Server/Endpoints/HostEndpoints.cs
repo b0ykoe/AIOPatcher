@@ -183,6 +183,7 @@ public static class HostEndpoints
         op.MapPost("/hosts/{id:guid}/revoke", RevokeHost);
         op.MapPost("/hosts/{id:guid}/agent-update/retry", RetryAgentUpdate);
         op.MapPost("/hosts/{id:guid}/agent-update/now", UpdateAgentNow);
+        op.MapPost("/hosts/agent-update/now", UpdateAllAgentsNow);
         op.MapDelete("/hosts/{id:guid}/reboot-check", DismissRebootCheck);
         op.MapPost("/hosts/{id:guid}/containers/recheck", RecheckContainers);
         op.MapPost("/hosts/{id:guid}/containers/{name}/update", UpdateContainer);
@@ -314,7 +315,8 @@ public static class HostEndpoints
         return Results.Ok(hosts.OrderBy(h => h.SiteName).ThenBy(h => h.Name, StringComparer.OrdinalIgnoreCase));
     }
 
-    private static async Task<IResult> GetHost(Guid id, AppDbContext db, AIOPatcherOptions options, ServerClock clock, FeatureFlags features, AgentDownloads downloads, CancellationToken ct)
+    private static async Task<IResult> GetHost(Guid id, AppDbContext db, AIOPatcherOptions options, ServerClock clock, FeatureFlags features, AgentDownloads downloads,
+        ScanSchedule schedule, CancellationToken ct)
     {
         var summary = await ProjectSummaries(db.Hosts.Where(h => h.Id == id), db.ImageChecks, DateTime.UtcNow - options.OfflineAfter).SingleOrDefaultAsync(ct);
         if (summary is null)
@@ -346,7 +348,7 @@ public static class HostEndpoints
         var lastUpdateTask = await db.AgentTasks.AsNoTracking()
             .Where(t => t.HostId == id && t.Module == AgentModules.Agent && t.Action == ModuleActions.Update)
             .OrderByDescending(t => t.CreatedAt).FirstOrDefaultAsync(ct);
-        var status = AgentUpdateStatus.Evaluate(host, downloads, features, lastUpdateTask, DateTime.UtcNow);
+        var status = AgentUpdateStatus.Evaluate(host, downloads, features, lastUpdateTask, DateTime.UtcNow, schedule.AgentUpdateInterval);
         var agentUpdate = new AgentUpdateDto(latest, host.AgentVersion is not null && !host.AgentVersion.EndsWith("-lite", StringComparison.Ordinal) && AgentDownloads.IsNewer(latest, host.AgentVersion),
             string.Equals(host.AgentUpdateBlockedVersion, latest, StringComparison.Ordinal),
             host.AgentUpdateOutcome, host.AgentUpdateFromVersion, host.AgentUpdateToVersion, host.AgentUpdateMessage, host.AgentUpdateAt,
@@ -455,6 +457,46 @@ public static class HostEndpoints
             siteId: host.SiteId, hostId: host.Id);
         await db.SaveChangesAsync(ct);
         return Results.NoContent();
+    }
+
+    /// <param name="Requested">Hosts, denen das Update beim nächsten Abruf angeboten wird.</param>
+    /// <param name="Unavailable">Veraltete Agents, bei denen es so nicht geht, je Grund (lite, featureOff, noBuild, unsigned, agentNoUpdate, unknown).</param>
+    public sealed record BulkAgentUpdateDto(int Requested, IReadOnlyDictionary<string, int> Unavailable);
+
+    /// <summary>"Agents aktualisieren" in der Hostliste: allen veralteten Agents das Update beim nächsten Abruf anbieten.</summary>
+    private static async Task<IResult> UpdateAllAgentsNow(AppDbContext db, AuditLog audit, AgentDownloads downloads, FeatureFlags features, CancellationToken ct)
+    {
+        var now = DateTime.UtcNow;
+        var requested = new List<string>();
+        var unavailable = new Dictionary<string, int>();
+        foreach (var host in await db.Hosts.Where(h => !h.IsRevoked && h.AgentVersion != null).ToListAsync(ct))
+        {
+            var blocked = host.AgentUpdateBlockedVersion;
+            host.AgentUpdateBlockedVersion = null;
+            var status = AgentUpdateStatus.Evaluate(host, downloads, features, null, now);
+            if (status.State is AgentUpdateStatus.Current or AgentUpdateStatus.Unavailable)
+            {
+                host.AgentUpdateBlockedVersion = blocked;
+                if (status.Reason is { } reason)
+                {
+                    unavailable[reason] = unavailable.GetValueOrDefault(reason) + 1;
+                }
+
+                continue;
+            }
+
+            host.AgentUpdateRequestedAt = now;
+            requested.Add(host.Name);
+        }
+
+        if (requested.Count > 0)
+        {
+            audit.Add("agent.update.requested",
+                $"{requested.Count} hosts -> {AgentDownloads.AgentVersion}: {string.Join(", ", requested.Take(20))}{(requested.Count > 20 ? " ..." : "")}");
+        }
+
+        await db.SaveChangesAsync(ct);
+        return Results.Ok(new BulkAgentUpdateDto(requested.Count, unavailable));
     }
 
     private static async Task<IResult> RetryAgentUpdate(Guid id, AppDbContext db, AuditLog audit, CancellationToken ct)

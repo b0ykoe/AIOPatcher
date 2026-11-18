@@ -35,6 +35,9 @@ public sealed class ModuleContext(
     /// <summary>Update-Scan-Intervall des Hosts (Einstellungen bzw. je Host; ohne Schedule der feste Standard).</summary>
     public TimeSpan UpdateScanInterval(ManagedHost host) => schedule?.UpdateScanInterval(host) ?? ServerModule.InventoryInterval;
 
+    /// <summary>Abstand zwischen Agent-Update-Angeboten (Einstellungen; ohne Schedule der feste Standard).</summary>
+    public TimeSpan AgentUpdateInterval => schedule?.AgentUpdateInterval ?? ServerModule.InventoryInterval;
+
     /// <summary>Wann der Server diese Aktion bei diesem Host zuletzt angefordert hat (aus AgentTasks).</summary>
     public DateTime? LastRequested(string module, string action) =>
         lastRequested.TryGetValue((module, action), out var at) ? at : null;
@@ -304,9 +307,9 @@ public sealed class AgentServerModule(bool renewOnly) : ServerModule
                 : null;
         }
 
-        // Höchstens alle 6 Stunden anbieten, außer "Jetzt aktualisieren" wurde seit dem letzten Angebot gedrückt
+        // Im eingestellten Abstand anbieten (Standard 6 Stunden), außer "Jetzt aktualisieren" wurde seit dem letzten Angebot gedrückt
         var asked = host.AgentUpdateRequestedAt is { } requested && !(context.LastRequested(Id, ModuleActions.Update) >= requested);
-        if (!context.Features.IsOn(Feature.AgentSelfUpdate) || !context.Older(Id, ModuleActions.Update, InventoryInterval) && !asked)
+        if (!context.Features.IsOn(Feature.AgentSelfUpdate) || !context.Older(Id, ModuleActions.Update, context.AgentUpdateInterval) && !asked)
         {
             return null;
         }

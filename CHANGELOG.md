@@ -8,6 +8,13 @@ Written for users, not as a list of commits.
 
 ## [Unreleased]
 
+### Added
+- **Update all agents at once:** When agents are older than the server, the Hosts page shows **Update agents (n)**.
+  It offers the update to all of them on their next poll instead of waiting; agents that cannot update themselves
+  (e.g. the lite agent) are skipped and the host page shows why.
+- **Agent rollout speed:** Under **Settings → General → Scan and update intervals** you choose how quickly agents are
+  offered a new version: every 15 minutes up to every 24 hours (default 6 hours, as before).
+
 ## [0.8.7] - 2026-11-18
 
 ### Added

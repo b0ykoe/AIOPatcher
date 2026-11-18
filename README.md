@@ -465,7 +465,12 @@ When the server has a newer agent version, the agents update themselves as soon 
    version has reported to the server. If not (crashed, hanging), it restores the backup and restarts the service.
 
 Failed updates appear on the host page and as a notification ("Agent update failed"). The version
-is not offered to the host again until you click *Retry* there.
+is not offered to the host again until you click *Update now* there.
+
+**How fast:** By default a new version is offered every 6 hours. Under **Settings → General → Scan and update
+intervals** → *Roll out agent updates* choose 15 minutes up to 24 hours. Right away: *Update now* on a host page, or
+*Update agents (n)* on the Hosts page for all outdated agents at once (agents that cannot update themselves, e.g. lite
+agents, are skipped and the host page shows why).
 
 **Trade-off with the server key:** whoever takes over the AIOPatcher server can use it to push their own code to all hosts
 whose agent has no release key. For particularly important hosts (Proxmox host, OPNsense), set

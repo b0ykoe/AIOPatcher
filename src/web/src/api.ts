@@ -210,6 +210,9 @@ export interface ScanSettings {
   updateScanHours: number;
   imageCheckHours: number;
   allowedHours: number[];
+  /** neue Agent-Version höchstens alle n Minuten anbieten */
+  agentUpdateMinutes: number;
+  allowedAgentMinutes: number[];
   updatedBy: string | null;
   updatedAt: string | null;
 }

@@ -24,7 +24,9 @@ public static class AgentUpdateStatus
     /// <param name="NextOfferAt">Bei Waiting: frühestens dann bietet der Server das Update wieder an (null = beim nächsten Abruf).</param>
     public sealed record Result(string State, string? Reason, DateTime? NextOfferAt);
 
-    public static Result Evaluate(ManagedHost host, AgentDownloads downloads, FeatureFlags features, AgentTaskRecord? lastUpdateTask, DateTime now)
+    /// <param name="offerInterval">Abstand zwischen Angeboten (Einstellungen); null = fester Standard.</param>
+    public static Result Evaluate(ManagedHost host, AgentDownloads downloads, FeatureFlags features, AgentTaskRecord? lastUpdateTask, DateTime now,
+        TimeSpan? offerInterval = null)
     {
         var latest = AgentDownloads.AgentVersion;
         if (host.AgentVersion is null)
@@ -74,7 +76,7 @@ public static class AgentUpdateStatus
         }
 
         var asked = host.AgentUpdateRequestedAt is { } requested && (lastUpdateTask is null || requested > lastUpdateTask.CreatedAt);
-        var next = lastUpdateTask is null || asked ? (DateTime?)null : lastUpdateTask.CreatedAt + ServerModule.InventoryInterval;
+        var next = lastUpdateTask is null || asked ? (DateTime?)null : lastUpdateTask.CreatedAt + (offerInterval ?? ServerModule.InventoryInterval);
         return new(Waiting, null, next > now ? next : null);
     }
 }

@@ -1519,6 +1519,9 @@ namespace AIOPatcher.Server.Data.Migrations
                     b.Property<int>("Id")
                         .HasColumnType("INTEGER");
 
+                    b.Property<int>("AgentUpdateMinutes")
+                        .HasColumnType("INTEGER");
+
                     b.Property<int>("ImageCheckHours")
                         .HasColumnType("INTEGER");
 

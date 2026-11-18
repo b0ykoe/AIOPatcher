@@ -28,12 +28,13 @@ export function ScanSettingsCard({ className }: { className?: string }) {
   const [settings, setSettings] = useScanSettings();
   const { options } = useHourOptions(settings);
 
-  const save = async (change: Partial<Pick<ScanSettings, "updateScanHours" | "imageCheckHours">>) => {
+  const save = async (change: Partial<Pick<ScanSettings, "updateScanHours" | "imageCheckHours" | "agentUpdateMinutes">>) => {
     if (!settings) return;
     try {
       setSettings(await api.put<ScanSettings>("/api/settings/scan", {
         updateScanHours: change.updateScanHours ?? settings.updateScanHours,
         imageCheckHours: change.imageCheckHours ?? settings.imageCheckHours,
+        agentUpdateMinutes: change.agentUpdateMinutes ?? settings.agentUpdateMinutes,
       }));
       notifySuccess(t("scan.saved"));
     } catch (e) {
@@ -50,6 +51,11 @@ export function ScanSettingsCard({ className }: { className?: string }) {
           value={settings ? String(settings.updateScanHours) : null} onChange={(v) => v && void save({ updateScanHours: Number(v) })} />
         <Select label={t("scan.images")} description={t("scan.imagesHint")} data={options} allowDeselect={false} disabled={!settings || !can.admin}
           value={settings ? String(settings.imageCheckHours) : null} onChange={(v) => v && void save({ imageCheckHours: Number(v) })} />
+        <Select label={t("scan.agentUpdates")} description={t("scan.agentUpdatesHint")} allowDeselect={false} disabled={!settings || !can.admin}
+          data={(settings?.allowedAgentMinutes ?? [15, 60, 120, 180, 360, 720, 1440]).map((m) => ({
+            value: String(m), label: m < 60 ? t("scan.everyMinutes", { count: m }) : t("scan.everyHours", { count: m / 60 }),
+          }))}
+          value={settings ? String(settings.agentUpdateMinutes) : null} onChange={(v) => v && void save({ agentUpdateMinutes: Number(v) })} />
         {!can.admin && <Text size="xs" c="dimmed">{t("scan.adminOnly")}</Text>}
       </Stack>
     </Card>

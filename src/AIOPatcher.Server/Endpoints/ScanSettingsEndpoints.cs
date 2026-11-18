@@ -11,9 +11,11 @@ namespace AIOPatcher.Server.Endpoints;
 /// </summary>
 public static class ScanSettingsEndpoints
 {
-    public sealed record ScanSettingsDto(int UpdateScanHours, int ImageCheckHours, IReadOnlyList<int> AllowedHours, string? UpdatedBy, DateTime? UpdatedAt);
+    public sealed record ScanSettingsDto(int UpdateScanHours, int ImageCheckHours, IReadOnlyList<int> AllowedHours, string? UpdatedBy, DateTime? UpdatedAt,
+        int AgentUpdateMinutes, IReadOnlyList<int> AllowedAgentMinutes);
 
-    public sealed record ScanSettingsRequest(int UpdateScanHours, int ImageCheckHours);
+    /// <param name="AgentUpdateMinutes">null = unverändert lassen.</param>
+    public sealed record ScanSettingsRequest(int UpdateScanHours, int ImageCheckHours, int? AgentUpdateMinutes = null);
 
     /// <summary>null = Standard aus den Einstellungen.</summary>
     public sealed record HostScanRequest(int? UpdateScanHours, int? ImageCheckHours);
@@ -27,7 +29,7 @@ public static class ScanSettingsEndpoints
     }
 
     private static ScanSettingsDto Dto(ScanSettingsRecord s) =>
-        new(s.UpdateScanHours, s.ImageCheckHours, ScanSchedule.AllowedHours, s.UpdatedBy, s.UpdatedAt);
+        new(s.UpdateScanHours, s.ImageCheckHours, ScanSchedule.AllowedHours, s.UpdatedBy, s.UpdatedAt, s.AgentUpdateMinutes, ScanSchedule.AllowedAgentMinutes);
 
     private static Dictionary<string, string[]> Validate(int? updateScanHours, int? imageCheckHours)
     {
@@ -48,7 +50,14 @@ public static class ScanSettingsEndpoints
 
     private static async Task<IResult> SaveAsync(ScanSettingsRequest request, ClaimsPrincipal user, AppDbContext db, AuditLog audit, ScanSchedule schedule, CancellationToken ct)
     {
-        if (Validate(request.UpdateScanHours, request.ImageCheckHours) is { Count: > 0 } errors)
+        var errors = Validate(request.UpdateScanHours, request.ImageCheckHours);
+        if (request.AgentUpdateMinutes is { } minutes && !ScanSchedule.IsAllowedAgentMinutes(minutes))
+        {
+            var allowed = string.Join(", ", ScanSchedule.AllowedAgentMinutes);
+            errors["agentUpdateMinutes"] = [L.T($"Erlaubt sind {allowed} Minuten.", $"Allowed are {allowed} minutes.")];
+        }
+
+        if (errors.Count > 0)
         {
             return Results.ValidationProblem(errors);
         }
@@ -61,9 +70,10 @@ public static class ScanSettingsEndpoints
 
         row.UpdateScanHours = request.UpdateScanHours;
         row.ImageCheckHours = request.ImageCheckHours;
+        row.AgentUpdateMinutes = request.AgentUpdateMinutes ?? row.AgentUpdateMinutes;
         row.UpdatedBy = user.Identity?.Name;
         row.UpdatedAt = DateTime.UtcNow;
-        audit.Add("scan.settings", $"updates every {row.UpdateScanHours} h, images every {row.ImageCheckHours} h");
+        audit.Add("scan.settings", $"updates every {row.UpdateScanHours} h, images every {row.ImageCheckHours} h, agent updates every {row.AgentUpdateMinutes} min");
         await db.SaveChangesAsync(ct);
         schedule.Use(row);
         return Results.Ok(Dto(row));

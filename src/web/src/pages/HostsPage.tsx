@@ -101,6 +101,25 @@ export function HostsPage() {
   const confirmBulk = (title: string, message: string, label: string, run: () => Promise<void>, danger = false) =>
     confirmAction({ title, message, confirmLabel: label, danger, onConfirm: run });
 
+  // Veraltete oder gescheiterte Agents: allen das Update beim nächsten Abruf anbieten
+  const outdatedAgents = (hosts ?? []).filter((h) => h.agentUpdate === "outdated" || h.agentUpdate === "failed").length;
+  const updateAllAgents = () =>
+    confirmAction({
+      title: t("hostsPage.agentsUpdateTitle"),
+      message: t("hostsPage.agentsUpdateText", { count: outdatedAgents }),
+      confirmLabel: t("hostsPage.agentsUpdate", { count: outdatedAgents }),
+      onConfirm: async () => {
+        try {
+          const result = await api.post<{ requested: number; unavailable: Record<string, number> }>("/api/hosts/agent-update/now");
+          const skipped = Object.values(result.unavailable).reduce((a, b) => a + b, 0);
+          notifySuccess(t("hostsPage.agentsUpdateDone", { count: result.requested }), skipped > 0 ? t("hostsPage.agentsUpdateSkipped", { count: skipped }) : undefined);
+          await load();
+        } catch (e) {
+          notifyError(e);
+        }
+      },
+    });
+
   const names = selectedHosts.slice(0, 5).map((h) => h.name).join(", ") + (selectedHosts.length > 5 ? t("hostsPage.andMore", { count: selectedHosts.length - 5 }) : "");
 
   return (
@@ -122,6 +141,11 @@ export function HostsPage() {
               clearable
               w={180}
             />
+            {can.operate && outdatedAgents > 0 && (
+              <Button variant="light" leftSection={<IconRefresh size={16} />} onClick={updateAllAgents}>
+                {t("hostsPage.agentsUpdate", { count: outdatedAgents })}
+              </Button>
+            )}
             {can.operate && (
               <Button variant="gradient" className="gradient-button" leftSection={<IconPlus size={16} />} onClick={openAddHost}>
                 {t("nav.addHost")}
