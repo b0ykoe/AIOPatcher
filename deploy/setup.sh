@@ -1,25 +1,25 @@
 #!/usr/bin/env bash
-# AIOPatcher: Server-Einrichtung in einem Schritt (Debian/Ubuntu mit systemd).
+# AIOPatcher: server setup in one step (Debian/Ubuntu with systemd).
 #
-#   sudo ./deploy/setup.sh                  interaktiv (fragt alles ab)
-#   sudo ./deploy/setup.sh --help           alle Optionen
-#   ./deploy/setup.sh --dry-run             nur Dateien erzeugen und anzeigen, nichts installieren
+#   sudo ./deploy/setup.sh                  interactive (asks for everything)
+#   sudo ./deploy/setup.sh --help           all options
+#   ./deploy/setup.sh --dry-run             only generate and show the files, install nothing
 #
-# Was es tut:
-#   1. Docker installieren (falls nötig), Image aus diesem Repo bauen (oder --image verwenden)
-#   2. Zugang zum Dashboard wählen: direkt (9443), Traefik, nginx oder vorhandener Proxy (Nginx Proxy Manager …)
-#   3. Zertifikat fürs Dashboard: Let's Encrypt, intern (Zertifikat der AIOPatcher-CA) oder eigene Dateien
-#   4. Firewall (ufw): SSH, Agents (8443), Dashboard und Proxy-Port (8080) nur aus erlaubten Netzen
-#   Der Server läuft intern. Hosts außerhalb (Cloud): später im Dashboard unter Einstellungen → Öffentlicher Zugang
-#   über den eigenen Reverse Proxy (nginx, Caddy, Nginx Proxy Manager, Traefik, Cloudflare Tunnel).
-#   5. Starten, auf "gesund" warten, Setup-Token und CA-Fingerprint ausgeben
-#   6. Antworten in /opt/aiopatcher/setup.conf merken, Befehl "aiopatcher-update" einrichten (optional nächtlich)
+# What it does:
+#   1. Install Docker (if needed), build the image from this repo (or use --image)
+#   2. Choose dashboard access: direct (9443), Traefik, nginx or an existing proxy (Nginx Proxy Manager ...)
+#   3. Certificate for the dashboard: Let's Encrypt, internal (certificate from the AIOPatcher CA) or your own files
+#   4. Firewall (ufw): SSH, agents (8443), dashboard and proxy port (8080) only from allowed networks
+#   The server runs internally. Hosts outside (cloud): later in the dashboard under Settings → Public access
+#   via your own reverse proxy (nginx, Caddy, Nginx Proxy Manager, Traefik, Cloudflare Tunnel).
+#   5. Start, wait until "healthy", print the setup token and CA fingerprint
+#   6. Remember the answers in /opt/aiopatcher/setup.conf, set up the "aiopatcher-update" command (optionally nightly)
 #
-# Updates danach ohne Setup: sudo aiopatcher-update (siehe deploy/update.sh).
-# Erneut ausführen ist gefahrlos: Vorschläge kommen aus dem letzten Lauf, Dateien werden vorher gesichert, Daten bleiben.
+# Updates afterwards without setup: sudo aiopatcher-update (see deploy/update.sh).
+# Running it again is safe: defaults come from the last run, files are backed up first, data is kept.
 set -euo pipefail
 
-# --- Vorgaben ------------------------------------------------------------------------------------------
+# --- Defaults ------------------------------------------------------------------------------------------
 BASE=/opt/aiopatcher
 IMAGE=""
 HOSTNAME_ARG=""
@@ -28,12 +28,12 @@ TLS=""             # letsencrypt | internal | custom
 EMAIL=""
 CERT_FILE=""
 KEY_FILE=""
-ALLOW=""           # Netze fürs Dashboard, kommagetrennt
-PROXY_NET=""       # external: IP/Netz des vorhandenen Proxys
+ALLOW=""           # networks for the dashboard, comma-separated
+PROXY_NET=""       # external: IP/network of the existing proxy
 UFW=""             # yes | no
 LANGUAGE_ARG=""
 TIMEZONE=""
-AUTO_UPDATE=""     # yes | no: nachts automatisch aktualisieren
+AUTO_UPDATE=""     # yes | no: update automatically at night
 ASSUME_YES=0
 DRY_RUN=0
 NO_BUILD=0
@@ -43,27 +43,27 @@ DATE="$(date +%Y%m%d-%H%M%S)"
 
 info() { printf '\033[1;35m==>\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m!!\033[0m  %s\n' "$*" >&2; }
-die() { printf '\033[1;31mFehler:\033[0m %s\n' "$*" >&2; exit 1; }
+die() { printf '\033[1;31mError:\033[0m %s\n' "$*" >&2; exit 1; }
 
 usage() {
   cat <<'EOF'
-Optionen (ohne Angabe wird gefragt, mit --yes gilt der Vorschlag):
-  --hostname NAME        DNS-Name des Servers (Agents und Dashboard), z. B. patch.example.com oder 1-2-3-4.nip.io
-  --proxy ART            none (Dashboard direkt auf 9443) | traefik | nginx | external (NPM o. ä., schon vorhanden)
-  --tls ART              letsencrypt | internal (Zertifikat der AIOPatcher-CA) | custom (eigene Dateien)
-  --email ADRESSE        für Let's Encrypt
-  --cert DATEI --key DATEI   eigenes Zertifikat (mit --tls custom)
-  --allow NETZE          Netze, die ans Dashboard dürfen, kommagetrennt (z. B. 192.168.0.0/16,10.99.0.0/24)
-  --proxy-net NETZ       mit --proxy external: IP oder Netz des vorhandenen Proxys
-  --ufw yes|no           Firewall einrichten
-  --image NAME           fertiges Image verwenden statt zu bauen
-  --no-build             vorhandenes Image aiopatcher-server:local verwenden
-  --language de|en       Sprache für Benachrichtigungen u. ä.
-  --timezone ZONE        z. B. Europe/Berlin
-  --auto-update yes|no   nachts automatisch aktualisieren (systemd-Timer, Standard: no)
-  --base DIR             Installationsordner (Standard /opt/aiopatcher)
-  --yes                  Vorschläge ohne Rückfrage übernehmen
-  --dry-run              nur Dateien in ./aiopatcher-setup-preview erzeugen, nichts installieren
+Options (anything not given is asked for; with --yes the default applies):
+  --hostname NAME        DNS name of the server (agents and dashboard), e.g. patch.example.com or 1-2-3-4.nip.io
+  --proxy TYPE           none (dashboard directly on 9443) | traefik | nginx | external (NPM or similar, already running)
+  --tls TYPE             letsencrypt | internal (certificate from the AIOPatcher CA) | custom (your own files)
+  --email ADDRESS        for Let's Encrypt
+  --cert FILE --key FILE     your own certificate (with --tls custom)
+  --allow NETWORKS       networks allowed to reach the dashboard, comma-separated (e.g. 192.168.0.0/16,10.99.0.0/24)
+  --proxy-net NETWORK    with --proxy external: IP or network of the existing proxy
+  --ufw yes|no           set up the firewall
+  --image NAME           use a prebuilt image instead of building
+  --no-build             use the existing image aiopatcher-server:local
+  --language de|en       language for notifications etc.
+  --timezone ZONE        e.g. Europe/Berlin
+  --auto-update yes|no   update automatically at night (systemd timer, default: no)
+  --base DIR             installation folder (default /opt/aiopatcher)
+  --yes                  accept the defaults without asking
+  --dry-run              only generate files in ./aiopatcher-setup-preview, install nothing
 EOF
 }
 
@@ -87,34 +87,34 @@ while [ $# -gt 0 ]; do
     --yes|-y) ASSUME_YES=1; shift ;;
     --dry-run) DRY_RUN=1; shift ;;
     -h|--help) usage; exit 0 ;;
-    *) usage; die "Unbekannte Option: $1" ;;
+    *) usage; die "Unknown option: $1" ;;
   esac
 done
 
 if [ "$DRY_RUN" -eq 1 ]; then
   BASE="$(pwd)/aiopatcher-setup-preview"
-  info "Probelauf: Dateien landen in $BASE, es wird nichts installiert oder gestartet."
+  info "Dry run: files go to $BASE, nothing is installed or started."
 elif [ "$(id -u)" -ne 0 ]; then
-  die "Bitte als root ausführen (sudo)."
+  die "Please run as root (sudo)."
 fi
 
-# Antworten vom letzten Lauf als Vorschläge (SAVED_HOSTNAME_ARG usw.); Optionen auf der Kommandozeile gehen vor
+# Answers from the last run as defaults (SAVED_HOSTNAME_ARG etc.); command-line options take precedence
 CONF="$BASE/setup.conf"
 SAVED_BUILD_NUMBER=0
 if [ -f "$CONF" ]; then
   while IFS= read -r line; do
     case "$line" in [A-Z_]*=*) eval "SAVED_$line" ;; esac
   done <"$CONF"
-  info "Vorschläge aus dem letzten Lauf ($CONF). Nur aktualisieren geht auch ohne Fragen: aiopatcher-update"
+  info "Defaults from the last run ($CONF). To just update without any questions: aiopatcher-update"
 fi
 
-# Befehl ausführen bzw. im Probelauf nur anzeigen
+# Run a command, or only show it in a dry run
 run() {
-  if [ "$DRY_RUN" -eq 1 ]; then printf '    [probe] %s\n' "$*"; else "$@"; fi
+  if [ "$DRY_RUN" -eq 1 ]; then printf '    [dry-run] %s\n' "$*"; else "$@"; fi
 }
 
-# --- Fragen ------------------------------------------------------------------------------------------
-ask() { # ask VARIABLE "Frage" "Vorschlag"
+# --- Questions ------------------------------------------------------------------------------------------
+ask() { # ask VARIABLE "Question" "Default"
   local var="$1" question="$2" default="$3" answer saved="SAVED_$1"
   if [ -n "${!var}" ]; then return; fi
   default="${!saved:-$default}"
@@ -123,10 +123,10 @@ ask() { # ask VARIABLE "Frage" "Vorschlag"
   printf -v "$var" '%s' "${answer:-$default}"
 }
 
-choose() { # choose VARIABLE "Frage" "Vorschlag" wert1 "Text1" wert2 "Text2" …
+choose() { # choose VARIABLE "Question" "Default" value1 "Text1" value2 "Text2" ...
   local var="$1" question="$2" default="$3" saved="SAVED_$1" option; shift 3
   if [ -n "${!var}" ]; then return; fi
-  # gespeicherte Antwort nur, wenn sie hier zur Auswahl steht
+  # use the saved answer only if it is one of the choices here
   for ((option = 1; option <= $#; option += 2)); do
     if [ "${!option}" = "${!saved:-}" ]; then default="${!saved}"; fi
   done
@@ -136,13 +136,23 @@ choose() { # choose VARIABLE "Frage" "Vorschlag" wert1 "Text1" wert2 "Text2" …
   echo "$question"
   while [ $# -gt 0 ]; do
     values+=("$1")
-    printf '  %d) %s%s\n' "$i" "$2" "$([ "$1" = "$default" ] && echo "  (Vorschlag)")"
+    printf '  %d) %s%s\n' "$i" "$2" "$([ "$1" = "$default" ] && echo "  (default)")"
     i=$((i + 1)); shift 2
   done
-  read -r -p "Auswahl [$default]: " answer
-  if [ -z "$answer" ]; then printf -v "$var" '%s' "$default"
-  elif [[ "$answer" =~ ^[0-9]+$ ]] && [ "$answer" -ge 1 ] && [ "$answer" -le "${#values[@]}" ]; then printf -v "$var" '%s' "${values[$((answer - 1))]}"
-  else printf -v "$var" '%s' "$answer"; fi
+  while true; do
+    read -r -p "Choice [$default]: " answer
+    if [ -z "$answer" ]; then printf -v "$var" '%s' "$default"; return; fi
+    if [[ "$answer" =~ ^[0-9]+$ ]] && [ "$answer" -ge 1 ] && [ "$answer" -le "${#values[@]}" ]; then
+      printf -v "$var" '%s' "${values[$((answer - 1))]}"; return
+    fi
+    # also accept the value itself, and y/n (j/ja/nein) for yes/no questions
+    answer="${answer,,}"
+    case "$answer" in y|j|ja) answer=yes ;; n|nein) answer=no ;; esac
+    for option in "${values[@]}"; do
+      if [ "$option" = "$answer" ]; then printf -v "$var" '%s' "$answer"; return; fi
+    done
+    echo "  Please enter a number from 1 to ${#values[@]} (or press Enter for $default)."
+  done
 }
 
 local_ip() {
@@ -152,17 +162,17 @@ local_ip() {
 is_private() { [[ "$1" =~ ^(10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[01])\.|127\.) ]]; }
 
 echo
-info "AIOPatcher einrichten"
+info "Setting up AIOPatcher"
 
 IP="$(local_ip || true)"
 DEFAULT_HOST="$(hostname -f 2>/dev/null || hostname)"
 if [[ "$DEFAULT_HOST" != *.* ]] && [ -n "$IP" ]; then DEFAULT_HOST="${IP//./-}.nip.io"; fi
 echo
-echo "Agents und Browser erreichen den Server unter einem Namen (patch.example.com, intern z. B. patch.home.arpa)"
-echo "oder direkt unter seiner IP (${IP:-1.2.3.4}). Ohne eigene Domain, aber mit Let's Encrypt: <ip-mit-bindestrichen>.nip.io."
-ask HOSTNAME_ARG "DNS-Name des Servers" "$DEFAULT_HOST"
-[[ "$HOSTNAME_ARG" =~ ^[A-Za-z0-9.:-]+$ ]] || die "Ungültiger Name: $HOSTNAME_ARG"
-# IP statt Name: kein Let's Encrypt; IPv6 in URLs in eckigen Klammern
+echo "Agents and browsers reach the server by a name (patch.example.com, internally e.g. patch.home.arpa)"
+echo "or directly by its IP (${IP:-1.2.3.4}). Without your own domain, but with Let's Encrypt: <ip-with-dashes>.nip.io."
+ask HOSTNAME_ARG "DNS name of the server" "$DEFAULT_HOST"
+[[ "$HOSTNAME_ARG" =~ ^[A-Za-z0-9.:-]+$ ]] || die "Invalid name: $HOSTNAME_ARG"
+# IP instead of a name: no Let's Encrypt; IPv6 in URLs in square brackets
 IS_IP=0
 URL_HOST="$HOSTNAME_ARG"
 if [[ "$HOSTNAME_ARG" =~ ^[0-9.]+$ ]]; then IS_IP=1; fi
@@ -170,37 +180,37 @@ if [[ "$HOSTNAME_ARG" == *:* ]]; then IS_IP=1; URL_HOST="[$HOSTNAME_ARG]"; fi
 
 
 echo
-echo "Standard: Der Server läuft intern. Hosts außerhalb (Cloud) und das Dashboard von unterwegs richtest du später im"
-echo "Dashboard unter Einstellungen → Öffentlicher Zugang über deinen eigenen Reverse Proxy ein."
-choose PROXY "Wie soll das Dashboard erreichbar sein?" none \
-  none "Direkt auf Port 9443 (einfachste Variante, Zertifikat der AIOPatcher-CA)" \
-  traefik "Traefik auf Port 443 (wird mit eingerichtet)" \
-  nginx "nginx auf Port 443 (wird mit eingerichtet)" \
-  external "Vorhandener Proxy, z. B. Nginx Proxy Manager (nur AIOPatcher passend einstellen)"
-case "$PROXY" in none|traefik|nginx|external) ;; *) die "--proxy: none, traefik, nginx oder external" ;; esac
+echo "Default: the server runs internally. Hosts outside (cloud) and the dashboard on the go are set up later in the"
+echo "dashboard under Settings → Public access, via your own reverse proxy."
+choose PROXY "How should the dashboard be reachable?" none \
+  none "Directly on port 9443 (simplest option, certificate from the AIOPatcher CA)" \
+  traefik "Traefik on port 443 (set up as well)" \
+  nginx "nginx on port 443 (set up as well)" \
+  external "Existing proxy, e.g. Nginx Proxy Manager (only configure AIOPatcher to match)"
+case "$PROXY" in none|traefik|nginx|external) ;; *) die "--proxy: none, traefik, nginx or external" ;; esac
 
 if [ "$PROXY" = traefik ] || [ "$PROXY" = nginx ]; then
   if [ "$IS_IP" -eq 1 ]; then
-    [ "$TLS" != letsencrypt ] || die "Let's Encrypt braucht einen Namen, keine IP (--tls internal oder custom)."
-    choose TLS "Zertifikat fürs Dashboard (IP-Adresse: ohne Let's Encrypt)?" internal \
-      internal "Intern: Zertifikat der AIOPatcher-CA (enthält die IP)" \
-      custom "Eigene Zertifikatsdateien"
+    [ "$TLS" != letsencrypt ] || die "Let's Encrypt needs a name, not an IP (--tls internal or custom)."
+    choose TLS "Certificate for the dashboard (IP address: no Let's Encrypt)?" internal \
+      internal "Internal: certificate from the AIOPatcher CA (includes the IP)" \
+      custom "Your own certificate files"
   fi
-  choose TLS "Zertifikat fürs Dashboard?" internal \
-    letsencrypt "Let's Encrypt (Server muss aus dem Internet auf Port 80/443 erreichbar sein)" \
-    internal "Intern: Zertifikat der AIOPatcher-CA (Homelab; CA einmal im Browser/System hinterlegen)" \
-    custom "Eigene Zertifikatsdateien (z. B. von deiner internen CA)"
-  case "$TLS" in letsencrypt|internal|custom) ;; *) die "--tls: letsencrypt, internal oder custom" ;; esac
+  choose TLS "Certificate for the dashboard?" internal \
+    letsencrypt "Let's Encrypt (server must be reachable from the internet on port 80/443)" \
+    internal "Internal: certificate from the AIOPatcher CA (homelab; add the CA to the browser/system once)" \
+    custom "Your own certificate files (e.g. from your internal CA)"
+  case "$TLS" in letsencrypt|internal|custom) ;; *) die "--tls: letsencrypt, internal or custom" ;; esac
   if [ "$TLS" = letsencrypt ]; then
-    ask EMAIL "E-Mail für Let's Encrypt (Ablaufwarnungen)" "admin@${HOSTNAME_ARG#*.}"
+    ask EMAIL "Email for Let's Encrypt (expiry warnings)" "admin@${HOSTNAME_ARG#*.}"
     if [ -n "$IP" ] && is_private "$IP"; then
-      warn "Let's Encrypt prüft über das Internet. Bei einer internen IP klappt das nicht (dann --tls internal)."
+      warn "Let's Encrypt validates over the internet. With an internal IP this will not work (use --tls internal instead)."
     fi
   fi
   if [ "$TLS" = custom ]; then
-    ask CERT_FILE "Pfad zum Zertifikat (PEM, mit Zwischenzertifikaten)" "/etc/ssl/aiopatcher/fullchain.pem"
-    ask KEY_FILE "Pfad zum Schlüssel (PEM)" "/etc/ssl/aiopatcher/privkey.pem"
-    if [ "$DRY_RUN" -eq 0 ]; then [ -r "$CERT_FILE" ] && [ -r "$KEY_FILE" ] || die "Zertifikat oder Schlüssel nicht lesbar."; fi
+    ask CERT_FILE "Path to the certificate (PEM, with intermediate certificates)" "/etc/ssl/aiopatcher/fullchain.pem"
+    ask KEY_FILE "Path to the key (PEM)" "/etc/ssl/aiopatcher/privkey.pem"
+    if [ "$DRY_RUN" -eq 0 ]; then [ -r "$CERT_FILE" ] && [ -r "$KEY_FILE" ] || die "Certificate or key is not readable."; fi
   fi
 else
   TLS=internal
@@ -208,55 +218,56 @@ fi
 
 if [ "$PROXY" = external ]; then
   echo
-  echo "Der vorhandene Proxy verbindet sich mit AIOPatcher auf Port 9443. Läuft er als Docker-Container auf diesem"
-  echo "Rechner (z. B. Nginx Proxy Manager), kommt er meist aus 172.16.0.0/12."
-  ask PROXY_NET "IP oder Netz des Proxys" "172.16.0.0/12"
+  echo "The existing proxy connects to AIOPatcher on port 9443. If it runs as a Docker container on this"
+  echo "machine (e.g. Nginx Proxy Manager), it usually comes from 172.16.0.0/12."
+  ask PROXY_NET "IP or network of the proxy" "172.16.0.0/12"
 fi
 
-# Dashboard nur aus diesen Netzen: Vorschlag = private Netze plus die IP, von der du gerade per SSH kommst
+# Dashboard only from these networks: default = private networks plus the IP you are currently connecting from via SSH
 SSH_CLIENT_IP="$(printf '%s' "${SSH_CONNECTION:-}" | awk '{print $1}')"
 DEFAULT_ALLOW="10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
 if [ -n "$SSH_CLIENT_IP" ] && ! is_private "$SSH_CLIENT_IP"; then DEFAULT_ALLOW="$SSH_CLIENT_IP/32,$DEFAULT_ALLOW"; fi
 echo
-echo "Das Dashboard gehört nicht ins offene Internet. Agents (Port 8443) sind davon nicht betroffen."
-ask ALLOW "Netze, die ans Dashboard dürfen (kommagetrennt)" "$DEFAULT_ALLOW"
+echo "The dashboard does not belong on the open internet. Agents (port 8443) are not affected by this."
+ask ALLOW "Networks allowed to reach the dashboard (comma-separated)" "$DEFAULT_ALLOW"
 IFS=',' read -r -a ALLOW_LIST <<<"${ALLOW// /}"
-for net in "${ALLOW_LIST[@]}"; do [[ "$net" =~ ^[0-9a-fA-F:.]+(/[0-9]{1,3})?$ ]] || die "Kein Netz: $net"; done
+for net in "${ALLOW_LIST[@]}"; do [[ "$net" =~ ^[0-9a-fA-F:.]+(/[0-9]{1,3})?$ ]] || die "Not a network: $net"; done
 
-choose UFW "Firewall (ufw) einrichten?" "yes" yes "Ja: SSH, Agents (8443) und Dashboard nur aus den erlaubten Netzen" no "Nein, mache ich selbst (z. B. Hetzner-Firewall)"
-ask LANGUAGE_ARG "Sprache (de/en)" "de"
-ask TIMEZONE "Zeitzone" "$(cat /etc/timezone 2>/dev/null || timedatectl show -p Timezone --value 2>/dev/null || echo Europe/Berlin)"
-choose AUTO_UPDATE "AIOPatcher nachts automatisch aktualisieren? (sonst von Hand: sudo aiopatcher-update)" no \
-  no "Nein, ich aktualisiere selbst (empfohlen: dann weißt du, wann sich etwas ändert)" \
-  yes "Ja, jede Nacht neuen Code holen, bauen und neu starten (mit Sicherung und Rücksprung bei Fehlern)"
-case "$AUTO_UPDATE" in yes|no) ;; *) die "--auto-update: yes oder no" ;; esac
+choose UFW "Set up the firewall (ufw)?" "yes" yes "Yes: SSH, agents (8443) and dashboard only from the allowed networks" no "No, I will do it myself (e.g. Hetzner firewall)"
+case "$UFW" in yes|no) ;; *) die "--ufw: yes or no" ;; esac
+ask LANGUAGE_ARG "Language (de/en)" "de"
+ask TIMEZONE "Time zone" "$(cat /etc/timezone 2>/dev/null || timedatectl show -p Timezone --value 2>/dev/null || echo Europe/Berlin)"
+choose AUTO_UPDATE "Update AIOPatcher automatically at night? (otherwise manually: sudo aiopatcher-update)" no \
+  no "No, I will update myself (recommended: then you know when something changes)" \
+  yes "Yes, fetch new code, build and restart every night (with backup and rollback on errors)"
+case "$AUTO_UPDATE" in yes|no) ;; *) die "--auto-update: yes or no" ;; esac
 
-# --- Übersicht ---------------------------------------------------------------------------------------
+# --- Summary -------------------------------------------------------------------------------------------
 case "$PROXY" in
   none) DASHBOARD_URL="https://$URL_HOST:9443" ;;
-  external) DASHBOARD_URL="https://$URL_HOST (über deinen Proxy) bzw. https://$URL_HOST:9443" ;;
+  external) DASHBOARD_URL="https://$URL_HOST (via your proxy) or https://$URL_HOST:9443" ;;
   *) DASHBOARD_URL="https://$URL_HOST" ;;
 esac
 echo
-info "Zusammenfassung"
+info "Summary"
 cat <<EOF
     Name:          $HOSTNAME_ARG
-    Dashboard:     $DASHBOARD_URL  ($PROXY, Zertifikat: $TLS)
+    Dashboard:     $DASHBOARD_URL  ($PROXY, certificate: $TLS)
     Agents:        https://$URL_HOST:8443
-    Erlaubt:       ${ALLOW_LIST[*]}
+    Allowed:       ${ALLOW_LIST[*]}
     Firewall:      $UFW
     Auto-Update:   $AUTO_UPDATE
-    Ordner:        $BASE
+    Folder:        $BASE
 EOF
 if [ "$ASSUME_YES" -eq 0 ] && [ -t 0 ]; then
-  read -r -p "Einrichten? [J/n]: " go
-  case "${go:-j}" in j|J|y|Y|ja|yes) ;; *) die "Abgebrochen." ;; esac
+  read -r -p "Set up now? [Y/n]: " go
+  case "${go:-y}" in y|Y|yes|Yes|YES|j|J|ja|Ja|JA) ;; *) die "Aborted." ;; esac
 fi
 
-# --- Docker und Image --------------------------------------------------------------------------------
+# --- Docker and image --------------------------------------------------------------------------------
 
-# Der Bau (.NET, Native AOT für drei Plattformen, Weboberfläche) braucht ca. 4 GB Arbeitsspeicher und 10 GB Platz.
-# Kleine Server (1-2 GB RAM): vorübergehend reicht Swap, der Bau dauert dann nur länger.
+# The build (.NET, Native AOT for three platforms, web UI) needs about 4 GB of memory and 10 GB of disk space.
+# Small servers (1-2 GB RAM): temporary swap is enough, the build just takes longer.
 ensure_build_resources() {
   [ "$DRY_RUN" -eq 1 ] && return
   local mem_mb swap_mb free_gb
@@ -265,14 +276,14 @@ ensure_build_resources() {
   free_gb=$(df -Pk /var/lib/docker 2>/dev/null | awk 'NR == 2 {print int($4 / 1048576)}')
   [ -n "$free_gb" ] || free_gb=$(df -Pk / | awk 'NR == 2 {print int($4 / 1048576)}')
   if [ "${free_gb:-0}" -lt 10 ]; then
-    warn "Nur ${free_gb} GB frei. Der Bau braucht ca. 10 GB (danach räumt Docker mit 'docker builder prune' wieder auf)."
+    warn "Only ${free_gb} GB free. The build needs about 10 GB (Docker cleans up afterwards with 'docker builder prune')."
   fi
   if [ $((mem_mb + swap_mb)) -lt 4000 ]; then
     local need=$((4096 - mem_mb - swap_mb + 512))
     [ "$need" -lt 1024 ] && need=1024
-    info "Wenig Arbeitsspeicher (${mem_mb} MB RAM, ${swap_mb} MB Swap): lege ${need} MB Swap an (/swapfile-aiopatcher, bleibt nach Neustart)."
+    info "Low memory (${mem_mb} MB RAM, ${swap_mb} MB swap): creating ${need} MB of swap (/swapfile-aiopatcher, persists after reboot)."
     if [ "${free_gb:-0}" -lt $(( need / 1024 + 10 )) ]; then
-      warn "Für Swap und Bau wird der Platz knapp. Notfalls das Image auf einem anderen Rechner bauen und --image verwenden."
+      warn "Disk space is getting tight for swap and build. If necessary, build the image on another machine and use --image."
     fi
     if [ ! -f /swapfile-aiopatcher ]; then
       fallocate -l "${need}M" /swapfile-aiopatcher 2>/dev/null || dd if=/dev/zero of=/swapfile-aiopatcher bs=1M count="$need" status=none
@@ -284,12 +295,12 @@ ensure_build_resources() {
   fi
 }
 if [ "$DRY_RUN" -eq 0 ] && ! command -v docker >/dev/null 2>&1; then
-  info "Installiere Docker ..."
+  info "Installing Docker ..."
   curl -fsSL https://get.docker.com | sh
 fi
 
-# Versionsnummer für eigene Builds: aus dem letzten Release-Tag (v0.7.0 → 0.7.0, 3 Commits danach → 0.7.0.3), passt so
-# zu den GitHub-Releases; ohne Tags bzw. ohne Git 0.1.<fortlaufend>. Agents bekommen damit Updates angeboten.
+# Version number for your own builds: from the latest release tag (v0.7.0 → 0.7.0, 3 commits later → 0.7.0.3), so it
+# matches the GitHub releases; without tags or without Git 0.1.<sequential>. This way agents are offered updates.
 tag_version() {
   local desc tag n
   desc="$(git -c safe.directory="$1" -C "$1" describe --tags --long --match 'v[0-9]*' 2>/dev/null)" || return 1
@@ -305,22 +316,22 @@ if [ -z "$IMAGE" ]; then
     COMMITS="$(git -c safe.directory="$REPO" -C "$REPO" rev-list --count HEAD 2>/dev/null || echo 0)"
     if [ "$COMMITS" -gt "$BUILD_NUMBER" ]; then BUILD_NUMBER="$COMMITS"; elif [ "$COMMITS" -eq 0 ]; then BUILD_NUMBER=$((BUILD_NUMBER + 1)); fi
     VERSION="$(tag_version "$REPO")" || VERSION="0.1.$BUILD_NUMBER"
-    [ -f "$REPO/Dockerfile" ] || die "Kein Dockerfile in $REPO. Skript aus dem entpackten Repo starten oder --image angeben."
+    [ -f "$REPO/Dockerfile" ] || die "No Dockerfile in $REPO. Run the script from the unpacked repo or pass --image."
     ensure_build_resources
-    info "Baue das Image $VERSION (Server, Weboberfläche, alle Agents; dauert ca. 10-15 Minuten, auf kleinen Servern länger) ..."
+    info "Building image $VERSION (server, web UI, all agents; takes about 10-15 minutes, longer on small servers) ..."
     if [ "$DRY_RUN" -eq 1 ]; then
       run docker build --build-arg VERSION="$VERSION" -t "$IMAGE" "$REPO"
     elif ! docker build --build-arg VERSION="$VERSION" -t "$IMAGE" "$REPO"; then
       if dmesg 2>/dev/null | tail -n 200 | grep -qiE "out of memory|killed process"; then
-        die "Bau abgebrochen: zu wenig Arbeitsspeicher (der Kernel hat einen Prozess beendet). Mehr RAM/Swap, dann erneut starten."
+        die "Build aborted: not enough memory (the kernel killed a process). Add more RAM/swap, then start again."
       fi
-      die "Bau fehlgeschlagen (siehe Ausgabe oben). Häufig: zu wenig RAM oder Speicherplatz, keine Internetverbindung zu nuget.org/npmjs."
+      die "Build failed (see output above). Common causes: not enough RAM or disk space, no internet connection to nuget.org/npmjs."
     fi
   fi
 fi
 
-# --- Dateien -----------------------------------------------------------------------------------------
-backup() { if [ -f "$1" ]; then cp "$1" "$1.bak-$DATE"; info "Gesichert: $1.bak-$DATE"; fi; }
+# --- Files -------------------------------------------------------------------------------------------
+backup() { if [ -f "$1" ]; then cp "$1" "$1.bak-$DATE"; info "Backed up: $1.bak-$DATE"; fi; }
 
 mkdir -p "$BASE/data"
 if [ "$DRY_RUN" -eq 0 ]; then chown 1654:1654 "$BASE/data"; chmod 700 "$BASE/data"; fi
@@ -335,13 +346,13 @@ COMPOSE="$BASE/docker-compose.yml"
 backup "$COMPOSE"
 {
   cat <<EOF
-# Erzeugt von deploy/setup.sh am $(date '+%Y-%m-%d %H:%M'). Ändern und mit "docker compose up -d" übernehmen.
+# Generated by deploy/setup.sh on $(date '+%Y-%m-%d %H:%M'). Edit and apply with "docker compose up -d".
 services:
   aiopatcher:
     image: $IMAGE
     container_name: aiopatcher
     restart: unless-stopped
-    network_mode: host # damit ufw-Regeln greifen (Docker-Port-Mappings würden ufw umgehen)
+    network_mode: host # so that ufw rules apply (Docker port mappings would bypass ufw)
     volumes:
       - $BASE/data:/data
     environment:
@@ -349,11 +360,11 @@ services:
       AIOPatcher__DataDirectory: /data
       AIOPatcher__DashboardPort: "9443"
       AIOPatcher__AgentPort: "8443"
-      AIOPatcher__AgentProxyPort: "8080" # HTTP für den eigenen Reverse Proxy (Einstellungen → Öffentlicher Zugang), nur LAN
+      AIOPatcher__AgentProxyPort: "8080" # HTTP for your own reverse proxy (Settings → Public access), LAN only
       AIOPatcher__Language: "$LANGUAGE_ARG"
       TZ: "$TIMEZONE"
 EOF
-  if [ -n "$TRUSTED" ]; then echo "      AIOPatcher__TrustedProxies: \"$TRUSTED\" # nur dieser Proxy darf die Client-IP weitergeben"; fi
+  if [ -n "$TRUSTED" ]; then echo "      AIOPatcher__TrustedProxies: \"$TRUSTED\" # only this proxy may pass on the client IP"; fi
 
   if [ "$PROXY" = traefik ]; then
     cat <<EOF
@@ -384,7 +395,7 @@ EOF
     volumes:
       - $BASE/traefik/dynamic.yml:/etc/traefik/dynamic.yml:ro
       - $BASE/traefik/letsencrypt:/letsencrypt
-      - $BASE/data/ca:/etc/traefik/aiopatcher:ro # ca.crt (Backend prüfen), bei "intern" auch server.crt/key
+      - $BASE/data/ca:/etc/traefik/aiopatcher:ro # ca.crt (verify the backend), with "internal" also server.crt/key
 EOF
     if [ "$TLS" = custom ]; then
       echo "      - $CERT_FILE:/etc/traefik/certs/cert.pem:ro"
@@ -392,16 +403,16 @@ EOF
     fi
   fi
 } >"$COMPOSE"
-info "Geschrieben: $COMPOSE"
+info "Written: $COMPOSE"
 
-# Traefik: Routing per File-Provider (Container mit Host-Netzwerk lassen sich per Labels nur umständlich ansprechen)
+# Traefik: routing via the file provider (containers on the host network are awkward to address via labels)
 if [ "$PROXY" = traefik ]; then
   mkdir -p "$BASE/traefik/letsencrypt"
   DYN="$BASE/traefik/dynamic.yml"
   backup "$DYN"
   {
     cat <<EOF
-# Erzeugt von deploy/setup.sh. Dashboard über Traefik, nur aus den erlaubten Netzen.
+# Generated by deploy/setup.sh. Dashboard via Traefik, only from the allowed networks.
 http:
   routers:
     aiopatcher:
@@ -428,7 +439,7 @@ EOF
           - url: https://127.0.0.1:9443
   serversTransports:
     aiopatcher:
-      serverName: localhost # steht immer im Zertifikat von AIOPatcher
+      serverName: localhost # always included in the AIOPatcher certificate
       rootCAs:
         - /etc/traefik/aiopatcher/ca.crt
 EOF
@@ -445,15 +456,15 @@ tls:
 EOF
     fi
   } >"$DYN"
-  info "Geschrieben: $DYN"
+  info "Written: $DYN"
 fi
 
-# nginx: Paket auf dem Host, Seite für das Dashboard
+# nginx: package on the host, site for the dashboard
 NGINX_SITE=/etc/nginx/sites-available/aiopatcher
 if [ "$PROXY" = nginx ]; then
   [ "$DRY_RUN" -eq 1 ] && NGINX_SITE="$BASE/nginx-aiopatcher.conf"
   if [ "$DRY_RUN" -eq 0 ]; then
-    info "Installiere nginx$([ "$TLS" = letsencrypt ] && echo " und certbot") ..."
+    info "Installing nginx$([ "$TLS" = letsencrypt ] && echo " and certbot") ..."
     apt-get update -qq
     apt-get install -y -qq nginx $([ "$TLS" = letsencrypt ] && echo "certbot python3-certbot-nginx") >/dev/null
   fi
@@ -465,7 +476,7 @@ if [ "$PROXY" = nginx ]; then
   [ -f "$NGINX_SITE" ] && backup "$NGINX_SITE"
   {
     cat <<EOF
-# Erzeugt von deploy/setup.sh. Dashboard über nginx, nur aus den erlaubten Netzen.
+# Generated by deploy/setup.sh. Dashboard via nginx, only from the allowed networks.
 server {
     listen 80;
     listen [::]:80;
@@ -503,7 +514,7 @@ EOF
 }
 EOF
   } >"$NGINX_SITE.new"
-  info "Vorbereitet: $NGINX_SITE (wird nach dem Start von AIOPatcher aktiviert)"
+  info "Prepared: $NGINX_SITE (activated after AIOPatcher has started)"
 fi
 
 # --- Firewall ----------------------------------------------------------------------------------------
@@ -513,8 +524,8 @@ if [ "$UFW" = yes ]; then
   SSH_PORT="$(printf '%s' "${SSH_CONNECTION:-}" | awk '{print $4}')"
   run ufw allow "${SSH_PORT:-22}/tcp" comment "SSH"
   run ufw allow 8443/tcp comment "AIOPatcher Agents (mTLS)"
-  # Proxy-Port nur aus den erlaubten Netzen: dort steht dein Reverse Proxy, nie direkt ins Internet
-  for net in "${ALLOW_LIST[@]}"; do run ufw allow from "$net" to any port 8080 proto tcp comment "AIOPatcher Proxy-Port (Reverse Proxy)"; done
+  # Proxy port only from the allowed networks: that is where your reverse proxy lives, never directly on the internet
+  for net in "${ALLOW_LIST[@]}"; do run ufw allow from "$net" to any port 8080 proto tcp comment "AIOPatcher proxy port (reverse proxy)"; done
   case "$PROXY" in
     none)
       for net in "${ALLOW_LIST[@]}"; do run ufw allow from "$net" to any port 9443 proto tcp comment "AIOPatcher Dashboard"; done ;;
@@ -522,8 +533,8 @@ if [ "$UFW" = yes ]; then
       run ufw allow from "$PROXY_NET" to any port 9443 proto tcp comment "AIOPatcher Dashboard via Proxy" ;;
     *)
       if [ "$TLS" = letsencrypt ]; then
-        # Let's Encrypt prüft aus dem Internet; den Zugang zum Dashboard begrenzt der Proxy (Allowlist).
-        run ufw allow 80/tcp comment "HTTP (Let's Encrypt, Umleitung)"
+        # Let's Encrypt validates from the internet; access to the dashboard is restricted by the proxy (allowlist).
+        run ufw allow 80/tcp comment "HTTP (Let's Encrypt, redirect)"
         run ufw allow 443/tcp comment "AIOPatcher Dashboard (Proxy, Allowlist)"
       else
         for net in "${ALLOW_LIST[@]}"; do run ufw allow from "$net" to any port 80,443 proto tcp comment "AIOPatcher Dashboard"; done
@@ -532,16 +543,16 @@ if [ "$UFW" = yes ]; then
   run ufw --force enable
 fi
 
-# --- Antworten merken, Update-Befehl -----------------------------------------------------------------
-# Für den nächsten Setup-Lauf (Vorschläge) und für aiopatcher-update (Image, Code, Proxy, Versionszähler)
+# --- Remember answers, update command ----------------------------------------------------------------
+# For the next setup run (defaults) and for aiopatcher-update (image, code, proxy, version counter)
 {
-  echo "# Erzeugt von deploy/setup.sh am $(date '+%Y-%m-%d %H:%M'). Wird von setup.sh und aiopatcher-update gelesen."
+  echo "# Generated by deploy/setup.sh on $(date '+%Y-%m-%d %H:%M'). Read by setup.sh and aiopatcher-update."
   for var in HOSTNAME_ARG PROXY TLS EMAIL CERT_FILE KEY_FILE ALLOW PROXY_NET UFW LANGUAGE_ARG TIMEZONE AUTO_UPDATE IMAGE REPO BUILD_NUMBER; do
     printf '%s=%q\n' "$var" "${!var}"
   done
 } >"$CONF"
 chmod 600 "$CONF"
-info "Geschrieben: $CONF"
+info "Written: $CONF"
 
 run ln -sf "$REPO/deploy/update.sh" /usr/local/bin/aiopatcher-update
 if [ "$AUTO_UPDATE" = yes ]; then
@@ -550,7 +561,7 @@ if [ "$AUTO_UPDATE" = yes ]; then
   mkdir -p "$UNIT_DIR"
   cat >"$UNIT_DIR/aiopatcher-update.service" <<EOF
 [Unit]
-Description=AIOPatcher aktualisieren
+Description=Update AIOPatcher
 After=docker.service network-online.target
 Wants=network-online.target
 
@@ -560,7 +571,7 @@ ExecStart=/usr/local/bin/aiopatcher-update --quiet --base $BASE
 EOF
   cat >"$UNIT_DIR/aiopatcher-update.timer" <<EOF
 [Unit]
-Description=AIOPatcher nachts aktualisieren
+Description=Update AIOPatcher at night
 
 [Timer]
 OnCalendar=*-*-* 04:00
@@ -572,49 +583,49 @@ WantedBy=timers.target
 EOF
   run systemctl daemon-reload
   run systemctl enable --now aiopatcher-update.timer
-  info "Nächtliches Update eingerichtet (04:00-04:45, Log: journalctl -u aiopatcher-update)"
+  info "Nightly update set up (04:00-04:45, log: journalctl -u aiopatcher-update)"
 elif [ "$DRY_RUN" -eq 0 ] && [ -f /etc/systemd/system/aiopatcher-update.timer ]; then
   systemctl disable --now aiopatcher-update.timer >/dev/null 2>&1 || true
   rm -f /etc/systemd/system/aiopatcher-update.timer /etc/systemd/system/aiopatcher-update.service
   systemctl daemon-reload
-  info "Nächtliches Update abgeschaltet."
+  info "Nightly update turned off."
 fi
 
 # --- Start -------------------------------------------------------------------------------------------
 if [ "$DRY_RUN" -eq 1 ]; then
   echo
-  info "Probelauf fertig. Erzeugte Dateien:"
+  info "Dry run finished. Generated files:"
   find "$BASE" -type f | sed 's/^/    /'
   exit 0
 fi
 
-info "Starte AIOPatcher ..."
+info "Starting AIOPatcher ..."
 cd "$BASE"
 docker compose up -d aiopatcher
 
-info "Warte, bis AIOPatcher bereit ist ..."
+info "Waiting until AIOPatcher is ready ..."
 for _ in $(seq 1 60); do
   if curl -fsk --max-time 5 https://127.0.0.1:9443/healthz >/dev/null 2>&1; then READY=1; break; fi
   sleep 3
 done
-[ "${READY:-0}" -eq 1 ] || { docker compose logs --tail 50 aiopatcher; die "AIOPatcher startet nicht (Log oben)."; }
+[ "${READY:-0}" -eq 1 ] || { docker compose logs --tail 50 aiopatcher; die "AIOPatcher does not start (log above)."; }
 
 case "$PROXY" in
   traefik)
-    info "Starte Traefik ..."
+    info "Starting Traefik ..."
     docker compose up -d traefik ;;
   nginx)
     mv "$NGINX_SITE.new" "$NGINX_SITE"
     ln -sf "$NGINX_SITE" /etc/nginx/sites-enabled/aiopatcher
     rm -f /etc/nginx/sites-enabled/default
     if [ "$TLS" = letsencrypt ] && [ ! -f "/etc/letsencrypt/live/$HOSTNAME_ARG/fullchain.pem" ]; then
-      info "Hole Zertifikat von Let's Encrypt ..."
-      # Erst nur Port 80 (für die Prüfung), dann die volle Seite
+      info "Requesting certificate from Let's Encrypt ..."
+      # First only port 80 (for the validation), then the full site
       sed -n '1,/^}/p' "$NGINX_SITE" >/etc/nginx/sites-available/aiopatcher-acme
       ln -sf /etc/nginx/sites-available/aiopatcher-acme /etc/nginx/sites-enabled/aiopatcher
       systemctl reload nginx
       certbot certonly --webroot -w /var/www/html -d "$HOSTNAME_ARG" -m "$EMAIL" --agree-tos -n \
-        --deploy-hook "systemctl reload nginx" || die "Let's Encrypt fehlgeschlagen (Port 80 aus dem Internet erreichbar? DNS richtig?)."
+        --deploy-hook "systemctl reload nginx" || die "Let's Encrypt failed (port 80 reachable from the internet? DNS correct?)."
       ln -sf "$NGINX_SITE" /etc/nginx/sites-enabled/aiopatcher
       rm -f /etc/nginx/sites-available/aiopatcher-acme
     fi
@@ -625,37 +636,37 @@ TOKEN="$(docker logs aiopatcher 2>&1 | grep -i "setup token" | tail -n1 | sed 's
 FINGERPRINT="$(docker logs aiopatcher 2>&1 | grep -i "CA fingerprint" | tail -n1 | sed 's/.*: //' | tr -d '[:space:]' || true)"
 
 echo
-info "Fertig."
+info "Done."
 cat <<EOF
 
     Dashboard:      $DASHBOARD_URL
-    Setup-Token:    ${TOKEN:-"(schon eingerichtet)"}
-    CA-Fingerprint: ${FINGERPRINT:-?}
+    Setup token:    ${TOKEN:-"(already set up)"}
+    CA fingerprint: ${FINGERPRINT:-?}
     Agents:         https://$URL_HOST:8443
-    Proxy-Port:     http://$URL_HOST:8080 (nur LAN, Ziel für deinen Reverse Proxy)
+    Proxy port:     http://$URL_HOST:8080 (LAN only, target for your reverse proxy)
 
 EOF
 case "$PROXY:$TLS" in
   none:*|*:internal)
-    echo "    Der Browser warnt beim ersten Aufruf: Das Zertifikat stammt von der eigenen AIOPatcher-CA."
-    echo "    Dauerhaft ruhig: $BASE/data/ca/ca.crt im Browser bzw. System als vertrauenswürdige CA hinterlegen."
+    echo "    The browser warns on the first visit: the certificate comes from your own AIOPatcher CA."
+    echo "    To silence it for good: add $BASE/data/ca/ca.crt to the browser or system as a trusted CA."
     echo ;;
 esac
 if [ "$PROXY" = external ]; then
   cat <<EOF
-    Im vorhandenen Proxy (z. B. Nginx Proxy Manager → Proxy Hosts → Add Proxy Host):
-      Domain: $HOSTNAME_ARG · Scheme: https · Forward Host: IP dieses Servers (vom Proxy aus) · Port: 9443
-      Access List: nur ${ALLOW_LIST[*]} · SSL: Zertifikat nach Wahl
+    In the existing proxy (e.g. Nginx Proxy Manager → Proxy Hosts → Add Proxy Host):
+      Domain: $HOSTNAME_ARG · Scheme: https · Forward Host: IP of this server (as seen from the proxy) · Port: 9443
+      Access List: only ${ALLOW_LIST[*]} · SSL: certificate of your choice
       Optional "Advanced": proxy_ssl_verify on; proxy_ssl_trusted_certificate <ca.crt>; proxy_ssl_name localhost;
     Details: docs/REVERSE-PROXY.md
 
 EOF
 fi
-echo "    Nächste Schritte: Dashboard öffnen, Token eingeben, Konto und Authenticator einrichten,"
-echo "    dann \"Host hinzufügen\" (ein Befehl pro Host). Log: docker compose -f $COMPOSE logs -f aiopatcher"
-echo "    Hosts außerhalb (Cloud): Einstellungen → Öffentlicher Zugang (Assistent mit Vorlagen für deinen Reverse Proxy)."
-echo "    Updates später ohne Setup: sudo aiopatcher-update$([ "$AUTO_UPDATE" = yes ] && echo " (läuft zusätzlich jede Nacht)")"
+echo "    Next steps: open the dashboard, enter the token, set up your account and authenticator,"
+echo "    then \"Add host\" (one command per host). Log: docker compose -f $COMPOSE logs -f aiopatcher"
+echo "    Hosts outside (cloud): Settings → Public access (wizard with templates for your reverse proxy)."
+echo "    Updates later without setup: sudo aiopatcher-update$([ "$AUTO_UPDATE" = yes ] && echo " (also runs every night)")"
 if [ "$UFW" = no ]; then
   echo
-  warn "Firewall nicht eingerichtet: Port 8443 für Agents freigeben, Dashboard nur aus deinen Netzen."
+  warn "Firewall not set up: open port 8443 for agents, dashboard only from your networks."
 fi

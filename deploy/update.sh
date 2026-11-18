@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
-# AIOPatcher aktualisieren, ohne das Setup erneut zu durchlaufen.
+# Update AIOPatcher without running the setup again.
 #
-#   sudo aiopatcher-update              neuen Code holen (git pull), Image bauen, Daten sichern, neu starten
-#   sudo aiopatcher-update --check      nur prüfen, ob es Neues gibt
-#   sudo aiopatcher-update --force      auch ohne neuen Code neu bauen
+#   sudo aiopatcher-update              fetch new code (git pull), build the image, back up data, restart
+#   sudo aiopatcher-update --check      only check whether there is something new
+#   sudo aiopatcher-update --force      rebuild even without new code
 #
-# Liest die Antworten des Setups aus /opt/aiopatcher/setup.conf. Ältere Installationen ohne diese Datei: einmal
-# direkt aus dem Repo starten (sudo /opt/aiopatcher/src/deploy/update.sh), dann legt es setup.conf und den Befehl an.
+# Reads the setup answers from /opt/aiopatcher/setup.conf. Older installations without this file: run it once
+# directly from the repo (sudo /opt/aiopatcher/src/deploy/update.sh), it then creates setup.conf and the command.
 #
-# Ablauf: Code holen → Image bauen (alter Container läuft weiter) → kurz anhalten, Datenordner sichern → neu starten →
-# warten bis "gesund". Klappt der Start nicht, kommen altes Image und gesicherte Daten automatisch zurück.
+# Steps: fetch code → build image (old container keeps running) → stop briefly, back up data folder → restart →
+# wait until "healthy". If the start fails, the old image and the backed-up data are restored automatically.
 set -euo pipefail
 
-# Alles in main(): Bash liest das Skript damit vollständig ein, bevor "git pull" es ändert.
+# Everything in main(): this way Bash reads the whole script before "git pull" changes it.
 main() {
   BASE=/opt/aiopatcher
   CHECK=0
@@ -27,11 +27,11 @@ main() {
       --quiet) QUIET=1; shift ;;
       --base) BASE="${2:-}"; shift 2 ;;
       -h|--help) sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
-      *) die "Unbekannte Option: $1" ;;
+      *) die "Unknown option: $1" ;;
     esac
   done
-  [ "$(id -u)" -eq 0 ] || die "Bitte als root ausführen (sudo)."
-  [ -f "$BASE/docker-compose.yml" ] || die "Keine Installation in $BASE (docker-compose.yml fehlt). Erst deploy/setup.sh ausführen."
+  [ "$(id -u)" -eq 0 ] || die "Please run as root (sudo)."
+  [ -f "$BASE/docker-compose.yml" ] || die "No installation in $BASE (docker-compose.yml missing). Run deploy/setup.sh first."
 
   load_config
   cd "$BASE"
@@ -45,17 +45,17 @@ main() {
   fi
 
   new_version="$(image_version "$IMAGE")"
-  info "Fertig: AIOPatcher ${old_version:-?} → ${new_version:-?}."
+  info "Done: AIOPatcher ${old_version:-?} → ${new_version:-?}."
 }
 
 info() { [ "${QUIET:-0}" -eq 1 ] || printf '\033[1;35m==>\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m!!\033[0m  %s\n' "$*" >&2; }
-die() { printf '\033[1;31mFehler:\033[0m %s\n' "$*" >&2; exit 1; }
+die() { printf '\033[1;31mError:\033[0m %s\n' "$*" >&2; exit 1; }
 
-# git im Code-Ordner; safe.directory, weil root sonst bei Repos anderer Benutzer abbricht
+# git in the code folder; safe.directory, because root otherwise refuses repos owned by other users
 g() { git -c safe.directory="$REPO" -C "$REPO" "$@"; }
 
-# Version aus dem letzten Release-Tag: "v0.7.0-3-gabc1234" → 0.7.0.3, genau auf dem Tag → 0.7.0. Fehler = kein Tag.
+# Version from the latest release tag: "v0.7.0-3-gabc1234" → 0.7.0.3, exactly on the tag → 0.7.0. Failure = no tag.
 tag_version() {
   local desc tag n
   desc="$(git -c safe.directory="$1" -C "$1" describe --tags --long --match 'v[0-9]*' 2>/dev/null)" || return 1
@@ -69,29 +69,29 @@ image_version() {
   docker image inspect -f '{{index .Config.Labels "org.opencontainers.image.version"}}' "$1" 2>/dev/null || true
 }
 
-# setup.conf laden; fehlt sie (Installation von vor dieser Version), das Nötigste aus der Compose-Datei ableiten.
+# Load setup.conf; if it is missing (installation from before this version), derive the essentials from the compose file.
 load_config() {
   REPO=""; IMAGE=""; PROXY=""; BUILD_NUMBER=0
   if [ -f "$BASE/setup.conf" ]; then
     # shellcheck disable=SC1091
     . "$BASE/setup.conf"
   else
-    # docker compose config löst Variablen aus der .env auf (image: ...:${AIOPATCHER_VERSION:-latest})
+    # docker compose config resolves variables from the .env (image: ...:${AIOPATCHER_VERSION:-latest})
     IMAGE="$(docker compose -f "$BASE/docker-compose.yml" config --images 2>/dev/null | grep -m1 aiopatcher || true)"
     [ -n "$IMAGE" ] || IMAGE="$(awk '/^  aiopatcher:/ {s = 1} s && /image:/ {print $2; exit}' "$BASE/docker-compose.yml")"
     grep -q '^  traefik:' "$BASE/docker-compose.yml" && PROXY=traefik
     REPO="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
     [ -f "$REPO/Dockerfile" ] || REPO="$BASE/src"
-    info "Keine $BASE/setup.conf gefunden, abgeleitet: Image $IMAGE, Code $REPO. Wird nach dem Update gespeichert."
+    info "No $BASE/setup.conf found, derived: image $IMAGE, code $REPO. Will be saved after the update."
     SAVE_CONFIG=1
   fi
-  [ -n "$IMAGE" ] || die "Image nicht ermittelbar (docker-compose.yml prüfen)."
+  [ -n "$IMAGE" ] || die "Cannot determine the image (check docker-compose.yml)."
 }
 
 save_config() {
   local file="$BASE/setup.conf"
   if [ -f "$file" ]; then
-    # nur BUILD_NUMBER anpassen, Rest unverändert lassen
+    # only adjust BUILD_NUMBER, leave the rest unchanged
     if grep -q '^BUILD_NUMBER=' "$file"; then
       sed -i "s/^BUILD_NUMBER=.*/BUILD_NUMBER=$BUILD_NUMBER/" "$file"
     else
@@ -99,7 +99,7 @@ save_config() {
     fi
   else
     cat >"$file" <<EOF
-# Angelegt von aiopatcher-update. setup.sh ergänzt beim nächsten Lauf die übrigen Antworten.
+# Created by aiopatcher-update. setup.sh adds the remaining answers on its next run.
 REPO='$REPO'
 IMAGE='$IMAGE'
 PROXY='$PROXY'
@@ -109,58 +109,58 @@ EOF
   fi
   if [ ! -e /usr/local/bin/aiopatcher-update ] && [ -f "$REPO/deploy/update.sh" ]; then
     ln -sf "$REPO/deploy/update.sh" /usr/local/bin/aiopatcher-update
-    info "Befehl eingerichtet: aiopatcher-update"
+    info "Command set up: aiopatcher-update"
   fi
 }
 
-# Selbst gebautes Image: Code holen, bauen, austauschen
+# Self-built image: fetch code, build, swap
 update_local() {
-  [ -f "$REPO/Dockerfile" ] || die "Kein Code in $REPO. Neuen Stand dorthin entpacken oder REPO in $BASE/setup.conf anpassen."
+  [ -f "$REPO/Dockerfile" ] || die "No code in $REPO. Unpack the new version there or adjust REPO in $BASE/setup.conf."
 
   local changed=1 count=0
   if g rev-parse --git-dir >/dev/null 2>&1; then
     local before after
     before="$(g rev-parse HEAD)"
-    info "Hole neuen Code ($(g remote get-url origin 2>/dev/null || echo git)) ..."
+    info "Fetching new code ($(g remote get-url origin 2>/dev/null || echo git)) ..."
     if [ "$CHECK" -eq 1 ]; then
       g fetch -q
       local behind
       behind="$(g rev-list --count HEAD..@{u} 2>/dev/null || echo 0)"
-      if [ "$behind" -gt 0 ]; then info "$behind neue Änderung(en) verfügbar:"; g log --oneline HEAD..@{u} | head -n 20
-      else info "Schon aktuell."; fi
+      if [ "$behind" -gt 0 ]; then info "$behind new change(s) available:"; g log --oneline HEAD..@{u} | head -n 20
+      else info "Already up to date."; fi
       exit 0
     fi
-    g pull --ff-only -q || die "git pull fehlgeschlagen (lokale Änderungen in $REPO? 'git -C $REPO status')."
-    g fetch -q --tags 2>/dev/null || true # Release-Tags für die Versionsnummer
+    g pull --ff-only -q || die "git pull failed (local changes in $REPO? 'git -C $REPO status')."
+    g fetch -q --tags 2>/dev/null || true # release tags for the version number
     after="$(g rev-parse HEAD)"
     [ "$before" != "$after" ] || changed=0
     [ "$changed" -eq 0 ] || g log --oneline "$before..$after" | head -n 20 | sed 's/^/    /'
     count="$(g rev-list --count HEAD)"
   else
-    [ "$CHECK" -eq 0 ] || die "$REPO ist kein Git-Repo; ob es Neues gibt, lässt sich nicht prüfen."
-    info "$REPO ist kein Git-Repo: baue den Code, der dort liegt (neuen Stand vorher hineinkopieren)."
+    [ "$CHECK" -eq 0 ] || die "$REPO is not a Git repo; cannot check whether there is something new."
+    info "$REPO is not a Git repo: building the code that is there (copy the new version in beforehand)."
   fi
 
-  # Versionsnummer: aus dem letzten Release-Tag (v0.7.0 → 0.7.0, 3 Commits danach → 0.7.0.3), passt so zu den
-  # GitHub-Releases. Ohne Tags bzw. ohne Git: 0.1.<fortlaufend>. Agents bekommen damit das Update angeboten.
+  # Version number: from the latest release tag (v0.7.0 → 0.7.0, 3 commits later → 0.7.0.3), so it matches the
+  # GitHub releases. Without tags or without Git: 0.1.<sequential>. This way agents are offered the update.
   if [ "$count" -gt "$BUILD_NUMBER" ]; then BUILD_NUMBER="$count"; elif [ "$count" -eq 0 ]; then BUILD_NUMBER=$((BUILD_NUMBER + 1)); fi
   local version
   version="$(tag_version "$REPO")" || version="0.1.$BUILD_NUMBER"
 
-  # Aktuell = kein neuer Code und das Image hat schon diese Version (Code von Hand geholt zählt also als neu)
+  # Up to date = no new code and the image already has this version (code fetched by hand therefore counts as new)
   if [ "$changed" -eq 0 ] && [ "$FORCE" -eq 0 ] && [ "$(image_version "$IMAGE")" = "$version" ]; then
-    info "Schon aktuell ($version). Neu bauen trotzdem: --force"
+    info "Already up to date ($version). To rebuild anyway: --force"
     exit 0
   fi
 
   [ -f /swapfile-aiopatcher ] && swapon /swapfile-aiopatcher 2>/dev/null || true
-  info "Baue Version $version (der laufende Dienst bleibt so lange erreichbar) ..."
+  info "Building version $version (the running service stays reachable meanwhile) ..."
   docker tag "$IMAGE" aiopatcher-server:previous 2>/dev/null || true
   if ! docker build --build-arg VERSION="$version" -t "$IMAGE" "$REPO"; then
     if dmesg 2>/dev/null | tail -n 200 | grep -qiE "out of memory|killed process"; then
-      die "Bau abgebrochen: zu wenig Arbeitsspeicher. AIOPatcher läuft unverändert weiter. Mehr RAM/Swap (setup.sh legt Swap an)."
+      die "Build aborted: not enough memory. AIOPatcher keeps running unchanged. Add more RAM/swap (setup.sh creates swap)."
     fi
-    die "Bau fehlgeschlagen (siehe oben). AIOPatcher läuft unverändert weiter."
+    die "Build failed (see above). AIOPatcher keeps running unchanged."
   fi
 
   swap_in aiopatcher-server:previous
@@ -169,24 +169,24 @@ update_local() {
   docker builder prune -f --filter until=168h >/dev/null 2>&1 || true
 }
 
-# Fertiges Image aus einer Registry (z. B. ghcr.io)
+# Prebuilt image from a registry (e.g. ghcr.io)
 update_registry() {
   if [ "$CHECK" -eq 1 ]; then
     local before after
     before="$(docker image inspect -f '{{.Id}}' "$IMAGE" 2>/dev/null || true)"
     docker pull -q "$IMAGE" >/dev/null
     after="$(docker image inspect -f '{{.Id}}' "$IMAGE")"
-    if [ "$before" != "$after" ]; then info "Neues Image geladen ($(image_version "$IMAGE")), Update mit: aiopatcher-update"
-    else info "Schon aktuell."; fi
+    if [ "$before" != "$after" ]; then info "New image pulled ($(image_version "$IMAGE")), update with: aiopatcher-update"
+    else info "Already up to date."; fi
     exit 0
   fi
   local old_id
   old_id="$(docker image inspect -f '{{.Id}}' "$IMAGE" 2>/dev/null || true)"
   [ -z "$old_id" ] || docker tag "$old_id" aiopatcher-server:previous
-  info "Lade $IMAGE ..."
+  info "Pulling $IMAGE ..."
   docker compose pull aiopatcher
   if [ "$(docker image inspect -f '{{.Id}}' "$IMAGE")" = "$old_id" ] && [ "$FORCE" -eq 0 ]; then
-    info "Schon aktuell."
+    info "Already up to date."
     exit 0
   fi
   swap_in aiopatcher-server:previous
@@ -196,24 +196,24 @@ update_registry() {
 
 save_config_if_new() { [ "${SAVE_CONFIG:-0}" -eq 0 ] || save_config; }
 
-# Daten sichern, neues Image starten, auf "gesund" warten; sonst altes Image und Daten zurück
+# Back up data, start the new image, wait until "healthy"; otherwise restore the old image and data
 swap_in() {
   local previous="$1" backup
   mkdir -p "$BASE/backups"
   backup="$BASE/backups/data-$(date +%Y%m%d-%H%M%S).tar.gz"
-  info "Halte AIOPatcher kurz an und sichere die Daten ($backup) ..."
+  info "Stopping AIOPatcher briefly and backing up the data ($backup) ..."
   docker compose stop aiopatcher >/dev/null
-  # data/cache (lokale CVE-Datenbank) lässt sich jederzeit neu laden und bleibt draußen
+  # data/cache (local CVE database) can be reloaded at any time and is left out
   tar -czpf "$backup" -C "$BASE" --exclude=data/cache data
   chmod 600 "$backup"
-  # nur die letzten Sicherungen behalten
+  # keep only the most recent backups
   ls -1t "$BASE"/backups/data-*.tar.gz 2>/dev/null | tail -n +$((KEEP_BACKUPS + 1)) | xargs -r rm -f
 
-  info "Starte neue Version ..."
+  info "Starting the new version ..."
   docker compose up -d aiopatcher >/dev/null
   if wait_healthy; then
     if [ "$PROXY" = traefik ]; then
-      info "Aktualisiere Traefik ..."
+      info "Updating Traefik ..."
       docker compose pull -q traefik >/dev/null 2>&1 || true
       docker compose up -d traefik >/dev/null
     fi
@@ -222,19 +222,19 @@ swap_in() {
   fi
 
   docker compose logs --tail 40 aiopatcher || true
-  warn "Neue Version startet nicht. Stelle den alten Stand wieder her ..."
+  warn "The new version does not start. Restoring the previous state ..."
   docker compose stop aiopatcher >/dev/null || true
   docker tag "$previous" "$IMAGE"
   rm -rf "$BASE/data.failed"
   mv "$BASE/data" "$BASE/data.failed"
   tar -xzpf "$backup" -C "$BASE"
-  # CVE-Datenbank nicht neu laden müssen (baut sich bei anderem Format selbst neu auf)
+  # avoid reloading the CVE database (it rebuilds itself if the format differs)
   [ -d "$BASE/data.failed/cache" ] && mv "$BASE/data.failed/cache" "$BASE/data/cache"
   docker compose up -d aiopatcher >/dev/null
   if wait_healthy; then
-    die "Update zurückgerollt, alte Version läuft wieder. Daten der fehlgeschlagenen Version: $BASE/data.failed"
+    die "Update rolled back, the old version is running again. Data of the failed version: $BASE/data.failed"
   fi
-  die "Auch die alte Version startet nicht. Log: docker compose -f $BASE/docker-compose.yml logs aiopatcher"
+  die "The old version does not start either. Log: docker compose -f $BASE/docker-compose.yml logs aiopatcher"
 }
 
 wait_healthy() {

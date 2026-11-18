@@ -12,6 +12,12 @@ Written for users, not as a list of commits.
 - **Documentation in English:** README, server setup, reverse proxy guide and architecture notes are now in English,
   as are the comments in `docker-compose.yml`, `.env.example` and the Portainer app template. The roadmap is up to
   date again.
+- **Setup and update scripts in English:** `setup.sh` and `aiopatcher-update` now ask and report in English, and the
+  configuration files they generate carry English comments. Answering "j"/"ja" still works.
+
+### Fixed
+- Setup script: answering a choice with "y", "ja" or anything other than the listed numbers silently skipped the
+  firewall setup. Choices now also accept the value itself or y/n and ask again on invalid input.
 
 ## [0.8.4] - 2026-11-18
 
