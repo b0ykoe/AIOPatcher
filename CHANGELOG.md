@@ -8,6 +8,8 @@ Geschrieben für Anwender, nicht als Commit-Liste.
 
 ## [Unveröffentlicht]
 
+## [0.8.4] - 2026-11-18
+
 ### Verbessert
 - **Authenticator-Code in einem Feld:** Bei Anmeldung, Ersteinrichtung, Einladung und Passwortwechsel steht der
   6-stellige Code jetzt in einem einzigen Feld statt in sechs Kästchen. Passwort-Manager wie Bitwarden, 1Password oder
