@@ -95,8 +95,10 @@ Use the status components, do not rebuild them: `HostStatusLabel`, `JobStatusBad
 
 - **`MetricRow`:** icon + name on the left, value on the right (`59 % (4,3 / 7,2 GB)`), a thin bar (6 px) below.
   Several rows stacked in one card ("Current", "Disks"), card at most ~560 px wide (`metric-grid`, rows in
-  `metric-rows`). Long lists (more than 6 rows, e.g. ZFS datasets): card `metric-wide` with `metric-columns`, i.e.
-  twice as wide with two columns read top to bottom, as long as there is room; otherwise one column.
+  `metric-rows`). If value cards and charts sit on one page (host utilization), both share one grid with three equal
+  columns (`metric-panel` + `metric-cols`, one column when narrow), so their edges line up; the charts start a new row
+  (`metric-row-start`). Long lists (more than 6 rows, e.g. ZFS datasets): card `metric-wide` with `metric-columns`,
+  i.e. two columns wide with the rows in two columns read top to bottom.
 - Values without a bar (uptime, load, IPs) as a `MetricRow` without a percentage.
 - In tables: a short bar (at most 160 px) with the value next to it, never stretched across the whole column;
   in list columns `UsageCompact`.

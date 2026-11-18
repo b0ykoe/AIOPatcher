@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Card, Group, Loader, SegmentedControl, SimpleGrid, Stack, Table, Text } from "@mantine/core";
+import { Card, Group, Loader, SegmentedControl, Stack, Table, Text } from "@mantine/core";
 import { IconActivity, IconArrowsExchange, IconClockHour4, IconCpu, IconDatabase, IconGauge, IconStack2 } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import { api, formatRelative, formatUptime, type HostMetricsResponse } from "../../api";
@@ -44,8 +44,8 @@ export function HostMetricsPanel({ hostId }: { hostId: string }) {
           data={[{ value: "24", label: t("metrics.range24h") }, { value: "168", label: t("metrics.range7d") }]} />
       </Group>
 
-      {/* Wertekarten wie bei Proxmox: Zeilen untereinander, Karten schmal (metric-grid) */}
-      <div className="metric-grid">
+      {/* Ein Raster mit drei gleich breiten Spalten für Wertekarten und Diagramme, damit die Kanten übereinander liegen */}
+      <div className="metric-panel"><div className="metric-cols">
         <Card>
           <CardTitle>{t("metrics.current")}</CardTitle>
           <Stack gap="sm">
@@ -70,14 +70,12 @@ export function HostMetricsPanel({ hostId }: { hostId: string }) {
             {m.disks.length === 0 && <Text size="sm" c="dimmed">–</Text>}
           </div>
         </Card>
-      </div>
 
-      {/* Verlauf: drei gleich breite Diagramme über die volle Breite */}
-      <SimpleGrid cols={{ base: 1, md: 3 }} spacing="md">
-        <Card><TimeSeriesChart title={t("metrics.cpu")} points={series("cpu")} from={from} to={to} /></Card>
+        {/* Verlauf: drei gleich breite Diagramme, immer in einer neuen Zeile (metric-row-start) */}
+        <Card className="metric-row-start"><TimeSeriesChart title={t("metrics.cpu")} points={series("cpu")} from={from} to={to} /></Card>
         <Card><TimeSeriesChart title={t("metrics.memory")} points={series("memory")} from={from} to={to} /></Card>
         <Card><TimeSeriesChart title={t("metrics.diskFullest")} points={series("disk")} from={from} to={to} /></Card>
-      </SimpleGrid>
+      </div></div>
 
         {m.containers && m.containers.length > 0 && (
           <Card p={0}>

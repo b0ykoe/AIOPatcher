@@ -477,7 +477,6 @@
   gap: var(--mantine-spacing-md);
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 20rem), 35rem));
   align-items: start;
-  container: metric-grid / inline-size;
 }
 
 /* Wertezeilen in einer Karte; .metric-columns zweispaltig, sobald die Karte doppelt breit sein darf */
@@ -488,7 +487,28 @@
   gap: var(--mantine-spacing-sm) var(--mantine-spacing-xl);
 }
 
-@container metric-grid (min-width: 42rem) {
+/* Auslastung eines Hosts: Wertekarten und Diagramme in denselben drei Spalten (schmal: eine Spalte) */
+.metric-panel {
+  container: metric-panel / inline-size;
+}
+
+.metric-cols {
+  display: grid;
+  gap: var(--mantine-spacing-md);
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* beginnt immer in Spalte 1, also in einer neuen Zeile, auch wenn darüber eine Spalte frei bleibt */
+.metric-row-start {
+  grid-column-start: 1;
+}
+
+@container metric-panel (min-width: 56rem) {
+  .metric-cols {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+
   .metric-wide {
     grid-column: span 2;
   }
