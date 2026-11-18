@@ -2,9 +2,9 @@ import type { ComponentType, ReactNode } from "react";
 import { Navigate, useNavigate, useParams } from "react-router";
 import { Box, NavLink, Select, Text } from "@mantine/core";
 import {
-  IconAdjustments, IconBell, IconBuilding, IconKey, IconLogin2, IconPlugConnected, IconShieldLock, IconStethoscope, IconUsers, IconWorld,
-} from "@tabler/icons-react";
+  IconAdjustments, IconBell, IconBuilding, IconKey, IconLogin2, IconPlugConnected, IconShieldLock, IconStethoscope, IconUsers, IconWorld, IconSparkles } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
+import { AiSettings } from "../components/settings/AiSettings";
 import { ApiTokenSettings } from "../components/settings/ApiTokenSettings";
 import { FeatureSettings } from "../components/settings/FeatureSettings";
 import { GeneralSettings } from "../components/settings/GeneralSettings";
@@ -54,6 +54,7 @@ export function SettingsPage() {
         { value: "integrations", label: t("settings.integrations"), icon: IconPlugConnected, element: <IntegrationSettings /> },
         { value: "sites", label: t("settings.sites"), icon: IconBuilding, element: <SitesPage /> },
         { value: "public-access", label: t("settings.publicAccess"), icon: IconWorld, element: <PublicAccessSettings /> },
+        { value: "ai", label: t("settings.ai"), icon: IconSparkles, element: <AiSettings /> },
       ],
     },
   ];

@@ -40,6 +40,9 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<SsoSettingsRecord> SsoSettings => Set<SsoSettingsRecord>();
     public DbSet<PublicAccessSettingsRecord> PublicAccessSettings => Set<PublicAccessSettingsRecord>();
     public DbSet<ScanSettingsRecord> ScanSettings => Set<ScanSettingsRecord>();
+    public DbSet<PackageChangelogRecord> PackageChangelogs => Set<PackageChangelogRecord>();
+    public DbSet<AiSettingsRecord> AiSettings => Set<AiSettingsRecord>();
+    public DbSet<HostUpdateSummary> HostUpdateSummaries => Set<HostUpdateSummary>();
     public DbSet<FirewallProfile> FirewallProfiles => Set<FirewallProfile>();
     public DbSet<ComplianceBaseline> ComplianceBaselines => Set<ComplianceBaseline>();
     public DbSet<ComplianceBaselineHost> ComplianceBaselineHosts => Set<ComplianceBaselineHost>();
@@ -240,6 +243,26 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
         {
             e.ToTable("ScanSettings");
             e.Property(x => x.Id).ValueGeneratedNever();
+        });
+
+        b.Entity<AiSettingsRecord>(e =>
+        {
+            e.ToTable("AiSettings");
+            e.Property(x => x.Id).ValueGeneratedNever();
+        });
+
+        b.Entity<HostUpdateSummary>(e =>
+        {
+            e.ToTable("HostUpdateSummaries");
+            e.HasKey(x => x.HostId);
+            e.HasOne<ManagedHost>().WithMany().HasForeignKey(x => x.HostId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        b.Entity<PackageChangelogRecord>(e =>
+        {
+            e.ToTable("PackageChangelogs");
+            e.HasIndex(x => new { x.Name, x.Version }).IsUnique();
+            e.HasIndex(x => x.FetchedAt);
         });
 
         b.Entity<SsoSettingsRecord>(e =>

@@ -65,6 +65,12 @@ public sealed class JobJanitor(IServiceScopeFactory scopes, AIOPatcherOptions op
             .Where(t => t.JobId == null && t.CreatedAt < tasksBefore && t.Status != JobStatus.Running)
             .ExecuteDeleteAsync(ct);
 
+        // Patchnotes: nach gut einem Jahr weg (Historie an Patch-Jobs reicht so weit), außer das Update steht noch an
+        var changelogsBefore = now - UpdateChangelogs.Keep;
+        await db.PackageChangelogs
+            .Where(c => c.FetchedAt < changelogsBefore && !db.PendingUpdates.Any(u => u.Name == c.Name && u.AvailableVersion == c.Version))
+            .ExecuteDeleteAsync(ct);
+
         if (stale.Count > 0 || deleted > 0 || samples > 0 || tasks > 0)
         {
             logger.LogInformation("Cleaned up: {Stale} stale jobs, {Lines} old log lines, {Samples} metric samples, {Tasks} agent tasks",

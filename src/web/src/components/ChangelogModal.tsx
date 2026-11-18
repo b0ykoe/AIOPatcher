@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Alert, Badge, Group, Loader, Modal, ScrollArea, Stack, Text } from "@mantine/core";
-import { IconAlertTriangle, IconInfoCircle } from "@tabler/icons-react";
+import { IconAlertTriangle, IconInfoCircle, IconSparkles } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import { api, formatRelative } from "../api";
 
@@ -20,13 +20,22 @@ interface Changelog {
   error: string | null;
   reason: "windows" | "agent" | "notFound" | null;
   fetchedAt: string | null;
+  /** KI-Zusammenfassung (falls eingerichtet) */
+  summary: string | null;
+  summaryError: string | null;
+  summaryModel: string | null;
 }
 
 /** Wie lange auf den Agent gewartet wird (er fragt höchstens jede Minute nach Aufträgen). */
 const maxWaitMs = 3 * 60_000;
 
-/** Patchnotes eines anstehenden Updates: was die neue Version gegenüber der installierten ändert (apt-get changelog). */
-export function ChangelogModal({ hostId, name, onClose }: { hostId: string; name: string | null; onClose: () => void }) {
+/**
+ * Patchnotes eines Updates: was die neue Version gegenüber der installierten ändert (apt-get changelog).
+ * Mit hostId: anstehendes Update dieses Hosts (holt fehlende Patchnotes beim Agent). Mit version: aus der Historie.
+ */
+export function ChangelogModal({ hostId, name, version, from, onClose }: {
+  hostId?: string; name: string | null; version?: string; from?: string; onClose: () => void;
+}) {
   const { t } = useTranslation();
   const [data, setData] = useState<Changelog | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
@@ -41,7 +50,9 @@ export function ChangelogModal({ hostId, name, onClose }: { hostId: string; name
     const started = Date.now();
     const load = async () => {
       try {
-        const result = await api.get<Changelog>(`/api/hosts/${hostId}/updates/changelog?name=${encodeURIComponent(name)}`);
+        const result = await api.get<Changelog>(version
+          ? `/api/changelogs?name=${encodeURIComponent(name)}&version=${encodeURIComponent(version)}${from ? `&from=${encodeURIComponent(from)}` : ""}`
+          : `/api/hosts/${hostId}/updates/changelog?name=${encodeURIComponent(name)}`);
         if (stop) return;
         setData(result);
         if (result.state === "pending") {
@@ -54,7 +65,7 @@ export function ChangelogModal({ hostId, name, onClose }: { hostId: string; name
     };
     void load();
     return () => { stop = true; };
-  }, [hostId, name]);
+  }, [hostId, name, version, from]);
 
   return (
     <Modal opened={name !== null} onClose={onClose} size="xl" title={<Text fw={700}>{t("changelog.title", { name: name ?? "" })}</Text>}>
@@ -84,6 +95,15 @@ export function ChangelogModal({ hostId, name, onClose }: { hostId: string; name
           <Alert color="gray" icon={<IconInfoCircle size={18} />}>{t(`changelog.reason_${data.reason ?? "notFound"}`)}</Alert>
         )}
 
+        {data?.summary && (
+          <Alert color="grape" variant="light" icon={<IconSparkles size={18} />} title={t("summary.packageTitle")}>
+            <Text size="sm" style={{ whiteSpace: "pre-wrap" }}>{data.summary}</Text>
+            {data.summaryModel && <Text size="xs" c="dimmed" mt={4}>{data.summaryModel}</Text>}
+          </Alert>
+        )}
+        {data?.summaryError && !data.summary && (
+          <Alert color="gray" icon={<IconAlertTriangle size={18} />}>{t("summary.failed", { error: data.summaryError })}</Alert>
+        )}
         {data?.state === "ready" && (
           data.sections && data.sections.length > 0 ? (
             <ScrollArea.Autosize mah="65vh" offsetScrollbars>

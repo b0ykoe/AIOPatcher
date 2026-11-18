@@ -227,6 +227,9 @@ public sealed class PatchJob
     /// <summary>AppUpdate: winget-IDs (kommagetrennt).</summary>
     public string? Packages { get; set; }
 
+    /// <summary>Patch: anstehende Updates beim Start des Jobs (JSON, siehe JobUpdateItem) für die Historie mit Patchnotes.</summary>
+    public string? UpdatesSnapshot { get; set; }
+
     /// <summary>SystemChange: <see cref="AIOPatcher.Contracts.SystemChange"/> als JSON, immer ohne Geheimnis.</summary>
     public string? Payload { get; set; }
 

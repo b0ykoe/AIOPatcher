@@ -77,26 +77,30 @@ public sealed class ChangelogTests : IDisposable
     }
 
     [Fact]
-    public void Cache_RequestTakeStore_AndErrorsAreRetriedLater()
+    public async Task Store_RequestTake_PersistsAndRetriesErrorsLater()
     {
         var cache = new UpdateChangelogs();
         var host = Guid.NewGuid();
+        var ct = CancellationToken.None;
 
-        Assert.Equal(2, cache.Request(host, [("pve-manager", "8.3.1"), ("samba", "2:4.17.12")], Now));
-        Assert.Equal(0, cache.Request(host, [("pve-manager", "8.3.1")], Now)); // schon vorgemerkt
-        Assert.True(cache.HasPending(host));
-
-        var taken = cache.TakePending(host, 40);
-        Assert.Equal(2, taken.Count);
+        Assert.Equal(2, await cache.RequestAsync(_db, host, [("pve-manager", "8.3.1"), ("samba", "2:4.17.12")], Now, ct));
+        Assert.Equal(0, await cache.RequestAsync(_db, host, [("pve-manager", "8.3.1")], Now, ct)); // schon vorgemerkt
+        Assert.Equal(2, cache.TakePending(host, 40).Count);
         Assert.False(cache.HasPending(host));
 
-        cache.Store([new PackageChangelog("pve-manager", "8.3.1", PveManager, null), new PackageChangelog("samba", "2:4.17.12", null, "E: Failed to fetch changelog")], Now);
-        Assert.NotNull(cache.Get("pve-manager", "8.3.1", Now)!.Text);
-        Assert.Equal("E: Failed to fetch changelog", cache.Get("samba", "2:4.17.12", Now)!.Error);
+        await cache.StoreAsync(_db, host, [new PackageChangelog("pve-manager", "8.3.1", PveManager, null), new PackageChangelog("samba", "2:4.17.12", null, "E: Failed to fetch changelog")], Now, ct);
 
-        // vorhandene werden nicht erneut angefordert, Fehler erst nach einer Weile wieder
-        Assert.Equal(0, cache.Request(host, [("pve-manager", "8.3.1"), ("samba", "2:4.17.12")], Now.AddHours(1)));
-        Assert.Equal(1, cache.Request(host, [("samba", "2:4.17.12")], Now + UpdateChangelogs.RetryErrorsAfter));
+        // dauerhaft in der Datenbank, auch für einen neuen Dienst (Neustart)
+        var restarted = new UpdateChangelogs();
+        Assert.NotNull((await UpdateChangelogs.GetAsync(_db, "pve-manager", "8.3.1", ct))!.Text);
+        Assert.Equal("E: Failed to fetch changelog", (await UpdateChangelogs.GetAsync(_db, "samba", "2:4.17.12", ct))!.Error);
+        Assert.Equal(0, await restarted.RequestAsync(_db, host, [("pve-manager", "8.3.1"), ("samba", "2:4.17.12")], Now.AddHours(1), ct));
+        Assert.Equal(1, await restarted.RequestAsync(_db, host, [("samba", "2:4.17.12")], Now + UpdateChangelogs.RetryErrorsAfter, ct));
+
+        // ein späterer Fehler ersetzt vorhandenen Text nicht; dieselbe Antwort zweimal legt keinen zweiten Eintrag an
+        await cache.StoreAsync(_db, host, [new PackageChangelog("pve-manager", "8.3.1", null, "E: timeout"), new PackageChangelog("pve-manager", "8.3.1", PveManager, null)], Now, ct);
+        Assert.Equal(1, await _db.PackageChangelogs.CountAsync(c => c.Name == "pve-manager"));
+        Assert.NotNull((await UpdateChangelogs.GetAsync(_db, "pve-manager", "8.3.1", ct))!.Text);
     }
 
     private ManagedHost Host(bool supportsChangelog)
@@ -137,11 +141,11 @@ public sealed class ChangelogTests : IDisposable
         var answer = new ChangelogResult([new PackageChangelog("pve-manager", "8.3.1", PveManager, null)]);
         await module.HandleAsync(Context(cache), host, new AgentTaskRecord { HostId = host.Id, Module = AgentModules.Updates, Action = ModuleActions.Changelog },
             new TaskResultRequest(JobOutcome.Succeeded, "ok", PullJsonContext.ToElement(answer, PullJsonContext.Default.ChangelogResult)), CancellationToken.None);
-        Assert.NotNull(cache.Get("pve-manager", "8.3.1", Now));
+        Assert.NotNull(await UpdateChangelogs.GetAsync(_db, "pve-manager", "8.3.1", CancellationToken.None));
         Assert.Null(module.Due(host, Context(cache), null));
 
         // ein Scan hat Vorrang vor Changelogs
-        cache.Request(host.Id, [("samba", "2:4.17.12")], Now);
+        await cache.RequestAsync(_db, host.Id, [("samba", "2:4.17.12")], Now, CancellationToken.None);
         Assert.Equal(ModuleActions.Scan, module.Due(host, Context(cache, lastScanHoursAgo: 7), null)?.Action);
 
         // älterer Agent ohne changelog: nichts vormerken, nichts anfordern
@@ -162,4 +166,91 @@ public sealed class ChangelogTests : IDisposable
     [InlineData("pve-manager", "1.0;rm", false)]
     public void Agent_AcceptsOnlyRealPackageNamesAndVersions(string name, string version, bool valid) =>
         Assert.Equal(valid, AptChangelog.IsValid(new ChangelogPackage(name, version)));
+
+    [Fact]
+    public async Task Describe_RequestsMissingChangelogs_ForUpdatesFoundBeforeTheAgentCouldFetchThem()
+    {
+        var cache = new UpdateChangelogs();
+        var host = Host(supportsChangelog: true);
+        _db.Hosts.Add(host);
+        _db.PendingUpdates.Add(new PendingUpdate { Host = host, Name = "apt", CurrentVersion = "2.0.9", AvailableVersion = "2.0.11" });
+        _db.PendingUpdates.Add(new PendingUpdate { Host = host, Name = "pve-manager", CurrentVersion = "8.2.10", AvailableVersion = "8.3.1" });
+        _db.PackageChangelogs.Add(new PackageChangelogRecord { Name = "pve-manager", Version = "8.3.1", Text = PveManager, FetchedAt = Now });
+        await _db.SaveChangesAsync();
+
+        Assert.Equal(1, await cache.RequestMissingAsync(_db, host, Now, CancellationToken.None));
+        Assert.Equal(new ChangelogPackage("apt", "2.0.11"), Assert.Single(cache.TakePending(host.Id, 40)));
+    }
+
+    [Fact]
+    public async Task JobSnapshot_KeepsTheUpdatesOfAPatchJob_ForTheHistory()
+    {
+        var host = Host(supportsChangelog: true);
+        _db.Hosts.Add(host);
+        _db.PendingUpdates.Add(new PendingUpdate { Host = host, Name = "openssl", CurrentVersion = "3.0.15", AvailableVersion = "3.0.16", IsSecurity = true });
+        _db.PendingUpdates.Add(new PendingUpdate { Host = host, Name = "vim", CurrentVersion = "9.0.1", AvailableVersion = "9.0.2" });
+        await _db.SaveChangesAsync();
+
+        var security = AIOPatcher.Server.Endpoints.ChangelogEndpoints.SnapshotAsync(_db, host.Id, PatchScope.Security, CancellationToken.None);
+        var items = JsonSerializer.Deserialize<List<AIOPatcher.Server.Endpoints.ChangelogEndpoints.JobUpdateItem>>(await security, new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
+        Assert.Equal("openssl", Assert.Single(items).Name);
+
+        var all = await AIOPatcher.Server.Endpoints.ChangelogEndpoints.SnapshotAsync(_db, host.Id, PatchScope.All, CancellationToken.None);
+        Assert.Contains("\"vim\"", all);
+    }
+
+    /// <summary>Nachgebaute OpenAI-kompatible KI (z. B. Ollama): antwortet mit dem Paketnamen aus der Anfrage.</summary>
+    private sealed class FakeChat : HttpMessageHandler
+    {
+        public List<string> Requests { get; } = [];
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+        {
+            var body = await request.Content!.ReadAsStringAsync(ct);
+            Requests.Add(body);
+            var answer = body.Contains("pending updates on one server") ? "- Host summary" : "Package summary";
+            return new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+            {
+                Content = new StringContent($$$"""{"choices":[{"message":{"role":"assistant","content":"{{{answer}}}"}}]}""", System.Text.Encoding.UTF8, "application/json"),
+            };
+        }
+    }
+
+    private sealed class Factory(HttpMessageHandler handler) : IHttpClientFactory
+    {
+        public HttpClient CreateClient(string name) => new(handler, disposeHandler: false);
+    }
+
+    [Fact]
+    public async Task Summaries_PerPackageAndPerHost_WithALocalModel()
+    {
+        var chat = new FakeChat();
+        var changelogs = new UpdateChangelogs();
+        var summaries = new AIOPatcher.Server.Services.Ai.UpdateSummaries(null!, new Microsoft.AspNetCore.DataProtection.EphemeralDataProtectionProvider(),
+            new AIOPatcher.Server.Services.Ai.AiClient(new Factory(chat)), changelogs, Microsoft.Extensions.Logging.Abstractions.NullLogger<AIOPatcher.Server.Services.Ai.UpdateSummaries>.Instance);
+        summaries.Use(new AiSettingsRecord { Enabled = true, Provider = "compatible", BaseUrl = "http://ollama:11434/v1", Model = "llama3.1", Language = "en" });
+
+        var host = Host(supportsChangelog: true);
+        _db.Hosts.Add(host);
+        _db.PendingUpdates.Add(new PendingUpdate { Host = host, Name = "pve-manager", CurrentVersion = "8.2.10", AvailableVersion = "8.3.1" });
+        _db.PackageChangelogs.Add(new PackageChangelogRecord { Name = "pve-manager", Version = "8.3.1", Text = PveManager, FetchedAt = Now });
+        await _db.SaveChangesAsync();
+
+        await summaries.RunHostAsync(_db, host.Id, Now, CancellationToken.None);
+
+        var record = await _db.PackageChangelogs.SingleAsync(c => c.Name == "pve-manager");
+        Assert.Equal("Package summary", record.Summary);
+        Assert.Equal("compatible/llama3.1", record.SummaryModel);
+        Assert.Equal("8.2.10", record.SummaryFrom);
+        Assert.Equal("- Host summary", (await _db.HostUpdateSummaries.SingleAsync(s => s.HostId == host.Id)).Text);
+
+        // an die KI gehen Paket, Versionen und nur die neuen Einträge - kein Host-Name
+        Assert.Contains("fix backup job editor", chat.Requests[0]);
+        Assert.DoesNotContain("old entry the host already has", chat.Requests[0]);
+        Assert.DoesNotContain("\"pve\"", string.Join("", chat.Requests));
+
+        // nichts geändert: kein neuer Aufruf
+        await summaries.RunHostAsync(_db, host.Id, Now, CancellationToken.None);
+        Assert.Equal(2, chat.Requests.Count);
+    }
 }

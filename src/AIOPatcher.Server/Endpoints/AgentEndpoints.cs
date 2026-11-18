@@ -440,6 +440,11 @@ public static class AgentEndpoints
 
         next.Status = JobStatus.Running;
         next.StartedAt = now;
+        if (next.Type == JobType.Patch)
+        {
+            next.UpdatesSnapshot = await ChangelogEndpoints.SnapshotAsync(db, next.HostId, next.Scope, ct);
+        }
+
         return next;
     }
 

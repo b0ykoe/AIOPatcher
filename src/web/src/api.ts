@@ -205,6 +205,42 @@ export interface HostDetail {
   lastScanAt: string | null;
 }
 
+export type AiProvider = "anthropic" | "openai" | "compatible";
+
+/** Einstellungen → KI (Zusammenfassungen der Patchnotes); der API-Schlüssel selbst kommt nie zurück. */
+export interface AiSettings {
+  enabled: boolean;
+  provider: AiProvider;
+  model: string;
+  defaultModel: string;
+  baseUrl: string | null;
+  hasApiKey: boolean;
+  language: "de" | "en";
+  updatedBy: string | null;
+  updatedAt: string | null;
+}
+
+/** "Was bringen diese Updates?" eines Hosts */
+export interface HostUpdateSummary {
+  state: "ready" | "pending" | "error" | "off" | "none";
+  text: string | null;
+  error: string | null;
+  model: string | null;
+  updateCount: number;
+  createdAt: string | null;
+}
+
+/** Ein Update in einem Patch-Job (beim Start festgehalten) */
+export interface JobUpdate {
+  name: string;
+  from: string | null;
+  to: string | null;
+  security: boolean;
+  state: "planned" | "installed" | "notInstalled" | "unknown";
+  hasChangelog: boolean;
+  summary: string | null;
+}
+
 /** Einstellungen → Scan-Intervalle (Standard für alle Hosts). */
 export interface ScanSettings {
   updateScanHours: number;

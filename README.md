@@ -142,8 +142,13 @@ tested against real systems, but against mocked APIs and unit tests):
   (Microsoft), KEV/EPSS and which of your own hosts are affected. Also via Ctrl+K and the CVE number.
 - **Release notes for pending updates**: the *i* next to a Linux update shows what the new version changes compared
   to the installed one (Debian changelog, via `apt-get changelog` on the host, so Debian, Ubuntu and Proxmox work,
-  including the enterprise repo). The agent fetches them right after each scan; for Windows updates the *i* opens
-  the KB article at Microsoft.
+  including the enterprise repo). The agent fetches them automatically for all pending updates (after each scan and
+  whenever something is missing); they are stored, so the page of a patch job later shows what was installed and what
+  it changed. For Windows updates the *i* opens the KB article at Microsoft.
+- **AI summaries** (optional, *Settings → AI*): Claude, ChatGPT or a local model (Ollama, LM Studio, vLLM or any
+  OpenAI-compatible API) summarizes the release notes automatically: per package in 1 to 3 sentences and per host as
+  "What do these updates bring?". Only package names, versions and changelog texts are sent, no host names or
+  addresses; the API key is stored encrypted. Each package version is summarized once for all hosts.
 - **Program inventory**: dpkg/snap and Windows programs, with available version and links (winget manifest,
   Debian tracker, Launchpad, vendor); on Windows **program updates via winget** (Windows 10/11, Server 2025)
 - **Docker containers**: detects newer images in the registry (display/notification only, updates nothing). The agent reports

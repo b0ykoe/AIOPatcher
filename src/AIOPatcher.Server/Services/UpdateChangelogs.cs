@@ -1,42 +1,61 @@
 using System.Collections.Concurrent;
 using System.Text.RegularExpressions;
 using AIOPatcher.Contracts;
+using AIOPatcher.Server.Data;
 using AIOPatcher.Server.Services.Security;
+using Microsoft.EntityFrameworkCore;
 
 namespace AIOPatcher.Server.Services;
 
 /// <summary>
-/// Changelogs anstehender Linux-Updates (Patchnotes): der Agent holt sie per <c>apt-get changelog</c> gleich nach jedem
-/// Scan, hier liegen sie je Paket und Version (für alle Hosts mit demselben Paket nur einmal). Nur im Speicher: nach
-/// einem Neustart holt der nächste Scan oder ein Klick auf "i" sie neu.
+/// Changelogs anstehender Linux-Updates (Patchnotes): der Agent holt sie per <c>apt-get changelog</c> nach jedem Scan
+/// und bei jeder Meldung alles, was für die anstehenden Updates noch fehlt. Sie liegen dauerhaft in der Datenbank
+/// (<see cref="PackageChangelogRecord"/>, je Paket und Version einmal für alle Hosts). Nur die Warteschlange, was ein
+/// Agent noch holen soll, liegt im Speicher.
 /// </summary>
 public sealed partial class UpdateChangelogs
 {
-    /// <summary>Höchstens so viele Changelogs im Speicher (je bis 32 KB); die ältesten fallen zuerst heraus.</summary>
-    public const int Capacity = 2000;
-
     /// <summary>Kein Changelog zu haben (z. B. Quelle bietet keine an): erst nach dieser Zeit wieder versuchen.</summary>
     public static readonly TimeSpan RetryErrorsAfter = TimeSpan.FromHours(6);
 
-    public sealed record Entry(string? Text, string? Error, DateTime FetchedAt);
+    /// <summary>So lange bleiben Patchnotes in der Datenbank (Historie an Patch-Jobs).</summary>
+    public static readonly TimeSpan Keep = TimeSpan.FromDays(400);
 
     /// <param name="Version">null, wenn der Text kein Debian-Changelog war (dann steht alles in Text).</param>
     public sealed record Section(string? Version, string? Date, string Text);
 
-    private readonly ConcurrentDictionary<(string Name, string Version), Entry> _cache = new();
     private readonly ConcurrentDictionary<Guid, ConcurrentDictionary<(string Name, string Version), byte>> _pending = new();
 
-    public Entry? Get(string name, string version, DateTime now) =>
-        _cache.TryGetValue((name, version), out var entry) && (entry.Text is not null || now - entry.FetchedAt < RetryErrorsAfter) ? entry : null;
+    /// <summary>Wird nach dem Speichern neuer Patchnotes eines Hosts aufgerufen (z. B. KI-Zusammenfassung anstoßen).</summary>
+    public event Action<Guid, IReadOnlyList<(string Name, string Version)>>? Stored;
+
+    /// <summary>Gilt als vorhanden: mit Text immer, ohne Text (Fehler) nur eine Weile, danach neuer Versuch.</summary>
+    public static bool IsUsable(PackageChangelogRecord? record, DateTime now) =>
+        record is not null && (record.Text is not null || now - record.FetchedAt < RetryErrorsAfter);
+
+    public static Task<PackageChangelogRecord?> GetAsync(AppDbContext db, string name, string version, CancellationToken ct) =>
+        db.PackageChangelogs.AsNoTracking().FirstOrDefaultAsync(c => c.Name == name && c.Version == version, ct);
 
     /// <summary>Für diesen Host vormerken, was noch fehlt; der nächste Abruf des Agents holt es (UpdatesServerModule).</summary>
-    public int Request(Guid hostId, IEnumerable<(string Name, string Version)> packages, DateTime now)
+    public async Task<int> RequestAsync(AppDbContext db, Guid hostId, IEnumerable<(string Name, string Version)> packages, DateTime now, CancellationToken ct)
     {
+        var wanted = packages.Where(p => p.Name.Length <= 100 && p.Version.Length <= 100).Distinct().ToList();
+        if (wanted.Count == 0)
+        {
+            return 0;
+        }
+
+        var names = wanted.Select(p => p.Name).Distinct().ToList();
+        var known = (await db.PackageChangelogs.AsNoTracking().Where(c => names.Contains(c.Name)).ToListAsync(ct))
+            .Where(c => IsUsable(c, now))
+            .Select(c => (c.Name, c.Version))
+            .ToHashSet();
+
         var queue = _pending.GetOrAdd(hostId, _ => new());
         var added = 0;
-        foreach (var package in packages)
+        foreach (var package in wanted)
         {
-            if (Get(package.Name, package.Version, now) is null && queue.TryAdd(package, 0))
+            if (!known.Contains(package) && queue.TryAdd(package, 0))
             {
                 added++;
             }
@@ -44,6 +63,19 @@ public sealed partial class UpdateChangelogs
 
         return added;
     }
+
+    /// <summary>Alle anstehenden Linux-Updates eines Hosts vormerken, deren Patchnotes noch fehlen.</summary>
+    public async Task<int> RequestMissingAsync(AppDbContext db, ManagedHost host, DateTime now, CancellationToken ct)
+    {
+        var updates = await db.PendingUpdates.AsNoTracking()
+            .Where(u => u.HostId == host.Id && u.AvailableVersion != null)
+            .Select(u => new { u.Name, u.AvailableVersion })
+            .ToListAsync(ct);
+        return await RequestAsync(db, host.Id, updates.Select(u => (u.Name, u.AvailableVersion!)), now, ct);
+    }
+
+    /// <summary>Liste der anstehenden Updates eines Hosts hat sich geändert (Scan): Zusammenfassung ggf. erneuern.</summary>
+    public void Touched(Guid hostId) => Stored?.Invoke(hostId, []);
 
     public bool HasPending(Guid hostId) => _pending.TryGetValue(hostId, out var queue) && !queue.IsEmpty;
 
@@ -67,26 +99,57 @@ public sealed partial class UpdateChangelogs
         return taken;
     }
 
-    public void Store(IEnumerable<PackageChangelog> changelogs, DateTime now)
+    /// <summary>Antwort des Agents speichern (sofort, unabhängig vom Rest des Ergebnisses).</summary>
+    public async Task StoreAsync(AppDbContext db, Guid hostId, IEnumerable<PackageChangelog> changelogs, DateTime now, CancellationToken ct)
     {
-        foreach (var c in changelogs)
+        var incoming = changelogs.Where(c => c.Name.Length <= 100 && c.Version.Length <= 100).ToList();
+        if (incoming.Count == 0)
         {
-            if (c.Name.Length > 100 || c.Version.Length > 100)
-            {
-                continue;
-            }
-
-            var text = c.Text is { Length: > 64_000 } big ? big[..64_000] : c.Text;
-            _cache[(c.Name, c.Version)] = new Entry(text, text is null ? Truncate(c.Error ?? "No changelog.") : null, now);
+            return;
         }
 
-        // Grob begrenzen: älteste zuerst entfernen
-        if (_cache.Count > Capacity)
+        var names = incoming.Select(c => c.Name).Distinct().ToList();
+        var existing = (await db.PackageChangelogs.Where(c => names.Contains(c.Name)).ToListAsync(ct)).ToDictionary(c => (c.Name, c.Version));
+        var withText = new List<(string, string)>();
+        foreach (var c in incoming)
         {
-            foreach (var old in _cache.OrderBy(e => e.Value.FetchedAt).Take(_cache.Count - Capacity).Select(e => e.Key).ToList())
+            var text = c.Text is { Length: > 64_000 } big ? big[..64_000] : c.Text;
+            if (!existing.TryGetValue((c.Name, c.Version), out var row))
             {
-                _cache.TryRemove(old, out _);
+                db.PackageChangelogs.Add(row = new PackageChangelogRecord { Name = c.Name, Version = c.Version });
+                existing[(c.Name, c.Version)] = row;
             }
+            else if (row.Text is not null && text is null)
+            {
+                continue; // vorhandenen Text nicht durch einen späteren Fehler ersetzen
+            }
+
+            row.Text = text;
+            row.Error = text is null ? Truncate(c.Error ?? "No changelog.") : null;
+            row.FetchedAt = now;
+            if (text is not null)
+            {
+                withText.Add((c.Name, c.Version));
+            }
+        }
+
+        // Gleich speichern: liefern zwei Hosts dasselbe Paket gleichzeitig, verliert nur einer (eindeutiger Index), nicht
+        // das ganze Ergebnis des Auftrags.
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException)
+        {
+            foreach (var entry in db.ChangeTracker.Entries<PackageChangelogRecord>().Where(e => e.State == EntityState.Added).ToList())
+            {
+                entry.State = EntityState.Detached;
+            }
+        }
+
+        if (withText.Count > 0)
+        {
+            Stored?.Invoke(hostId, withText);
         }
     }
 

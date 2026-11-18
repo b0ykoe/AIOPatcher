@@ -180,6 +180,10 @@ builder.Services.AddHostedService<ContainerUpdateService>();
 builder.Services.AddSingleton<PublicAccess>();
 builder.Services.AddSingleton<ScanSchedule>();
 builder.Services.AddSingleton<UpdateChangelogs>();
+builder.Services.AddHttpClient("ai", c => c.Timeout = TimeSpan.FromMinutes(5)); // lokale Modelle brauchen etwas
+builder.Services.AddSingleton<AIOPatcher.Server.Services.Ai.AiClient>();
+builder.Services.AddSingleton<AIOPatcher.Server.Services.Ai.UpdateSummaries>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<AIOPatcher.Server.Services.Ai.UpdateSummaries>());
 builder.Services.AddMemoryCache();
 builder.Services.AddSingleton<ReleaseCheck>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<ReleaseCheck>());
@@ -201,6 +205,7 @@ using (var scope = app.Services.CreateScope())
     await app.Services.GetRequiredService<AIOPatcher.Server.Services.Sso.SsoService>().LoadAsync(db, CancellationToken.None);
     await app.Services.GetRequiredService<PublicAccess>().LoadAsync(db, CancellationToken.None);
     await app.Services.GetRequiredService<ScanSchedule>().LoadAsync(db, CancellationToken.None);
+    await app.Services.GetRequiredService<AIOPatcher.Server.Services.Ai.UpdateSummaries>().LoadAsync(db, CancellationToken.None);
 }
 
 // --- Pipeline -------------------------------------------------------------------------------------
@@ -253,6 +258,7 @@ app.MapFeatureEndpoints();
 app.MapPublicAccessEndpoints();
 app.MapScanSettingsEndpoints();
 app.MapChangelogEndpoints();
+app.MapAiEndpoints();
 app.MapPasskeyEndpoints();
 app.MapOpenApi("/api/openapi/{documentName}.json").RequireAuthorization();
 app.MapAgentEndpoints();

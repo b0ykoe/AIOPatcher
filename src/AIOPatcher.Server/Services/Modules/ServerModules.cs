@@ -131,6 +131,12 @@ public sealed class SystemServerModule : ServerModule
             AgentEndpoints.RecordUpdateReport(context.Db, context.Notifier, host, report, context.Now);
         }
 
+        // Patchnotes nachholen, die noch fehlen (z. B. Agent kann es erst seit dem letzten Update, Server neu gestartet)
+        if (context.Changelogs is { } changelogs && ModuleJson.Supports(host, AgentModules.Updates, ModuleActions.Changelog))
+        {
+            await changelogs.RequestMissingAsync(context.Db, host, context.Now, ct);
+        }
+
         return null;
     }
 }
@@ -165,7 +171,10 @@ public sealed class UpdatesServerModule : ServerModule
         {
             if (PullJsonContext.FromElement(result.Payload, PullJsonContext.Default.ChangelogResult) is { } changelogs)
             {
-                context.Changelogs?.Store(changelogs.Changelogs.Take(100), context.Now);
+                if (context.Changelogs is { } store)
+                {
+                    await store.StoreAsync(context.Db, host.Id, changelogs.Changelogs.Take(100), context.Now, ct);
+                }
             }
 
             return null;
@@ -179,8 +188,11 @@ public sealed class UpdatesServerModule : ServerModule
         // Patchnotes der angebotenen Versionen vormerken (nur was noch nicht da ist); der nächste Abruf holt sie
         if (context.Changelogs is { } cache && ModuleJson.Supports(host, Id, ModuleActions.Changelog))
         {
-            cache.Request(host.Id, scan.Updates.Where(u => !string.IsNullOrEmpty(u.AvailableVersion)).Select(u => (u.Name, u.AvailableVersion!)), context.Now);
+            await cache.RequestAsync(context.Db, host.Id,
+                scan.Updates.Where(u => !string.IsNullOrEmpty(u.AvailableVersion)).Select(u => (u.Name, u.AvailableVersion!)), context.Now, ct);
         }
+
+        context.Changelogs?.Touched(host.Id); // KI-Zusammenfassung des Hosts auf den neuen Stand bringen
 
         host.BrokenAptSources = scan.BrokenSources is { Count: > 0 } broken
             ? System.Text.Json.JsonSerializer.Serialize(broken.Take(20).ToList(), PullJsonContext.Default.ListBrokenAptSource)

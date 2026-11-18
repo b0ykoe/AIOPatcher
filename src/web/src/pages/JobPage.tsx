@@ -7,6 +7,7 @@ import { api, describeJob, describeRequester, formatDateTime, isActiveJob, type 
 import { useCan } from "../App";
 import { Console } from "../components/Console";
 import { confirmAction, DetailHeader, errorText, JobStatusBadge, notifySuccess } from "../components/ui";
+import { JobUpdatesCard } from "../components/UpdateSummary";
 
 export function JobPage() {
   const { t } = useTranslation();
@@ -95,6 +96,8 @@ export function JobPage() {
           <Fact label={t("jobPage.runtime")} value={job.startedAt ? formatDateTime(job.startedAt) : t("jobPage.notStarted")} sub={job.finishedAt ? t("jobPage.until", { date: formatDateTime(job.finishedAt) }) : undefined} />
           <Fact label={t("jobType.reboot")} value={job.rebootPerformed ? t("jobPage.rebootDone") : job.allowReboot ? t("jobPage.rebootAllowed") : t("jobPage.rebootNotAllowed")} />
         </SimpleGrid>
+
+        {job.type === "Patch" && <JobUpdatesCard jobId={job.id} finished={!isActiveJob(job.status)} />}
 
         <Console title={`${job.hostName} · ${describeJob(job)}`} lines={lines} live={isActiveJob(job.status)} />
       </Stack>

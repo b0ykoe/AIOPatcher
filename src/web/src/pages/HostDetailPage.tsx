@@ -27,6 +27,7 @@ import {
 import { api, ApiError, formatDateTime, kbOf, splitTags, formatRelative, formatUptime, isActiveJob, type HostDetail, type Job, type JobType, type PatchScope } from "../api";
 import { HostScanCard } from "../components/ScanIntervals";
 import { ChangelogModal } from "../components/ChangelogModal";
+import { HostUpdateSummaryCard } from "../components/UpdateSummary";
 import { useTranslation } from "react-i18next";
 import { useCan, useSimple } from "../App";
 import { useFeatures } from "../features";
@@ -375,6 +376,8 @@ export function HostDetailPage() {
         </Tabs.Panel>
 
         <Tabs.Panel value="updates">
+          <Stack gap="md">
+          {h.osFamily !== "Windows" && updates.length > 0 && <HostUpdateSummaryCard hostId={h.id} updateCount={host.updates.length} />}
           <Card p={0}>
             {!h.lastScanAt ? (
               <EmptyState icon={<IconScan size={28} />} title={t("hostDetail.noScanTitle")} text={t("hostDetail.noScanText")} />
@@ -452,6 +455,7 @@ export function HostDetailPage() {
               </Stack>
             )}
           </Card>
+          </Stack>
         </Tabs.Panel>
 
         <Tabs.Panel value="software"><Card p={0}><SoftwareTab hostId={h.id} windows={h.osFamily === "Windows"} busy={!!activeJob} /></Card></Tabs.Panel>
