@@ -143,7 +143,8 @@ tested against real systems, but against mocked APIs and unit tests):
 - **Program inventory**: dpkg/snap and Windows programs, with available version and links (winget manifest,
   Debian tracker, Launchpad, vendor); on Windows **program updates via winget** (Windows 10/11, Server 2025)
 - **Docker containers**: detects newer images in the registry (display/notification only, updates nothing). The agent reports
-  its containers every 30 minutes and after every scan, the registry is queried every 6 hours per image; *Check again* in
+  its containers every 30 minutes and after every scan, the registry is queried every 6 hours per image (adjustable, see
+  *Scan intervals* below); *Check again* in
   the Containers tab queries both right away. A container is up to date when one of the local digests of its image
   (also pulled via other tags) matches the digest of the tag in the registry.
 - **Notifications**: ntfy, email, Discord, Slack, Telegram, webhook (HMAC-signed)
@@ -396,6 +397,12 @@ The agent is a pure **pull agent**: it asks the server for tasks (`GET /agent/v2
 response to exactly one task (log lines and result). It sends nothing unasked, not even inventory. The server
 decides which data it needs when, e.g. system data every 15 minutes, containers every 30 minutes, utilization every
 5 minutes and updates, programs and compliance every 6 hours, right after an installation.
+
+**Scan intervals:** How often agents look for updates (default every 6 hours) and how often the server asks the registry
+for new container images (default every 6 hours per image) is set under **Settings → General → Scan intervals**:
+every 1, 2, 3, 6, 12 or 24 hours. A host can use a different value under **Host → Settings → Scan interval**, e.g. every
+hour for a Docker host. If an image runs on several hosts, the shortest interval applies. After an installation or a
+reboot the agent scans again right away anyway.
 
 Every function is a **module** with fixed actions. The agent rejects any other task:
 

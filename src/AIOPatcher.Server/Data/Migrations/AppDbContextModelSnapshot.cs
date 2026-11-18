@@ -827,6 +827,9 @@ namespace AIOPatcher.Server.Data.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("TEXT");
 
+                    b.Property<int?>("ImageCheckHours")
+                        .HasColumnType("INTEGER");
+
                     b.Property<Guid?>("IntegrationId")
                         .HasColumnType("TEXT");
 
@@ -923,6 +926,9 @@ namespace AIOPatcher.Server.Data.Migrations
                     b.Property<string>("Tags")
                         .HasMaxLength(500)
                         .HasColumnType("TEXT");
+
+                    b.Property<int?>("UpdateScanHours")
+                        .HasColumnType("INTEGER");
 
                     b.Property<TimeSpan?>("Uptime")
                         .HasColumnType("TEXT");
@@ -1506,6 +1512,29 @@ namespace AIOPatcher.Server.Data.Migrations
                     b.HasIndex("HostId");
 
                     b.ToTable("RunbookWaveHosts");
+                });
+
+            modelBuilder.Entity("AIOPatcher.Server.Data.ScanSettingsRecord", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("ImageCheckHours")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("UpdateScanHours")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("ScanSettings", (string)null);
                 });
 
             modelBuilder.Entity("AIOPatcher.Server.Data.Site", b =>

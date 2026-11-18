@@ -197,6 +197,21 @@ export interface HostDetail {
   autoFixSources: boolean;
   /** Vergleich laufender Dienste/Container vor und nach dem letzten Neustart (null = keiner, ausgeblendet oder Schalter aus) */
   rebootCheck: RebootCheck | null;
+  /** Update-Scan alle n Stunden statt des Standards (null = Standard) */
+  updateScanHours: number | null;
+  /** Registry-Abfrage für die Images dieses Hosts alle n Stunden (null = Standard) */
+  imageCheckHours: number | null;
+  /** letzter erfolgreicher Update-Scan */
+  lastScanAt: string | null;
+}
+
+/** Einstellungen → Scan-Intervalle (Standard für alle Hosts). */
+export interface ScanSettings {
+  updateScanHours: number;
+  imageCheckHours: number;
+  allowedHours: number[];
+  updatedBy: string | null;
+  updatedAt: string | null;
 }
 
 /** reason: stopped = Dienst gestoppt/fehlgeschlagen, noRestart = Container ohne Restart-Policy, null = läuft einfach nicht */

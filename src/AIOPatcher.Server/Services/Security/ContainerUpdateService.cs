@@ -93,10 +93,14 @@ public sealed class ContainerUpdateService(
     AIOPatcherOptions options,
     Notifier notifier,
     ILogger<ContainerUpdateService> logger,
-    FeatureFlags features) : BackgroundService
+    FeatureFlags features,
+    ScanSchedule schedule) : BackgroundService
 {
-    private static readonly TimeSpan Interval = TimeSpan.FromMinutes(30);
-    private static readonly TimeSpan RecheckAfter = TimeSpan.FromHours(6);
+    /// <summary>So oft wird nachgesehen, welche Images fällig sind; wie oft je Image abgefragt wird, sagt <see cref="ScanSchedule"/>.</summary>
+    private static readonly TimeSpan Interval = TimeSpan.FromMinutes(10);
+
+    /// <summary>Spielraum, damit ein Image mit 1-Stunden-Intervall nicht wegen Sekunden erst eine Runde später dran ist.</summary>
+    private static readonly TimeSpan Slack = TimeSpan.FromMinutes(2);
 
     private static readonly string[] ManifestTypes =
     [
@@ -131,26 +135,33 @@ public sealed class ContainerUpdateService(
         while (await timer.WaitForNextTickAsync(stoppingToken));
     }
 
-    /// <summary>"Neu prüfen" für einen Host: dessen Images sofort bei der Registry abfragen (statt nach bis zu 6 Stunden).</summary>
+    /// <summary>"Neu prüfen" für einen Host: dessen Images sofort bei der Registry abfragen (statt erst im Intervall).</summary>
     public async Task RecheckHostAsync(AppDbContext db, Guid hostId, DateTime now, CancellationToken ct)
     {
         var references = await db.Containers.Where(c => c.HostId == hostId && c.Reference != null).Select(c => c.Reference!).Distinct().ToListAsync(ct);
-        await CheckAsync(db, references, now, force: true, ct);
+        await CheckAsync(db, references.ToDictionary(r => r, _ => TimeSpan.FromMinutes(1)), now, ct);
     }
 
-    public async Task RunOnceAsync(AppDbContext db, DateTime now, CancellationToken ct)
+    public async Task RunOnceAsync(AppDbContext db, DateTime now, CancellationToken ct) =>
+        await CheckAsync(db, await DueIntervalsAsync(db, schedule, ct), now, ct);
+
+    /// <summary>Je Image das kürzeste Intervall der Hosts, auf denen es läuft (Standard oder abweichender Wert des Hosts).</summary>
+    public static async Task<Dictionary<string, TimeSpan>> DueIntervalsAsync(AppDbContext db, ScanSchedule schedule, CancellationToken ct)
     {
-        var references = await db.Containers.Where(c => c.Reference != null).Select(c => c.Reference!).Distinct().ToListAsync(ct);
-        await CheckAsync(db, references, now, force: false, ct);
+        var rows = await db.Containers.Where(c => c.Reference != null)
+            .Select(c => new { Reference = c.Reference!, c.Host!.ImageCheckHours })
+            .ToListAsync(ct);
+        return rows.GroupBy(r => r.Reference).ToDictionary(g => g.Key, g => g.Min(r => schedule.ImageCheckInterval(r.ImageCheckHours)));
     }
 
-    private async Task CheckAsync(AppDbContext db, List<string> references, DateTime now, bool force, CancellationToken ct)
+    private async Task CheckAsync(AppDbContext db, Dictionary<string, TimeSpan> recheckAfter, DateTime now, CancellationToken ct)
     {
+        var references = recheckAfter.Keys.ToList();
         var checks = await db.ImageChecks.Where(i => references.Contains(i.Reference)).ToDictionaryAsync(i => i.Reference, ct);
 
         foreach (var reference in references)
         {
-            if (checks.TryGetValue(reference, out var check) && now - check.CheckedAt < (force ? TimeSpan.FromMinutes(1) : RecheckAfter))
+            if (checks.TryGetValue(reference, out var check) && now - check.CheckedAt < recheckAfter[reference] - Slack)
             {
                 continue;
             }

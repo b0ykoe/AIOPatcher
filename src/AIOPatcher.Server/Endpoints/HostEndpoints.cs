@@ -103,7 +103,10 @@ public static class HostEndpoints
         IReadOnlyList<HostModuleDto>? Modules = null,
         IReadOnlyList<BrokenAptSource>? BrokenSources = null,
         bool AutoFixSources = false,
-        RebootCheckResult? RebootCheck = null);
+        RebootCheckResult? RebootCheck = null,
+        int? UpdateScanHours = null,
+        int? ImageCheckHours = null,
+        DateTime? LastScanAt = null);
 
     /// <summary>Modul des Agents: vorhanden, lokal (policy.json) oder im Dashboard abgeschaltet. Required = nicht abschaltbar.</summary>
     public sealed record HostModuleDto(string Id, bool Available, bool DisabledLocally, bool DisabledInDashboard, bool Required, IReadOnlyList<string> Actions);
@@ -337,6 +340,9 @@ public static class HostEndpoints
             .ToListAsync(ct);
 
         var latest = AgentDownloads.AgentVersion;
+        var lastScanAt = await db.AgentTasks.AsNoTracking()
+            .Where(t => t.HostId == id && t.Module == AgentModules.Updates && t.Action == ModuleActions.Scan && t.Status == JobStatus.Succeeded)
+            .MaxAsync(t => (DateTime?)t.FinishedAt, ct);
         var lastUpdateTask = await db.AgentTasks.AsNoTracking()
             .Where(t => t.HostId == id && t.Module == AgentModules.Agent && t.Action == ModuleActions.Update)
             .OrderByDescending(t => t.CreatedAt).FirstOrDefaultAsync(ct);
@@ -351,7 +357,8 @@ public static class HostEndpoints
         return Results.Ok(new HostDetailDto(summary, host.KernelVersion, uptime, host.EnrolledAt, host.CertificateExpiresAt, updates, addresses,
             host.IntegrationId, host.Integration?.Name, host.ExternalId, await ContainersAsync(db, id, ct), agentUpdate,
             host.ProtocolVersion, ModulesOf(host), BrokenSourcesOf(host), features.IsOn(Feature.AptSourceFixes),
-            features.IsOn(Feature.RebootCheck) ? RebootCheck.Result(host) : null));
+            features.IsOn(Feature.RebootCheck) ? RebootCheck.Result(host) : null,
+            host.UpdateScanHours, host.ImageCheckHours, lastScanAt));
     }
 
     private static List<BrokenAptSource>? BrokenSourcesOf(ManagedHost host)

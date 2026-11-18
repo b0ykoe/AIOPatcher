@@ -8,6 +8,13 @@ Written for users, not as a list of commits.
 
 ## [Unreleased]
 
+### Added
+- **Adjustable scan intervals:** Under **Settings → General → Scan intervals** you choose how often agents look for
+  new updates and how often the server checks the registry for new container images: every 1, 2, 3, 6, 12 or 24 hours
+  (default 6 hours, as before). Each host can use its own values under **Host → Settings → Scan interval**, e.g.
+  every hour for a Docker host; the card also shows when the last scan ran and when the next one is due. If an image
+  runs on several hosts, the shortest interval applies.
+
 ### Improved
 - **Documentation in English:** README, server setup, reverse proxy guide and architecture notes are now in English,
   as are the comments in `docker-compose.yml`, `.env.example` and the Portainer app template. The roadmap is up to

@@ -18,7 +18,8 @@ public sealed class ModuleContext(
     AgentDownloads downloads,
     CertificateAuthority? ca,
     DateTime now,
-    IReadOnlyDictionary<(string Module, string Action), DateTime> lastRequested)
+    IReadOnlyDictionary<(string Module, string Action), DateTime> lastRequested,
+    ScanSchedule? schedule = null)
 {
     public AppDbContext Db => db;
     public Notifier Notifier => notifier;
@@ -26,6 +27,9 @@ public sealed class ModuleContext(
     public AgentDownloads Downloads => downloads;
     public CertificateAuthority? Ca => ca;
     public DateTime Now => now;
+
+    /// <summary>Update-Scan-Intervall des Hosts (Einstellungen bzw. je Host; ohne Schedule der feste Standard).</summary>
+    public TimeSpan UpdateScanInterval(ManagedHost host) => schedule?.UpdateScanInterval(host) ?? ServerModule.InventoryInterval;
 
     /// <summary>Wann der Server diese Aktion bei diesem Host zuletzt angefordert hat (aus AgentTasks).</summary>
     public DateTime? LastRequested(string module, string action) =>
@@ -130,10 +134,10 @@ public sealed class UpdatesServerModule : ServerModule
 
     public override PlannedTask? Due(ManagedHost host, ModuleContext context, string? polledVersion)
     {
-        // Nach Installation/Neustart gleich neu scannen, sonst alle 6 Stunden.
+        // Nach Installation/Neustart gleich neu scannen, sonst im eingestellten Intervall (Standard 6 Stunden).
         var lastScan = context.LastRequested(Id, ModuleActions.Scan);
         var lastChange = new[] { context.LastRequested(Id, ModuleActions.Install), context.LastRequested(Id, ModuleActions.Reboot) }.Max();
-        return lastScan is null || context.Now - lastScan >= InventoryInterval || lastChange > lastScan
+        return lastScan is null || context.Now - lastScan >= context.UpdateScanInterval(host) || lastChange > lastScan
             ? new PlannedTask(ModuleActions.Scan)
             : null;
     }

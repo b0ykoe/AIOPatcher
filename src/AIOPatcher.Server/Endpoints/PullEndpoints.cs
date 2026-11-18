@@ -36,6 +36,7 @@ public static class PullEndpoints
         UpdateSigningKey updateKey,
         IDataProtectionProvider protection,
         PublicAccess publicAccess,
+        ScanSchedule schedule,
         CancellationToken ct)
     {
         var host = (ManagedHost)http.Items[AgentEndpoints.HostItemKey]!;
@@ -48,7 +49,7 @@ public static class PullEndpoints
         AgentTask? task = null;
         if (running is null)
         {
-            task = await NextTaskAsync(db, host, notifier, features, downloads, ComplianceEndpoints.SecretProtector(protection), polledVersion, now, ct);
+            task = await NextTaskAsync(db, host, notifier, features, downloads, ComplianceEndpoints.SecretProtector(protection), polledVersion, now, ct, schedule);
         }
 
         // Über den Proxy sieht der Proxy (evtl. Cloudflare) den Inhalt: Geheimnisse nur für den Agent verschlüsselt
@@ -103,7 +104,7 @@ public static class PullEndpoints
     /// Offene Aufträge ohne Antwort gelten als verloren (der Agent arbeitet immer nur einen ab).
     /// </summary>
     public static async Task<AgentTask?> NextTaskAsync(AppDbContext db, ManagedHost host, Notifier notifier, FeatureFlags features, AgentDownloads downloads,
-        IDataProtector? secrets, string? polledVersion, DateTime now, CancellationToken ct)
+        IDataProtector? secrets, string? polledVersion, DateTime now, CancellationToken ct, ScanSchedule? schedule = null)
     {
         var lost = await db.AgentTasks.Where(t => t.HostId == host.Id && t.Status == JobStatus.Running).ToListAsync(ct);
         foreach (var t in lost)
@@ -146,7 +147,7 @@ public static class PullEndpoints
                 .Select(g => new { g.Key.Module, g.Key.Action, Last = g.Max(t => t.CreatedAt) })
                 .ToListAsync(ct))
             .ToDictionary(x => (x.Module, x.Action), x => x.Last);
-        var context = new ModuleContext(db, notifier, features, downloads, null, now, history);
+        var context = new ModuleContext(db, notifier, features, downloads, null, now, history, schedule);
 
         foreach (var module in ServerModule.All)
         {

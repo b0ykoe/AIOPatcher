@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 import { api, type ServerInfo } from "../../api";
 import { MirrorStatusLine } from "../../pages/CveLookupPage";
 import { openSetupWizard } from "../SetupWizard";
+import { ScanSettingsCard } from "../ScanIntervals";
 import { CardTitle } from "../ui";
 
 /** Einstellungen → Allgemein: Version, Zeitzone, CVE-Datenbank, Assistent, API. */
@@ -33,6 +34,8 @@ export function GeneralSettings() {
         <Text ff="monospace">{info?.timeZone ?? "…"}</Text>
         <Text size="xs" c="dimmed">{t("settings.generalTimeZoneHint")}</Text>
       </Card>
+
+      <ScanSettingsCard />
 
       <Card>
         <CardTitle>{t("settings.generalCve")}</CardTitle>

@@ -94,6 +94,12 @@ public sealed class ManagedHost
     /// <summary>Diese Version ist auf dem Host gescheitert und wird nicht erneut angeboten (bis "Erneut versuchen").</summary>
     public string? AgentUpdateBlockedVersion { get; set; }
 
+    /// <summary>Update-Scan alle n Stunden statt des Standards aus den Einstellungen (null = Standard).</summary>
+    public int? UpdateScanHours { get; set; }
+
+    /// <summary>Registry-Abfrage für die Images dieses Hosts alle n Stunden statt des Standards (null = Standard).</summary>
+    public int? ImageCheckHours { get; set; }
+
     /// <summary>"Jetzt aktualisieren" im Dashboard: Update beim nächsten Abruf anbieten statt nach bis zu 6 Stunden.</summary>
     public DateTime? AgentUpdateRequestedAt { get; set; }
 

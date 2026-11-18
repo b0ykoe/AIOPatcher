@@ -25,6 +25,7 @@ import {
   IconTrash,
 } from "@tabler/icons-react";
 import { api, ApiError, formatDateTime, kbOf, splitTags, formatRelative, formatUptime, isActiveJob, type HostDetail, type Job, type JobType, type PatchScope } from "../api";
+import { HostScanCard } from "../components/ScanIntervals";
 import { useTranslation } from "react-i18next";
 import { useCan, useSimple } from "../App";
 import { useFeatures } from "../features";
@@ -478,6 +479,7 @@ export function HostDetailPage() {
               )}
             </Card>
             <PlanCard host={h} modules={host.modules} onChanged={() => void load()} />
+            <HostScanCard host={host} onSaved={() => void load()} />
             {!simple && <MappingCard host={host} onSaved={() => void load()} />}
             {!simple && <AgentModulesCard hostId={h.id} protocol={host.agentProtocol} modules={host.modules ?? []} onChanged={() => void load()} />}
             {can.operate && (

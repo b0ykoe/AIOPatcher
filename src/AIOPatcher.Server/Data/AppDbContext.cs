@@ -38,6 +38,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<HostMetricSample> MetricSamples => Set<HostMetricSample>();
     public DbSet<SsoSettingsRecord> SsoSettings => Set<SsoSettingsRecord>();
     public DbSet<PublicAccessSettingsRecord> PublicAccessSettings => Set<PublicAccessSettingsRecord>();
+    public DbSet<ScanSettingsRecord> ScanSettings => Set<ScanSettingsRecord>();
     public DbSet<FirewallProfile> FirewallProfiles => Set<FirewallProfile>();
     public DbSet<ComplianceBaseline> ComplianceBaselines => Set<ComplianceBaseline>();
     public DbSet<ComplianceBaselineHost> ComplianceBaselineHosts => Set<ComplianceBaselineHost>();
@@ -223,6 +224,12 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
         b.Entity<PublicAccessSettingsRecord>(e =>
         {
             e.ToTable("PublicAccessSettings");
+            e.Property(x => x.Id).ValueGeneratedNever();
+        });
+
+        b.Entity<ScanSettingsRecord>(e =>
+        {
+            e.ToTable("ScanSettings");
             e.Property(x => x.Id).ValueGeneratedNever();
         });
 

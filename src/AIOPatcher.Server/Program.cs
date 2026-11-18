@@ -178,6 +178,7 @@ builder.Services.AddHostedService(sp => sp.GetRequiredService<CveMirror>());
 builder.Services.AddSingleton<CveLookupService>();
 builder.Services.AddHostedService<ContainerUpdateService>();
 builder.Services.AddSingleton<PublicAccess>();
+builder.Services.AddSingleton<ScanSchedule>();
 builder.Services.AddSingleton<ReleaseCheck>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<ReleaseCheck>());
 
@@ -197,6 +198,7 @@ using (var scope = app.Services.CreateScope())
     await app.Services.GetRequiredService<FeatureFlags>().LoadAsync(db, CancellationToken.None);
     await app.Services.GetRequiredService<AIOPatcher.Server.Services.Sso.SsoService>().LoadAsync(db, CancellationToken.None);
     await app.Services.GetRequiredService<PublicAccess>().LoadAsync(db, CancellationToken.None);
+    await app.Services.GetRequiredService<ScanSchedule>().LoadAsync(db, CancellationToken.None);
 }
 
 // --- Pipeline -------------------------------------------------------------------------------------
@@ -247,6 +249,7 @@ app.MapVulnerabilityEndpoints();
 app.MapCveLookupEndpoints();
 app.MapFeatureEndpoints();
 app.MapPublicAccessEndpoints();
+app.MapScanSettingsEndpoints();
 app.MapOpenApi("/api/openapi/{documentName}.json").RequireAuthorization();
 app.MapAgentEndpoints();
 app.MapAgentDownloadEndpoints();
