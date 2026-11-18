@@ -137,11 +137,13 @@ export function TimeSeriesChart({ title, points, from, to, height = 160, gapAfte
   const x = (t: number) => margin.left + ((t - from) / Math.max(1, to - from)) * w;
   const y = (v: number) => margin.top + h - (Math.min(100, Math.max(0, v)) / 100) * h;
 
-  // Linie in Abschnitte teilen, wo Messungen fehlen
+  // Linie in Abschnitte teilen, wo Messungen fehlen. Der Server fasst auf höchstens 288 Punkte zusammen (7 Tage: alle
+  // 35 min), eine Lücke ist also erst, was deutlich länger als ein solcher Abschnitt ist.
+  const gap = Math.max(gapAfterMs, ((to - from) / 288) * 2.5);
   const segments: { t: number; v: number }[][] = [];
   for (const p of data) {
     const last = segments[segments.length - 1];
-    if (!last || p.t - last[last.length - 1].t > gapAfterMs) segments.push([p]);
+    if (!last || p.t - last[last.length - 1].t > gap) segments.push([p]);
     else last.push(p);
   }
   const path = (s: { t: number; v: number }[]) => s.map((p, i) => `${i ? "L" : "M"}${x(p.t).toFixed(1)},${y(p.v).toFixed(1)}`).join(" ");

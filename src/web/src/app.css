@@ -477,4 +477,25 @@
   gap: var(--mantine-spacing-md);
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 20rem), 35rem));
   align-items: start;
+  container: metric-grid / inline-size;
+}
+
+/* Wertezeilen in einer Karte; .metric-columns zweispaltig, sobald die Karte doppelt breit sein darf */
+.metric-rows,
+.metric-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr); /* lange Pfade kürzen statt die Karte zu sprengen */
+  gap: var(--mantine-spacing-sm) var(--mantine-spacing-xl);
+}
+
+@container metric-grid (min-width: 42rem) {
+  .metric-wide {
+    grid-column: span 2;
+  }
+
+  .metric-columns {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-auto-flow: column;
+    grid-template-rows: repeat(var(--metric-rows, 7), auto);
+  }
 }

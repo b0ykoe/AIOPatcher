@@ -94,7 +94,9 @@ Use the status components, do not rebuild them: `HostStatusLabel`, `JobStatusBad
 ## 8. Values and bars (like Proxmox)
 
 - **`MetricRow`:** icon + name on the left, value on the right (`59 % (4,3 / 7,2 GB)`), a thin bar (6 px) below.
-  Several rows stacked in one card ("Current", "Disks"), card at most ~560 px wide.
+  Several rows stacked in one card ("Current", "Disks"), card at most ~560 px wide (`metric-grid`, rows in
+  `metric-rows`). Long lists (more than 6 rows, e.g. ZFS datasets): card `metric-wide` with `metric-columns`, i.e.
+  twice as wide with two columns read top to bottom, as long as there is room; otherwise one column.
 - Values without a bar (uptime, load, IPs) as a `MetricRow` without a percentage.
 - In tables: a short bar (at most 160 px) with the value next to it, never stretched across the whole column;
   in list columns `UsageCompact`.

@@ -58,15 +58,17 @@ export function HostMetricsPanel({ hostId }: { hostId: string }) {
             {m.load && <MetricRow icon={<IconActivity size={16} />} label={t("metrics.loadLabel")} value={m.load.map((l) => l.toFixed(2)).join(" / ")} />}
           </Stack>
         </Card>
-        <Card>
+        {/* Viele Datenträger (z. B. ZFS-Datasets): Karte doppelt breit, Einträge in zwei Spalten, wenn Platz ist */}
+        <Card className={m.disks.length > 6 ? "metric-wide" : undefined}>
           <CardTitle>{t("metrics.disks")}</CardTitle>
-          <Stack gap="sm">
+          <div className={m.disks.length > 6 ? "metric-columns" : "metric-rows"}
+            style={{ "--metric-rows": Math.ceil(m.disks.length / 2) } as React.CSSProperties}>
             {m.disks.map((d) => (
               <UsageMeter key={d.mount} icon={<IconDatabase size={16} />} label={`${d.mount}${d.fileSystem ? ` (${d.fileSystem})` : ""}`} percent={percentOf(d.used, d.total)}
                 detail={`${formatBytes(d.used)} / ${formatBytes(d.total)}`} />
             ))}
             {m.disks.length === 0 && <Text size="sm" c="dimmed">–</Text>}
-          </Stack>
+          </div>
         </Card>
       </div>
 

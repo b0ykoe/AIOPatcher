@@ -15,7 +15,12 @@ Written for users, not as a list of commits.
 - **Setup and update scripts in English:** `setup.sh` and `aiopatcher-update` now ask and report in English, and the
   configuration files they generate carry English comments. Answering "j"/"ja" still works.
 
+- **Utilization with many disks:** Hosts with many mount points (e.g. ZFS datasets on Proxmox) show the disks card
+  twice as wide with two columns next to "Current" instead of one long list that pushed the charts far down.
+
 ### Fixed
+- Utilization: the 7-day charts showed scattered dots instead of a line and area, because every data point was
+  treated as a gap.
 - Setup script: answering a choice with "y", "ja" or anything other than the listed numbers silently skipped the
   firewall setup. Choices now also accept the value itself or y/n and ask again on invalid input.
 
