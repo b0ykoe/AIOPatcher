@@ -18,6 +18,8 @@ Written for users, not as a list of commits.
 - **Utilization tidied up:** "Current", "Disks" and the three charts below share the same three columns, so their
   edges line up. Hosts with many mount points (e.g. ZFS datasets on Proxmox) show the disks card two columns wide
   with the entries side by side instead of one long list that pushed the charts far down.
+- On the Utilization page, host cards and Proxmox nodes now fill the full width in equal columns instead of
+  stopping short of the right edge on wide screens.
 
 ### Fixed
 - Utilization: the 7-day charts showed scattered dots instead of a line and area, because every data point was

@@ -50,8 +50,11 @@ row (icon ↔ text: `4`–`6`).
 | Many cards of the same kind (plans, sites) | `card-grid` (from 22rem) or `card-grid-wide` (from 30rem) |
 | Small tiles (hosts on the home page) | `host-grid` (from 15rem) |
 | Two large sections | `split-grid` |
+| Cards with value rows (section 8) | `metric-grid` (from 20rem) |
 
-Cards with value rows (section 8) are at most ~560 px wide; extra space is filled with more cards.
+Every grid spans the full width and splits it into equal columns; cards never get their own maximum width. Wide
+screens get more columns, not wider cards. Everything that belongs together on a page (e.g. value cards and charts)
+sits in **one** grid, so edges line up.
 
 ## 5. Typography
 
@@ -94,10 +97,9 @@ Use the status components, do not rebuild them: `HostStatusLabel`, `JobStatusBad
 ## 8. Values and bars (like Proxmox)
 
 - **`MetricRow`:** icon + name on the left, value on the right (`59 % (4,3 / 7,2 GB)`), a thin bar (6 px) below.
-  Several rows stacked in one card ("Current", "Disks"), card at most ~560 px wide (`metric-grid`, rows in
-  `metric-rows`). If value cards and charts sit on one page (host utilization), both share one grid with three equal
-  columns (`metric-panel` + `metric-cols`, one column when narrow), so their edges line up; the charts start a new row
-  (`metric-row-start`). Long lists (more than 6 rows, e.g. ZFS datasets): card `metric-wide` with `metric-columns`,
+  Several rows stacked in one card ("Current", "Disks"), cards in `metric-grid`, rows in `metric-rows`. If value
+  cards and charts sit on one page (host utilization), both share one grid with three equal columns (`metric-panel`
+  + `metric-cols`, one column when narrow); the charts start a new row (`metric-row-start`). Long lists (more than 6 rows, e.g. ZFS datasets): card `metric-wide` with `metric-columns`,
   i.e. two columns wide with the rows in two columns read top to bottom.
 - Values without a bar (uptime, load, IPs) as a `MetricRow` without a percentage.
 - In tables: a short bar (at most 160 px) with the value next to it, never stretched across the whole column;
