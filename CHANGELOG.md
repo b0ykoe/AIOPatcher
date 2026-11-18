@@ -8,6 +8,8 @@ Written for users, not as a list of commits.
 
 ## [Unreleased]
 
+## [0.8.7] - 2026-11-18
+
 ### Added
 - **Passkeys:** Sign in with fingerprint, face recognition, device PIN or a password manager instead of password and
   code. Add passkeys under **My account → Passkeys**, then use **Sign in with a passkey** on the sign-in page.
