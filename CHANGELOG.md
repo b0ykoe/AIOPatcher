@@ -8,6 +8,8 @@ Written for users, not as a list of commits.
 
 ## [Unreleased]
 
+## [0.8.8] - 2026-11-18
+
 ### Added
 - **Update all agents at once:** When agents are older than the server, the Hosts page shows **Update agents (n)**.
   It offers the update to all of them on their next poll instead of waiting; agents that cannot update themselves
