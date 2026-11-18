@@ -94,6 +94,9 @@ public sealed class ManagedHost
     /// <summary>Diese Version ist auf dem Host gescheitert und wird nicht erneut angeboten (bis "Erneut versuchen").</summary>
     public string? AgentUpdateBlockedVersion { get; set; }
 
+    /// <summary>"Jetzt aktualisieren" im Dashboard: Update beim nächsten Abruf anbieten statt nach bis zu 6 Stunden.</summary>
+    public DateTime? AgentUpdateRequestedAt { get; set; }
+
     // Pull-Agent (Protokoll v2). Wann was angefordert wurde, steht in AgentTasks.
     /// <summary>1 = alter Check-in (Push), 2 = Pull-Agent. 0 = noch nie gemeldet.</summary>
     public int ProtocolVersion { get; set; }

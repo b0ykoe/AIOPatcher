@@ -50,7 +50,8 @@ public static class HostEndpoints
         string? PlanGroup = null,
         PlanVia? PlanVia = null,
         UsageDto? Usage = null,
-        string? Channel = null);
+        string? Channel = null,
+        string? AgentUpdate = null);
 
     /// <summary>Letzte Auslastung (für Listen): CPU %, RAM %, vollster Datenträger %.</summary>
     public sealed record UsageDto(DateTime At, double Cpu, float Memory, float? Disk);
@@ -109,7 +110,10 @@ public static class HostEndpoints
 
     public sealed record ModuleToggleRequest(bool Enabled);
 
-    /// <summary>Available: Server hat eine neuere Agent-Version. Blocked: diese ist hier gescheitert und wird nicht erneut angeboten.</summary>
+    /// <summary>
+    /// Available: Server hat eine neuere Agent-Version. Blocked: diese ist hier gescheitert und wird nicht erneut angeboten.
+    /// State/Reason/NextOfferAt: siehe <see cref="AgentUpdateStatus"/>.
+    /// </summary>
     public sealed record AgentUpdateDto(
         string LatestVersion,
         bool Available,
@@ -118,7 +122,10 @@ public static class HostEndpoints
         string? FromVersion,
         string? ToVersion,
         string? Message,
-        DateTime? At);
+        DateTime? At,
+        string State = AgentUpdateStatus.Current,
+        string? Reason = null,
+        DateTime? NextOfferAt = null);
 
     public sealed record OverviewDto(
         int Sites,
@@ -172,6 +179,7 @@ public static class HostEndpoints
                 releases.Latest?.Version, releases.Latest?.Url, releases.UpdateAvailable));
         op.MapPost("/hosts/{id:guid}/revoke", RevokeHost);
         op.MapPost("/hosts/{id:guid}/agent-update/retry", RetryAgentUpdate);
+        op.MapPost("/hosts/{id:guid}/agent-update/now", UpdateAgentNow);
         op.MapDelete("/hosts/{id:guid}/reboot-check", DismissRebootCheck);
         op.MapPost("/hosts/{id:guid}/containers/recheck", RecheckContainers);
         op.MapPost("/hosts/{id:guid}/containers/{name}/update", UpdateContainer);
@@ -225,12 +233,19 @@ public static class HostEndpoints
             .Select(h => new { h.Id, h.Metrics, h.MetricsAt }).ToDictionaryAsync(h => h.Id, ct);
         var channels = await db.Hosts.AsNoTracking().Where(h => ids.Contains(h.Id) && h.LastChannel != null)
             .Select(h => new { h.Id, h.LastChannel }).ToDictionaryAsync(h => h.Id, h => h.LastChannel, ct);
+        var latestAgent = AgentDownloads.AgentVersion;
+        var blockedAgents = await db.Hosts.AsNoTracking().Where(h => ids.Contains(h.Id) && h.AgentUpdateBlockedVersion == latestAgent)
+            .Select(h => h.Id).ToListAsync(ct);
         var now = DateTime.UtcNow;
 
         return summaries.Select(s =>
         {
             // Weg des Agents: direkt (intern) oder über den Reverse Proxy
             s = s with { Channel = channels.GetValueOrDefault(s.Id) };
+            if (s.AgentVersion is { } v && !v.EndsWith("-lite", StringComparison.Ordinal) && AgentDownloads.IsNewer(latestAgent, v))
+            {
+                s = s with { AgentUpdate = blockedAgents.Contains(s.Id) ? AgentUpdateStatus.Failed : "outdated" };
+            }
             if (metrics.TryGetValue(s.Id, out var m) && m.Metrics is not null
                 && System.Text.Json.JsonSerializer.Deserialize(m.Metrics, PullJsonContext.Default.HostMetrics) is { } latest)
             {
@@ -296,7 +311,7 @@ public static class HostEndpoints
         return Results.Ok(hosts.OrderBy(h => h.SiteName).ThenBy(h => h.Name, StringComparer.OrdinalIgnoreCase));
     }
 
-    private static async Task<IResult> GetHost(Guid id, AppDbContext db, AIOPatcherOptions options, ServerClock clock, FeatureFlags features, CancellationToken ct)
+    private static async Task<IResult> GetHost(Guid id, AppDbContext db, AIOPatcherOptions options, ServerClock clock, FeatureFlags features, AgentDownloads downloads, CancellationToken ct)
     {
         var summary = await ProjectSummaries(db.Hosts.Where(h => h.Id == id), db.ImageChecks, DateTime.UtcNow - options.OfflineAfter).SingleOrDefaultAsync(ct);
         if (summary is null)
@@ -322,9 +337,14 @@ public static class HostEndpoints
             .ToListAsync(ct);
 
         var latest = AgentDownloads.AgentVersion;
+        var lastUpdateTask = await db.AgentTasks.AsNoTracking()
+            .Where(t => t.HostId == id && t.Module == AgentModules.Agent && t.Action == ModuleActions.Update)
+            .OrderByDescending(t => t.CreatedAt).FirstOrDefaultAsync(ct);
+        var status = AgentUpdateStatus.Evaluate(host, downloads, features, lastUpdateTask, DateTime.UtcNow);
         var agentUpdate = new AgentUpdateDto(latest, host.AgentVersion is not null && !host.AgentVersion.EndsWith("-lite", StringComparison.Ordinal) && AgentDownloads.IsNewer(latest, host.AgentVersion),
             string.Equals(host.AgentUpdateBlockedVersion, latest, StringComparison.Ordinal),
-            host.AgentUpdateOutcome, host.AgentUpdateFromVersion, host.AgentUpdateToVersion, host.AgentUpdateMessage, host.AgentUpdateAt);
+            host.AgentUpdateOutcome, host.AgentUpdateFromVersion, host.AgentUpdateToVersion, host.AgentUpdateMessage, host.AgentUpdateAt,
+            status.State, status.Reason, status.NextOfferAt);
 
         // Uptime ab Systemstart weiterzählen statt den Wert der letzten Meldung zu zeigen
         var uptime = host.BootedAt is { } booted ? DateTime.UtcNow - booted : host.Uptime;
@@ -383,6 +403,53 @@ public static class HostEndpoints
     }
 
     /// <summary>Gescheiterte Agent-Version wieder anbieten (z. B. nachdem die Ursache behoben ist).</summary>
+    /// <summary>
+    /// "Jetzt aktualisieren": Sperre nach einem gescheiterten Versuch aufheben und das Update beim nächsten Abruf anbieten,
+    /// statt bis zu 6 Stunden zu warten. Geht nicht, wenn gar kein Update möglich ist (Grund in der Antwort).
+    /// </summary>
+    private static async Task<IResult> UpdateAgentNow(Guid id, AppDbContext db, AuditLog audit, AgentDownloads downloads, FeatureFlags features, CancellationToken ct)
+    {
+        var host = await db.Hosts.FindAsync([id], ct);
+        if (host is null)
+        {
+            return Results.NotFound();
+        }
+
+        var now = DateTime.UtcNow;
+        var blocked = host.AgentUpdateBlockedVersion;
+        host.AgentUpdateBlockedVersion = null; // zuerst lösen, damit die Prüfung unten den echten Grund liefert
+        var status = AgentUpdateStatus.Evaluate(host, downloads, features, null, now);
+        if (status.State == AgentUpdateStatus.Current)
+        {
+            host.AgentUpdateBlockedVersion = blocked;
+            return Results.Problem(L.T("Der Agent ist schon aktuell.", "The agent is already up to date."), statusCode: StatusCodes.Status409Conflict);
+        }
+
+        if (status.State == AgentUpdateStatus.Unavailable)
+        {
+            host.AgentUpdateBlockedVersion = blocked;
+            return Results.Problem(status.Reason switch
+            {
+                "lite" => L.T("Der Lite-Agent aktualisiert sich nicht selbst: Installationsbefehl auf dem Host erneut ausführen.",
+                    "The lite agent does not update itself: run the install command on the host again."),
+                "featureOff" => FeatureFlags.DisabledMessage(Feature.AgentSelfUpdate),
+                "noBuild" => L.T("Für dieses System bzw. diese Architektur liegt kein Agent-Build auf dem Server.",
+                    "The server has no agent build for this system or architecture."),
+                "unsigned" => L.T("Der Server kann Agent-Updates nicht signieren (kein Update-Schlüssel); Agent per Installationsbefehl aktualisieren.",
+                    "The server cannot sign agent updates (no update key); update the agent with the install command."),
+                "agentNoUpdate" => L.T("Dieser Agent ist zu alt für Self-Updates: Installationsbefehl auf dem Host erneut ausführen.",
+                    "This agent is too old for self-updates: run the install command on the host again."),
+                _ => L.T("Der Agent hat sich noch nicht gemeldet.", "The agent has not reported yet."),
+            }, statusCode: StatusCodes.Status409Conflict);
+        }
+
+        host.AgentUpdateRequestedAt = now;
+        audit.Add("agent.update.requested", $"{host.Name}: {host.AgentVersion} → {AgentDownloads.AgentVersion}{(blocked is null ? "" : $" (unblocked {blocked})")}",
+            siteId: host.SiteId, hostId: host.Id);
+        await db.SaveChangesAsync(ct);
+        return Results.NoContent();
+    }
+
     private static async Task<IResult> RetryAgentUpdate(Guid id, AppDbContext db, AuditLog audit, CancellationToken ct)
     {
         var host = await db.Hosts.FindAsync([id], ct);

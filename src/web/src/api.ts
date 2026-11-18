@@ -109,6 +109,8 @@ export interface HostSummary {
   osName: string | null;
   osVersion: string | null;
   agentVersion: string | null;
+  /** Agent älter als der Server ("outdated") bzw. Update dorthin gescheitert ("failed"); Lite-Agents nicht */
+  agentUpdate?: "outdated" | "failed" | null;
   lastSeenAt: string | null;
   lastScanAt: string | null;
   status: HostStatus;
@@ -243,6 +245,11 @@ export interface AgentUpdateInfo {
   toVersion: string | null;
   message: string | null;
   at: string | null;
+  /** Stand des Self-Updates; reason nur bei "unavailable" */
+  state: "current" | "waiting" | "updating" | "failed" | "unavailable";
+  reason: "unknown" | "lite" | "featureOff" | "noBuild" | "unsigned" | "agentNoUpdate" | null;
+  /** frühestens dann bietet der Server das Update wieder an (null = beim nächsten Abruf) */
+  nextOfferAt: string | null;
 }
 
 export interface Overview {

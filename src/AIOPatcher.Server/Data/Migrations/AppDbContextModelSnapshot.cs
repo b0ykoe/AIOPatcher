@@ -760,6 +760,9 @@ namespace AIOPatcher.Server.Data.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("TEXT");
 
+                    b.Property<DateTime?>("AgentUpdateRequestedAt")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("AgentUpdateToVersion")
                         .HasMaxLength(32)
                         .HasColumnType("TEXT");

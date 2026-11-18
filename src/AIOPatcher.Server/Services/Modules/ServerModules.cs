@@ -270,7 +270,9 @@ public sealed class AgentServerModule(bool renewOnly) : ServerModule
                 : null;
         }
 
-        if (!context.Features.IsOn(Feature.AgentSelfUpdate) || !context.Older(Id, ModuleActions.Update, InventoryInterval))
+        // Höchstens alle 6 Stunden anbieten, außer "Jetzt aktualisieren" wurde seit dem letzten Angebot gedrückt
+        var asked = host.AgentUpdateRequestedAt is { } requested && !(context.LastRequested(Id, ModuleActions.Update) >= requested);
+        if (!context.Features.IsOn(Feature.AgentSelfUpdate) || !context.Older(Id, ModuleActions.Update, InventoryInterval) && !asked)
         {
             return null;
         }

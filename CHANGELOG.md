@@ -8,6 +8,13 @@ Geschrieben für Anwender, nicht als Commit-Liste.
 
 ## [Unveröffentlicht]
 
+### Neu
+- **Agent-Update im Blick:** Der Steckbrief auf der Host-Seite zeigt, ob der Agent aktuell ist, wann das Update kommt,
+  ob es gerade läuft, gescheitert ist oder warum keins möglich ist (z. B. Lite-Agent, Self-Update abgeschaltet, kein
+  Build für die Architektur, Server kann nicht signieren). **„Jetzt aktualisieren“** bietet das Update beim nächsten
+  Abruf an, statt bis zu 6 Stunden zu warten, und hebt eine Sperre nach einem gescheiterten Versuch auf.
+- Die Hostliste markiert Hosts mit veraltetem Agent („Agent 0.6.2“) bzw. gescheitertem Agent-Update.
+
 ## [0.8.2] - 2026-11-17
 
 ### Verbessert

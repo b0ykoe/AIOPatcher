@@ -192,4 +192,65 @@ public sealed class AgentUpdateTests : IDisposable
         {
         }
     }
+
+    // --- Stand für die Anzeige und "Jetzt aktualisieren" ------------------------------------------------
+
+    private static ManagedHost StatusHost(string? version) => new()
+    {
+        Site = new Site { Name = "Home" }, Name = "docker", Hostname = "docker", CertificateThumbprint = "x", OsFamily = OsFamily.Linux,
+        Architecture = "x64", AgentVersion = version,
+        ReportedModules = """[{"id":"agent","available":true,"disabledLocally":false,"actions":["update","renew"]}]""",
+    };
+
+    [Fact]
+    public void Status_ExplainsWhyNoUpdateIsOffered()
+    {
+        using var key = UpdateSigningKey.LoadOrCreate(Path.Combine(_dir, "ca"), NullLogger.Instance);
+        var downloads = Downloads(key, releaseSignature: false);
+        var on = new FeatureFlags(new AIOPatcherOptions());
+        var now = DateTime.UtcNow;
+
+        Assert.Equal((AgentUpdateStatus.Unavailable, "lite"), Pair(AgentUpdateStatus.Evaluate(StatusHost("1.0-lite"), downloads, on, null, now)));
+        Assert.Equal(AgentUpdateStatus.Current, AgentUpdateStatus.Evaluate(StatusHost("999.0.0"), downloads, on, null, now).State);
+        Assert.Equal((AgentUpdateStatus.Unavailable, "featureOff"),
+            Pair(AgentUpdateStatus.Evaluate(StatusHost("0.0.1"), downloads, new FeatureFlags(new AIOPatcherOptions { AgentAutoUpdate = false }), null, now)));
+        var arm = StatusHost("0.0.1");
+        arm.Architecture = "arm64"; // nur linux-x64 liegt vor
+        Assert.Equal((AgentUpdateStatus.Unavailable, "noBuild"), Pair(AgentUpdateStatus.Evaluate(arm, downloads, on, null, now)));
+        Assert.Equal((AgentUpdateStatus.Unavailable, "unsigned"),
+            Pair(AgentUpdateStatus.Evaluate(StatusHost("0.0.1"), new AgentDownloads(new AIOPatcherOptions { DataDirectory = _dir }), on, null, now)));
+
+        var blocked = StatusHost("0.0.1");
+        blocked.AgentUpdateBlockedVersion = AgentDownloads.AgentVersion;
+        Assert.Equal(AgentUpdateStatus.Failed, AgentUpdateStatus.Evaluate(blocked, downloads, on, null, now).State);
+
+        static (string, string?) Pair(AgentUpdateStatus.Result r) => (r.State, r.Reason);
+    }
+
+    [Fact]
+    public void Status_WaitingUntilNextOffer_UpdatingRightAfter_NowSkipsTheWait()
+    {
+        using var key = UpdateSigningKey.LoadOrCreate(Path.Combine(_dir, "ca"), NullLogger.Instance);
+        var downloads = Downloads(key, releaseSignature: false);
+        var on = new FeatureFlags(new AIOPatcherOptions());
+        var now = DateTime.UtcNow;
+        var host = StatusHost("0.0.1");
+
+        Assert.Equal((AgentUpdateStatus.Waiting, (DateTime?)null), Pair(AgentUpdateStatus.Evaluate(host, downloads, on, null, now)));
+
+        var running = new AgentTaskRecord { HostId = host.Id, Module = AgentModules.Agent, Action = ModuleActions.Update, CreatedAt = now.AddMinutes(-2) };
+        Assert.Equal(AgentUpdateStatus.Updating, AgentUpdateStatus.Evaluate(host, downloads, on, running, now).State);
+
+        // Abgelehnt vor 2 Stunden: nächstes Angebot in 4 Stunden
+        var rejected = new AgentTaskRecord { HostId = host.Id, Module = AgentModules.Agent, Action = ModuleActions.Update, CreatedAt = now.AddHours(-2), Status = JobStatus.Rejected };
+        var waiting = AgentUpdateStatus.Evaluate(host, downloads, on, rejected, now);
+        Assert.Equal(AgentUpdateStatus.Waiting, waiting.State);
+        Assert.Equal(rejected.CreatedAt.AddHours(6), waiting.NextOfferAt);
+
+        // "Jetzt aktualisieren": beim nächsten Abruf
+        host.AgentUpdateRequestedAt = now;
+        Assert.Null(AgentUpdateStatus.Evaluate(host, downloads, on, rejected, now).NextOfferAt);
+
+        static (string, DateTime?) Pair(AgentUpdateStatus.Result r) => (r.State, r.NextOfferAt);
+    }
 }

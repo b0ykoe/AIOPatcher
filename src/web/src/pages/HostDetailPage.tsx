@@ -118,15 +118,29 @@ export function HostDetailPage() {
     });
 
   const agentUpdate = host.agentUpdate;
-  const retryAgentUpdate = async () => {
+  // "Jetzt aktualisieren": Sperre lösen und das Update beim nächsten Abruf anbieten (statt nach bis zu 6 Stunden)
+  const updateAgentNow = async () => {
     try {
-      await api.post(`/api/hosts/${h.id}/agent-update/retry`);
-      notifySuccess(t("hostDetail.agentUpdateRetried"));
+      await api.post(`/api/hosts/${h.id}/agent-update/now`);
+      notifySuccess(t("hostDetail.agentUpdateRequested"));
       await load();
     } catch (e) {
       notifyError(e);
     }
   };
+  const agentSub = (() => {
+    if (!agentUpdate) return undefined;
+    switch (agentUpdate.state) {
+      case "current": return t("hostDetail.agentState_current");
+      case "updating": return t("hostDetail.agentState_updating", { version: agentUpdate.latestVersion });
+      case "failed": return t("hostDetail.agentState_failed", { version: agentUpdate.latestVersion });
+      case "waiting": return agentUpdate.nextOfferAt
+        ? t("hostDetail.agentState_waitingAt", { version: agentUpdate.latestVersion, time: formatDateTime(agentUpdate.nextOfferAt) })
+        : t("hostDetail.agentState_waiting", { version: agentUpdate.latestVersion });
+      case "unavailable": return t(`hostDetail.agentReason_${agentUpdate.reason ?? "unknown"}`, { version: agentUpdate.latestVersion });
+    }
+  })();
+  const canUpdateNow = can.operate && (agentUpdate?.state === "waiting" || agentUpdate?.state === "failed");
 
   const revoke = () =>
     confirmAction({
@@ -221,7 +235,7 @@ export function HostDetailPage() {
             <Text size="xs" c="dimmed" ff="monospace" style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{formatDateTime(agentUpdate.at)}: {agentUpdate.message}</Text>
           )}
           {can.operate && (
-            <Group><Button size="compact-xs" variant="light" leftSection={<IconRefresh size={12} />} onClick={() => void retryAgentUpdate()}>{t("hostDetail.agentUpdateRetry")}</Button></Group>
+            <Group><Button size="compact-xs" variant="light" leftSection={<IconRefresh size={12} />} onClick={() => void updateAgentNow()}>{t("hostDetail.agentUpdateNow")}</Button></Group>
           )}
         </Stack>
       </Alert>,
@@ -342,8 +356,12 @@ export function HostDetailPage() {
                   <Fact label={t("hostDetail.hostname")} value={h.hostname} />
                   <Fact label={t("hostDetail.uptime")} value={formatUptime(host.uptime)} />
                   <Fact label={t("hostDetail.lastScan")} value={formatRelative(h.lastScanAt)} />
-                  <Fact label="Agent" value={h.agentVersion ?? "–"}
-                    sub={agentUpdate?.available && !agentUpdate.blocked ? t("hostDetail.agentUpdateAvailable", { version: agentUpdate.latestVersion }) : undefined} />
+                  <Fact label="Agent" value={h.agentVersion ?? "–"} sub={agentSub}
+                    action={canUpdateNow && (
+                      <Button size="compact-xs" variant="light" mt={4} leftSection={<IconRefresh size={12} />} onClick={() => void updateAgentNow()}>
+                        {t("hostDetail.agentUpdateNow")}
+                      </Button>
+                    )} />
                   <Fact label={t("hostDetail.certificate")} value={formatDateTime(host.certificateExpiresAt).split(",")[0]} />
                   {host.kernelVersion && <Fact label="Kernel" value={host.kernelVersion} />}
                 </Stack>
@@ -480,13 +498,14 @@ export function HostDetailPage() {
   );
 }
 
-function Fact({ label, value, sub }: { label: string; value: string; sub?: string }) {
+function Fact({ label, value, sub, action }: { label: string; value: string; sub?: string; action?: React.ReactNode }) {
   return (
     <Group justify="space-between" gap="xs" wrap="nowrap" align="flex-start">
       <Text size="sm" c="dimmed" style={{ whiteSpace: "nowrap" }}>{label}</Text>
       <div style={{ minWidth: 0, textAlign: "right" }}>
         <Text size="sm" fw={600} truncate>{value}</Text>
         {sub && <Text size="xs" c="dimmed">{sub}</Text>}
+        {action}
       </div>
     </Group>
   );

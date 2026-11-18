@@ -472,6 +472,8 @@ function HostHints({ host: h }: { host: HostSummary }) {
   if (h.rebootRequired) hints.push({ key: "reboot", label: t("jobType.reboot"), node: <Badge size="sm" color="yellow" leftSection={<IconRefresh size={12} />}>{t("jobType.reboot")}</Badge> });
   if (h.containerUpdates > 0) hints.push({ key: "containers", label: t("security.containerBadge", { count: h.containerUpdates }), node: <ContainerUpdatesBadge hostId={h.id} count={h.containerUpdates} /> });
   if (h.nativeAutoUpdatesEnabled) hints.push({ key: "native", label: t("hostsPage.native"), node: <Tooltip label={t("hostsPage.nativeHint")}><Badge size="sm" color="yellow">{t("hostsPage.native")}</Badge></Tooltip> });
+  if (h.agentUpdate === "failed") hints.push({ key: "agent", label: t("hostsPage.agentFailed"), node: <Tooltip label={t("hostsPage.agentFailedHint")}><Badge size="sm" color="orange">{t("hostsPage.agentFailed")}</Badge></Tooltip> });
+  else if (h.agentUpdate === "outdated") hints.push({ key: "agent", label: t("hostsPage.agentOutdated", { version: h.agentVersion }), node: <Tooltip label={t("hostsPage.agentOutdatedHint")}><Badge size="sm" color="blue">{t("hostsPage.agentOutdated", { version: h.agentVersion })}</Badge></Tooltip> });
   const rest = hints.slice(2);
   return (
     <Group gap="xs" wrap="nowrap">
