@@ -14,6 +14,11 @@ Written for users, not as a list of commits.
   plan, rules included, and its plan card says **excluded**. **Assign automatically again** on the host lifts that;
   assigning it to a plan does too. Excluded hosts no longer count as "without a plan" in the overview.
 
+### Improved
+- **Excluded hosts at a glance:** below the patch plans a card **Not patched automatically** lists every excluded
+  host with **Assign automatically again**, and **Exclude host** adds more. It has no schedule, so it can never patch
+  them by accident. Two or three plans now fill the full width instead of leaving an empty column.
+
 ## [0.14.1] - 2026-11-19
 
 ### Added

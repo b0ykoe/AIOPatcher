@@ -10,6 +10,7 @@ import { useSiteScope } from "../siteScope";
 import { api, describeRequester, describeWindow, formatRelative, formatWindowStart, isActiveRun, type HostSummary, type Runbook, type RunSummary } from "../api";
 import { useCan } from "../App";
 import { AssignPlanModal } from "../components/plans/AssignPlanModal";
+import { ExcludedHostsCard } from "../components/plans/ExcludedHostsCard";
 import { QuickPlanModal } from "../components/plans/QuickPlanModal";
 import type { TemplateKey } from "../components/plans/planTemplates";
 import { RunStatusBadge } from "../components/RunStatusBadge";
@@ -102,7 +103,7 @@ export function PlansPage() {
               )} />
           </Card>
         ) : (
-          <div className="card-grid card-grid-wide">
+          <div className="card-grid card-grid-wide card-grid-fit">
             {plans?.map((plan) => {
               const active = plan.lastRun && isActiveRun(plan.lastRun.status) ? plan.lastRun : null;
               const members = plan.waves.reduce((n, w) => n + w.members.length, 0);
@@ -163,6 +164,8 @@ export function PlansPage() {
             })}
           </div>
         )}
+
+        {plans && plans.length > 0 && <ExcludedHostsCard hosts={hosts} onChanged={() => void load()} />}
 
         {runs.length > 0 && (
           <Card p={0}>
