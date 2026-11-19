@@ -129,7 +129,8 @@ public static class HostEndpoints
         RebootCheckResult? RebootCheck = null,
         int? UpdateScanHours = null,
         int? ImageCheckHours = null,
-        DateTime? LastScanAt = null);
+        DateTime? LastScanAt = null,
+        bool MappingManual = false);
 
     /// <summary>Modul des Agents: vorhanden, lokal (policy.json) oder im Dashboard abgeschaltet. Required = nicht abschaltbar.</summary>
     public sealed record HostModuleDto(string Id, bool Available, bool DisabledLocally, bool DisabledInDashboard, bool Required, IReadOnlyList<string> Actions);
@@ -397,7 +398,7 @@ public static class HostEndpoints
             host.IntegrationId, host.Integration?.Name, host.ExternalId, await ContainersAsync(db, id, ct, features), agentUpdate,
             host.ProtocolVersion, ModulesOf(host), BrokenSourcesOf(host), features.IsOn(Feature.AptSourceFixes),
             features.IsOn(Feature.RebootCheck) ? RebootCheck.Result(host) : null,
-            host.UpdateScanHours, host.ImageCheckHours, lastScanAt));
+            host.UpdateScanHours, host.ImageCheckHours, lastScanAt, host.MappingManual));
     }
 
     private static List<BrokenAptSource>? BrokenSourcesOf(ManagedHost host)

@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
-import { Anchor, Button, Card, Group, Select, Text, ThemeIcon } from "@mantine/core";
+import { Anchor, Badge, Button, Card, Group, Select, Text, ThemeIcon, Tooltip } from "@mantine/core";
 import { IconServer2 } from "@tabler/icons-react";
 import { Link } from "react-router";
 import { useTranslation } from "react-i18next";
 import { api, type HostDetail, type Integration, type MachineInfo } from "../api";
 import { useCan } from "../App";
 import { errorText, notifyError, notifySuccess } from "./ui";
+import { SourceBadge } from "./settings/IntegrationMappingModal";
 
 /** Zuordnung Host ↔ Proxmox-VM bzw. Hetzner-Server: Voraussetzung für Snapshots und Backup-Prüfung. */
 export function MappingCard({ host, onSaved }: { host: HostDetail; onSaved: () => void }) {
@@ -50,7 +51,18 @@ export function MappingCard({ host, onSaved }: { host: HostDetail; onSaved: () =
             <IconServer2 size={20} />
           </ThemeIcon>
           <div>
-            <Text fw={700}>{t("mapping.title")}</Text>
+            <Group gap={6} wrap="nowrap">
+              <Text fw={700}>{t("mapping.title")}</Text>
+              {host.integrationId ? (
+                <SourceBadge machine={{ hostId: host.integrationId, manual: host.mappingManual ?? false }} />
+              ) : (
+                host.mappingManual && (
+                  <Tooltip label={t("mapping.unlinkedHint")}>
+                    <Badge size="sm" color="grape">{t("integrations.mapManual")}</Badge>
+                  </Tooltip>
+                )
+              )}
+            </Group>
             <Text size="sm" c="dimmed">
               {host.integrationId ? `${host.integrationName} · ${host.externalId}` : t("mapping.none")}
             </Text>

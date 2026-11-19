@@ -31,8 +31,15 @@ Written for users, not as a list of commits.
   started it (`peer:<instance>/<user>`) in the jobs and audit log on both sides. Notifications for a shared site can
   be chosen per channel; the new event **Site sharing** tells you when an invite is accepted or burned, the share
   ends or the other instance starts a job.
+- **Map VMs to hosts by hand:** under Settings → Integrations, **Map** opens a table of all VMs and containers
+  (Proxmox) or servers (Hetzner Cloud) of the integration. Pick the host for each one (with search), move a wrong
+  automatic mapping to the right host or **Unlink** it. A badge shows whether a mapping is **auto** or **manual**,
+  and **Not mapped** shows what is still missing. Mappings whose VM no longer exists are listed as **not found**, so
+  you can remove them. A VM always belongs to one host only.
 
 ### Improved
+- **Auto-map respects your choices:** mappings you set or removed by hand (in the new table or on the host page) are
+  no longer touched by **Auto-map**, and it never gives a VM that already has a host to a second one.
 - **Setup uses the release image:** `setup.sh` now pulls the prebuilt image from GitHub (ghcr.io) instead of building
   it on the server. No 10-15 minute build, 2 GB RAM is enough, and `aiopatcher-update` brings releases only.
   Building it yourself is still possible with `--build` (forks, own changes, arm64).

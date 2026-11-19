@@ -31,7 +31,20 @@ public static class IntegrationEndpoints
 
     public sealed record TestResultDto(bool Ok, string Message, string? PresentedFingerprint);
     public sealed record MappingRequest(Guid? IntegrationId, string? ExternalId);
-    public sealed record AutoMapResultDto(int Mapped, IReadOnlyList<string> Hosts);
+    /// <param name="Unmapped">VMs bzw. Server, die danach noch keinen Host haben (Name passt nicht: von Hand zuordnen).</param>
+    public sealed record AutoMapResultDto(int Mapped, IReadOnlyList<string> Hosts, int Unmapped = 0);
+
+    /// <summary>Zuordnung in den Einstellungen: alle VMs bzw. Server einer Integration und die wählbaren Hosts.</summary>
+    public sealed record MappingOverviewDto(IReadOnlyList<MappingMachineDto> Machines, IReadOnlyList<MappingHostDto> Hosts);
+
+    /// <param name="Missing">Einem Host zugeordnet, aber beim Anbieter nicht (mehr) vorhanden.</param>
+    public sealed record MappingMachineDto(string ExternalId, string Name, string? Status, Guid? HostId, string? HostName, bool Manual, bool Missing);
+
+    /// <param name="MappedTo">Schon zugeordnet: Name der VM bzw. "Integration · Maschine" bei einer anderen Integration.</param>
+    public sealed record MappingHostDto(Guid Id, string Name, string Hostname, Guid? IntegrationId, string? ExternalId, string? MappedTo, string? SiteName = null);
+
+    /// <summary>HostId null = Zuordnung dieser Maschine lösen.</summary>
+    public sealed record MachineMappingRequest(string ExternalId, Guid? HostId);
 
     /// <summary>
     /// Proxmox-API-Token muss "benutzer@realm!token-id=secret" sein. Häufigster Fehler: nur das Secret (UUID) eingefügt,
@@ -67,6 +80,8 @@ public static class IntegrationEndpoints
         var read = app.MapGroup("/api/integrations").RequireAuthorization();
         read.MapGet("/", List);
         read.MapGet("/{id:guid}/machines", Machines).RequireAuthorization(UserAccounts.OperatorPolicy);
+        read.MapGet("/{id:guid}/mapping", MappingOverview).RequireAuthorization(UserAccounts.OperatorPolicy);
+        read.MapPut("/{id:guid}/mapping", SetMachineMapping).RequireAuthorization(UserAccounts.OperatorPolicy);
 
         app.MapPut("/api/hosts/{id:guid}/mapping", SetMapping).RequireAuthorization(UserAccounts.OperatorPolicy);
         app.MapGet("/api/backups", BackupServers).RequireAuthorization();
@@ -284,7 +299,10 @@ public static class IntegrationEndpoints
             return Results.NotFound();
         }
 
-        await db.Hosts.Where(h => h.IntegrationId == id).ExecuteUpdateAsync(s => s.SetProperty(h => h.IntegrationId, (Guid?)null).SetProperty(h => h.ExternalId, (string?)null), ct);
+        await db.Hosts.Where(h => h.IntegrationId == id).ExecuteUpdateAsync(s => s
+            .SetProperty(h => h.IntegrationId, (Guid?)null)
+            .SetProperty(h => h.ExternalId, (string?)null)
+            .SetProperty(h => h.MappingManual, false), ct);
         db.Integrations.Remove(integration);
         audit.Add("integration.deleted", integration.Name);
         await db.SaveChangesAsync(ct);
@@ -360,29 +378,120 @@ public static class IntegrationEndpoints
             return Results.Problem(ex.Message, statusCode: StatusCodes.Status502BadGateway);
         }
 
-        var byName = machines.GroupBy(m => m.Name.ToLowerInvariant()).Where(g => g.Count() == 1).ToDictionary(g => g.Key, g => g.Single());
-        var query = db.Hosts.Where(h => h.IntegrationId == null && !h.IsRevoked);
+        // Von Hand gesetzte oder gelöste Zuordnungen bleiben unverändert, schon vergebene VMs werden nicht doppelt vergeben.
+        var query = db.Hosts.Where(h => h.IntegrationId == null && !h.MappingManual && !h.IsRevoked);
         if (integration.SiteId is { } siteId)
         {
             query = query.Where(h => h.SiteId == siteId);
         }
 
-        var mapped = new List<string>();
-        foreach (var host in await query.ToListAsync(ct))
-        {
-            var candidates = new[] { host.Name, host.Hostname, host.Hostname.Split('.')[0] }.Select(n => n.ToLowerInvariant());
-            var machine = candidates.Select(c => byName.GetValueOrDefault(c)).FirstOrDefault(m => m is not null);
-            if (machine is not null)
-            {
-                host.IntegrationId = integration.Id;
-                host.ExternalId = machine.ExternalId;
-                mapped.Add(host.Name);
-            }
-        }
+        var taken = await db.Hosts.Where(h => h.IntegrationId == id && h.ExternalId != null).Select(h => h.ExternalId!).ToListAsync(ct);
+        var mapped = HostMapping.AutoMap(integration.Id, await query.ToListAsync(ct), machines, taken).Select(h => h.Name).ToList();
+        var unmapped = machines.Select(m => m.ExternalId).Distinct().Count(e => !taken.Contains(e)) - mapped.Count;
 
         audit.Add("integration.auto-map", $"{integration.Name}: {mapped.Count} hosts");
         await db.SaveChangesAsync(ct);
-        return Results.Ok(new AutoMapResultDto(mapped.Count, mapped));
+        return Results.Ok(new AutoMapResultDto(mapped.Count, mapped, Math.Max(0, unmapped)));
+    }
+
+    private static bool Mappable(IntegrationType type) => type is IntegrationType.Proxmox or IntegrationType.HetznerCloud;
+
+    /// <summary>
+    /// Alle VMs bzw. Server der Integration mit ihrem Host, dazu alle Hosts zur Auswahl (bewusst auch aus anderen Sites:
+    /// von Hand darf jede VM jedem Host zugeordnet werden, z. B. "win2025-warz" → "WARZ-APP").
+    /// </summary>
+    private static async Task<IResult> MappingOverview(Guid id, AppDbContext db, VirtualizationProviderFactory providers, CancellationToken ct)
+    {
+        var integration = await db.Integrations.FindAsync([id], ct);
+        if (integration is null || !Mappable(integration.Type) || providers.For(integration) is not { } provider)
+        {
+            return Results.NotFound();
+        }
+
+        IReadOnlyList<MachineInfo> machines;
+        try
+        {
+            machines = await provider.ListMachinesAsync(ct);
+        }
+        catch (IntegrationException ex)
+        {
+            return Results.Problem(ex.Message, statusCode: StatusCodes.Status502BadGateway);
+        }
+
+        var hosts = await db.Hosts.AsNoTracking().Include(h => h.Integration).Include(h => h.Site)
+            .Where(h => !h.IsRevoked)
+            .OrderBy(h => h.Name)
+            .ToListAsync(ct);
+        return Results.Ok(BuildOverview(id, machines, hosts));
+    }
+
+    /// <summary>Zeilen für die Zuordnungstabelle; Zuordnungen auf Maschinen, die der Anbieter nicht mehr kennt, als "Missing".</summary>
+    public static MappingOverviewDto BuildOverview(Guid integrationId, IReadOnlyList<MachineInfo> machines, IReadOnlyList<ManagedHost> hosts)
+    {
+        var byExternal = hosts.Where(h => h.IntegrationId == integrationId && h.ExternalId != null)
+            .GroupBy(h => h.ExternalId!).ToDictionary(g => g.Key, g => g.First());
+        var names = machines.GroupBy(m => m.ExternalId).ToDictionary(g => g.Key, g => g.First().Name);
+
+        var rows = machines
+            .Select(m => byExternal.GetValueOrDefault(m.ExternalId) is { } h
+                ? new MappingMachineDto(m.ExternalId, m.Name, m.Status, h.Id, h.Name, h.MappingManual, false)
+                : new MappingMachineDto(m.ExternalId, m.Name, m.Status, null, null, false, false))
+            .Concat(byExternal.Where(x => !names.ContainsKey(x.Key))
+                .Select(x => new MappingMachineDto(x.Key, x.Key, null, x.Value.Id, x.Value.Name, x.Value.MappingManual, true)))
+            .OrderBy(m => m.Name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var hostRows = hosts
+            .Select(h => new MappingHostDto(h.Id, h.Name, h.Hostname, h.IntegrationId, h.ExternalId,
+                h.IntegrationId is null ? null
+                : h.IntegrationId == integrationId && h.ExternalId != null && names.TryGetValue(h.ExternalId, out var vm) ? vm
+                : $"{h.Integration?.Name} · {h.ExternalId}",
+                h.Site?.Name))
+            .ToList();
+        return new MappingOverviewDto(rows, hostRows);
+    }
+
+    /// <summary>Settings → Integrations → Zuordnen: Maschine einem Host zuordnen (HostId) oder ihre Zuordnung lösen (null).</summary>
+    private static async Task<IResult> SetMachineMapping(Guid id, MachineMappingRequest request, AppDbContext db, AuditLog audit, CancellationToken ct)
+    {
+        var integration = await db.Integrations.FindAsync([id], ct);
+        if (integration is null || !Mappable(integration.Type))
+        {
+            return Results.NotFound();
+        }
+
+        if (string.IsNullOrWhiteSpace(request.ExternalId))
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]> { ["externalId"] = [L.T("Maschine wählen.", "Choose a machine.")] });
+        }
+
+        var externalId = HostMapping.Normalize(request.ExternalId);
+        if (request.HostId is { } hostId)
+        {
+            var host = await db.Hosts.FirstOrDefaultAsync(h => h.Id == hostId && !h.IsRevoked, ct);
+            if (host is null)
+            {
+                return Results.NotFound();
+            }
+
+            var previous = await HostMapping.AssignAsync(db, host, id, externalId, ct);
+            audit.Add("host.mapping", $"{host.Name}: {integration.Name} · {externalId}", siteId: host.SiteId, hostId: host.Id);
+            if (previous is not null)
+            {
+                audit.Add("host.mapping", $"{previous.Name}: -", siteId: previous.SiteId, hostId: previous.Id);
+            }
+        }
+        else
+        {
+            foreach (var host in await db.Hosts.Where(h => h.IntegrationId == id && h.ExternalId == externalId).ToListAsync(ct))
+            {
+                HostMapping.Unassign(host);
+                audit.Add("host.mapping", $"{host.Name}: -", siteId: host.SiteId, hostId: host.Id);
+            }
+        }
+
+        await db.SaveChangesAsync(ct);
+        return Results.NoContent();
     }
 
     private static async Task<IResult> SetMapping(Guid id, MappingRequest request, AppDbContext db, AuditLog audit, CancellationToken ct)
@@ -400,13 +509,15 @@ public static class IntegrationEndpoints
                 return Results.ValidationProblem(new Dictionary<string, string[]> { ["externalId"] = [L.T("Integration und Maschine wählen.", "Choose integration and machine.")] });
             }
 
-            host.IntegrationId = integrationId;
-            host.ExternalId = request.ExternalId.Trim().Length > 100 ? request.ExternalId.Trim()[..100] : request.ExternalId.Trim();
+            var previous = await HostMapping.AssignAsync(db, host, integrationId, request.ExternalId, ct);
+            if (previous is not null)
+            {
+                audit.Add("host.mapping", $"{previous.Name}: -", siteId: previous.SiteId, hostId: previous.Id);
+            }
         }
         else
         {
-            host.IntegrationId = null;
-            host.ExternalId = null;
+            HostMapping.Unassign(host);
         }
 
         audit.Add("host.mapping", $"{host.Name}: {host.ExternalId ?? "-"}", siteId: host.SiteId, hostId: host.Id);

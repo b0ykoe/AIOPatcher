@@ -234,6 +234,8 @@ export interface HostDetail {
   integrationId: string | null;
   integrationName: string | null;
   externalId: string | null;
+  /** Zuordnung von Hand gesetzt oder gelöst (Auto-map fasst sie nicht an). */
+  mappingManual?: boolean;
   containers: ContainerItem[];
   agentUpdate: AgentUpdateInfo | null;
   /** 1 = alter Check-in (Push), 2 = Pull-Agent, 0 = noch nie gemeldet. */
@@ -1040,6 +1042,35 @@ export interface MachineInfo {
   name: string;
   status: string | null;
   addresses: string[];
+}
+
+/** Settings → Integrations → Zuordnen: VM bzw. Server mit zugeordnetem Host. */
+export interface MappingMachine {
+  externalId: string;
+  name: string;
+  status: string | null;
+  hostId: string | null;
+  hostName: string | null;
+  /** Von Hand gesetzt; Auto-map lässt die Zuordnung in Ruhe. */
+  manual: boolean;
+  /** Zugeordnet, aber beim Anbieter nicht (mehr) vorhanden. */
+  missing: boolean;
+}
+
+export interface MappingHost {
+  id: string;
+  name: string;
+  hostname: string;
+  integrationId: string | null;
+  externalId: string | null;
+  /** Schon zugeordnet: VM-Name bzw. "Integration · Maschine". */
+  mappedTo: string | null;
+  siteName: string | null;
+}
+
+export interface MappingOverview {
+  machines: MappingMachine[];
+  hosts: MappingHost[];
 }
 
 // --- Programme -----------------------------------------------------------------------------------

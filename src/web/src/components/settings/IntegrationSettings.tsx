@@ -19,7 +19,7 @@ import {
   ThemeIcon,
   Tooltip,
 } from "@mantine/core";
-import { IconBrandUbuntu, IconCloud, IconDatabase, IconEdit, IconFlame, IconLink, IconPlugConnected, IconPlus, IconRefresh, IconServer2, IconTrash } from "@tabler/icons-react";
+import { IconBrandUbuntu, IconCloud, IconDatabase, IconEdit, IconFlame, IconLink, IconListDetails, IconPlugConnected, IconPlus, IconRefresh, IconServer2, IconTrash } from "@tabler/icons-react";
 import { Link } from "react-router";
 import { useTranslation } from "react-i18next";
 import { api, formatRelative, type Integration, type IntegrationTestResult, type IntegrationType, type Site } from "../../api";
@@ -27,6 +27,7 @@ import { CardTitle, confirmAction, EmptyState, errorText, notifyError, notifySuc
 import { GuidePanel } from "../GuidePanel";
 import { FeatureOffHint, useFeatures } from "../../features";
 import { MonitoringTargets } from "../monitoring/MonitoringTargets";
+import { IntegrationMappingModal } from "./IntegrationMappingModal";
 
 
 const types: IntegrationType[] = ["Proxmox", "HetznerCloud", "Opnsense", "ProxmoxBackup"];
@@ -42,6 +43,7 @@ export function IntegrationSettings() {
   const [editing, setEditing] = useState<Integration | "new" | null>(null);
   const [results, setResults] = useState<Record<string, IntegrationTestResult>>({});
   const [busy, setBusy] = useState<string | null>(null);
+  const [mapping, setMapping] = useState<Integration | null>(null);
 
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -85,8 +87,9 @@ export function IntegrationSettings() {
   const autoMap = async (i: Integration) => {
     setBusy(i.id);
     try {
-      const r = await api.post<{ mapped: number; hosts: string[] }>(`/api/integrations/${i.id}/auto-map`);
-      notifySuccess(t("integrations.autoMapped", { count: r.mapped }), r.hosts.join(", ") || undefined);
+      const r = await api.post<{ mapped: number; hosts: string[]; unmapped: number }>(`/api/integrations/${i.id}/auto-map`);
+      const rest = r.unmapped > 0 ? t("integrations.autoMapRest", { count: r.unmapped }) : "";
+      notifySuccess(t("integrations.autoMapped", { count: r.mapped }), [r.hosts.join(", "), rest].filter(Boolean).join(" · ") || undefined);
     } catch (e) {
       notifyError(e);
     } finally {
@@ -255,7 +258,12 @@ export function IntegrationSettings() {
                   {t("integrations.test")}
                 </Button>
                 {mappable(i.type) && (
-                  <Tooltip label={t("integrations.autoMapHint")}>
+                  <Button size="compact-xs" variant="light" leftSection={<IconListDetails size={14} />} onClick={() => setMapping(i)}>
+                    {t("integrations.map")}
+                  </Button>
+                )}
+                {mappable(i.type) && (
+                  <Tooltip label={t("integrations.autoMapHint")} multiline maw={300}>
                     <Button size="compact-xs" variant="light" leftSection={<IconLink size={14} />} disabled={busy === i.id} onClick={() => void autoMap(i)}>
                       {t("integrations.autoMap")}
                     </Button>
@@ -298,6 +306,13 @@ export function IntegrationSettings() {
       </Card>
 
       <IntegrationModal integration={editing} sites={sites} onClose={() => setEditing(null)} onSaved={load} />
+      <IntegrationMappingModal
+        integration={mapping}
+        onClose={() => {
+          setMapping(null);
+          load();
+        }}
+      />
     </Stack>
   );
 }
