@@ -44,6 +44,12 @@ public enum JobType
     /// docker.appupdate; braucht policy.json allowAppUpdates und allowPatch All.
     /// </summary>
     ContainerUpdate,
+
+    /// <summary>
+    /// Den AIOPatcher-Server auf diesem Host aktualisieren (aiopatcher-update aus dem Setup: Sicherung, Neustart,
+    /// Rückfall). Läuft als serverupdate.update; braucht policy.json allowServerUpdate.
+    /// </summary>
+    ServerUpdate,
 }
 
 [JsonConverter(typeof(JsonStringEnumConverter<PatchScope>))]

@@ -8,6 +8,15 @@ Written for users, not as a list of commits.
 
 ## [Unreleased]
 
+### Added
+- **Update AIOPatcher from the dashboard:** enroll the server host as an agent and allow it once with
+  `aiopatcher-agent policy set allowServerUpdate true` (or `install.sh --allow-server-update`). The update notice then
+  has an **Update now** button: the agent runs `aiopatcher-update` with backup and automatic rollback, and the result
+  shows up in the job once AIOPatcher is back. Only for installations made with the setup script.
+
+### Improved
+- The update notice now shows `sudo aiopatcher-update` for setup installations and the compose commands as a fallback.
+
 ## [0.12.1] - 2026-11-19
 
 ### Added

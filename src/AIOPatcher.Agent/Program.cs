@@ -120,6 +120,7 @@ switch (commandLine.Command)
         builder.Services.AddSingleton<IAgentModule, RemoteAccessModule>();
         builder.Services.AddSingleton<IAgentModule, UsersModule>();
         builder.Services.AddSingleton<IAgentModule, MonitoringModule>();
+        builder.Services.AddSingleton<IAgentModule, ServerUpdateModule>();
         builder.Services.AddSingleton<IAgentModule, AgentSelfModule>();
         builder.Services.AddSingleton<ModuleHost>();
         builder.Services.AddHostedService<PollService>();

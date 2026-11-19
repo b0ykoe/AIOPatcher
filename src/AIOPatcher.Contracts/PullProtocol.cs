@@ -61,7 +61,10 @@ public static class AgentModules
     /// <summary>status, change (Wazuh-/Checkmk-Client installieren, konfigurieren, deinstallieren).</summary>
     public const string Monitoring = "monitoring";
 
-    public static readonly string[] All = [System, Updates, Software, Docker, Services, Metrics, Firewall, RemoteAccess, Users, Agent, Monitoring];
+    /// <summary>update: den AIOPatcher-Server auf diesem Host aktualisieren (nur wo das Setup aiopatcher-update eingerichtet hat).</summary>
+    public const string ServerUpdate = "serverupdate";
+
+    public static readonly string[] All = [System, Updates, Software, Docker, Services, Metrics, Firewall, RemoteAccess, Users, Agent, Monitoring, ServerUpdate];
 
     /// <summary>Ohne diese geht nichts: nicht abschaltbar.</summary>
     public static readonly string[] Required = [System, Agent];

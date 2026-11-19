@@ -417,7 +417,7 @@ export interface EnrollmentToken {
   expiresAt: string;
 }
 
-export type JobType = "Scan" | "Patch" | "Reboot" | "AppUpdate" | "SystemChange" | "ContainerUpdate";
+export type JobType = "Scan" | "Patch" | "Reboot" | "AppUpdate" | "SystemChange" | "ContainerUpdate" | "ServerUpdate";
 export type PatchScope = "Security" | "All";
 export type JobStatus = "Queued" | "Running" | "Succeeded" | "Failed" | "Rejected" | "Cancelled";
 
@@ -464,6 +464,8 @@ export function describeJob(job: Pick<Job, "type" | "scope" | "allowReboot">): s
       return t("jobType.systemChange");
     case "ContainerUpdate":
       return t("jobType.containerUpdate");
+    case "ServerUpdate":
+      return t("jobType.serverUpdate");
     case "Patch":
       return `${job.scope === "Security" ? t("jobType.security") : t("jobType.all")}${job.allowReboot ? t("jobType.plusReboot") : ""}`;
   }
@@ -530,6 +532,9 @@ export interface ServerInfo {
   latestVersion: string | null;
   releaseUrl: string | null;
   updateAvailable: boolean;
+  /** Hosts, deren Agent den Server aktualisieren kann (Setup mit aiopatcher-update) */
+  updateHosts: { id: string; name: string }[] | null;
+  runningUpdateJob: string | null;
 }
 
 const weekdayKeys = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const;

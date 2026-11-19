@@ -232,6 +232,8 @@ public static class PullEndpoints
             case JobType.ContainerUpdate:
                 return (AgentModules.Docker, ModuleActions.AppUpdate,
                     PullJsonContext.ToElement(new AppUpdateRequest([job.Packages ?? ""]), PullJsonContext.Default.AppUpdateRequest));
+            case JobType.ServerUpdate:
+                return (AgentModules.ServerUpdate, ModuleActions.Update, null);
             case JobType.AppUpdate:
                 return (AgentModules.Software, ModuleActions.AppUpdate,
                     PullJsonContext.ToElement(new AppUpdateRequest(job.Packages?.Split(',', StringSplitOptions.RemoveEmptyEntries) ?? []), PullJsonContext.Default.AppUpdateRequest));

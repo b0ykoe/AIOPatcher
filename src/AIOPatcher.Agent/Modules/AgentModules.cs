@@ -320,6 +320,51 @@ public sealed class MonitoringModule(AgentState state) : IAgentModule
     }
 }
 
+/// <summary>
+/// serverupdate.update: den AIOPatcher-Server auf diesem Host mit aiopatcher-update aktualisieren (aus dem Setup: neuer Code
+/// bzw. neues Image, Sicherung, Neustart, Rückfall bei Fehlern). Nur verfügbar, wo das Setup den Befehl eingerichtet hat.
+/// Braucht policy.json "allowServerUpdate". Während des Neustarts ist der Server kurz weg; das Ergebnis wird nachgeliefert.
+/// </summary>
+public sealed class ServerUpdateModule : IAgentModule
+{
+    public const string Command = "/usr/local/bin/aiopatcher-update";
+    public const string Compose = "/opt/aiopatcher/docker-compose.yml";
+    private static readonly TimeSpan Timeout = TimeSpan.FromMinutes(45);
+
+    public string Id => AgentModules.ServerUpdate;
+    public bool Available => OperatingSystem.IsLinux() && File.Exists(Command) && File.Exists(Compose);
+    public IReadOnlyList<string> Actions { get; } = [ModuleActions.Update];
+
+    public async Task<TaskOutcome> ExecuteAsync(AgentTask task, TaskContext context, CancellationToken ct)
+    {
+        if (!context.Policy.AllowServerUpdate)
+        {
+            const string rejected = "Local policy forbids updating the AIOPatcher server from the dashboard. To allow it on this host: aiopatcher-agent policy set allowServerUpdate true";
+            context.Log($"[agent] Rejected: {rejected}");
+            return TaskOutcome.Rejected(rejected);
+        }
+
+        context.Log($"[agent] Running {Command} (the server restarts; the result follows once it is back).");
+        string? done = null;
+        var code = await ProcessRunner.RunStreamingAsync(Command, [], Timeout, line =>
+        {
+            var clean = StripAnsi(line);
+            if (clean.Contains("Done: AIOPatcher", StringComparison.Ordinal))
+            {
+                done = clean.Trim().TrimStart('=', '>', ' ');
+            }
+
+            context.Log(clean);
+        }, ct);
+
+        return code == 0
+            ? new TaskOutcome(JobOutcome.Succeeded, done ?? "AIOPatcher updated.")
+            : new TaskOutcome(JobOutcome.Failed, $"aiopatcher-update failed (exit code {code}); see the log. If the new version did not start, the previous one was restored.");
+    }
+
+    public static string StripAnsi(string line) => System.Text.RegularExpressions.Regex.Replace(line, @"\x1B\[[0-9;]*[A-Za-z]", "");
+}
+
 /// <summary>agent.update (Self-Update) und agent.renew (Client-Zertifikat). Neustart erst nach der Antwort.</summary>
 public sealed class AgentSelfModule(SelfMaintenance maintenance, AgentState state) : IAgentModule
 {

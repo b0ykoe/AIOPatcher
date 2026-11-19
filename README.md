@@ -85,6 +85,16 @@ are offered the update as well. `--check` only shows whether there is something 
 without new code. Automatically at night: choose "Auto-Update" during setup (systemd timer, log: `journalctl -u aiopatcher-update`).
 With a prebuilt image (`--image`), the command pulls the new image instead (`docker compose pull`).
 
+**Update from the dashboard:** enroll the server host as an agent and allow it there once:
+
+```bash
+sudo aiopatcher-agent policy set allowServerUpdate true     # or install.sh … --allow-server-update
+```
+
+The update notice then has an **Update now** button. The agent runs exactly `aiopatcher-update` (with backup and
+rollback); AIOPatcher is unavailable for a minute or two and the result appears in the job once it is back. Only
+installations made with the setup script have `aiopatcher-update`; with your own compose file the notice shows the command.
+
 Installations from before this command: once run `cd /opt/aiopatcher/src && sudo git pull && sudo bash deploy/update.sh`,
 after that `aiopatcher-update` is available. Code via `tar` instead of Git: unpack the new version to `/opt/aiopatcher/src`, then
 `sudo aiopatcher-update`.
@@ -468,6 +478,7 @@ Every function is a **module** with fixed actions. The agent rejects any other t
 | `users` | `list`, `change` |
 | `agent` | `update` (self-update), `renew` (client certificate) |
 | `monitoring` | `status` (installed Wazuh/Checkmk clients), `change` (install, point to a target, uninstall) |
+| `serverupdate` | `update`: run `aiopatcher-update` on the host running the AIOPatcher server (only where the setup installed it) |
 
 Modules can be turned off **per host** in the dashboard (host → *Agent & modules*). The server then no longer assigns
 tasks for them. On the host itself, `policy.json` locks modules for good:
@@ -628,6 +639,7 @@ The server cannot change it; it is read again for every job.
   "allowSourceFixes": true,
   "allowAutoUpdateChanges": true,
   "allowMonitoringChanges": false,
+  "allowServerUpdate": false,
   "disabledModules": []
 }
 ```

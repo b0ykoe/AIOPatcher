@@ -30,6 +30,7 @@ PURGE=0
 DOWNLOAD_ONLY=""
 ALLOW_SYSTEM_CHANGES=0
 ALLOW_MONITORING_CHANGES=0
+ALLOW_SERVER_UPDATE=0
 FORCE_LITE=0
 
 die() { echo "Error: $*" >&2; exit 1; }
@@ -51,6 +52,8 @@ Options:
                         (policy.json allowSystemChanges; off by default)
   --allow-monitoring-changes  Allow installing, reconfiguring and uninstalling Wazuh/Checkmk
                         clients from the dashboard (policy.json allowMonitoringChanges; off by default)
+  --allow-server-update  On the host running the AIOPatcher server: allow "Update now" in the dashboard
+                        (policy.json allowServerUpdate; off by default)
   --lite                Force the lite agent (Python). Chosen automatically on old systems (glibc < 2.27,
                         OpenSSL < 1.1.1, e.g. Ubuntu 16.04, Debian 9).
 EOF
@@ -69,6 +72,7 @@ while [ $# -gt 0 ]; do
     --download-only) DOWNLOAD_ONLY="${2:-}"; shift 2 ;;
     --allow-system-changes) ALLOW_SYSTEM_CHANGES=1; shift ;;
     --allow-monitoring-changes) ALLOW_MONITORING_CHANGES=1; shift ;;
+    --allow-server-update) ALLOW_SERVER_UPDATE=1; shift ;;
     --lite) FORCE_LITE=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) usage; die "Unknown option: $1" ;;
@@ -281,6 +285,13 @@ PY
     "$BIN" policy set allowMonitoringChanges true --state-dir "$STATE" >/dev/null
   fi
   info "Installing and reconfiguring Wazuh/Checkmk clients from the dashboard allowed (policy.json)."
+fi
+
+if [ "$ALLOW_SERVER_UPDATE" -eq 1 ] && [ "$LITE" -eq 1 ]; then
+  info "Lite agent: --allow-server-update has no effect (the AIOPatcher server needs a current system)."
+elif [ "$ALLOW_SERVER_UPDATE" -eq 1 ]; then
+  "$BIN" policy set allowServerUpdate true --state-dir "$STATE" >/dev/null
+  info "Updating the AIOPatcher server from the dashboard allowed (policy.json)."
 fi
 
 # --- 5. Self-test before starting the service -----------------------------------------------------

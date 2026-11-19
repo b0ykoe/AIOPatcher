@@ -76,7 +76,14 @@ public static class HostEndpoints
         bool WindowOpenNow = false);
 
 
-    public sealed record ServerInfoDto(string Version, string TimeZone, DateTime NowUtc, string? LatestVersion, string? ReleaseUrl, bool UpdateAvailable);
+/// <param name="UpdateHosts">Hosts, deren Agent den AIOPatcher-Server aktualisieren kann (Setup mit aiopatcher-update).</param>
+    /// <param name="RunningUpdateJob">Laufender bzw. wartender Server-Update-Job.</param>
+    public sealed record ServerInfoDto(string Version, string TimeZone, DateTime NowUtc, string? LatestVersion, string? ReleaseUrl, bool UpdateAvailable,
+        IReadOnlyList<ServerUpdateHostDto>? UpdateHosts = null, Guid? RunningUpdateJob = null);
+
+    public sealed record ServerUpdateHostDto(Guid Id, string Name);
+
+    public sealed record ServerUpdateRequest(Guid HostId);
 
     public sealed record UpdateDto(string Name, string? CurrentVersion, string? AvailableVersion, bool IsSecurity, string? Classification, DateTime FirstSeenAt, bool IsHeld,
         string? Cves, bool IsKev, double? MaxEpss);
@@ -188,9 +195,20 @@ public static class HostEndpoints
             AssignPlanAsync([id], request.PlanId, request.GroupId, db, audit, ct));
         op.MapPut("/hosts/plan", (BulkPlanAssignmentRequest request, AppDbContext db, AuditLog audit, CancellationToken ct) =>
             AssignPlanAsync(request.HostIds ?? [], request.PlanId, request.GroupId, db, audit, ct));
-        api.MapGet("/server-info", (ServerClock clock, ReleaseCheck releases) =>
-            new ServerInfoDto(AgentDownloads.AgentVersion, clock.ZoneName, DateTime.UtcNow,
-                releases.Latest?.Version, releases.Latest?.Url, releases.UpdateAvailable));
+        api.MapGet("/server-info", async (ServerClock clock, ReleaseCheck releases, AppDbContext db, CancellationToken ct) =>
+        {
+            var hosts = (await db.Hosts.AsNoTracking().Where(h => !h.IsRevoked && h.ReportedModules != null && h.ReportedModules.Contains(AgentModules.ServerUpdate))
+                    .OrderBy(h => h.Name).ToListAsync(ct))
+                .Where(h => ModuleJson.Usable(h, AgentModules.ServerUpdate) && ModuleJson.Supports(h, AgentModules.ServerUpdate, ModuleActions.Update))
+                .Select(h => new ServerUpdateHostDto(h.Id, h.Name))
+                .ToList();
+            var running = await db.Jobs.AsNoTracking()
+                .Where(j => j.Type == JobType.ServerUpdate && (j.Status == JobStatus.Queued || j.Status == JobStatus.Running))
+                .Select(j => (Guid?)j.Id).FirstOrDefaultAsync(ct);
+            return new ServerInfoDto(AgentDownloads.AgentVersion, clock.ZoneName, DateTime.UtcNow,
+                releases.Latest?.Version, releases.Latest?.Url, releases.UpdateAvailable, hosts, running);
+        });
+        api.MapPost("/server/update", StartServerUpdate).RequireAuthorization(UserAccounts.AdminPolicy);
         op.MapPost("/hosts/{id:guid}/revoke", RevokeHost);
         op.MapPost("/hosts/{id:guid}/agent-update/retry", RetryAgentUpdate);
         op.MapPost("/hosts/{id:guid}/agent-update/now", UpdateAgentNow);
@@ -533,6 +551,43 @@ public static class HostEndpoints
     /// Einen Compose-Container aktualisieren: Job, der auf dem Host das Image zieht und nur diesen Dienst neu erstellt.
     /// Wie Programm-Updates: Schalter "Programm-Updates" und lokal allowAppUpdates + allowPatch All.
     /// </summary>
+    /// <summary>
+    /// "Jetzt aktualisieren": Job an den Agent auf dem Server-Host; der startet aiopatcher-update (Sicherung, Neustart,
+    /// Rückfall). Der Agent prüft zusätzlich policy.json allowServerUpdate.
+    /// </summary>
+    private static async Task<IResult> StartServerUpdate(ServerUpdateRequest request, ClaimsPrincipal user, AppDbContext db, AuditLog audit, CancellationToken ct)
+    {
+        var host = await db.Hosts.FindAsync([request.HostId], ct);
+        if (host is null || host.IsRevoked)
+        {
+            return Results.NotFound();
+        }
+
+        if (!ModuleJson.Usable(host, AgentModules.ServerUpdate) || !ModuleJson.Supports(host, AgentModules.ServerUpdate, ModuleActions.Update))
+        {
+            return Results.Problem(L.T("Auf diesem Host meldet der Agent kein aiopatcher-update (Setup) oder ist zu alt.",
+                "The agent on this host does not report aiopatcher-update (setup) or is too old."), statusCode: StatusCodes.Status409Conflict);
+        }
+
+        if (await db.Jobs.AnyAsync(j => j.HostId == host.Id && (j.Status == JobStatus.Queued || j.Status == JobStatus.Running), ct))
+        {
+            return Results.Problem(L.T("Es ist bereits ein Job geplant oder aktiv.", "A job is already queued or running."), statusCode: StatusCodes.Status409Conflict);
+        }
+
+        var job = new PatchJob
+        {
+            HostId = host.Id,
+            Type = JobType.ServerUpdate,
+            Scope = PatchScope.All,
+            RequestedBy = $"admin:{user.Identity?.Name}",
+            Summary = L.T($"AIOPatcher-Server aktualisieren (von {AgentDownloads.AgentVersion})", $"Update AIOPatcher server (from {AgentDownloads.AgentVersion})"),
+        };
+        db.Jobs.Add(job);
+        audit.Add("server.update.requested", $"via {host.Name}, from {AgentDownloads.AgentVersion}", siteId: host.SiteId, hostId: host.Id);
+        await db.SaveChangesAsync(ct);
+        return Results.Ok(new { jobId = job.Id });
+    }
+
     private static async Task<IResult> UpdateContainer(Guid id, string name, ClaimsPrincipal user, AppDbContext db, AuditLog audit, FeatureFlags features, CancellationToken ct)
     {
         if (!features.IsOn(Feature.AppUpdates))
