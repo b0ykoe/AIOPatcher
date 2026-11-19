@@ -8,6 +8,8 @@ Written for users, not as a list of commits.
 
 ## [Unreleased]
 
+## [0.14.4] - 2026-11-19
+
 ### Added
 - **Hypervisors on the overview:** a **Hypervisors** card lists your Proxmox hosts (found automatically) with their
   pending and security updates, reboot status and how they are patched (plan, excluded or no plan), with
