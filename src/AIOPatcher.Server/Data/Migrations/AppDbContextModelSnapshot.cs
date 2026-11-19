@@ -1185,6 +1185,9 @@ namespace AIOPatcher.Server.Data.Migrations
                     b.Property<TimeOnly>("MaintenanceStart")
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("MappingManual")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("Metrics")
                         .HasColumnType("TEXT");
 
