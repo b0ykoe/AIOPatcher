@@ -8,6 +8,14 @@ Written for users, not as a list of commits.
 
 ## [Unreleased]
 
+### Improved
+- **AI summaries use far fewer requests:** Packages are bundled into one request per 25 packages instead of one
+  request each, so 100 new updates now take about 5 requests instead of 101. Short changelogs (e.g. "New upstream
+  release") are shown as they are and not sent to the AI at all. Failed summaries are retried after 6 hours instead
+  of after every scan.
+- **Token usage under Settings → AI:** A new card warns how many tokens summaries use and shows requests, input and
+  output tokens of the last 30 days as reported by the provider.
+
 ## [0.9.0] - 2026-11-19
 
 ### Added

@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
 import { Alert, Button, Card, Group, List, Loader, PasswordInput, SegmentedControl, Select, SimpleGrid, Stack, Switch, Text, TextInput } from "@mantine/core";
-import { IconAlertTriangle, IconCheck, IconPlugConnected, IconShieldLock, IconSparkles } from "@tabler/icons-react";
+import { IconAlertTriangle, IconArrowDownRight, IconArrowUpRight, IconCheck, IconCoins, IconPlugConnected, IconSend, IconShieldLock, IconSparkles } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import { api, formatDateTime, type AiSettings as AiSettingsDto, type AiProvider } from "../../api";
+import { MetricRow } from "../metrics/charts";
 import { CardTitle, errorText, notifyError, notifySuccess } from "../ui";
 
 /** Einstellungen → KI: Anbieter für die Zusammenfassungen der Patchnotes (Claude, ChatGPT, lokales Modell). */
 export function AiSettings() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [saved, setSaved] = useState<AiSettingsDto | null>(null);
   const [enabled, setEnabled] = useState(false);
   const [provider, setProvider] = useState<AiProvider>("anthropic");
@@ -56,6 +57,8 @@ export function AiSettings() {
     setTest(null);
     try {
       setTest(await api.post("/api/settings/ai/test", body()));
+      // der Test zählt zum Verbrauch
+      api.get<AiSettingsDto>("/api/settings/ai").then((s) => setSaved((old) => (old ? { ...old, usage: s.usage } : s))).catch(() => undefined);
     } catch (e) {
       setTest({ ok: false, text: null, error: errorText(e) });
     } finally {
@@ -67,10 +70,11 @@ export function AiSettings() {
   if (!saved) return <Loader />;
 
   const defaultModel = provider === "anthropic" ? "claude-opus-5-5" : "";
+  const number = (n: number) => n.toLocaleString(i18n.language);
 
   return (
     <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
-      <Card>
+      <Card style={{ gridRow: "span 2" }}>
         <CardTitle icon={<IconSparkles size={18} />}>{t("ai.title")}</CardTitle>
         <Stack gap="sm">
           <Text size="sm" c="dimmed">{t("ai.intro")}</Text>
@@ -121,7 +125,23 @@ export function AiSettings() {
             <List.Item>{t("ai.privacyItem3")}</List.Item>
           </List>
           <Text size="sm" c="dimmed">{t("ai.privacyLocal")}</Text>
-          <Text size="sm" c="dimmed">{t("ai.costs")}</Text>
+        </Stack>
+      </Card>
+
+      <Card>
+        <CardTitle icon={<IconCoins size={18} />}>{t("ai.usageTitle")}</CardTitle>
+        <Stack gap="sm">
+          <Alert color="yellow" icon={<IconAlertTriangle size={18} />} title={t("ai.usageWarnTitle")}>
+            <Text size="sm">{t("ai.usageWarn")}</Text>
+          </Alert>
+          <Text size="sm" c="dimmed">{t("ai.usageSaving")}</Text>
+          <Text size="xs" c="dimmed" tt="uppercase" fw={700}>{t("ai.usagePeriod", { days: saved.usage.days })}</Text>
+          <Stack gap={6}>
+            <MetricRow icon={<IconSend size={14} />} label={t("ai.usageRequests")} value={number(saved.usage.requests)} />
+            <MetricRow icon={<IconArrowUpRight size={14} />} label={t("ai.usageInput")} value={number(saved.usage.inputTokens)} />
+            <MetricRow icon={<IconArrowDownRight size={14} />} label={t("ai.usageOutput")} value={number(saved.usage.outputTokens)} />
+          </Stack>
+          {provider === "compatible" && <Text size="xs" c="dimmed">{t("ai.usageLocal")}</Text>}
         </Stack>
       </Card>
     </SimpleGrid>

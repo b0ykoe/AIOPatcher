@@ -11,6 +11,9 @@ namespace AIOPatcher.Server.Services.Ai;
 /// <summary>Fehler der KI-Anbindung mit einer Meldung, die so im Dashboard stehen kann.</summary>
 public sealed class AiException(string message, Exception? inner = null) : Exception(message, inner);
 
+/// <summary>Antwort der KI mit dem gemeldeten Verbrauch (0, wenn der Anbieter nichts meldet).</summary>
+public sealed record AiAnswer(string Text, long InputTokens, long OutputTokens);
+
 /// <summary>
 /// Eine Anfrage an die eingestellte KI: Claude über das offizielle Anthropic-SDK, ChatGPT und lokale Modelle über die
 /// OpenAI-kompatible Schnittstelle (/chat/completions).
@@ -32,7 +35,7 @@ public sealed class AiClient(IHttpClientFactory httpFactory)
     public static string ModelOf(AiSettingsRecord settings) =>
         string.IsNullOrWhiteSpace(settings.Model) ? DefaultModel(settings.Provider) : settings.Model.Trim();
 
-    public async Task<string> CompleteAsync(AiSettingsRecord settings, string? apiKey, string system, string user, int maxTokens, CancellationToken ct)
+    public async Task<AiAnswer> CompleteAsync(AiSettingsRecord settings, string? apiKey, string system, string user, int maxTokens, CancellationToken ct)
     {
         var model = ModelOf(settings);
         if (model.Length == 0)
@@ -51,7 +54,7 @@ public sealed class AiClient(IHttpClientFactory httpFactory)
         };
     }
 
-    private static async Task<string> ClaudeAsync(string model, string? apiKey, string system, string user, int maxTokens, CancellationToken ct)
+    private static async Task<AiAnswer> ClaudeAsync(string model, string? apiKey, string system, string user, int maxTokens, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(apiKey))
         {
@@ -90,7 +93,10 @@ public sealed class AiClient(IHttpClientFactory httpFactory)
             }
 
             var text = string.Join("\n", response.Content.Select(b => b.Value).OfType<Beta.BetaTextBlock>().Select(t => t.Text)).Trim();
-            return text.Length > 0 ? text : throw new AiException(L.T("Leere Antwort von Claude.", "Empty answer from Claude."));
+            return text.Length > 0
+                ? new AiAnswer(text, response.Usage.InputTokens + (response.Usage.CacheCreationInputTokens ?? 0) + (response.Usage.CacheReadInputTokens ?? 0),
+                    response.Usage.OutputTokens)
+                : throw new AiException(L.T("Leere Antwort von Claude.", "Empty answer from Claude."));
         }
         catch (AnthropicApiException ex)
         {
@@ -98,7 +104,7 @@ public sealed class AiClient(IHttpClientFactory httpFactory)
         }
     }
 
-    private async Task<string> ChatCompletionsAsync(string baseUrl, string model, string? apiKey, string system, string user, int maxTokens, bool official,
+    private async Task<AiAnswer> ChatCompletionsAsync(string baseUrl, string model, string? apiKey, string system, string user, int maxTokens, bool official,
         CancellationToken ct)
     {
         if (official && string.IsNullOrWhiteSpace(apiKey))
@@ -132,14 +138,19 @@ public sealed class AiClient(IHttpClientFactory httpFactory)
                 throw new AiException($"{(official ? "OpenAI" : baseUrl)}: HTTP {(int)response.StatusCode} {Shorten(raw)}");
             }
 
-            var text = JsonNode.Parse(raw)?["choices"]?[0]?["message"]?["content"]?.GetValue<string>()?.Trim();
-            return string.IsNullOrEmpty(text) ? throw new AiException(L.T("Leere Antwort der KI.", "Empty answer from the AI.")) : text;
+            var json = JsonNode.Parse(raw);
+            var text = json?["choices"]?[0]?["message"]?["content"]?.GetValue<string>()?.Trim();
+            return string.IsNullOrEmpty(text)
+                ? throw new AiException(L.T("Leere Antwort der KI.", "Empty answer from the AI."))
+                : new AiAnswer(text, Tokens(json?["usage"]?["prompt_tokens"]), Tokens(json?["usage"]?["completion_tokens"]));
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException or InvalidOperationException)
         {
             throw new AiException($"{(official ? "OpenAI" : baseUrl)}: {ex.Message}", ex);
         }
     }
+
+    private static long Tokens(JsonNode? node) => node is JsonValue v && v.TryGetValue<long>(out var n) ? n : 0;
 
     private static string Shorten(string text) => text.Length > 200 ? text[..200] : text;
 }

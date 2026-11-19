@@ -199,20 +199,48 @@ public sealed class ChangelogTests : IDisposable
         Assert.Contains("\"vim\"", all);
     }
 
-    /// <summary>Nachgebaute OpenAI-kompatible KI (z. B. Ollama): antwortet mit dem Paketnamen aus der Anfrage.</summary>
+    private const string OpenSsl = """
+        openssl (3.0.16-1~deb12u1) bookworm-security; urgency=medium
+
+          * Import 3.0.16
+            - CVE-2024-13176 (Timing side-channel in ECDSA signature computation).
+            - CVE-2024-9143 (Low-level invalid GF(2^m) parameters lead to OOB memory access).
+            - Fix possible use-after-free in SSL_select_next_proto when the client sends an empty list.
+
+         -- Sebastian Andrzej Siewior <sebastian@breakpoint.cc>  Sat, 01 Feb 2025 12:00:00 +0100
+
+        openssl (3.0.15-1~deb12u1) bookworm-security; urgency=medium
+
+          * old entry the host already has.
+
+         -- Sebastian Andrzej Siewior <sebastian@breakpoint.cc>  Mon, 02 Sep 2024 12:00:00 +0100
+        """;
+
+    /// <summary>
+    /// Nachgebaute OpenAI-kompatible KI (z. B. Ollama): beantwortet Paket-Bündel mit "name: Package summary" je Paket
+    /// (ohne die Pakete in <see cref="Skip"/>) und meldet 100 Eingabe- und 20 Ausgabe-Tokens.
+    /// </summary>
     private sealed class FakeChat : HttpMessageHandler
     {
         public List<string> Requests { get; } = [];
+
+        public HashSet<string> Skip { get; } = [];
+
+        private static readonly System.Text.RegularExpressions.Regex Package = new(@"### ([a-z0-9.+-]+)");
 
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
         {
             var body = await request.Content!.ReadAsStringAsync(ct);
             Requests.Add(body);
-            var answer = body.Contains("pending updates on one server") ? "- Host summary" : "Package summary";
-            return new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+            var answer = body.Contains("pending updates on one server")
+                ? "- Host summary"
+                : string.Join("\n", Package.Matches(body).Select(m => m.Groups[1].Value).Where(n => !Skip.Contains(n)).Select(n => $"{n}: Package summary"));
+            var json = JsonSerializer.Serialize(new
             {
-                Content = new StringContent($$$"""{"choices":[{"message":{"role":"assistant","content":"{{{answer}}}"}}]}""", System.Text.Encoding.UTF8, "application/json"),
-            };
+                choices = new[] { new { message = new { role = "assistant", content = answer } } },
+                usage = new { prompt_tokens = 100, completion_tokens = 20 },
+            });
+            return new HttpResponseMessage(System.Net.HttpStatusCode.OK) { Content = new StringContent(json, System.Text.Encoding.UTF8, "application/json") };
         }
     }
 
@@ -221,36 +249,114 @@ public sealed class ChangelogTests : IDisposable
         public HttpClient CreateClient(string name) => new(handler, disposeHandler: false);
     }
 
+    private static AIOPatcher.Server.Services.Ai.UpdateSummaries Summaries(FakeChat chat)
+    {
+        var summaries = new AIOPatcher.Server.Services.Ai.UpdateSummaries(null!, new Microsoft.AspNetCore.DataProtection.EphemeralDataProtectionProvider(),
+            new AIOPatcher.Server.Services.Ai.AiClient(new Factory(chat)), new UpdateChangelogs(),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<AIOPatcher.Server.Services.Ai.UpdateSummaries>.Instance);
+        summaries.Use(new AiSettingsRecord { Enabled = true, Provider = "compatible", BaseUrl = "http://ollama:11434/v1", Model = "llama3.1", Language = "en" });
+        return summaries;
+    }
+
     [Fact]
-    public async Task Summaries_PerPackageAndPerHost_WithALocalModel()
+    public async Task Summaries_BundlePackages_SkipShortChangelogs_AndCountTokens()
     {
         var chat = new FakeChat();
-        var changelogs = new UpdateChangelogs();
-        var summaries = new AIOPatcher.Server.Services.Ai.UpdateSummaries(null!, new Microsoft.AspNetCore.DataProtection.EphemeralDataProtectionProvider(),
-            new AIOPatcher.Server.Services.Ai.AiClient(new Factory(chat)), changelogs, Microsoft.Extensions.Logging.Abstractions.NullLogger<AIOPatcher.Server.Services.Ai.UpdateSummaries>.Instance);
-        summaries.Use(new AiSettingsRecord { Enabled = true, Provider = "compatible", BaseUrl = "http://ollama:11434/v1", Model = "llama3.1", Language = "en" });
-
+        var summaries = Summaries(chat);
         var host = Host(supportsChangelog: true);
         _db.Hosts.Add(host);
         _db.PendingUpdates.Add(new PendingUpdate { Host = host, Name = "pve-manager", CurrentVersion = "8.2.10", AvailableVersion = "8.3.1" });
+        _db.PendingUpdates.Add(new PendingUpdate { Host = host, Name = "openssl", CurrentVersion = "3.0.15-1~deb12u1", AvailableVersion = "3.0.16-1~deb12u1", IsSecurity = true });
+        _db.PendingUpdates.Add(new PendingUpdate { Host = host, Name = "libssl3", CurrentVersion = "3.0.15-1~deb12u1", AvailableVersion = "3.0.16-1~deb12u1", IsSecurity = true });
         _db.PackageChangelogs.Add(new PackageChangelogRecord { Name = "pve-manager", Version = "8.3.1", Text = PveManager, FetchedAt = Now });
+        _db.PackageChangelogs.Add(new PackageChangelogRecord { Name = "openssl", Version = "3.0.16-1~deb12u1", Text = OpenSsl, FetchedAt = Now });
+        _db.PackageChangelogs.Add(new PackageChangelogRecord { Name = "libssl3", Version = "3.0.16-1~deb12u1", Text = OpenSsl, FetchedAt = Now });
         await _db.SaveChangesAsync();
 
         await summaries.RunHostAsync(_db, host.Id, Now, CancellationToken.None);
 
-        var record = await _db.PackageChangelogs.SingleAsync(c => c.Name == "pve-manager");
-        Assert.Equal("Package summary", record.Summary);
-        Assert.Equal("compatible/llama3.1", record.SummaryModel);
-        Assert.Equal("8.2.10", record.SummaryFrom);
-        Assert.Equal("- Host summary", (await _db.HostUpdateSummaries.SingleAsync(s => s.HostId == host.Id)).Text);
-
-        // an die KI gehen Paket, Versionen und nur die neuen Einträge - kein Host-Name
-        Assert.Contains("fix backup job editor", chat.Requests[0]);
+        // eine Anfrage für beide langen Changelogs, eine für den Host
+        Assert.Equal(2, chat.Requests.Count);
+        Assert.Contains("### libssl3", chat.Requests[0]);
+        Assert.Contains("### openssl", chat.Requests[0]);
+        Assert.DoesNotContain("pve-manager", chat.Requests[0]);
+        Assert.Contains("CVE-2024-13176", chat.Requests[0]);
         Assert.DoesNotContain("old entry the host already has", chat.Requests[0]);
-        Assert.DoesNotContain("\"pve\"", string.Join("", chat.Requests));
+        Assert.DoesNotContain("\"pve\"", string.Join("", chat.Requests)); // kein Host-Name
+
+        var openssl = await _db.PackageChangelogs.SingleAsync(c => c.Name == "openssl");
+        Assert.Equal("Package summary", openssl.Summary);
+        Assert.Equal("compatible/llama3.1", openssl.SummaryModel);
+        Assert.Equal("3.0.15-1~deb12u1", openssl.SummaryFrom);
+        Assert.Equal("Package summary", (await _db.PackageChangelogs.SingleAsync(c => c.Name == "libssl3")).Summary);
+
+        // kurzer Changelog: ohne KI, der Text selbst
+        var pve = await _db.PackageChangelogs.SingleAsync(c => c.Name == "pve-manager");
+        Assert.Equal(AIOPatcher.Server.Services.Ai.UpdateSummaries.FromChangelog, pve.SummaryModel);
+        Assert.Equal("ui: fix backup job editor. api: guard against empty node list. add new SDN features.", pve.Summary);
+
+        Assert.Equal("- Host summary", (await _db.HostUpdateSummaries.SingleAsync(s => s.HostId == host.Id)).Text);
+        var usage = await _db.AiUsage.SingleAsync();
+        Assert.Equal((2, 200L, 40L), (usage.Requests, usage.InputTokens, usage.OutputTokens));
+        Assert.Equal((2, 200L, 40L), await AIOPatcher.Server.Services.Ai.UpdateSummaries.UsageAsync(_db, Now, 30, CancellationToken.None));
 
         // nichts geändert: kein neuer Aufruf
         await summaries.RunHostAsync(_db, host.Id, Now, CancellationToken.None);
         Assert.Equal(2, chat.Requests.Count);
+    }
+
+    [Fact]
+    public async Task Summaries_MissingAnswer_IsRetriedOnlyAfterAWhile()
+    {
+        var chat = new FakeChat { Skip = { "libssl3" } };
+        var summaries = Summaries(chat);
+        var host = Host(supportsChangelog: true);
+        _db.Hosts.Add(host);
+        _db.PendingUpdates.Add(new PendingUpdate { Host = host, Name = "libssl3", CurrentVersion = "3.0.15-1~deb12u1", AvailableVersion = "3.0.16-1~deb12u1" });
+        _db.PackageChangelogs.Add(new PackageChangelogRecord { Name = "libssl3", Version = "3.0.16-1~deb12u1", Text = OpenSsl, FetchedAt = Now });
+        await _db.SaveChangesAsync();
+
+        await summaries.RunHostAsync(_db, host.Id, Now, CancellationToken.None);
+        var record = await _db.PackageChangelogs.SingleAsync();
+        Assert.Null(record.Summary);
+        Assert.NotNull(record.SummaryError);
+
+        // gleich danach (z. B. nächster Scan): nicht erneut an die KI
+        var before = chat.Requests.Count(r => r.Contains("### libssl3"));
+        await summaries.RunHostAsync(_db, host.Id, Now.AddHours(1), CancellationToken.None);
+        Assert.Equal(before, chat.Requests.Count(r => r.Contains("### libssl3")));
+
+        chat.Skip.Clear();
+        await summaries.RunHostAsync(_db, host.Id, Now + AIOPatcher.Server.Services.Ai.UpdateSummaries.RetryErrorsAfter + TimeSpan.FromMinutes(1), CancellationToken.None);
+        Assert.Equal("Package summary", (await _db.PackageChangelogs.SingleAsync()).Summary);
+    }
+
+    [Fact]
+    public void ParsePackageAnswer_AcceptsCommonFormats()
+    {
+        var parsed = AIOPatcher.Server.Services.Ai.UpdateSummaries.ParsePackageAnswer("""
+            Here are the summaries:
+            - **openssl**: Fixes CVE-2024-13176.
+            Note: restart services that use TLS.
+            `libssl3`: Same fixes as openssl.
+            ### vim
+            vim: New upstream release.
+            unknown-package: ignored
+            """, ["openssl", "libssl3", "vim", "curl"]);
+
+        Assert.Equal("Fixes CVE-2024-13176. Note: restart services that use TLS.", parsed["openssl"]);
+        Assert.Equal("Same fixes as openssl.", parsed["libssl3"]);
+        Assert.Equal("New upstream release.", parsed["vim"]);
+        Assert.False(parsed.ContainsKey("curl"));
+        Assert.Equal(3, parsed.Count);
+    }
+
+    [Fact]
+    public void Brief_ShortChangelogsNeedNoAi()
+    {
+        Assert.Equal("New upstream release.", AIOPatcher.Server.Services.Ai.UpdateSummaries.Brief(
+            [new UpdateChangelogs.Section("1.2-1", null, "  [ Jane Doe ]\n  * New upstream release.")]));
+        Assert.Equal("", AIOPatcher.Server.Services.Ai.UpdateSummaries.Brief([]));
+        Assert.Null(AIOPatcher.Server.Services.Ai.UpdateSummaries.Brief(UpdateChangelogs.Since(OpenSsl, "3.0.15-1~deb12u1")));
     }
 }

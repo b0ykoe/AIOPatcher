@@ -62,7 +62,9 @@ public static class ChangelogEndpoints
     private static ChangelogDto Ready(PackageChangelogRecord entry, string name, string? from, string version) =>
         entry.Text is { } text
             ? new ChangelogDto("ready", name, from, version, UpdateChangelogs.Since(text, from), FetchedAt: entry.FetchedAt,
-                Summary: entry.Summary, SummaryError: entry.SummaryError, SummaryModel: entry.SummaryModel)
+                // kurzer Changelog ohne KI: steht ohnehin darunter
+                Summary: entry.SummaryModel == UpdateSummaries.FromChangelog ? null : entry.Summary, SummaryError: entry.SummaryError,
+                SummaryModel: entry.SummaryModel)
             : new ChangelogDto("unavailable", name, from, version, Error: entry.Error, FetchedAt: entry.FetchedAt);
 
     /// <summary>Patchnotes nach Paket und Version (z. B. aus der Historie eines Patch-Jobs, das Update steht nicht mehr an).</summary>

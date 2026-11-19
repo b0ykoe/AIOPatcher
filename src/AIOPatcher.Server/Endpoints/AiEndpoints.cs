@@ -11,8 +11,13 @@ namespace AIOPatcher.Server.Endpoints;
 public static class AiEndpoints
 {
     /// <param name="HasApiKey">Ein Schlüssel ist gespeichert (der Schlüssel selbst verlässt den Server nie).</param>
+    /// <param name="Usage">Verbrauch der letzten Tage laut Anbieter.</param>
     public sealed record AiSettingsDto(bool Enabled, string Provider, string Model, string DefaultModel, string? BaseUrl, bool HasApiKey, string Language,
-        string? UpdatedBy, DateTime? UpdatedAt);
+        string? UpdatedBy, DateTime? UpdatedAt, AiUsageDto Usage);
+
+    public sealed record AiUsageDto(int Days, int Requests, long InputTokens, long OutputTokens);
+
+    private const int UsageDays = 30;
 
     /// <param name="ApiKey">null = unverändert lassen, "" = löschen.</param>
     public sealed record AiSettingsRequest(bool Enabled, string Provider, string? Model, string? BaseUrl, string? ApiKey, string Language);
@@ -22,14 +27,18 @@ public static class AiEndpoints
     public static void MapAiEndpoints(this IEndpointRouteBuilder app)
     {
         var admin = app.MapGroup("/api/settings/ai").RequireAuthorization(UserAccounts.AdminPolicy);
-        admin.MapGet("", (UpdateSummaries summaries) => Dto(summaries.Settings, summaries));
+        admin.MapGet("", (UpdateSummaries summaries, AppDbContext db, CancellationToken ct) => DtoAsync(summaries.Settings, summaries, db, ct));
         admin.MapPut("", SaveAsync);
         admin.MapPost("/test", TestAsync);
     }
 
-    private static AiSettingsDto Dto(AiSettingsRecord s, UpdateSummaries summaries) =>
-        new(s.Enabled, s.Provider, s.Model, AiClient.DefaultModel(s.Provider), s.BaseUrl, !string.IsNullOrEmpty(s.ProtectedApiKey) && summaries.ApiKeyOf(s) is not null,
-            s.Language, s.UpdatedBy, s.UpdatedAt);
+    private static async Task<AiSettingsDto> DtoAsync(AiSettingsRecord s, UpdateSummaries summaries, AppDbContext db, CancellationToken ct)
+    {
+        var (requests, input, output) = await UpdateSummaries.UsageAsync(db, DateTime.UtcNow, UsageDays, ct);
+        return new(s.Enabled, s.Provider, s.Model, AiClient.DefaultModel(s.Provider), s.BaseUrl,
+            !string.IsNullOrEmpty(s.ProtectedApiKey) && summaries.ApiKeyOf(s) is not null, s.Language, s.UpdatedBy, s.UpdatedAt,
+            new AiUsageDto(UsageDays, requests, input, output));
+    }
 
     private static Dictionary<string, string[]> Validate(AiSettingsRequest request)
     {
@@ -115,11 +124,11 @@ public static class AiEndpoints
             }
         }
 
-        return Results.Ok(Dto(row, summaries));
+        return Results.Ok(await DtoAsync(row, summaries, db, ct));
     }
 
     /// <summary>Probeanfrage mit den Werten aus dem Formular (noch nicht gespeichert); ohne neuen Schlüssel gilt der gespeicherte.</summary>
-    private static async Task<IResult> TestAsync(AiSettingsRequest request, UpdateSummaries summaries, CancellationToken ct)
+    private static async Task<IResult> TestAsync(AiSettingsRequest request, UpdateSummaries summaries, AppDbContext db, CancellationToken ct)
     {
         if (Validate(request) is { Count: > 0 } errors)
         {
@@ -129,7 +138,7 @@ public static class AiEndpoints
         var probe = Apply(new AiSettingsRecord { ProtectedApiKey = summaries.Settings.ProtectedApiKey }, request, summaries);
         try
         {
-            var text = await summaries.TestAsync(probe, summaries.ApiKeyOf(probe), ct);
+            var text = await summaries.TestAsync(db, probe, summaries.ApiKeyOf(probe), DateTime.UtcNow, ct);
             return Results.Ok(new AiTestResult(true, text, null));
         }
         catch (AiException ex)

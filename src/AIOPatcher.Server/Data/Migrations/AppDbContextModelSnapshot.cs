@@ -105,6 +105,25 @@ namespace AIOPatcher.Server.Data.Migrations
                     b.ToTable("AiSettings", (string)null);
                 });
 
+            modelBuilder.Entity("AIOPatcher.Server.Data.AiUsageDay", b =>
+                {
+                    b.Property<DateOnly>("Day")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("InputTokens")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("OutputTokens")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Requests")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Day");
+
+                    b.ToTable("AiUsage", (string)null);
+                });
+
             modelBuilder.Entity("AIOPatcher.Server.Data.ApiToken", b =>
                 {
                     b.Property<Guid>("Id")

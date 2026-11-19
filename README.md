@@ -148,7 +148,9 @@ tested against real systems, but against mocked APIs and unit tests):
 - **AI summaries** (optional, *Settings → AI*): Claude, ChatGPT or a local model (Ollama, LM Studio, vLLM or any
   OpenAI-compatible API) summarizes the release notes automatically: per package in 1 to 3 sentences and per host as
   "What do these updates bring?". Only package names, versions and changelog texts are sent, no host names or
-  addresses; the API key is stored encrypted. Each package version is summarized once for all hosts.
+  addresses; the API key is stored encrypted. Each package version is summarized once for all hosts, packages are
+  bundled into requests of 25, short changelogs are shown as they are without the AI, and the settings page shows
+  the token usage of the last 30 days.
 - **Program inventory**: dpkg/snap and Windows programs, with available version and links (winget manifest,
   Debian tracker, Launchpad, vendor); on Windows **program updates via winget** (Windows 10/11, Server 2025)
 - **Docker containers**: detects newer images in the registry (display/notification only, updates nothing). The agent reports

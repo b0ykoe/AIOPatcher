@@ -218,6 +218,8 @@ export interface AiSettings {
   language: "de" | "en";
   updatedBy: string | null;
   updatedAt: string | null;
+  /** Verbrauch der letzten Tage laut Anbieter */
+  usage: { days: number; requests: number; inputTokens: number; outputTokens: number };
 }
 
 /** "Was bringen diese Updates?" eines Hosts */

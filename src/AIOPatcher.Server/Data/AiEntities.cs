@@ -57,3 +57,15 @@ public sealed class HostUpdateSummary
 
     public DateTime CreatedAt { get; set; }
 }
+
+/// <summary>Verbrauch der KI je Tag (Anfragen und Tokens laut Anbieter), für den Hinweis unter Einstellungen → KI.</summary>
+public sealed class AiUsageDay
+{
+    public DateOnly Day { get; set; }
+
+    public int Requests { get; set; }
+
+    public long InputTokens { get; set; }
+
+    public long OutputTokens { get; set; }
+}
