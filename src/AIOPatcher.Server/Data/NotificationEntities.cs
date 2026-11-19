@@ -34,6 +34,9 @@ public enum NotificationEvents
 
     /// <summary>Proxmox Backup Server: Task fehlgeschlagen, Datastore fast voll oder nicht verfügbar, Backup zu alt.</summary>
     BackupProblem = 16384,
+
+    /// <summary>Site-Sharing: Freigabe angenommen oder beendet, Einladung verbrannt, Aktion einer anderen Instanz.</summary>
+    SharingActivity = 32768,
 }
 
 public enum ChannelType
@@ -57,6 +60,10 @@ public sealed class NotificationChannel
     /// <summary>Nur Ereignisse dieser Site. null = alle Sites.</summary>
     public Guid? SiteId { get; set; }
     public Site? Site { get; set; }
+
+    /// <summary>Nur Ereignisse dieser geteilten Site (Site einer anderen Instanz). Solche Ereignisse gehen nur an Kanäle, die sie ausdrücklich gewählt haben.</summary>
+    public Guid? RemoteSiteId { get; set; }
+    public RemoteSite? RemoteSite { get; set; }
 
     /// <summary>Konfiguration als JSON, per Data Protection verschlüsselt (enthält Tokens/Passwörter).</summary>
     public required string ProtectedConfig { get; set; }

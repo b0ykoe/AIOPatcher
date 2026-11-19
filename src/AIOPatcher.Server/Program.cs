@@ -184,6 +184,12 @@ builder.Services.AddHostedService(sp => sp.GetRequiredService<CveMirror>());
 builder.Services.AddSingleton<CveLookupService>();
 builder.Services.AddHostedService<ContainerUpdateService>();
 builder.Services.AddSingleton<PublicAccess>();
+builder.Services.AddSingleton<AIOPatcher.Server.Services.Federation.ServerIdentity>();
+builder.Services.AddSingleton<AIOPatcher.Server.Services.Federation.FederationClient>();
+builder.Services.AddSingleton<AIOPatcher.Server.Services.Federation.ShareActionLimiter>();
+builder.Services.AddScoped<AIOPatcher.Server.Services.Federation.SharingService>();
+builder.Services.AddScoped<AIOPatcher.Server.Services.Federation.RemoteSites>();
+builder.Services.AddHostedService<AIOPatcher.Server.Services.Federation.FederationSync>();
 builder.Services.AddSingleton<ScanSchedule>();
 builder.Services.AddSingleton<UpdateChangelogs>();
 builder.Services.AddHttpClient("ai", c => c.Timeout = TimeSpan.FromMinutes(5)); // lokale Modelle brauchen etwas
@@ -210,6 +216,7 @@ using (var scope = app.Services.CreateScope())
     await app.Services.GetRequiredService<FeatureFlags>().LoadAsync(db, CancellationToken.None);
     await app.Services.GetRequiredService<AIOPatcher.Server.Services.Sso.SsoService>().LoadAsync(db, CancellationToken.None);
     await app.Services.GetRequiredService<PublicAccess>().LoadAsync(db, CancellationToken.None);
+    await app.Services.GetRequiredService<AIOPatcher.Server.Services.Federation.ServerIdentity>().LoadAsync(db, CancellationToken.None);
     await app.Services.GetRequiredService<ScanSchedule>().LoadAsync(db, CancellationToken.None);
     await app.Services.GetRequiredService<AIOPatcher.Server.Services.Ai.UpdateSummaries>().LoadAsync(db, CancellationToken.None);
 }
@@ -267,11 +274,15 @@ app.MapScanSettingsEndpoints();
 app.MapChangelogEndpoints();
 app.MapAiEndpoints();
 app.MapPasskeyEndpoints();
+app.MapSharingEndpoints();
+app.MapRemoteSiteEndpoints();
+app.MapFederationEndpoints();
 app.MapOpenApi("/api/openapi/{documentName}.json").RequireAuthorization();
 app.MapAgentEndpoints();
 app.MapAgentDownloadEndpoints();
 
 app.MapFallback("/api/{**path}", () => Results.NotFound());
+app.MapFallback("/federation/{**path}", () => Results.NotFound());
 app.MapFallbackToFile("index.html");
 
 app.Logger.LogInformation("Dashboard: https://{Host}:{DashboardPort}  |  Agent-API: https://{Host}:{AgentPort}  |  Proxy-Port (HTTP): {ProxyPort}",

@@ -117,6 +117,52 @@ public sealed class CertificateAuthority
         return request.Create(_caWithKey, now.AddMinutes(-5), now.Add(ClientCertLifetime), serial);
     }
 
+    private const string PeerOrganization = "AIOPatcher Peer";
+    private const string PeerUriPrefix = "urn:aiopatcher:peer:";
+
+    /// <summary>
+    /// Client-Zertifikat für eine andere AIOPatcher-Instanz (Site-Sharing). Eigene Organisation und SAN-Kennung, damit
+    /// es nie als Agent gilt und ein Agent-Zertifikat nie als Gegenstelle.
+    /// </summary>
+    public X509Certificate2 IssuePeerCertificate(string csrPem, Guid peerId, TimeSpan lifetime)
+    {
+        var csr = CertificateRequest.LoadSigningRequestPem(csrPem, HashAlgorithmName.SHA256);
+        EnsureAcceptableKey(csr.PublicKey);
+
+        var request = new CertificateRequest(new X500DistinguishedName($"CN=peer-{peerId}, O={PeerOrganization}"), csr.PublicKey, HashAlgorithmName.SHA256);
+        request.CertificateExtensions.Add(new X509BasicConstraintsExtension(false, false, 0, true));
+        request.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature, true));
+        request.CertificateExtensions.Add(new X509EnhancedKeyUsageExtension([new Oid(ClientAuthOid)], false));
+        request.CertificateExtensions.Add(new X509SubjectKeyIdentifierExtension(request.PublicKey, false));
+        request.CertificateExtensions.Add(X509AuthorityKeyIdentifierExtension.CreateFromCertificate(_caWithKey, true, false));
+
+        var san = new SubjectAlternativeNameBuilder();
+        san.AddUri(new Uri(PeerUriPrefix + peerId));
+        request.CertificateExtensions.Add(san.Build());
+
+        var now = DateTimeOffset.UtcNow;
+        var serial = RandomNumberGenerator.GetBytes(16);
+        serial[0] &= 0x7F;
+        return request.Create(_caWithKey, now.AddMinutes(-5), now.Add(lifetime), serial);
+    }
+
+    /// <summary>Gegenstellen-Zertifikat (Site-Sharing)? Solche Zertifikate gelten nie als Agent.</summary>
+    public static bool IsPeerCertificate(X509Certificate2 certificate) =>
+        certificate.SubjectName.EnumerateRelativeDistinguishedNames()
+            .Any(rdn => rdn.GetSingleElementType().Value == "2.5.4.10" && rdn.GetSingleElementValue() == PeerOrganization);
+
+    /// <summary>ID der Gegenstelle (CN "peer-{id}" eines Gegenstellen-Zertifikats), sonst null.</summary>
+    public static Guid? GetPeerId(X509Certificate2 certificate)
+    {
+        if (!IsPeerCertificate(certificate))
+        {
+            return null;
+        }
+
+        var cn = certificate.GetNameInfo(X509NameType.SimpleName, forIssuer: false);
+        return cn.StartsWith("peer-", StringComparison.Ordinal) && Guid.TryParse(cn["peer-".Length..], out var id) ? id : null;
+    }
+
     /// <summary>Fingerprint, über den Agents in der Datenbank identifiziert werden.</summary>
     public static string GetIdentityThumbprint(X509Certificate2 certificate) =>
         certificate.GetCertHashString(HashAlgorithmName.SHA256);

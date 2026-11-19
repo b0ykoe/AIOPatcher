@@ -21,7 +21,8 @@ public sealed record Notification(
     NotificationSeverity Severity,
     Guid? SiteId = null,
     Guid? HostId = null,
-    string? LinkPath = null)
+    string? LinkPath = null,
+    Guid? RemoteSiteId = null)
 {
     public DateTime CreatedAt { get; init; } = DateTime.UtcNow;
 }
@@ -68,8 +69,13 @@ public sealed class NotificationDispatcher(
         using var scope = scopes.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
+        // Geteilte Sites (andere Instanz) nur an Kanäle, die sie ausdrücklich gewählt haben.
+        System.Linq.Expressions.Expression<Func<NotificationChannel, bool>> channelFilter = notification.RemoteSiteId == null
+            ? c => c.RemoteSiteId == null && (c.SiteId == null || c.SiteId == notification.SiteId)
+            : c => c.RemoteSiteId == notification.RemoteSiteId;
         var channels = await db.NotificationChannels
-            .Where(c => c.Enabled && (c.SiteId == null || c.SiteId == notification.SiteId))
+            .Where(c => c.Enabled)
+            .Where(channelFilter)
             .ToListAsync(ct);
 
         foreach (var channel in channels.Where(c => (c.Events & notification.Event) != 0))

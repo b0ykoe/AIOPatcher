@@ -484,6 +484,66 @@ namespace AIOPatcher.Server.Data.Migrations
                     b.ToTable("EnrollmentTokens");
                 });
 
+            modelBuilder.Entity("AIOPatcher.Server.Data.FederationPeer", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CertificateExpiresAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CertificateThumbprint")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("InstanceId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("LastSeenAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("LastSeenIp")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("PendingCertificateExpiresAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PendingCertificateThumbprint")
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("RevokedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RevokedBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Version")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CertificateThumbprint")
+                        .IsUnique();
+
+                    b.HasIndex("PendingCertificateThumbprint");
+
+                    b.ToTable("FederationPeers");
+                });
+
             modelBuilder.Entity("AIOPatcher.Server.Data.FirewallProfile", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1392,6 +1452,9 @@ namespace AIOPatcher.Server.Data.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid?>("RemoteSiteId")
+                        .HasColumnType("TEXT");
+
                     b.Property<Guid?>("SiteId")
                         .HasColumnType("TEXT");
 
@@ -1401,6 +1464,8 @@ namespace AIOPatcher.Server.Data.Migrations
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("RemoteSiteId");
 
                     b.HasIndex("SiteId");
 
@@ -1704,6 +1769,145 @@ namespace AIOPatcher.Server.Data.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("PublicAccessSettings", (string)null);
+                });
+
+            modelBuilder.Entity("AIOPatcher.Server.Data.RemoteInstance", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("BaseUrl")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CaCertificatePem")
+                        .IsRequired()
+                        .HasMaxLength(8000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CaFingerprint")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Capabilities")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CertificateExpiresAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CertificatePem")
+                        .IsRequired()
+                        .HasMaxLength(8000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("InstanceId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("LastSuccessAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("LastSyncAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ProtectedKey")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Version")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("RemoteInstances");
+                });
+
+            modelBuilder.Entity("AIOPatcher.Server.Data.RemoteSite", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Data")
+                        .HasMaxLength(32)
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime?>("EndedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("ExpiresAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("JobsCheckedUntil")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Level")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("LocalName")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("RemoteInstanceId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("RemoteSiteId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ShareId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("SnapshotAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SnapshotJson")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RemoteInstanceId");
+
+                    b.HasIndex("ShareId")
+                        .IsUnique();
+
+                    b.ToTable("RemoteSites");
                 });
 
             modelBuilder.Entity("AIOPatcher.Server.Data.Runbook", b =>
@@ -2014,6 +2218,86 @@ namespace AIOPatcher.Server.Data.Migrations
                     b.ToTable("ScanSettings", (string)null);
                 });
 
+            modelBuilder.Entity("AIOPatcher.Server.Data.ServerIdentityRecord", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("InstanceId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("ServerIdentity", (string)null);
+                });
+
+            modelBuilder.Entity("AIOPatcher.Server.Data.ShareInvite", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("BurnedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CodeHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Data")
+                        .HasMaxLength(32)
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("FailedAttempts")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Level")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("RevokedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("ShareDays")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("SiteId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("UsedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("UsedByPeerId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SiteId");
+
+                    b.ToTable("ShareInvites");
+                });
+
             modelBuilder.Entity("AIOPatcher.Server.Data.Site", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2040,6 +2324,60 @@ namespace AIOPatcher.Server.Data.Migrations
                         .IsUnique();
 
                     b.ToTable("Sites");
+                });
+
+            modelBuilder.Entity("AIOPatcher.Server.Data.SiteShare", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Data")
+                        .HasMaxLength(32)
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime?>("EndedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("EndedBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("ExpiresAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("InviteId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("LastAccessAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Level")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("PeerId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("SiteId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SiteId");
+
+                    b.HasIndex("PeerId", "SiteId");
+
+                    b.ToTable("SiteShares");
                 });
 
             modelBuilder.Entity("AIOPatcher.Server.Data.SsoSettingsRecord", b =>
@@ -2565,10 +2903,17 @@ namespace AIOPatcher.Server.Data.Migrations
 
             modelBuilder.Entity("AIOPatcher.Server.Data.NotificationChannel", b =>
                 {
+                    b.HasOne("AIOPatcher.Server.Data.RemoteSite", "RemoteSite")
+                        .WithMany()
+                        .HasForeignKey("RemoteSiteId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
                     b.HasOne("AIOPatcher.Server.Data.Site", "Site")
                         .WithMany()
                         .HasForeignKey("SiteId")
                         .OnDelete(DeleteBehavior.Cascade);
+
+                    b.Navigation("RemoteSite");
 
                     b.Navigation("Site");
                 });
@@ -2620,6 +2965,17 @@ namespace AIOPatcher.Server.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("Host");
+                });
+
+            modelBuilder.Entity("AIOPatcher.Server.Data.RemoteSite", b =>
+                {
+                    b.HasOne("AIOPatcher.Server.Data.RemoteInstance", "Instance")
+                        .WithMany("Sites")
+                        .HasForeignKey("RemoteInstanceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Instance");
                 });
 
             modelBuilder.Entity("AIOPatcher.Server.Data.RunbookRun", b =>
@@ -2692,6 +3048,36 @@ namespace AIOPatcher.Server.Data.Migrations
                     b.Navigation("Wave");
                 });
 
+            modelBuilder.Entity("AIOPatcher.Server.Data.ShareInvite", b =>
+                {
+                    b.HasOne("AIOPatcher.Server.Data.Site", "Site")
+                        .WithMany()
+                        .HasForeignKey("SiteId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Site");
+                });
+
+            modelBuilder.Entity("AIOPatcher.Server.Data.SiteShare", b =>
+                {
+                    b.HasOne("AIOPatcher.Server.Data.FederationPeer", "Peer")
+                        .WithMany("Shares")
+                        .HasForeignKey("PeerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("AIOPatcher.Server.Data.Site", "Site")
+                        .WithMany()
+                        .HasForeignKey("SiteId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Peer");
+
+                    b.Navigation("Site");
+                });
+
             modelBuilder.Entity("AIOPatcher.Server.Data.Subnet", b =>
                 {
                     b.HasOne("AIOPatcher.Server.Data.Site", "Site")
@@ -2729,6 +3115,11 @@ namespace AIOPatcher.Server.Data.Migrations
                     b.Navigation("Hosts");
                 });
 
+            modelBuilder.Entity("AIOPatcher.Server.Data.FederationPeer", b =>
+                {
+                    b.Navigation("Shares");
+                });
+
             modelBuilder.Entity("AIOPatcher.Server.Data.FirewallProfile", b =>
                 {
                     b.Navigation("Versions");
@@ -2750,6 +3141,11 @@ namespace AIOPatcher.Server.Data.Migrations
             modelBuilder.Entity("AIOPatcher.Server.Data.PatchJob", b =>
                 {
                     b.Navigation("LogEntries");
+                });
+
+            modelBuilder.Entity("AIOPatcher.Server.Data.RemoteInstance", b =>
+                {
+                    b.Navigation("Sites");
                 });
 
             modelBuilder.Entity("AIOPatcher.Server.Data.Runbook", b =>

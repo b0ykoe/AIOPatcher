@@ -72,6 +72,12 @@ public static class PublicChannelGate
                 return;
             }
 
+            if (CertificateAuthority.IsPeerCertificate(certificate))
+            {
+                ctx.Response.StatusCode = StatusCodes.Status401Unauthorized; // Gegenstelle (Site-Sharing) ist kein Agent
+                return;
+            }
+
             ctx.Items[CertificateItem] = certificate;
         }
 
@@ -81,7 +87,15 @@ public static class PublicChannelGate
             return;
         }
 
-        // Antwort puffern und signieren (an die Nonce der Anfrage gebunden)
+        await RunSignedAsync(ctx, next, ca);
+    }
+
+    /// <summary>
+    /// Führt die Anfrage aus und signiert die Antwort mit dem Server-Zertifikat, gebunden an die Nonce der Anfrage
+    /// (auch für den Föderationsweg, siehe <see cref="FederationGate"/>).
+    /// </summary>
+    public static async Task RunSignedAsync(HttpContext ctx, Func<Task> next, CertificateAuthority ca)
+    {
         var nonce = ctx.Request.Headers[PublicChannel.NonceHeader].ToString();
         var original = ctx.Response.Body;
         using var buffer = new MemoryStream();

@@ -39,6 +39,12 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<HostMetricSample> MetricSamples => Set<HostMetricSample>();
     public DbSet<SsoSettingsRecord> SsoSettings => Set<SsoSettingsRecord>();
     public DbSet<PublicAccessSettingsRecord> PublicAccessSettings => Set<PublicAccessSettingsRecord>();
+    public DbSet<ServerIdentityRecord> ServerIdentity => Set<ServerIdentityRecord>();
+    public DbSet<ShareInvite> ShareInvites => Set<ShareInvite>();
+    public DbSet<FederationPeer> FederationPeers => Set<FederationPeer>();
+    public DbSet<SiteShare> SiteShares => Set<SiteShare>();
+    public DbSet<RemoteInstance> RemoteInstances => Set<RemoteInstance>();
+    public DbSet<RemoteSite> RemoteSites => Set<RemoteSite>();
     public DbSet<ScanSettingsRecord> ScanSettings => Set<ScanSettingsRecord>();
     public DbSet<PackageChangelogRecord> PackageChangelogs => Set<PackageChangelogRecord>();
     public DbSet<AiSettingsRecord> AiSettings => Set<AiSettingsRecord>();
@@ -177,6 +183,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             e.Property(x => x.Events).HasConversion<int>();
             e.Property(x => x.LastError).HasMaxLength(500);
             e.HasOne(x => x.Site).WithMany().HasForeignKey(x => x.SiteId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.RemoteSite).WithMany().HasForeignKey(x => x.RemoteSiteId).OnDelete(DeleteBehavior.Cascade);
         });
 
         b.Entity<PatchFreeze>(e =>
@@ -238,6 +245,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             e.Property(x => x.Key).HasMaxLength(64);
             e.Property(x => x.ChangedBy).HasMaxLength(100);
         });
+
+        FederationModel.Configure(b);
 
         b.Entity<PublicAccessSettingsRecord>(e =>
         {

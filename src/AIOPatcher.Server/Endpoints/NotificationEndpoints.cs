@@ -11,8 +11,8 @@ public static class NotificationEndpoints
     /// <summary>Platzhalter für gespeicherte Geheimnisse: kommt er zurück, bleibt der alte Wert.</summary>
     public const string SecretMask = "••••••••";
 
-    public sealed record ChannelDto(Guid Id, string Name, ChannelType Type, bool Enabled, string[] Events, Guid? SiteId, ChannelConfig Config, DateTime? LastSentAt, string? LastError);
-    public sealed record ChannelRequest(string Name, ChannelType Type, bool Enabled, string[] Events, Guid? SiteId, ChannelConfig Config);
+    public sealed record ChannelDto(Guid Id, string Name, ChannelType Type, bool Enabled, string[] Events, Guid? SiteId, ChannelConfig Config, DateTime? LastSentAt, string? LastError, Guid? RemoteSiteId);
+    public sealed record ChannelRequest(string Name, ChannelType Type, bool Enabled, string[] Events, Guid? SiteId, ChannelConfig Config, Guid? RemoteSiteId = null);
 
     public static readonly NotificationEvents[] AllEvents = Enum.GetValues<NotificationEvents>().Where(e => e != NotificationEvents.None).ToArray();
 
@@ -36,13 +36,19 @@ public static class NotificationEndpoints
             return problem;
         }
 
+        if (await UnknownRemoteSite(request, db, ct) is { } unknown)
+        {
+            return unknown;
+        }
+
         var channel = new NotificationChannel
         {
             Name = request.Name.Trim(),
             Type = request.Type,
             Enabled = request.Enabled,
             Events = ParseEvents(request.Events),
-            SiteId = request.SiteId,
+            SiteId = request.RemoteSiteId is null ? request.SiteId : null,
+            RemoteSiteId = request.RemoteSiteId,
             ProtectedConfig = senders.Protect(request.Config),
         };
         db.NotificationChannels.Add(channel);
@@ -77,11 +83,17 @@ public static class NotificationEndpoints
             return problem;
         }
 
+        if (await UnknownRemoteSite(request, db, ct) is { } unknown)
+        {
+            return unknown;
+        }
+
         channel.Name = request.Name.Trim();
         channel.Type = request.Type;
         channel.Enabled = request.Enabled;
         channel.Events = ParseEvents(request.Events);
-        channel.SiteId = request.SiteId;
+        channel.SiteId = request.RemoteSiteId is null ? request.SiteId : null;
+        channel.RemoteSiteId = request.RemoteSiteId;
         channel.ProtectedConfig = senders.Protect(merged);
         audit.Add("notification.channel.updated", $"{channel.Name} ({channel.Type})");
         await db.SaveChangesAsync(ct);
@@ -129,6 +141,11 @@ public static class NotificationEndpoints
             : Results.Problem(L.T($"Senden fehlgeschlagen: {error}", $"Sending failed: {error}"), statusCode: StatusCodes.Status502BadGateway);
     }
 
+    private static async Task<IResult?> UnknownRemoteSite(ChannelRequest request, AppDbContext db, CancellationToken ct) =>
+        request.RemoteSiteId is { } id && !await db.RemoteSites.AnyAsync(r => r.Id == id, ct)
+            ? Results.ValidationProblem(new Dictionary<string, string[]> { ["remoteSiteId"] = [L.T("Geteilte Site existiert nicht.", "Shared site does not exist.")] })
+            : null;
+
     private static IResult? Validate(ChannelRequest request)
     {
         var errors = new Dictionary<string, string[]>();
@@ -170,6 +187,6 @@ public static class NotificationEndpoints
         }
 
         var events = AllEvents.Where(e => (c.Events & e) != 0).Select(e => e.ToString()).ToArray();
-        return new ChannelDto(c.Id, c.Name, c.Type, c.Enabled, events, c.SiteId, config, c.LastSentAt, c.LastError);
+        return new ChannelDto(c.Id, c.Name, c.Type, c.Enabled, events, c.SiteId, config, c.LastSentAt, c.LastError, c.RemoteSiteId);
     }
 }

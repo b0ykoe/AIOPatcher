@@ -52,6 +52,9 @@ public enum Feature
 
     /// <summary>Proxmox VE: Gäste ohne Backup-Job und fehlgeschlagene Backup-Läufe prüfen und melden (sonst nur Jobs anzeigen).</summary>
     BackupJobChecks,
+
+    /// <summary>Site-Sharing: Sites mit anderen AIOPatcher-Instanzen teilen (über die externe Dashboard-Adresse).</summary>
+    SiteSharing,
 }
 
 public enum FeatureRisk
@@ -98,6 +101,7 @@ public sealed class FeatureFlags(AIOPatcherOptions options)
         new(Feature.OpnsenseUpdates, false, FeatureRisk.High, "integrations"),
         new(Feature.BackupJobChecks, false, FeatureRisk.Low, "integrations"),
         new(Feature.ApiTokens, true, FeatureRisk.Medium, "access"),
+        new(Feature.SiteSharing, false, FeatureRisk.Medium, "access"),
         new(Feature.CveLookup, true, FeatureRisk.Low, "external"),
         new(Feature.ContainerChecks, true, FeatureRisk.Low, "external"),
         new(Feature.ReleaseCheck, true, FeatureRisk.Low, "external"),
@@ -217,6 +221,7 @@ public sealed class FeatureFlags(AIOPatcherOptions options)
         Feature.Metrics => german ? "Auslastung erfassen" : "Collect utilization",
         Feature.MonitoringClients => german ? "Monitoring-Clients verwalten" : "Manage monitoring clients",
         Feature.BackupJobChecks => german ? "Backup-Jobs prüfen" : "Check backup jobs",
+        Feature.SiteSharing => german ? "Sites teilen" : "Share sites",
         _ => feature.ToString(),
     };
 }
