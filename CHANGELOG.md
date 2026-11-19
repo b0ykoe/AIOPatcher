@@ -9,6 +9,8 @@ Written for users, not as a list of commits.
 ## [Unreleased]
 
 ### Fixed
+- **Saving a patch plan failed with "An error occurred while processing your request":** changes to an existing plan
+  were not saved (error 500, "FOREIGN KEY constraint failed" in the log). Editing plans works again.
 - **Check now really checks:** the button could show an old result when the automatic check had run shortly before,
   so a new version did not show up. It now always asks GitHub (only double clicks within 10 seconds are skipped) and
   says which version GitHub reports as the latest. A refused request (GitHub limit) is named as such.

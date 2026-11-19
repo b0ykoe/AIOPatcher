@@ -150,7 +150,7 @@ public static class RunbookEndpoints
         return Results.Created($"/api/runbooks/{runbook.Id}", ToDto(await WithDetails(db).SingleAsync(r => r.Id == runbook.Id, ct), null, clock, await MembersAsync(db, ct)));
     }
 
-    private static async Task<IResult> UpdateRunbook(Guid id, RunbookRequest request, AppDbContext db, ServerClock clock, AuditLog audit, CancellationToken ct)
+    public static async Task<IResult> UpdateRunbook(Guid id, RunbookRequest request, AppDbContext db, ServerClock clock, AuditLog audit, CancellationToken ct)
     {
         var runbook = await db.Runbooks.Include(r => r.Waves).ThenInclude(w => w.Hosts).SingleOrDefaultAsync(r => r.Id == id, ct);
         if (runbook is null)
@@ -297,6 +297,9 @@ public static class RunbookEndpoints
             IncludeOthers = w.IncludeOthers,
             Hosts = (w.HostIds ?? []).Select(id => new RunbookWaveHost { HostId = id }).ToList(),
         }).ToList();
+        // Ausdrücklich als neu hinzufügen: Die Gruppen haben ihre Id schon (Guid.NewGuid). Über einen geladenen Plan
+        // entdeckt, hielte EF Core sie sonst für vorhanden und schickte UPDATE statt INSERT (FOREIGN KEY constraint failed).
+        db.RunbookWaves.AddRange(runbook.Waves);
         return null;
     }
 
