@@ -494,6 +494,7 @@ public static class ComplianceBaselines
         SystemChangeKind.FirewallApply or SystemChangeKind.FirewallRestoreOriginal => Feature.FirewallManagement,
         SystemChangeKind.RemoteAccessFix or SystemChangeKind.RemoteAccessRevert or SystemChangeKind.RemoteAccessSet => Feature.RemoteAccessFixes,
         SystemChangeKind.AutoUpdatesOff or SystemChangeKind.AutoUpdatesOn => Feature.AutoUpdateControl,
+        SystemChangeKind.MonitoringInstall or SystemChangeKind.MonitoringConfigure or SystemChangeKind.MonitoringUninstall => Feature.MonitoringClients,
         _ => Feature.UserManagement,
     };
 }

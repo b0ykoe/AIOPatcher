@@ -80,6 +80,7 @@ public abstract class ServerModule
         new ComplianceServerModule(AgentModules.Firewall, ModuleActions.Status),
         new ComplianceServerModule(AgentModules.RemoteAccess, ModuleActions.Status),
         new ComplianceServerModule(AgentModules.Users, ModuleActions.List),
+        new MonitoringServerModule(),
         new AgentServerModule(renewOnly: false),
     ];
 

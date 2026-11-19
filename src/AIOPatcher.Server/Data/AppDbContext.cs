@@ -51,6 +51,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<ComplianceBaseline> ComplianceBaselines => Set<ComplianceBaseline>();
     public DbSet<ComplianceBaselineHost> ComplianceBaselineHosts => Set<ComplianceBaselineHost>();
     public DbSet<FirewallProfileVersion> FirewallProfileVersions => Set<FirewallProfileVersion>();
+    public DbSet<MonitoringTarget> MonitoringTargets => Set<MonitoringTarget>();
+    public DbSet<MonitoringClientState> MonitoringClients => Set<MonitoringClientState>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
@@ -265,6 +267,40 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
         {
             e.ToTable("ImageVulnerabilities");
             e.HasIndex(x => x.ImageId);
+        });
+
+        b.Entity<MonitoringTarget>(e =>
+        {
+            e.Property(x => x.Name).HasMaxLength(100);
+            e.Property(x => x.Product).HasMaxLength(20);
+            e.Property(x => x.Address).HasMaxLength(253);
+            e.Property(x => x.Protocol).HasMaxLength(10);
+            e.Property(x => x.Enrollment).HasMaxLength(10);
+            e.Property(x => x.Groups).HasMaxLength(200);
+            e.Property(x => x.ManagerVersion).HasMaxLength(40);
+            e.Property(x => x.SiteUrl).HasMaxLength(300);
+            e.Property(x => x.RegistrationUser).HasMaxLength(100);
+            e.Property(x => x.OnlyFrom).HasMaxLength(1000);
+            e.Property(x => x.LegacyPackageUrl).HasMaxLength(500);
+            e.Property(x => x.TlsFingerprintSha256).HasMaxLength(64);
+            e.Property(x => x.SiteVersion).HasMaxLength(40);
+            e.Property(x => x.ProtectedSecret).HasMaxLength(2000);
+            e.Property(x => x.LastError).HasMaxLength(500);
+            e.HasIndex(x => new { x.Product, x.SiteId }).IsUnique();
+            e.HasOne(x => x.Site).WithMany().HasForeignKey(x => x.SiteId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        b.Entity<MonitoringClientState>(e =>
+        {
+            e.ToTable("MonitoringClients");
+            e.HasKey(x => new { x.HostId, x.Product });
+            e.Property(x => x.Product).HasMaxLength(20);
+            e.Property(x => x.Variant).HasMaxLength(30);
+            e.Property(x => x.Version).HasMaxLength(60);
+            e.Property(x => x.Addresses).HasMaxLength(2000);
+            e.Property(x => x.Detail).HasMaxLength(500);
+            e.Ignore(x => x.AddressList);
+            e.HasOne(x => x.Host).WithMany().HasForeignKey(x => x.HostId).OnDelete(DeleteBehavior.Cascade);
         });
 
         b.Entity<AiRequestRecord>(e =>

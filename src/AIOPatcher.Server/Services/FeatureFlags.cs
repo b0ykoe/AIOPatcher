@@ -46,6 +46,9 @@ public enum Feature
 
     /// <summary>Auslastung (CPU, RAM, Datenträger, Container) der Hosts und Proxmox-Gäste erfassen und anzeigen.</summary>
     Metrics,
+
+    /// <summary>Monitoring-Clients (Wazuh, Checkmk) installieren, konfigurieren und deinstallieren (Lesen läuft immer mit).</summary>
+    MonitoringClients,
 }
 
 public enum FeatureRisk
@@ -87,6 +90,7 @@ public sealed class FeatureFlags(AIOPatcherOptions options)
         new(Feature.RebootCheck, true, FeatureRisk.Low, "hosts"),
         new(Feature.AutoUpdateControl, true, FeatureRisk.Medium, "hosts"),
         new(Feature.Metrics, true, FeatureRisk.Low, "hosts"),
+        new(Feature.MonitoringClients, false, FeatureRisk.High, "hosts"),
         new(Feature.SnapshotTests, true, FeatureRisk.Low, "integrations"),
         new(Feature.OpnsenseUpdates, false, FeatureRisk.High, "integrations"),
         new(Feature.ApiTokens, true, FeatureRisk.Medium, "access"),
@@ -207,6 +211,7 @@ public sealed class FeatureFlags(AIOPatcherOptions options)
         Feature.RebootCheck => german ? "Dienste nach Neustart prüfen" : "Check services after reboot",
         Feature.AutoUpdateControl => german ? "Update-Automatik der Hosts steuern" : "Control hosts' automatic updates",
         Feature.Metrics => german ? "Auslastung erfassen" : "Collect utilization",
+        Feature.MonitoringClients => german ? "Monitoring-Clients verwalten" : "Manage monitoring clients",
         _ => feature.ToString(),
     };
 }

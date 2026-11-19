@@ -23,6 +23,21 @@ public static class PullEndpoints
         authenticated.MapGet("/v2/poll", Poll);
         authenticated.MapPost("/v2/tasks/{taskId:guid}/log", TaskLog);
         authenticated.MapPost("/v2/tasks/{taskId:guid}/result", TaskResult);
+        authenticated.MapGet("/v2/monitoring-package/{id}", MonitoringPackageFile);
+    }
+
+    /// <summary>Paket für einen Monitoring-Client: nur für einen offenen Job dieses Hosts, der genau dieses Paket enthält.</summary>
+    private static async Task<IResult> MonitoringPackageFile(string id, HttpContext http, AppDbContext db, Services.Monitoring.MonitoringPackages packages, CancellationToken ct)
+    {
+        var host = (ManagedHost)http.Items[AgentEndpoints.HostItemKey]!;
+        if (packages.Find(id) is not { } file)
+        {
+            return Results.NotFound();
+        }
+
+        var allowed = await db.Jobs.AnyAsync(j => j.HostId == host.Id && (j.Status == JobStatus.Queued || j.Status == JobStatus.Running)
+                                                  && j.Type == JobType.SystemChange && j.Payload != null && j.Payload.Contains(id), ct);
+        return allowed ? Results.File(file.FullName, "application/octet-stream") : Results.NotFound();
     }
 
     private static async Task<IResult> Poll(

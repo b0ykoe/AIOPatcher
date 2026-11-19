@@ -58,7 +58,10 @@ public static class AgentModules
     /// <summary>update (Self-Update), renew (Client-Zertifikat).</summary>
     public const string Agent = "agent";
 
-    public static readonly string[] All = [System, Updates, Software, Docker, Services, Metrics, Firewall, RemoteAccess, Users, Agent];
+    /// <summary>status, change (Wazuh-/Checkmk-Client installieren, konfigurieren, deinstallieren).</summary>
+    public const string Monitoring = "monitoring";
+
+    public static readonly string[] All = [System, Updates, Software, Docker, Services, Metrics, Firewall, RemoteAccess, Users, Agent, Monitoring];
 
     /// <summary>Ohne diese geht nichts: nicht abschaltbar.</summary>
     public static readonly string[] Required = [System, Agent];
@@ -69,6 +72,7 @@ public static class AgentModules
         SystemChangeKind.FirewallApply or SystemChangeKind.FirewallRestoreOriginal => Firewall,
         SystemChangeKind.RemoteAccessFix or SystemChangeKind.RemoteAccessRevert or SystemChangeKind.RemoteAccessSet => RemoteAccess,
         SystemChangeKind.AutoUpdatesOff or SystemChangeKind.AutoUpdatesOn => Updates,
+        SystemChangeKind.MonitoringInstall or SystemChangeKind.MonitoringConfigure or SystemChangeKind.MonitoringUninstall => Monitoring,
         _ => Users,
     };
 }
@@ -237,6 +241,7 @@ public sealed record RenewAnswer(string CertificateSigningRequestPem);
 [JsonSerializable(typeof(RemoteAccessList))]
 [JsonSerializable(typeof(UserList))]
 [JsonSerializable(typeof(SystemChange))]
+[JsonSerializable(typeof(MonitoringStatus))]
 [JsonSerializable(typeof(AgentUpdateOffer))]
 [JsonSerializable(typeof(RenewAnswer))]
 [JsonSerializable(typeof(RenewResponse))]

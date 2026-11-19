@@ -28,6 +28,9 @@ public enum NotificationEvents
 
     /// <summary>Ein laufender Container ist gestoppt oder sein Healthcheck meldet "unhealthy".</summary>
     ContainerStopped = 4096,
+
+    /// <summary>Ein Monitoring-Client (Wazuh, Checkmk) hat die Verbindung verloren oder sein Dienst läuft nicht mehr.</summary>
+    MonitoringDisconnected = 8192,
 }
 
 public enum ChannelType

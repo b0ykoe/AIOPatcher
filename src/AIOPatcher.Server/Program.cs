@@ -161,6 +161,7 @@ builder.Services.AddHttpClient(NotificationSenders.HttpClientName, c => c.Defaul
 builder.Services.AddHostedService<NotificationDispatcher>();
 builder.Services.AddHostedService<HostMonitor>();
 builder.Services.AddSingleton<IntegrationHttp>();
+builder.Services.AddSingleton<AIOPatcher.Server.Services.Monitoring.MonitoringPackages>();
 builder.Services.AddSingleton<VirtualizationProviderFactory>();
 builder.Services.AddSingleton<OpnsenseClientFactory>();
 builder.Services.AddSingleton<IRunbookPreparation, RunbookPreparation>();
@@ -249,6 +250,7 @@ app.MapReportEndpoints();
 app.MapIpamEndpoints();
 app.MapCheckEndpoints();
 app.MapComplianceEndpoints();
+app.MapMonitoringEndpoints();
 app.MapComplianceBaselineEndpoints();
 app.MapSsoEndpoints();
 app.MapSoftwareEndpoints();

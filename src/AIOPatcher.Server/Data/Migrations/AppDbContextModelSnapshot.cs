@@ -1124,6 +1124,12 @@ namespace AIOPatcher.Server.Data.Migrations
                     b.Property<DateTime?>("MetricsAt")
                         .HasColumnType("TEXT");
 
+                    b.Property<bool?>("MonitoringChangesAllowed")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime?>("MonitoringScannedAt")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -1198,6 +1204,153 @@ namespace AIOPatcher.Server.Data.Migrations
                     b.HasIndex("SiteId", "Name");
 
                     b.ToTable("Hosts");
+                });
+
+            modelBuilder.Entity("AIOPatcher.Server.Data.MonitoringClientState", b =>
+                {
+                    b.Property<Guid>("HostId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Product")
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Addresses")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("CanConfigure")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool?>("Connected")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Detail")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("DisconnectedSince")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("Held")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("SeenAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("ServiceRunning")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Variant")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Version")
+                        .HasMaxLength(60)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("HostId", "Product");
+
+                    b.ToTable("MonitoringClients", (string)null);
+                });
+
+            modelBuilder.Entity("AIOPatcher.Server.Data.MonitoringTarget", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Address")
+                        .HasMaxLength(253)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Enrollment")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("EnrollmentPort")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Groups")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("LegacyPackageUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ManagerVersion")
+                        .HasMaxLength(40)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OnlyFrom")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("Port")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Product")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ProtectedSecret")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Protocol")
+                        .HasMaxLength(10)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("ReceiverPort")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("RegistrationUser")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("SiteId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SiteUrl")
+                        .HasMaxLength(300)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SiteVersion")
+                        .HasMaxLength(40)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TlsFingerprintSha256")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SiteId");
+
+                    b.HasIndex("Product", "SiteId")
+                        .IsUnique();
+
+                    b.ToTable("MonitoringTargets");
                 });
 
             modelBuilder.Entity("AIOPatcher.Server.Data.NotificationChannel", b =>
@@ -2378,6 +2531,27 @@ namespace AIOPatcher.Server.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("Integration");
+
+                    b.Navigation("Site");
+                });
+
+            modelBuilder.Entity("AIOPatcher.Server.Data.MonitoringClientState", b =>
+                {
+                    b.HasOne("AIOPatcher.Server.Data.ManagedHost", "Host")
+                        .WithMany()
+                        .HasForeignKey("HostId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Host");
+                });
+
+            modelBuilder.Entity("AIOPatcher.Server.Data.MonitoringTarget", b =>
+                {
+                    b.HasOne("AIOPatcher.Server.Data.Site", "Site")
+                        .WithMany()
+                        .HasForeignKey("SiteId")
+                        .OnDelete(DeleteBehavior.Cascade);
 
                     b.Navigation("Site");
                 });

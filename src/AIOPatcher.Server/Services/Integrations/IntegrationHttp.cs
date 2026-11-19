@@ -28,10 +28,14 @@ public sealed class IntegrationHttp(IDataProtectionProvider dataProtection)
     /// Neuer HttpClient pro Aufruf: Die Prüfung hängt am Fingerprint der jeweiligen Integration.
     /// Kurzlebig und selten genutzt, daher kein Pooling nötig.
     /// </summary>
-    public HttpClient CreateClient(Integration integration, Uri baseAddress, out Func<string?> presentedFingerprint)
+    public HttpClient CreateClient(Integration integration, Uri baseAddress, out Func<string?> presentedFingerprint) =>
+        new(CreateHandler(integration.TlsFingerprintSha256, out presentedFingerprint)) { BaseAddress = baseAddress, Timeout = TimeSpan.FromSeconds(30) };
+
+    /// <summary>Handler mit normaler TLS-Prüfung bzw. angepinntem Fingerprint (SHA-256 des Zertifikats).</summary>
+    public static SocketsHttpHandler CreateHandler(string? fingerprint, out Func<string?> presentedFingerprint)
     {
         string? seen = null;
-        var pinned = integration.TlsFingerprintSha256?.Replace(":", "", StringComparison.Ordinal).ToUpperInvariant();
+        var pinned = fingerprint?.Replace(":", "", StringComparison.Ordinal).ToUpperInvariant();
         var handler = new SocketsHttpHandler
         {
             ConnectTimeout = TimeSpan.FromSeconds(10),
@@ -53,7 +57,7 @@ public sealed class IntegrationHttp(IDataProtectionProvider dataProtection)
         };
 
         presentedFingerprint = () => seen;
-        return new HttpClient(handler) { BaseAddress = baseAddress, Timeout = TimeSpan.FromSeconds(30) };
+        return handler;
     }
 
     /// <summary>Einheitliche Fehlermeldung, inklusive Hinweis auf das Zertifikat.</summary>

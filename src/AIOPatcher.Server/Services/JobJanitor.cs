@@ -87,6 +87,9 @@ public sealed class JobJanitor(IServiceScopeFactory scopes, AIOPatcherOptions op
         var aiBefore = now - Ai.UpdateSummaries.KeepRequests;
         await db.AiRequests.Where(r => r.At < aiBefore).ExecuteDeleteAsync(ct);
 
+        // Pakete für Monitoring-Clients: nach 30 Tagen ohne Neuladen weg (werden bei Bedarf neu geholt)
+        scope.ServiceProvider.GetService<Monitoring.MonitoringPackages>()?.CleanUp(now - TimeSpan.FromDays(30));
+
         if (stale.Count > 0 || deleted > 0 || samples > 0 || tasks > 0)
         {
             logger.LogInformation("Cleaned up: {Stale} stale jobs, {Lines} old log lines, {Samples} metric samples, {Tasks} agent tasks",

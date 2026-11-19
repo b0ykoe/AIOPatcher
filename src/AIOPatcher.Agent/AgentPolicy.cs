@@ -33,9 +33,13 @@ public enum PatchPermission
 /// <param name="AllowAutoUpdateChanges">
 /// Die eigene Update-Automatik (unattended-upgrades, Windows Update) auf Wunsch aus dem Dashboard an- oder abschalten.
 /// </param>
+/// <param name="AllowMonitoringChanges">
+/// Monitoring-Clients (Wazuh, Checkmk) installieren, umstellen und deinstallieren lassen. Ab Werk aus: Ein falsches Ziel
+/// leitet Logs und Messwerte an einen fremden Server, daher muss das jeder Host selbst freigeben. Lesen geht immer.
+/// </param>
 public sealed record AgentPolicy(PatchPermission AllowPatch = PatchPermission.All, bool AllowReboot = true, bool AllowSelfUpdate = true, bool AllowAppUpdates = true, bool TrustServerUpdates = true,
     bool AllowSystemChanges = false, IReadOnlyList<string>? DisabledModules = null, bool AllowSourceFixes = true,
-    bool AllowAutoUpdateChanges = true)
+    bool AllowAutoUpdateChanges = true, bool AllowMonitoringChanges = false)
 {
     /// <summary>Modul auf diesem Host gesperrt? (system und agent lassen sich nicht sperren.)</summary>
     public bool IsModuleDisabled(string module) =>
@@ -56,6 +60,7 @@ public sealed record AgentPolicy(PatchPermission AllowPatch = PatchPermission.Al
             "allowsystemchanges" => policy with { AllowSystemChanges = Bool() },
             "allowsourcefixes" => policy with { AllowSourceFixes = Bool() },
             "allowautoupdatechanges" => policy with { AllowAutoUpdateChanges = Bool() },
+            "allowmonitoringchanges" => policy with { AllowMonitoringChanges = Bool() },
             "disabledmodules" => policy with { DisabledModules = value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) is var list && list.All(m => AIOPatcher.Contracts.AgentModules.All.Contains(m)) ? list : throw new ArgumentException($"disabledModules: comma-separated list of {string.Join(", ", AIOPatcher.Contracts.AgentModules.All)}.") },
             _ => throw new ArgumentException($"Unknown policy key '{key}'."),
         };

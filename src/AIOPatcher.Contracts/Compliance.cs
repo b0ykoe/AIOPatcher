@@ -92,6 +92,15 @@ public enum SystemChangeKind
 
     /// <summary>Mehrere Änderungen nacheinander (Compliance-Vorgabe angleichen); bricht beim ersten Fehler ab.</summary>
     Batch,
+
+    /// <summary>Monitoring-Client installieren bzw. auf die Zielversion aktualisieren und konfigurieren (Monitoring).</summary>
+    MonitoringInstall,
+
+    /// <summary>Monitoring-Client auf das Ziel einstellen bzw. umstellen (Monitoring).</summary>
+    MonitoringConfigure,
+
+    /// <summary>Monitoring-Client deinstallieren (Monitoring.Product); Konfiguration wird vorher gesichert.</summary>
+    MonitoringUninstall,
 }
 
 /// <param name="Secret">Nur UserSetPassword. Liegt auf dem Server nur verschlüsselt bis zur Übergabe, wird nie geloggt.</param>
@@ -99,6 +108,7 @@ public enum SystemChangeKind
 /// <param name="Admin">UserCreate: mit Administratorrechten.</param>
 /// <param name="Values">RemoteAccessSet: Id → Sollwert, z. B. "ssh.permitRootLogin" → "no".</param>
 /// <param name="Steps">Batch: die einzelnen Änderungen in Reihenfolge.</param>
+/// <param name="Monitoring">MonitoringInstall/Configure/Uninstall: Zielvorgabe. Secret = Anmelde- bzw. Registrierungspasswort.</param>
 public sealed record SystemChange(
     SystemChangeKind Kind,
     FirewallConfig? Firewall = null,
@@ -108,7 +118,8 @@ public sealed record SystemChange(
     string? SshKey = null,
     bool Admin = false,
     IReadOnlyDictionary<string, string>? Values = null,
-    IReadOnlyList<SystemChange>? Steps = null);
+    IReadOnlyList<SystemChange>? Steps = null,
+    MonitoringSpec? Monitoring = null);
 
 [JsonConverter(typeof(JsonStringEnumConverter<FirewallAction>))]
 public enum FirewallAction

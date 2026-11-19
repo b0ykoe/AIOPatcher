@@ -69,6 +69,10 @@ public sealed class ManagedHost
     /// <summary>"Container neu prüfen" im Dashboard: Agent soll seine Container gleich wieder melden.</summary>
     public DateTime? ContainersRequestedAt { get; set; }
 
+    /// <summary>Laut letztem monitoring.status: policy.json erlaubt Änderungen an Monitoring-Clients (null = noch nie gemeldet).</summary>
+    public bool? MonitoringChangesAllowed { get; set; }
+    public DateTime? MonitoringScannedAt { get; set; }
+
     // mTLS-Identität
     public required string CertificateThumbprint { get; set; }
     public DateTime CertificateExpiresAt { get; set; }

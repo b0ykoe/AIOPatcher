@@ -6,6 +6,7 @@ using AIOPatcher.Agent.Jobs;
 using AIOPatcher.Agent.Maintenance;
 using AIOPatcher.Agent.Platforms.Apt;
 using AIOPatcher.Agent.Platforms.Docker;
+using AIOPatcher.Agent.Platforms.Monitoring;
 using AIOPatcher.Contracts;
 
 namespace AIOPatcher.Agent.Modules;
@@ -253,6 +254,69 @@ public sealed class UsersModule(IComplianceProvider provider, JobExecutor execut
     {
         var users = await Provider.UsersAsync(ct);
         return Json.Ok($"{users.Count} users", new UserList(users), PullJsonContext.Default.UserList);
+    }
+}
+
+/// <summary>
+/// monitoring.status: installierte Wazuh-/Checkmk-Clients (immer erlaubt); monitoring.change: installieren, umstellen,
+/// deinstallieren. Ändern braucht policy.json "allowMonitoringChanges".
+/// </summary>
+public sealed class MonitoringModule(AgentState state) : IAgentModule
+{
+    public string Id => AgentModules.Monitoring;
+    public bool Available => OperatingSystem.IsLinux() || OperatingSystem.IsWindows();
+    public IReadOnlyList<string> Actions { get; } = [ModuleActions.Status, ModuleActions.Change];
+
+    public static string? PolicyRejects(AgentPolicy policy) => policy.AllowMonitoringChanges
+        ? null
+        : "Local policy forbids changing monitoring clients. To allow it on this host: aiopatcher-agent policy set allowMonitoringChanges true";
+
+    public async Task<TaskOutcome> ExecuteAsync(AgentTask task, TaskContext context, CancellationToken ct)
+    {
+        if (task.Action == ModuleActions.Status)
+        {
+            var clients = new List<MonitoringClient>();
+            foreach (var detect in new Func<CancellationToken, Task<MonitoringClient?>>[] { WazuhClient.DetectAsync, CheckmkClient.DetectAsync })
+            {
+                try
+                {
+                    if (await detect(ct) is { } client)
+                    {
+                        clients.Add(client);
+                    }
+                }
+                catch (Exception e) when (e is IOException or UnauthorizedAccessException or InvalidOperationException)
+                {
+                    context.Log($"[agent] Detecting a monitoring client failed: {e.Message}");
+                }
+            }
+
+            var summary = clients.Count == 0 ? "no monitoring clients" : string.Join(", ", clients.Select(c => $"{c.Product} {c.Version}".Trim()));
+            return Json.Ok(summary, new MonitoringStatus(clients, context.Policy.AllowMonitoringChanges), PullJsonContext.Default.MonitoringStatus);
+        }
+
+        var change = PullJsonContext.FromElement(task.Payload, PullJsonContext.Default.SystemChange);
+        if (change?.Monitoring is not { } spec || AgentModules.ForChange(change.Kind) != Id)
+        {
+            return TaskOutcome.Rejected("Change does not belong to module monitoring.");
+        }
+
+        if (PolicyRejects(context.Policy) is { } rejected)
+        {
+            context.Log($"[agent] Rejected: {rejected}");
+            return TaskOutcome.Rejected(rejected);
+        }
+
+        context.Log($"[agent] {change.Kind}: {spec.Product}");
+        var result = (change.Kind, spec.Product) switch
+        {
+            (SystemChangeKind.MonitoringConfigure, MonitoringProducts.Wazuh) => await WazuhClient.ConfigureAsync(spec, change.Secret, state.Directory, context.Log, ct),
+            (SystemChangeKind.MonitoringConfigure, MonitoringProducts.Checkmk) => await CheckmkClient.ConfigureAsync(spec, change.Secret, state.Directory, context.Log, ct),
+            (SystemChangeKind.MonitoringInstall, _) => await MonitoringInstaller.InstallAsync(state, spec, change.Secret, context.Log, ct),
+            (SystemChangeKind.MonitoringUninstall, _) => await MonitoringInstaller.UninstallAsync(spec.Product, state.Directory, context.Log, ct),
+            _ => new JobExecutionResult(JobOutcome.Rejected, $"Unknown monitoring product {spec.Product}."),
+        };
+        return Json.From(result);
     }
 }
 
