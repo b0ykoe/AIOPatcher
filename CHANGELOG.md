@@ -8,6 +8,8 @@ Written for users, not as a list of commits.
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-11-19
+
 ### Added
 - **Proxmox Backup Server:** new integration under **Settings → Integrations** (read-only API token). **Inventory →
   Backups** shows datastore usage with the estimated full date and garbage collection, failed tasks of the last 7 days,
