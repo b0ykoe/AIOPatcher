@@ -8,6 +8,8 @@ Written for users, not as a list of commits.
 
 ## [Unreleased]
 
+## [0.14.1] - 2026-11-19
+
 ### Added
 - **See each host's local policy:** the agent now reports its `policy.json` with the system data. Host → Settings shows
   a **Local policy** card with every value and the command to change it on the host. The host list shows only what
@@ -22,6 +24,10 @@ Written for users, not as a list of commits.
   measures utilization, collects system data, container status, software and compliance, the state of monitoring
   clients, queries Proxmox backups/PBS and OPNsense, syncs shared sites and looks for a new version. Each has a
   sensible default and a lower limit; changes apply right away without a restart.
+
+### Upgrade notes
+- The local policy appears once a host runs the new agent (agents update themselves). Until then its card says the
+  agent does not report it yet.
 
 ## [0.14.0] - 2026-11-19
 
