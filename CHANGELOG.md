@@ -8,6 +8,8 @@ Written for users, not as a list of commits.
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-11-19
+
 ### Added
 - **Getting started:** a new page that guides you through the basics (site, first host, patch plan, notifications)
   and shows what else AIOPatcher can do under **Discover more**: public access, passkeys, compliance templates,
@@ -69,6 +71,8 @@ Written for users, not as a list of commits.
   directly and through the public address.
 
 ### Upgrade notes
+- Windows hosts whose installation failed with the "ComputeHash" error: update AIOPatcher first, then run the
+  install command from **Add host** again.
 - Existing installations keep building locally. To switch to the release image, run the setup again and choose
   "Release from GitHub" at the image question.
 - Update recipes need the new agent (it updates itself) and must be allowed on each host once:
