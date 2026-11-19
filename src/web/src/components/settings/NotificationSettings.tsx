@@ -11,6 +11,7 @@ import {
   Modal,
   NumberInput,
   PasswordInput,
+  SegmentedControl,
   Select,
   SimpleGrid,
   Stack,
@@ -41,6 +42,7 @@ import {
   type ChannelConfig,
   type ChannelType,
   type NotificationChannel,
+  type NotificationStyle,
   type NotificationEvent,
   type Site,
 } from "../../api";
@@ -241,6 +243,7 @@ export function ChannelModal({ channel, sites, remoteSites = [], onClose, onSave
   const [siteId, setSiteId] = useState<string | null>(null);
   const [events, setEvents] = useState<string[]>(defaultEvents);
   const [config, setConfig] = useState<ChannelConfig>({});
+  const [style, setStyle] = useState<NotificationStyle>("Standard");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -252,6 +255,7 @@ export function ChannelModal({ channel, sites, remoteSites = [], onClose, onSave
       setSiteId(null);
       setEvents(defaultEvents);
       setConfig({ smtpPort: 587, smtpSecurity: "StartTls" });
+      setStyle("Standard");
     } else {
       setName(channel.name);
       setType(channel.type);
@@ -259,6 +263,7 @@ export function ChannelModal({ channel, sites, remoteSites = [], onClose, onSave
       setSiteId(channel.remoteSiteId ? `remote:${channel.remoteSiteId}` : channel.siteId);
       setEvents(channel.events);
       setConfig(channel.config);
+      setStyle(channel.style ?? "Standard");
     }
     setError(null);
   }, [channel, initialType]);
@@ -273,7 +278,7 @@ export function ChannelModal({ channel, sites, remoteSites = [], onClose, onSave
     setBusy(true);
     setError(null);
     const remote = siteId?.startsWith("remote:") ? siteId.slice("remote:".length) : null;
-    const body = { name, type, enabled: channel === "new" ? true : channel?.enabled ?? true, events, siteId: remote ? null : siteId, remoteSiteId: remote, config };
+    const body = { name, type, enabled: channel === "new" ? true : channel?.enabled ?? true, events, siteId: remote ? null : siteId, remoteSiteId: remote, config, style };
     try {
       if (channel === "new") await api.post("/api/notification-channels", body);
       else if (channel) await api.put(`/api/notification-channels/${channel.id}`, body);
@@ -347,6 +352,19 @@ export function ChannelModal({ channel, sites, remoteSites = [], onClose, onSave
               <TextInput label={t("notifications.to")} description={t("notifications.toHint")} {...field("to")} />
             </Group>
           </>
+        )}
+
+        {type === "Webhook" ? (
+          <Text size="xs" c="dimmed">{t("notifications.styleWebhook")}</Text>
+        ) : (
+          <div>
+            <Text size="sm" fw={500} mb={6}>{t("notifications.style")}</Text>
+            <SegmentedControl fullWidth value={style} onChange={(v) => setStyle(v as NotificationStyle)}
+              data={(["Short", "Standard", "Detailed", "Rich"] as const).map((s) => ({ value: s, label: t(`notifications.style${s}`) }))} />
+            <Text size="xs" c="dimmed" mt={6}>
+              {t(`notifications.styleHint${style}`)}{style === "Rich" ? ` ${t(`notifications.styleRich${type}`)}` : ""}
+            </Text>
+          </div>
         )}
 
         <Select

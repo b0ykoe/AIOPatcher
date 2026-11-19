@@ -8,6 +8,13 @@ Written for users, not as a list of commits.
 
 ## [Unreleased]
 
+### Added
+- **Notification styles per channel:** choose **Short** (title and link), **Standard** (as before), **Detailed** (plus
+  host, site, event and time) or **Rich**, the service's own formatting: Telegram with a bold title and an "Open in
+  AIOPatcher" button, Discord embeds colored by severity, Slack cards with a button, HTML emails with a text version,
+  ntfy with Markdown and a tap action. **Send test** shows the chosen style with sample details. Webhooks always get
+  every field (now also host, site and event name).
+
 ### Fixed
 - **Links in notifications and invites use your public address:** with a dashboard address set under
   Settings → Public access (e.g. `https://patch.example.com`), messages and user invitations now link there instead of

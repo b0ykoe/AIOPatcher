@@ -799,7 +799,11 @@ export interface NotificationChannel {
   lastSentAt: string | null;
   lastError: string | null;
   remoteSiteId: string | null;
+  /** Aufmachung: Kurz, Standard, Ausführlich, Schick */
+  style: NotificationStyle;
 }
+
+export type NotificationStyle = "Short" | "Standard" | "Detailed" | "Rich";
 
 // --- Regeln: Patchpausen und zurückgehaltene Updates ---------------------------------------------
 
