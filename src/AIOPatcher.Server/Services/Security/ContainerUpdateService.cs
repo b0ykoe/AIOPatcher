@@ -319,6 +319,8 @@ public sealed class ContainerUpdateService(
                 RestartPolicy = report.RestartPolicy is null ? null : Cut(report.RestartPolicy, 30),
                 LocalImage = local,
                 BaseImage = baseImage is null ? null : Cut(baseImage, 300),
+                UpdateRecipe = report.Recipe?.Id is { } recipe ? Cut(recipe, 40) : null,
+                UpdateRecipeAllowed = report.Recipe?.Allowed == true,
             };
             db.Containers.Add(container);
 

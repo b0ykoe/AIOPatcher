@@ -165,9 +165,10 @@ public sealed record InstalledSoftware(
 /// <param name="Health">Healthcheck: "healthy", "unhealthy", "starting"; null ohne Healthcheck.</param>
 /// <param name="RestartPolicy">"no", "always", "unless-stopped", "on-failure".</param>
 /// <param name="Build">Selbst gebaut per Compose (build:): Dockerfile und Basis-Image.</param>
+/// <param name="Recipe">Passendes Update-Rezept für das Compose-Projekt (z. B. mailcow); hat Vorrang vor pull/up.</param>
 public sealed record ContainerReport(string Name, string Image, string? ImageId, IReadOnlyList<string>? RepoDigests, string? State, ComposeInfo? Compose = null,
     string? Id = null, int? ExitCode = null, DateTime? StartedAt = null, DateTime? FinishedAt = null, string? Health = null, string? RestartPolicy = null,
-    BuildInfo? Build = null);
+    BuildInfo? Build = null, RecipeRef? Recipe = null);
 
 /// <summary>
 /// Selbst gebautes Image eines Compose-Dienstes. BaseImage: Basis der letzten Stufe des Dockerfiles (das, worauf der

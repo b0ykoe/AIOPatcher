@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router";
-import { Alert, Anchor, Badge, Box, Button, Group, Loader, Modal, Stack, Table, Text, Tooltip, UnstyledButton } from "@mantine/core";
-import { IconAlertTriangle, IconChevronDown, IconChevronUp, IconDownload, IconHammer, IconInfoCircle, IconRefresh, IconSelector } from "@tabler/icons-react";
+import { Alert, Anchor, Badge, Box, Button, Code, Group, Loader, Modal, Stack, Table, Text, Tooltip, UnstyledButton } from "@mantine/core";
+import { IconAlertTriangle, IconChevronDown, IconChevronUp, IconDownload, IconHammer, IconInfoCircle, IconRefresh, IconScript, IconSelector } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
-import { api, formatRelative, type ContainerItem, type ContainerVulnList } from "../api";
+import { api, formatRelative, type ContainerItem, type ContainerRecipe, type ContainerVulnList } from "../api";
 import { useCan } from "../App";
 import { FeatureOffHint, useFeatures } from "../features";
 import { t as tGlobal } from "../i18n";
@@ -249,6 +249,42 @@ export function ContainerTable({ containers, hostId, onRechecked }: { containers
         }
       },
     });
+  // App mit eigenem Update-Skript (Update-Rezept, z. B. mailcow): ein Ablauf für das ganze Compose-Projekt
+  const recipeProjects = Object.values(
+    containers.reduce<Record<string, { recipe: ContainerRecipe; project: string; first: ContainerItem; count: number }>>((acc, c) => {
+      if (!c.recipe) return acc;
+      const project = c.compose?.split("/")[0] ?? c.name;
+      const key = `${c.recipe.id}|${project}`;
+      acc[key] = acc[key] ? { ...acc[key], count: acc[key].count + 1 } : { recipe: c.recipe, project, first: c, count: 1 };
+      return acc;
+    }, {}),
+  );
+
+  const updateViaRecipe = (recipe: ContainerRecipe, project: string, c: ContainerItem) =>
+    confirmAction({
+      title: t("containers.recipeTitle", { app: recipe.app }),
+      message: (
+        <>
+          {t("containers.recipeText", { name: recipe.name, project })}
+          {recipe.note && <><br /><br />{recipe.note}</>}
+          {recipe.docs && <><br /><br /><Anchor href={recipe.docs} target="_blank" rel="noreferrer" size="sm">{t("containers.recipeDocs")}</Anchor></>}
+        </>
+      ),
+      confirmLabel: t("containers.recipeUpdate", { name: recipe.name }),
+      onConfirm: async () => {
+        setUpdating(c.name);
+        try {
+          const job = await api.post<{ id: string }>(`/api/hosts/${hostId}/containers/${encodeURIComponent(c.name)}/update`);
+          notifySuccess(t("containers.recipeStarted", { name: recipe.name }));
+          navigate(`/jobs/${job.id}`); // Live-Log des Skripts
+        } catch (e) {
+          notifyError(e);
+        } finally {
+          setUpdating(null);
+        }
+      },
+    });
+
   const [sort, setSort] = useState<{ key: SortKey; desc: boolean }>({ key: "state", desc: false });
 
   const sorted = [...containers].sort((a, b) => {
@@ -282,6 +318,28 @@ export function ContainerTable({ containers, hostId, onRechecked }: { containers
       </Group>
     )}
     {hostId && can.operate && !isOn("AppUpdates") && containers.some((c) => c.updateAvailable && !c.updateBlocker) && <Box px="md" pb="sm"><FeatureOffHint feature="AppUpdates" /></Box>}
+    {hostId && recipeProjects.map(({ recipe, project, first, count }) => (
+      <Box key={`${recipe.id}|${project}`} px="md" pb="sm">
+        <Alert color="blue" icon={<IconScript size={16} />}>
+          <Group justify="space-between" gap="xs" wrap="wrap">
+            <Stack gap={4} style={{ flex: "1 1 320px" }}>
+              <Text size="sm">{t("containers.recipeDetected", { app: recipe.app, project, count })}</Text>
+              {!recipe.allowed && (
+                <Text size="xs" c="dimmed">
+                  {t("containers.recipeNotAllowed")} <Code>sudo aiopatcher-agent policy set allowUpdateRecipes true</Code>
+                </Text>
+              )}
+            </Stack>
+            {canUpdate && recipe.allowed && (
+              <Button size="compact-xs" variant="light" leftSection={<IconScript size={12} />}
+                loading={updating === first.name} onClick={() => updateViaRecipe(recipe, project, first)}>
+                {t("containers.recipeUpdate", { name: recipe.name })}
+              </Button>
+            )}
+          </Group>
+        </Alert>
+      </Box>
+    ))}
     <Table.ScrollContainer minWidth={760}>
       <Table>
         <Table.Thead>
@@ -310,7 +368,14 @@ export function ContainerTable({ containers, hostId, onRechecked }: { containers
               {showCves && <Table.Td><VulnCell c={c} onOpen={() => setVulnsOf(c.name)} /></Table.Td>}
               {canUpdate && (
                 <Table.Td style={{ whiteSpace: "nowrap" }}>
-                  {c.updateAvailable && (c.updateBlocker ? (
+                  {c.updateAvailable && (c.recipe ? (
+                    <Tooltip label={t("containers.recipeRowHint", { app: c.recipe.app, name: c.recipe.name })} multiline w={300}>
+                      <Group gap={4} wrap="nowrap" c="dimmed" style={{ cursor: "help" }}>
+                        <IconScript size={14} />
+                        <Text size="xs">{t("containers.recipeRow", { name: c.recipe.name })}</Text>
+                      </Group>
+                    </Tooltip>
+                  ) : c.updateBlocker ? (
                     <Tooltip label={t(`containers.blocker.${c.updateBlocker}`)} multiline w={300}>
                       <Group gap={4} wrap="nowrap" c="dimmed" style={{ cursor: "help" }}>
                         <IconInfoCircle size={14} />

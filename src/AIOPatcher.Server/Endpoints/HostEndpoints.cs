@@ -89,11 +89,16 @@ public static class HostEndpoints
         string? Cves, bool IsKev, double? MaxEpss);
 
     /// <param name="UpdateBlocker">Warum "Aktualisieren" nicht geht: "notCompose", "portainer", "noFile", "agent" (Agent zu alt); null = geht.</param>
+    /// <param name="Recipe">Update-Rezept des Compose-Projekts (z. B. mailcow update.sh): ersetzt "Aktualisieren" durch das Skript der App.</param>
     /// <param name="LocalImage">Image aus keiner Registry (selbst gebaut); ohne <paramref name="BaseImage"/> nicht prüfbar.</param>
     /// <param name="BaseImage">Selbst gebaut per Compose: Basis-Image; UpdateAvailable bezieht sich dann darauf (Update = neu bauen).</param>
     public sealed record ContainerDto(string Name, string Image, string? State, bool UpdateAvailable, DateTime? CheckedAt, string? CheckError, bool Pinned, DateTime? SeenAt = null,
         string? Compose = null, string? UpdateBlocker = null, int? ExitCode = null, DateTime? StartedAt = null, DateTime? FinishedAt = null, string? Health = null,
-        string? RestartPolicy = null, bool LocalImage = false, string? BaseImage = null, ContainerVulnsDto? Vulns = null);
+        string? RestartPolicy = null, bool LocalImage = false, string? BaseImage = null, ContainerVulnsDto? Vulns = null, ContainerRecipeDto? Recipe = null);
+
+    /// <param name="Allowed">Lokale Policy des Hosts erlaubt es (allowUpdateRecipes).</param>
+    /// <param name="Note">Hinweis für den Bestätigungsdialog in der Sprache der Anfrage.</param>
+    public sealed record ContainerRecipeDto(string Id, string Name, string App, string? Docs, string? Note, bool Allowed);
 
     /// <param name="State">"ok" (abgeglichen), "pending" (Paketliste oder Abgleich steht aus), "unsupported" (Image ohne
     /// prüfbare Paketdatenbank, Error sagt warum), "agent" (Agent zu alt), "off" (CVE-Abgleich ausgeschaltet).</param>
@@ -608,6 +613,12 @@ public static class HostEndpoints
                 "The agent on this host is too old for container updates; it will update itself shortly."), statusCode: StatusCodes.Status409Conflict);
         }
 
+        // App mit eigenem Update-Skript (z. B. mailcow): das Rezept hat Vorrang vor pull/up des einzelnen Containers
+        if (container.UpdateRecipe is { } recipeId)
+        {
+            return await UpdateViaRecipe(host, container, recipeId, user, db, audit, ct);
+        }
+
         if (container.UpdateBlocker is { } blocker)
         {
             return Results.Problem(blocker switch
@@ -637,6 +648,69 @@ public static class HostEndpoints
         audit.Add("job.created", $"ContainerUpdate {container.Name} ({container.Image}) for {host.Name}", siteId: host.SiteId, hostId: host.Id);
         await db.SaveChangesAsync(ct);
         return Results.Ok(new { job.Id });
+    }
+
+    /// <summary>
+    /// Update-Rezept für das Compose-Projekt des Containers als Job (docker.recipe). Der Job nennt nur Rezept-Id und
+    /// Containername; Ordner und Befehl bestimmt der Agent selbst aus seinem eingebauten Rezept.
+    /// </summary>
+    private static async Task<IResult> UpdateViaRecipe(ManagedHost host, ContainerInfo container, string recipeId, ClaimsPrincipal user, AppDbContext db,
+        AuditLog audit, CancellationToken ct)
+    {
+        var recipe = UpdateRecipeCatalog.Find(recipeId);
+        var label = recipe?.Name ?? recipeId;
+        if (!ModuleJson.Supports(host, AgentModules.Docker, ModuleActions.Recipe))
+        {
+            return Results.Problem(L.T("Der Agent auf diesem Host ist zu alt für Update-Rezepte; er aktualisiert sich gleich selbst.",
+                "The agent on this host is too old for update recipes; it will update itself shortly."), statusCode: StatusCodes.Status409Conflict);
+        }
+
+        if (!container.UpdateRecipeAllowed)
+        {
+            return Results.Problem(L.T($"Auf dem Host nicht freigegeben. Dort einmal ausführen: sudo aiopatcher-agent policy set {RecipePolicyKey} true",
+                $"Not allowed on the host. Run there once: sudo aiopatcher-agent policy set {RecipePolicyKey} true"), statusCode: StatusCodes.Status409Conflict);
+        }
+
+        if (await db.Jobs.AnyAsync(j => j.HostId == host.Id && (j.Status == JobStatus.Queued || j.Status == JobStatus.Running), ct))
+        {
+            return Results.Problem(L.T("Es ist bereits ein Job geplant oder aktiv.", "A job is already queued or running."), statusCode: StatusCodes.Status409Conflict);
+        }
+
+        var job = new PatchJob
+        {
+            HostId = host.Id,
+            Type = JobType.ContainerUpdate,
+            Scope = PatchScope.All,
+            RequestedBy = $"admin:{user.Identity?.Name}",
+            Packages = container.Name,
+            Payload = JsonSerializer.Serialize(new RecipeUpdateRequest(recipeId, container.Name), PullJsonContext.Default.RecipeUpdateRequest),
+            Summary = L.T($"Update über {label} ({container.ComposeProject})", $"Update via {label} ({container.ComposeProject})"),
+        };
+        db.Jobs.Add(job);
+        audit.Add("job.created", $"ContainerUpdate via recipe {recipeId}, project {container.ComposeProject} ({container.Name}) for {host.Name}",
+            siteId: host.SiteId, hostId: host.Id);
+        await db.SaveChangesAsync(ct);
+        return Results.Ok(new { job.Id });
+    }
+
+    public const string RecipePolicyKey = "allowUpdateRecipes";
+
+    /// <summary>Rezept-Auftrag eines Container-Jobs (Payload); null = generisches pull/up.</summary>
+    public static RecipeUpdateRequest? RecipeOf(PatchJob job)
+    {
+        if (job.Type != JobType.ContainerUpdate || string.IsNullOrEmpty(job.Payload))
+        {
+            return null;
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize(job.Payload, PullJsonContext.Default.RecipeUpdateRequest);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 
     /// <summary>Container neu prüfen: Images sofort bei der Registry abfragen, Agent meldet seine Container beim nächsten Abruf.</summary>
@@ -729,13 +803,25 @@ public static class HostEndpoints
             return new ContainerVulnsDto("ok", list.Count, list.Count(v => v.IsKev), list.Max(v => v.Epss), os, set.PackageCount, set.ScannedAt, null);
         }
 
+        ContainerRecipeDto? Recipe(ContainerInfo c)
+        {
+            if (c.UpdateRecipe is not { } id)
+            {
+                return null;
+            }
+
+            // Unbekannt (Agent neuer als Server): Id statt Name anzeigen
+            var recipe = UpdateRecipeCatalog.Find(id);
+            return new ContainerRecipeDto(id, recipe?.Name ?? id, recipe?.App ?? id, recipe?.Docs, recipe?.NoteFor(L.Language), c.UpdateRecipeAllowed);
+        }
+
         return containers.Select(c =>
         {
             var check = c.Reference is null ? null : checks.GetValueOrDefault(c.Reference);
             var update = check?.RemoteDigest is { } remote && c.LocalDigest is not null && !c.HasDigest(remote);
             return new ContainerDto(c.Name, c.Image, c.State, update, check?.CheckedAt, check?.Error, c.Reference is null && !c.LocalImage, c.SeenAt,
                 c.ComposeProject is null ? null : $"{c.ComposeProject}/{c.ComposeService}", agentCan ? c.UpdateBlocker : "agent",
-                c.ExitCode, c.StartedAt, c.FinishedAt, c.Health, c.RestartPolicy, c.LocalImage, c.BaseImage, Vulns(c));
+                c.ExitCode, c.StartedAt, c.FinishedAt, c.Health, c.RestartPolicy, c.LocalImage, c.BaseImage, Vulns(c), Recipe(c));
         }).ToList();
     }
 

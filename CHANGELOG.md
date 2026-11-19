@@ -8,6 +8,13 @@ Written for users, not as a list of commits.
 
 ## [Unreleased]
 
+### Added
+- **Update recipes for apps with their own update script:** when the agent finds mailcow: dockerized, the containers
+  tab shows **Update via mailcow update.sh** instead of updating single containers. The agent runs
+  `./update.sh --force` in the mailcow folder with a live log and then checks that all mailcow containers run again.
+  Recipes are small JSON files in the repository, so the community can add more apps (see the README section
+  "Container update recipes").
+
 ### Improved
 - **Setup uses the release image:** `setup.sh` now pulls the prebuilt image from GitHub (ghcr.io) instead of building
   it on the server. No 10-15 minute build, 2 GB RAM is enough, and `aiopatcher-update` brings releases only.
@@ -18,6 +25,9 @@ Written for users, not as a list of commits.
 ### Upgrade notes
 - Existing installations keep building locally. To switch to the release image, run the setup again and choose
   "Release from GitHub" at the image question.
+- Update recipes need the new agent (it updates itself) and must be allowed on each host once:
+  `sudo aiopatcher-agent policy set allowUpdateRecipes true`. Until then the notice shows this command instead of the
+  button. Single containers of a mailcow project can no longer be pulled one by one.
 
 ## [0.13.0] - 2026-11-19
 

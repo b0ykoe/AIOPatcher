@@ -152,6 +152,20 @@ export interface UpdateItem {
   maxEpss: number | null;
 }
 
+/** App-eigener Update-Ablauf (Update-Rezept), vom Agent erkannt. */
+export interface ContainerRecipe {
+  id: string;
+  /** Anzeige des Ablaufs, z. B. "mailcow update.sh" */
+  name: string;
+  /** Anwendung, z. B. "mailcow: dockerized" */
+  app: string;
+  docs: string | null;
+  /** Hinweis für den Bestätigungsdialog (Sprache der Anfrage) */
+  note: string | null;
+  /** lokale Policy des Hosts erlaubt es (allowUpdateRecipes) */
+  allowed: boolean;
+}
+
 export interface ContainerItem {
   name: string;
   image: string;
@@ -177,6 +191,8 @@ export interface ContainerItem {
   /** selbst gebaut per Compose: Basis-Image; updateAvailable bezieht sich darauf */
   baseImage: string | null;
   vulns: ContainerVulns | null;
+  /** Update-Rezept des Compose-Projekts (z. B. mailcow update.sh): ersetzt "Aktualisieren" */
+  recipe?: ContainerRecipe | null;
 }
 
 /** Relevante Lücken im Image eines Containers (KEV oder EPSS ab 5 %). */

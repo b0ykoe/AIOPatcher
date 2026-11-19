@@ -41,9 +41,14 @@ public enum PatchPermission
 /// Auf dem Host, auf dem der AIOPatcher-Server läuft: "Jetzt aktualisieren" im Dashboard darf aiopatcher-update starten.
 /// Ab Werk aus.
 /// </param>
+/// <param name="AllowUpdateRecipes">
+/// Update-Rezepte ausführen: das App-eigene Update-Skript (z. B. mailcow update.sh) statt pull/up. Nur mitgelieferte
+/// Rezepte; zusätzlich gelten allowAppUpdates und allowPatch All. Ab Werk aus, weil solche Skripte mehr ändern als ein Image
+/// (Git, Konfiguration, ganzer Stack).
+/// </param>
 public sealed record AgentPolicy(PatchPermission AllowPatch = PatchPermission.All, bool AllowReboot = true, bool AllowSelfUpdate = true, bool AllowAppUpdates = true, bool TrustServerUpdates = true,
     bool AllowSystemChanges = false, IReadOnlyList<string>? DisabledModules = null, bool AllowSourceFixes = true,
-    bool AllowAutoUpdateChanges = true, bool AllowMonitoringChanges = false, bool AllowServerUpdate = false)
+    bool AllowAutoUpdateChanges = true, bool AllowMonitoringChanges = false, bool AllowServerUpdate = false, bool AllowUpdateRecipes = false)
 {
     /// <summary>Modul auf diesem Host gesperrt? (system und agent lassen sich nicht sperren.)</summary>
     public bool IsModuleDisabled(string module) =>
@@ -66,6 +71,7 @@ public sealed record AgentPolicy(PatchPermission AllowPatch = PatchPermission.Al
             "allowautoupdatechanges" => policy with { AllowAutoUpdateChanges = Bool() },
             "allowmonitoringchanges" => policy with { AllowMonitoringChanges = Bool() },
             "allowserverupdate" => policy with { AllowServerUpdate = Bool() },
+            "allowupdaterecipes" => policy with { AllowUpdateRecipes = Bool() },
             "disabledmodules" => policy with { DisabledModules = value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) is var list && list.All(m => AIOPatcher.Contracts.AgentModules.All.Contains(m)) ? list : throw new ArgumentException($"disabledModules: comma-separated list of {string.Join(", ", AIOPatcher.Contracts.AgentModules.All)}.") },
             _ => throw new ArgumentException($"Unknown policy key '{key}'."),
         };

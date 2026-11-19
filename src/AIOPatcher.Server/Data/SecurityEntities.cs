@@ -95,6 +95,13 @@ public sealed class ContainerInfo
     /// <summary>Liegen alle Compose-Dateien auf dem Host? (Portainer-Stacks: nein)</summary>
     public bool ComposeFilesFound { get; set; }
 
+    /// <summary>Update-Rezept des Compose-Projekts (z. B. "mailcow"): hat Vorrang vor pull/up. null = keins.</summary>
+    [System.ComponentModel.DataAnnotations.MaxLength(40)]
+    public string? UpdateRecipe { get; set; }
+
+    /// <summary>Lokale Policy des Hosts erlaubt das Rezept (allowUpdateRecipes und Container-Updates).</summary>
+    public bool UpdateRecipeAllowed { get; set; }
+
     /// <summary>Warum sich der Container nicht per Klick aktualisieren lässt: "notCompose", "portainer", "noFile"; null = geht.</summary>
     public string? UpdateBlocker =>
         ComposeProject is null || ComposeService is null ? "notCompose"

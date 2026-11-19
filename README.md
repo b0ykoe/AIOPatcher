@@ -582,7 +582,7 @@ Every function is a **module** with fixed actions. The agent rejects any other t
 | `system` | `describe`: OS, IPs, reboot required, modules, result of the last self-update |
 | `updates` | `scan`, `install`, `reboot` (apt or Windows Update), `change` (own automatic updates on/off), `changelog` (release notes of pending apt updates, read-only) |
 | `software` | `inventory`, `appupdate` (winget) |
-| `docker` | `inventory` (all containers with status), `packages` (package list of an image for the CVE check), `appupdate` (move a Compose container to a new image or rebuild it) |
+| `docker` | `inventory` (all containers with status), `packages` (package list of an image for the CVE check), `appupdate` (move a Compose container to a new image or rebuild it), `recipe` (run an app's own update script, see [update recipes](#container-update-recipes-mailcow--co)) |
 | `services` | `list`: running autostart services and containers (before/after reboot comparison) |
 | `metrics` | `sample`: CPU, RAM, disks, container utilization |
 | `firewall`, `remoteaccess` | `status`, `change` |
@@ -733,6 +733,76 @@ Or right at installation: `install.sh … --allow-monitoring-changes` or `instal
 Lite agents have no `policy set` command: add `"allowMonitoringChanges": true` to their `policy.json` instead. Reading the state works without that. During registration, the Checkmk password briefly appears in the host's process
 list (`cmk-agent-ctl` only reads it from the command line or interactively).
 
+## Container update recipes (mailcow & co.)
+
+Normally *Update* on a container pulls the new image and recreates only that service (`docker compose pull` and
+`up -d`). Some apps must not be updated that way: they ship their own update script that also updates code,
+configuration and all containers together. For those, AIOPatcher has **update recipes**. When the agent recognizes
+such an app, the recipe takes precedence: the containers tab shows a notice *mailcow: dockerized detected* with the
+button **Update via mailcow update.sh**, and pulling single containers of that project is refused.
+
+Recipes shipped so far:
+
+| App | Detected by | Runs |
+|---|---|---|
+| mailcow: dockerized | compose folder with `mailcow.conf`, `update.sh`, `generate_config.sh` and a `ghcr.io/mailcow/*` image | `./update.sh --force` (no questions; see the [mailcow docs](https://docs.mailcow.email/maintenance/update/)) |
+
+The agent runs the script in the compose folder as root, shows its output live in the job, and afterwards checks that
+every container of the project that was running before runs again (otherwise the job fails and shows the last log
+lines of the affected containers). mailcow restarts the whole stack, so mail is unavailable for a few minutes; back up
+at least the database before major mailcow updates.
+
+**Allow it on the host** (off by default; container updates must be allowed as well, i.e. `allowAppUpdates` and
+`allowPatch: All`):
+
+```bash
+sudo aiopatcher-agent policy set allowUpdateRecipes true
+```
+
+**Security:** only recipes built into the agent are run. The dashboard sends only the recipe name and a container
+name; the agent detects the folder itself from the container's compose labels, checks the recipe again and refuses
+scripts that group or others may write to. There is no way to enter commands in the dashboard.
+
+### Contributing a recipe
+
+A recipe is one JSON file in [`src/AIOPatcher.Contracts/Recipes/`](src/AIOPatcher.Contracts/Recipes/), named after
+its `id`. Example ([mailcow.json](src/AIOPatcher.Contracts/Recipes/mailcow.json), shortened):
+
+```json
+{
+  "id": "mailcow",
+  "name": "mailcow update.sh",
+  "app": "mailcow: dockerized",
+  "docs": "https://docs.mailcow.email/maintenance/update/",
+  "match": { "files": ["mailcow.conf", "update.sh", "generate_config.sh"], "images": ["ghcr.io/mailcow/*", "mailcow/*"] },
+  "command": ["./update.sh", "--force"],
+  "timeoutMinutes": 60,
+  "successExitCodes": [0],
+  "failurePatterns": ["Oh no, something went wrong"],
+  "verify": { "projectRunning": true, "waitSeconds": 300 },
+  "notes": { "en": "Stops and restarts the whole mailcow stack …", "de": "…" }
+}
+```
+
+| Field | Meaning |
+|---|---|
+| `id` | lowercase letters, digits and `-`; the file is `<id>.json` |
+| `name`, `app` | shown in the dashboard: "Update via *name*", "*app* detected" |
+| `docs` | official update guide of the app (https) |
+| `match.files` | files that must all exist in the compose folder (relative paths) |
+| `match.images` | at least one container of the project uses one of these images (`*` = anything) |
+| `command` | the app's script, relative to the compose folder (`./…`), plus arguments. Run directly, without a shell; it must not ask questions (use the app's force/non-interactive flag) |
+| `timeoutMinutes` | 1 to 180 |
+| `successExitCodes` | exit codes that mean success (default `0`) |
+| `failurePatterns` | output lines that mean failure even with exit code 0 |
+| `verify` | `projectRunning`: containers that ran before must run again (not unhealthy); `waitSeconds`: how long to wait |
+| `notes` | text for the confirmation dialog (`en` required, `de` welcome): what the script does, downtime, backups |
+
+Check the app's documentation for the exact flags and what happens without a terminal (the agent closes standard
+input, so a remaining prompt reads an empty answer). Run `dotnet test tests/AIOPatcher.Tests` (the test
+`EveryShippedRecipe_IsValid_AndLoaded` checks every recipe file), then open a pull request with the file and a line in
+the table above. Recipes reach hosts with the next agent update.
+
 ## Local policy on the host
 
 When registering, the agent creates `policy.json` next to its certificates
@@ -751,6 +821,7 @@ The server cannot change it; it is read again for every job.
   "allowAutoUpdateChanges": true,
   "allowMonitoringChanges": false,
   "allowServerUpdate": false,
+  "allowUpdateRecipes": false,
   "disabledModules": []
 }
 ```
@@ -760,7 +831,8 @@ e.g. on the Proxmox host itself or the OPNsense VM. `"allowSelfUpdate": false` p
 signed updates itself. `"trustServerUpdates": false` only allows updates with a release signature
 (see [Agent updates](#agent-updates)). `"allowSystemChanges": true` allows changes to the firewall, SSH/RDP and
 users (see [Compliance](#compliance-firewall-sshrdp-users), off by default). `"allowSourceFixes": false` prevents the agent from disabling broken package sources (see [Broken package sources](#broken-package-sources-apt)). `"allowAutoUpdateChanges": false` prevents the dashboard from turning unattended-upgrades or Windows Update off or on (see [Auto-patch](#auto-patch)). `"allowMonitoringChanges": true` allows installing, reconfiguring and uninstalling Wazuh and Checkmk clients (see [Monitoring clients](#monitoring-clients-wazuh-checkmk), off by default). `"allowAppUpdates": false` forbids program updates via winget and container updates on this host
-(both also need `allowPatch: All`). The policy applies in addition to the switches in the dashboard: only what both
+(both also need `allowPatch: All`). `"allowUpdateRecipes": true` allows app update scripts such as mailcow's
+`update.sh` (see [Container update recipes](#container-update-recipes-mailcow--co), off by default). The policy applies in addition to the switches in the dashboard: only what both
 allow is executed.
 
 ## Agent (development)

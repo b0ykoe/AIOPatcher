@@ -115,13 +115,13 @@ public sealed class SoftwareModule(IPlatformInventory inventory, JobExecutor exe
 
 /// <summary>
 /// docker.inventory: alle Container mit Status; docker.packages: Paketlisten von Images (für den CVE-Abgleich);
-/// docker.appupdate: einen Compose-Container aktualisieren.
+/// docker.appupdate: einen Compose-Container aktualisieren; docker.recipe: Update-Rezept der App ausführen (z. B. mailcow update.sh).
 /// </summary>
 public sealed class DockerModule : IAgentModule
 {
     public string Id => AgentModules.Docker;
     public bool Available => OperatingSystem.IsLinux() && (File.Exists("/usr/bin/docker") || File.Exists("/usr/local/bin/docker"));
-    public IReadOnlyList<string> Actions { get; } = [ModuleActions.Inventory, ModuleActions.AppUpdate, ModuleActions.Packages];
+    public IReadOnlyList<string> Actions { get; } = [ModuleActions.Inventory, ModuleActions.AppUpdate, ModuleActions.Packages, ModuleActions.Recipe];
 
     /// <summary>Container aktualisieren gilt wie Programm-Updates: allowAppUpdates und allowPatch All.</summary>
     public static string? PolicyRejects(AgentPolicy policy) =>
@@ -145,6 +145,19 @@ public sealed class DockerModule : IAgentModule
                 : Json.From(await DockerUpdater.UpdateAsync(name, context.Log, ct));
         }
 
+        if (task.Action == ModuleActions.Recipe)
+        {
+            if (DockerRecipes.PolicyRejects(context.Policy) is { } rejected)
+            {
+                context.Log($"[agent] Rejected: {rejected}");
+                return TaskOutcome.Rejected(rejected);
+            }
+
+            return PullJsonContext.FromElement(task.Payload, PullJsonContext.Default.RecipeUpdateRequest) is { } recipe
+                ? Json.From(await DockerRecipes.RunAsync(recipe, context.Log, ct))
+                : TaskOutcome.Rejected("Recipe task without parameters.");
+        }
+
         if (task.Action == ModuleActions.Packages)
         {
             var request = PullJsonContext.FromElement(task.Payload, PullJsonContext.Default.ImagePackagesRequest);
@@ -160,7 +173,7 @@ public sealed class DockerModule : IAgentModule
         var containers = await DockerInventory.CollectAsync(ct);
         return containers is null
             ? new TaskOutcome(JobOutcome.Failed, "Docker daemon not reachable.")
-            : Json.Ok($"{containers.Count} containers", new ContainerList(containers), PullJsonContext.Default.ContainerList);
+            : Json.Ok($"{containers.Count} containers", new ContainerList(DockerRecipes.WithRecipes(containers, DockerRecipes.PolicyRejects(context.Policy) is null, File.Exists)), PullJsonContext.Default.ContainerList);
     }
 }
 

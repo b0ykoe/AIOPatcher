@@ -90,6 +90,14 @@ public static partial class DockerUpdater
         }
 
         var compose = before.Compose!;
+        // Projekte mit App-eigenem Update-Skript (z. B. mailcow) nicht einzeln ziehen: Versionen gehören dort zusammen
+        if (await DockerRecipes.ForProjectAsync(compose, ct) is { } recipe)
+        {
+            var viaRecipe = $"{name} belongs to {recipe.App}; update it with {recipe.Name} (update recipe \"{recipe.Id}\"), not by pulling single containers.";
+            log($"[agent] {viaRecipe}");
+            return new JobExecutionResult(JobOutcome.Rejected, viaRecipe);
+        }
+
         if (await FindComposeAsync(ct) is not { } command)
         {
             return new JobExecutionResult(JobOutcome.Rejected, "Neither \"docker compose\" nor \"docker-compose\" is installed.");

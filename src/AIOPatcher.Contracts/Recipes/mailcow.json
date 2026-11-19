@@ -1,0 +1,19 @@
+{
+  "id": "mailcow",
+  "name": "mailcow update.sh",
+  "app": "mailcow: dockerized",
+  "docs": "https://docs.mailcow.email/maintenance/update/",
+  "match": {
+    "files": ["mailcow.conf", "update.sh", "generate_config.sh"],
+    "images": ["ghcr.io/mailcow/*", "mailcow/*"]
+  },
+  "command": ["./update.sh", "--force"],
+  "timeoutMinutes": 60,
+  "successExitCodes": [0],
+  "failurePatterns": ["Oh no, something went wrong", "You need to be root", "is not a FQDN"],
+  "verify": { "projectRunning": true, "waitSeconds": 300 },
+  "notes": {
+    "en": "Runs mailcow's own update script without questions (update.sh --force): it pulls the current mailcow version via Git, adds new options to mailcow.conf, then stops and restarts the whole mailcow stack. Mail is unavailable for a few minutes. mailcow does not back up data on its own; back up at least the database before major updates. On hosts with IPv6 it may adjust /etc/docker/daemon.json and restart Docker.",
+    "de": "Führt das Update-Skript von mailcow ohne Rückfragen aus (update.sh --force): Es holt die aktuelle mailcow-Version per Git, ergänzt neue Optionen in mailcow.conf und stoppt und startet danach den ganzen mailcow-Stack. Mail ist dabei einige Minuten nicht erreichbar. mailcow sichert keine Daten selbst; vor größeren Updates mindestens die Datenbank sichern. Auf Hosts mit IPv6 kann es /etc/docker/daemon.json anpassen und Docker neu starten."
+  }
+}

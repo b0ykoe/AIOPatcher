@@ -96,6 +96,9 @@ public static class ModuleActions
     public const string Sample = "sample";
     public const string Changelog = "changelog";
     public const string Packages = "packages";
+
+    /// <summary>docker.recipe: Update-Rezept der App ausführen (siehe <see cref="UpdateRecipeCatalog"/>).</summary>
+    public const string Recipe = "recipe";
 }
 
 /// <summary>docker.packages: Paketliste dieser Images lesen (je Image ein Container; docker cp, nur lesen).</summary>
@@ -232,6 +235,7 @@ public sealed record RenewAnswer(string CertificateSigningRequestPem);
 [JsonSerializable(typeof(List<BrokenAptSource>))]
 [JsonSerializable(typeof(InstallRequest))]
 [JsonSerializable(typeof(AppUpdateRequest))]
+[JsonSerializable(typeof(RecipeUpdateRequest))]
 [JsonSerializable(typeof(ChangelogRequest))]
 [JsonSerializable(typeof(ChangelogResult))]
 [JsonSerializable(typeof(SoftwareList))]
