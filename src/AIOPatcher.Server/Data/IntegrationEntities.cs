@@ -5,9 +5,12 @@ public enum IntegrationType
     Proxmox,
     HetznerCloud,
     Opnsense,
+
+    /// <summary>Proxmox Backup Server (nur lesen: Datastores, Tasks, Backup-Gruppen).</summary>
+    ProxmoxBackup,
 }
 
-/// <summary>Verbindung zu einer externen API: Proxmox VE, Hetzner Cloud oder OPNsense.</summary>
+/// <summary>Verbindung zu einer externen API: Proxmox VE, Hetzner Cloud, OPNsense oder Proxmox Backup Server.</summary>
 public sealed class Integration
 {
     public Guid Id { get; set; } = Guid.NewGuid();

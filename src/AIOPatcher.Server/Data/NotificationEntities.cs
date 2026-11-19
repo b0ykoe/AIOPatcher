@@ -31,6 +31,9 @@ public enum NotificationEvents
 
     /// <summary>Ein Monitoring-Client (Wazuh, Checkmk) hat die Verbindung verloren oder sein Dienst läuft nicht mehr.</summary>
     MonitoringDisconnected = 8192,
+
+    /// <summary>Proxmox Backup Server: Task fehlgeschlagen, Datastore fast voll oder nicht verfügbar, Backup zu alt.</summary>
+    BackupProblem = 16384,
 }
 
 public enum ChannelType

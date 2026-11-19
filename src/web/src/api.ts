@@ -715,6 +715,7 @@ export const notificationEvents = [
   "RebootCheckFailed",
   "ContainerStopped",
   "MonitoringDisconnected",
+  "BackupProblem",
 ] as const;
 export type NotificationEvent = (typeof notificationEvents)[number];
 
@@ -779,7 +780,7 @@ export function kbOf(title: string): string | null {
 
 // --- Integrationen -------------------------------------------------------------------------------
 
-export type IntegrationType = "Proxmox" | "HetznerCloud" | "Opnsense";
+export type IntegrationType = "Proxmox" | "HetznerCloud" | "Opnsense" | "ProxmoxBackup";
 
 export interface Integration {
   id: string;
@@ -794,6 +795,75 @@ export interface Integration {
   lastError: string | null;
   mappedHosts: number;
   firmware: OpnsenseFirmware | null;
+  /** Proxmox Backup Server: Kurzfassung des letzten Abrufs */
+  backup: BackupSummary | null;
+}
+
+export interface BackupSummary {
+  version: string | null;
+  datastores: number;
+  failedTasks: number;
+  staleGroups: number;
+  groups: number;
+  checkedAt: string;
+}
+
+export interface PbsDatastore {
+  store: string;
+  total: number | null;
+  used: number | null;
+  avail: number | null;
+  error: string | null;
+  estimatedFull: string | null;
+  gcState: string | null;
+  gcLastRun: string | null;
+  gcNextRun: string | null;
+}
+
+export interface PbsTask {
+  upid: string;
+  type: string;
+  workerId: string | null;
+  start: string;
+  end: string | null;
+  /** "OK", "WARNINGS: n", "unknown" oder Fehlertext; null = läuft */
+  status: string | null;
+  user: string | null;
+}
+
+export interface PbsGroup {
+  store: string;
+  namespace: string;
+  type: string;
+  id: string;
+  lastBackup: string | null;
+  count: number;
+  /** "ok", "failed" oder null (nie geprüft) */
+  verifyState: string | null;
+  owner: string | null;
+  comment: string | null;
+}
+
+export interface PbsStatus {
+  version: string | null;
+  datastores: PbsDatastore[];
+  failedTasks: PbsTask[];
+  tasks: number;
+  warnings: number;
+  groups: PbsGroup[];
+  checkedAt: string;
+}
+
+/** Proxmox Backup Server mit letztem Zustand (Inventar → Backups). */
+export interface BackupServer {
+  id: string;
+  name: string;
+  siteName: string | null;
+  baseUrl: string | null;
+  enabled: boolean;
+  lastCheckAt: string | null;
+  lastError: string | null;
+  status: PbsStatus | null;
 }
 
 export interface OpnsenseFirmware {

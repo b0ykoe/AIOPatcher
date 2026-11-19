@@ -9,6 +9,11 @@ Written for users, not as a list of commits.
 ## [Unreleased]
 
 ### Added
+- **Proxmox Backup Server:** new integration under **Settings → Integrations** (read-only API token). **Inventory →
+  Backups** shows datastore usage with the estimated full date and garbage collection, failed tasks of the last 7 days,
+  and for every VM, container or host when the last backup ran and whether it was verified. The new notification
+  **Backup problem (Proxmox Backup Server)** reports failed tasks, datastores that are almost full or unavailable, and
+  backups older than 48 hours.
 - **Host page:** a short line under the host name shows at a glance where Wazuh and Checkmk report to, e.g. *Wazuh active: 10.0.0.20:1514*, or whether a client is disconnected, stopped or not installed. Below it you see the client's error and the last action that failed or is running (with a link to the job); a failed client also shows up in the host's hints instead of "All good, nothing to do here right now."
 - **Install command:** new options `--allow-monitoring-changes` (`install.sh`) and `-AllowMonitoringChanges` (`install.ps1`), also for lite agents. **Add host** has switches for both permissions and presets them when the matching features are on, so new hosts are allowed right away.
 

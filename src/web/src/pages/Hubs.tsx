@@ -1,7 +1,8 @@
-import { IconApps, IconBug, IconRadar, IconCalendarTime, IconListCheck, IconNetwork, IconShieldCheck, IconShieldHalfFilled, IconShieldLock } from "@tabler/icons-react";
+import { IconApps, IconBug, IconDatabase, IconRadar, IconCalendarTime, IconListCheck, IconNetwork, IconShieldCheck, IconShieldHalfFilled, IconShieldLock } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import { useSimple } from "../App";
 import { SectionPage } from "../components/SectionTabs";
+import { BackupsPage } from "./BackupsPage";
 import { CompliancePage } from "./CompliancePage";
 import { CveLookupPage } from "./CveLookupPage";
 import { IpamPage } from "./IpamPage";
@@ -39,7 +40,7 @@ export function AutoPatchHub() {
   );
 }
 
-/** Inventar: installierte Programme, Netzwerk (IPAM) und Monitoring-Clients (Wazuh, Checkmk). */
+/** Inventar: installierte Programme, Netzwerk (IPAM), Monitoring-Clients (Wazuh, Checkmk) und Backups (Proxmox Backup Server). */
 export function InventoryHub() {
   const { t } = useTranslation();
   return (
@@ -47,6 +48,7 @@ export function InventoryHub() {
       { value: "software", label: t("nav.software"), icon: IconApps, element: <SoftwarePage /> },
       { value: "network", label: t("hubs.network"), icon: IconNetwork, element: <IpamPage /> },
       { value: "monitoring", label: t("hubs.monitoring"), icon: IconRadar, element: <MonitoringPage /> },
+      { value: "backups", label: t("hubs.backups"), icon: IconDatabase, element: <BackupsPage /> },
     ]} />
   );
 }

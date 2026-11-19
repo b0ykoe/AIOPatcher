@@ -12,7 +12,7 @@ export interface Guide {
   note?: string;
 }
 
-export type GuideTopic = "Proxmox" | "HetznerCloud" | "Opnsense" | "Ntfy" | "Email" | "Discord" | "Slack" | "Telegram" | "Webhook" | "Api";
+export type GuideTopic = "Proxmox" | "HetznerCloud" | "Opnsense" | "ProxmoxBackup" | "Ntfy" | "Email" | "Discord" | "Slack" | "Telegram" | "Webhook" | "Api";
 
 const de: Record<GuideTopic, Guide> = {
   Proxmox: {
@@ -47,6 +47,17 @@ const de: Record<GuideTopic, Guide> = {
       { text: "Hier als key:secret eintragen, URL https://<firewall>. Mit einer Site verknüpfen, damit die ARP-Tabelle ins IPAM übernommen wird." },
     ],
     note: "Ein Firmware-Update startet die Firewall ggf. neu und unterbricht kurz das Netz, auch den VPN-Zugang zu diesem Dashboard.",
+  },
+  ProxmoxBackup: {
+    title: "Proxmox Backup Server anbinden",
+    steps: [
+      { text: "Auf dem PBS (Shell als root) einen eigenen Benutzer anlegen:", code: "proxmox-backup-manager user create aiopatcher@pbs" },
+      { text: "API-Token erzeugen. Das ausgegebene „value“ ist das Secret (wird nur einmal angezeigt):", code: "proxmox-backup-manager user generate-token aiopatcher@pbs dashboard" },
+      { text: "Nur-Lese-Rechte vergeben (Rolle Audit: Datastores, Backups und alle Tasks lesen), für Benutzer und Token:", code: "proxmox-backup-manager acl update / Audit --auth-id aiopatcher@pbs\nproxmox-backup-manager acl update / Audit --auth-id 'aiopatcher@pbs!dashboard'" },
+      { text: "Hier als Token eintragen: aiopatcher@pbs!dashboard:<value> (Doppelpunkt, nicht =). URL: https://<pbs>:8007" },
+      { text: "„Verbindung testen“: Beim selbstsignierten Zertifikat erscheint der Fingerprint, „Diesem Zertifikat vertrauen“ klicken." },
+    ],
+    note: "AIOPatcher liest nur: Datastores, Tasks und Backup-Gruppen. Es startet, löscht oder ändert nichts auf dem PBS. Den PBS-Host selbst patcht der normale Agent.",
   },
   Ntfy: {
     title: "ntfy aufs Smartphone",
@@ -142,6 +153,17 @@ const en: Record<GuideTopic, Guide> = {
       { text: "Enter it here as key:secret, URL https://<firewall>. Link it to a site so the ARP table goes into IPAM." },
     ],
     note: "A firmware update may reboot the firewall and briefly interrupt the network, including VPN access to this dashboard.",
+  },
+  ProxmoxBackup: {
+    title: "Connect Proxmox Backup Server",
+    steps: [
+      { text: "On the PBS (shell as root), create a dedicated user:", code: "proxmox-backup-manager user create aiopatcher@pbs" },
+      { text: "Create an API token. The \"value\" shown is the secret (displayed only once):", code: "proxmox-backup-manager user generate-token aiopatcher@pbs dashboard" },
+      { text: "Grant read-only rights (role Audit: read datastores, backups and all tasks), for the user and the token:", code: "proxmox-backup-manager acl update / Audit --auth-id aiopatcher@pbs\nproxmox-backup-manager acl update / Audit --auth-id 'aiopatcher@pbs!dashboard'" },
+      { text: "Enter as token here: aiopatcher@pbs!dashboard:<value> (colon, not =). URL: https://<pbs>:8007" },
+      { text: "\"Test connection\": for a self-signed certificate the fingerprint appears; click \"Trust this certificate\"." },
+    ],
+    note: "AIOPatcher only reads: datastores, tasks and backup groups. It does not start, delete or change anything on the PBS. The normal agent patches the PBS host itself.",
   },
   Ntfy: {
     title: "ntfy to your phone",

@@ -10,7 +10,14 @@ public static class IntegrationEndpoints
 {
     public sealed record IntegrationDto(
         Guid Id, string Name, IntegrationType Type, Guid? SiteId, string? BaseUrl, string? TlsFingerprintSha256, int KeepSnapshots,
-        bool Enabled, DateTime? LastCheckAt, string? LastError, int MappedHosts, OpnsenseFirmware? Firmware);
+        bool Enabled, DateTime? LastCheckAt, string? LastError, int MappedHosts, OpnsenseFirmware? Firmware, BackupSummaryDto? Backup = null);
+
+    /// <summary>Proxmox Backup Server: Kurzfassung für die Karte in den Einstellungen.</summary>
+    public sealed record BackupSummaryDto(string? Version, int Datastores, int FailedTasks, int StaleGroups, int Groups, DateTime CheckedAt);
+
+    /// <summary>Proxmox Backup Server mit vollem Zustand (Inventar → Backups).</summary>
+    public sealed record BackupServerDto(Guid Id, string Name, string? SiteName, string? BaseUrl, bool Enabled, DateTime? LastCheckAt, string? LastError,
+        PbsStatus? Status);
 
     /// <summary>Secret leer lassen = unverändert (beim Bearbeiten).</summary>
     public sealed record IntegrationRequest(string Name, IntegrationType Type, Guid? SiteId, string? BaseUrl, string? Secret, string? TlsFingerprintSha256, int KeepSnapshots, bool Enabled);
@@ -47,12 +54,42 @@ public static class IntegrationEndpoints
         admin.MapPost("/{id:guid}/auto-map", AutoMap);
         admin.MapPost("/{id:guid}/opnsense/refresh", RefreshOpnsense);
         admin.MapPost("/{id:guid}/opnsense/update", UpdateOpnsense);
+        admin.MapPost("/{id:guid}/pbs/refresh", RefreshBackup);
 
         var read = app.MapGroup("/api/integrations").RequireAuthorization();
         read.MapGet("/", List);
         read.MapGet("/{id:guid}/machines", Machines).RequireAuthorization(UserAccounts.OperatorPolicy);
 
         app.MapPut("/api/hosts/{id:guid}/mapping", SetMapping).RequireAuthorization(UserAccounts.OperatorPolicy);
+        app.MapGet("/api/backups", BackupServers).RequireAuthorization();
+    }
+
+    private static BackupSummaryDto? Summary(Integration integration)
+    {
+        if (integration.Type != IntegrationType.ProxmoxBackup || ProxmoxBackupMonitor.Parse(integration.StatusJson) is not { } status)
+        {
+            return null;
+        }
+
+        return new BackupSummaryDto(status.Version, status.Datastores.Count, status.FailedTasks.Count,
+            status.Groups.Count(g => ProxmoxBackupMonitor.IsStale(g, status.CheckedAt)), status.Groups.Count, status.CheckedAt);
+    }
+
+    private static async Task<List<BackupServerDto>> BackupServers(AppDbContext db, CancellationToken ct) =>
+        (await db.Integrations.AsNoTracking().Include(i => i.Site).Where(i => i.Type == IntegrationType.ProxmoxBackup).OrderBy(i => i.Name).ToListAsync(ct))
+        .Select(i => new BackupServerDto(i.Id, i.Name, i.Site?.Name, i.BaseUrl, i.Enabled, i.LastCheckAt, i.LastError, ProxmoxBackupMonitor.Parse(i.StatusJson)))
+        .ToList();
+
+    private static async Task<IResult> RefreshBackup(Guid id, AppDbContext db, ProxmoxBackupMonitor monitor, CancellationToken ct)
+    {
+        var integration = await db.Integrations.FindAsync([id], ct);
+        if (integration is not { Type: IntegrationType.ProxmoxBackup })
+        {
+            return Results.NotFound();
+        }
+
+        await monitor.RefreshAsync(db, integration, ct);
+        return integration.LastError is { } error ? Results.Problem(error, statusCode: StatusCodes.Status502BadGateway) : Results.NoContent();
     }
 
     private static async Task<List<IntegrationDto>> List(AppDbContext db, CancellationToken ct) =>
@@ -62,7 +99,7 @@ public static class IntegrationEndpoints
             .ToListAsync(ct))
         .Select(x => new IntegrationDto(x.Integration.Id, x.Integration.Name, x.Integration.Type, x.Integration.SiteId, x.Integration.BaseUrl,
             x.Integration.TlsFingerprintSha256, x.Integration.KeepSnapshots, x.Integration.Enabled, x.Integration.LastCheckAt, x.Integration.LastError, x.Mapped,
-            OpnsenseMonitor.Parse(x.Integration.StatusJson)))
+            x.Integration.Type == IntegrationType.Opnsense ? OpnsenseMonitor.Parse(x.Integration.StatusJson) : null, Summary(x.Integration)))
         .ToList();
 
     private static async Task<IResult> RefreshOpnsense(Guid id, AppDbContext db, OpnsenseMonitor monitor, CancellationToken ct)
@@ -178,6 +215,11 @@ public static class IntegrationEndpoints
             errors["secret"] = [tokenProblem];
         }
 
+        if (request.Type == IntegrationType.ProxmoxBackup && !string.IsNullOrWhiteSpace(request.Secret) && ProxmoxBackupClient.TokenProblem(request.Secret) is { } pbsProblem)
+        {
+            errors["secret"] = [pbsProblem];
+        }
+
         if (request.KeepSnapshots is < 1 or > 20)
         {
             errors["keepSnapshots"] = [L.T("1 bis 20 Snapshots behalten.", "Keep 1 to 20 snapshots.")];
@@ -218,7 +260,8 @@ public static class IntegrationEndpoints
         return Results.NoContent();
     }
 
-    private static async Task<IResult> Test(Guid id, AppDbContext db, VirtualizationProviderFactory providers, OpnsenseClientFactory opnsense, CancellationToken ct)
+    private static async Task<IResult> Test(Guid id, AppDbContext db, VirtualizationProviderFactory providers, OpnsenseClientFactory opnsense,
+        ProxmoxBackupClientFactory pbs, CancellationToken ct)
     {
         var integration = await db.Integrations.FindAsync([id], ct);
         if (integration is null)
@@ -229,9 +272,12 @@ public static class IntegrationEndpoints
         TestResultDto result;
         try
         {
-            var message = integration.Type == IntegrationType.Opnsense
-                ? await opnsense.For(integration).TestAsync(ct)
-                : await providers.For(integration)!.TestAsync(ct);
+            var message = integration.Type switch
+            {
+                IntegrationType.Opnsense => await opnsense.For(integration).TestAsync(ct),
+                IntegrationType.ProxmoxBackup => await pbs.For(integration).TestAsync(ct),
+                _ => await providers.For(integration)!.TestAsync(ct),
+            };
             result = new TestResultDto(true, message, null);
             integration.LastError = null;
         }
@@ -318,7 +364,7 @@ public static class IntegrationEndpoints
 
         if (request.IntegrationId is { } integrationId)
         {
-            if (!await db.Integrations.AnyAsync(i => i.Id == integrationId && i.Type != IntegrationType.Opnsense, ct) || string.IsNullOrWhiteSpace(request.ExternalId))
+            if (!await db.Integrations.AnyAsync(i => i.Id == integrationId && (i.Type == IntegrationType.Proxmox || i.Type == IntegrationType.HetznerCloud), ct) || string.IsNullOrWhiteSpace(request.ExternalId))
             {
                 return Results.ValidationProblem(new Dictionary<string, string[]> { ["externalId"] = [L.T("Integration und Maschine wählen.", "Choose integration and machine.")] });
             }

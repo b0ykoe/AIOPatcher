@@ -19,7 +19,8 @@ import {
   ThemeIcon,
   Tooltip,
 } from "@mantine/core";
-import { IconBrandUbuntu, IconCloud, IconEdit, IconFlame, IconLink, IconPlugConnected, IconPlus, IconServer2, IconTrash } from "@tabler/icons-react";
+import { IconBrandUbuntu, IconCloud, IconDatabase, IconEdit, IconFlame, IconLink, IconPlugConnected, IconPlus, IconRefresh, IconServer2, IconTrash } from "@tabler/icons-react";
+import { Link } from "react-router";
 import { useTranslation } from "react-i18next";
 import { api, formatRelative, type Integration, type IntegrationTestResult, type IntegrationType, type Site } from "../../api";
 import { CardTitle, confirmAction, EmptyState, errorText, notifyError, notifySuccess } from "../ui";
@@ -28,8 +29,10 @@ import { FeatureOffHint, useFeatures } from "../../features";
 import { MonitoringTargets } from "../monitoring/MonitoringTargets";
 
 
-const types: IntegrationType[] = ["Proxmox", "HetznerCloud", "Opnsense"];
-const typeIcon: Record<IntegrationType, typeof IconServer2> = { Proxmox: IconServer2, HetznerCloud: IconCloud, Opnsense: IconFlame };
+const types: IntegrationType[] = ["Proxmox", "HetznerCloud", "Opnsense", "ProxmoxBackup"];
+const typeIcon: Record<IntegrationType, typeof IconServer2> = { Proxmox: IconServer2, HetznerCloud: IconCloud, Opnsense: IconFlame, ProxmoxBackup: IconDatabase };
+/** Typen, denen Hosts zugeordnet werden (Snapshots, Backups): Proxmox VE und Hetzner Cloud. */
+const mappable = (type: IntegrationType) => type === "Proxmox" || type === "HetznerCloud";
 
 export function IntegrationSettings() {
   const { t } = useTranslation();
@@ -96,6 +99,18 @@ export function IntegrationSettings() {
     setBusy(i.id);
     try {
       await api.post(`/api/integrations/${i.id}/opnsense/refresh`);
+    } catch (e) {
+      notifyError(e);
+    } finally {
+      setBusy(null);
+      load();
+    }
+  };
+
+  const refreshBackup = async (i: Integration) => {
+    setBusy(i.id);
+    try {
+      await api.post(`/api/integrations/${i.id}/pbs/refresh`);
     } catch (e) {
       notifyError(e);
     } finally {
@@ -173,7 +188,7 @@ export function IntegrationSettings() {
                     </Text>
                   </div>
                 </Group>
-                {i.type !== "Opnsense" && <Badge size="sm">{t("integrations.mapped", { count: i.mappedHosts })}</Badge>}
+                {mappable(i.type) && <Badge size="sm">{t("integrations.mapped", { count: i.mappedHosts })}</Badge>}
               </Group>
 
               {result ? (
@@ -205,6 +220,14 @@ export function IntegrationSettings() {
               {i.type === "Opnsense" && (
                 <Text size="xs" c="dimmed" mt={4}>{i.siteId ? t("opnsense.arpHint") : ""}</Text>
               )}
+              {i.type === "ProxmoxBackup" && i.backup && (
+                <Group gap={6} mt="sm">
+                  {i.backup.version && <Badge size="sm" color="gray">PBS {i.backup.version}</Badge>}
+                  <Badge size="sm" color="gray">{t("pbs.datastores", { count: i.backup.datastores })}</Badge>
+                  <Badge size="sm" color={i.backup.failedTasks > 0 ? "red" : "teal"}>{t("pbs.failedTasks", { count: i.backup.failedTasks })}</Badge>
+                  {i.backup.staleGroups > 0 && <Badge size="sm" color="orange">{t("pbs.staleGroups", { count: i.backup.staleGroups })}</Badge>}
+                </Group>
+              )}
 
               <Group gap="xs" mt="sm" justify="flex-end">
                 {i.type === "Opnsense" && (
@@ -220,10 +243,18 @@ export function IntegrationSettings() {
                     )}
                   </>
                 )}
+                {i.type === "ProxmoxBackup" && (
+                  <>
+                    <Button size="compact-xs" variant="light" leftSection={<IconRefresh size={14} />} loading={busy === i.id} onClick={() => void refreshBackup(i)}>
+                      {t("pbs.refresh")}
+                    </Button>
+                    <Button size="compact-xs" variant="light" component={Link} to="/inventory?tab=backups">{t("pbs.open")}</Button>
+                  </>
+                )}
                 <Button size="compact-xs" variant="light" leftSection={<IconPlugConnected size={14} />} loading={busy === i.id} onClick={() => void test(i)}>
                   {t("integrations.test")}
                 </Button>
-                {i.type !== "Opnsense" && (
+                {mappable(i.type) && (
                   <Tooltip label={t("integrations.autoMapHint")}>
                     <Button size="compact-xs" variant="light" leftSection={<IconLink size={14} />} disabled={busy === i.id} onClick={() => void autoMap(i)}>
                       {t("integrations.autoMap")}
@@ -259,6 +290,9 @@ export function IntegrationSettings() {
           </Text>
           <Text size="sm">
             <b>OPNsense:</b> {t("integrations.opnsensePerms")}
+          </Text>
+          <Text size="sm">
+            <b>Proxmox Backup Server:</b> {t("integrations.pbsPerms")}
           </Text>
         </Stack>
       </Card>
@@ -312,14 +346,16 @@ function IntegrationModal({ integration, sites, onClose, onSaved }: { integratio
     }
   };
 
-  // Häufigster Fehler: nur das Secret (UUID) eingefügt → Proxmox antwortet mit 401
+  // Häufigster Fehler: nur das Secret (UUID) eingefügt → 401. Proxmox VE trennt mit "=", PBS mit ":" (dort geht auch "=").
   const trimmed = secret.trim();
-  const secretProblem = type !== "Proxmox" || trimmed === "" || /^[^@\s!=]+@[^!\s=]+![^=\s]+=\S+$/.test(trimmed)
+  const tokenPattern = type === "Proxmox" ? /^[^@\s!=]+@[^!\s=]+![^=\s]+=\S+$/ : /^[^@\s!=:]+@[^!\s=:]+![^=:\s]+[:=]\S+$/;
+  const pveLike = type === "Proxmox" || type === "ProxmoxBackup";
+  const secretProblem = !pveLike || trimmed === "" || tokenPattern.test(trimmed)
     ? null
     : /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(trimmed)
-      ? t("integrations.proxmoxOnlySecret")
-      : t("integrations.proxmoxBadFormat");
-  const secretLabel = type === "Proxmox" ? t("integrations.proxmoxToken") : type === "HetznerCloud" ? t("integrations.hetznerToken") : t("integrations.opnsenseKey");
+      ? t(type === "Proxmox" ? "integrations.proxmoxOnlySecret" : "pbs.onlySecret")
+      : t(type === "Proxmox" ? "integrations.proxmoxBadFormat" : "pbs.badFormat");
+  const secretLabel = pveLike ? t("integrations.proxmoxToken") : type === "HetznerCloud" ? t("integrations.hetznerToken") : t("integrations.opnsenseKey");
   const secretHint = type === "Opnsense" ? "key:secret" : undefined;
 
   return (
@@ -337,12 +373,18 @@ function IntegrationModal({ integration, sites, onClose, onSaved }: { integratio
           />
         </Group>
         {type !== "HetznerCloud" && (
-          <TextInput label={t("integrations.url")} placeholder={type === "Proxmox" ? "https://pve.example:8006" : "https://fw.example"} value={baseUrl} onChange={(e) => setBaseUrl(e.currentTarget.value)} />
+          <TextInput label={t("integrations.url")} placeholder={type === "Proxmox" ? "https://pve.example:8006" : type === "ProxmoxBackup" ? "https://pbs.example:8007" : "https://fw.example"} value={baseUrl} onChange={(e) => setBaseUrl(e.currentTarget.value)} />
         )}
         {type === "Proxmox" && (
           <Alert color="blue" p="sm" title={t("integrations.proxmoxFormatTitle")}>
             <Code block fz="sm" mb={6}>root@pam!aiopatcher=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx</Code>
             <Text size="xs">{t("integrations.proxmoxFormatText")}</Text>
+          </Alert>
+        )}
+        {type === "ProxmoxBackup" && (
+          <Alert color="blue" p="sm" title={t("integrations.proxmoxFormatTitle")}>
+            <Code block fz="sm" mb={6}>aiopatcher@pbs!dashboard:xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx</Code>
+            <Text size="xs">{t("pbs.formatText")}</Text>
           </Alert>
         )}
         <PasswordInput
@@ -363,7 +405,7 @@ function IntegrationModal({ integration, sites, onClose, onSaved }: { integratio
             onChange={(v) => setSiteId(v ?? "")}
             allowDeselect={false}
           />
-          {type !== "Opnsense" && (
+          {mappable(type) && (
             <NumberInput label={t("integrations.keep")} description={t("integrations.keepHint")} value={keep} onChange={(v) => setKeep(typeof v === "number" ? v : 3)} min={1} max={20} />
           )}
         </Group>

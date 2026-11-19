@@ -19,7 +19,7 @@ export function MappingCard({ host, onSaved }: { host: HostDetail; onSaved: () =
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    void api.get<Integration[]>("/api/integrations").then((list) => setIntegrations(list.filter((i) => i.type !== "Opnsense"))).catch(() => {});
+    void api.get<Integration[]>("/api/integrations").then((list) => setIntegrations(list.filter((i) => i.type === "Proxmox" || i.type === "HetznerCloud"))).catch(() => {});
   }, []);
 
   useEffect(() => {

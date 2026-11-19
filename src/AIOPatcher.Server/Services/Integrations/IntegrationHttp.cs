@@ -81,6 +81,9 @@ public sealed class IntegrationHttp(IDataProtectionProvider dataProtection)
         return ex switch
         {
             TaskCanceledException => new IntegrationException(L.T("Zeitüberschreitung.", "Timed out.")),
+            HttpRequestException { StatusCode: System.Net.HttpStatusCode.Unauthorized } when integration.Type == IntegrationType.ProxmoxBackup => new IntegrationException(
+                L.T("Anmeldung abgelehnt (401). Das Token muss das Format benutzer@realm!token-id:secret haben (z. B. root@pam!aiopatcher:…), nicht nur das Secret.",
+                    "Login rejected (401). The token must have the format user@realm!token-id:secret (e.g. root@pam!aiopatcher:…), not just the secret.")),
             HttpRequestException { StatusCode: System.Net.HttpStatusCode.Unauthorized } when integration.Type == IntegrationType.Proxmox => new IntegrationException(
                 L.T("Anmeldung abgelehnt (401). Das Token muss das Format benutzer@realm!token-id=secret haben (z. B. root@pam!aiopatcher=…), nicht nur das Secret.",
                     "Login rejected (401). The token must have the format user@realm!token-id=secret (e.g. root@pam!aiopatcher=…), not just the secret.")),

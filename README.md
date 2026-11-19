@@ -175,6 +175,11 @@ tested against real systems, but against mocked APIs and unit tests):
 - **Reports**: compliance per site and period, CSV and print/PDF
 - **IPAM light**: subnets, usage, next free address, conflicts; addresses from agents, OPNsense ARP and manual entries
 - **OPNsense**: firmware status, update notice, update by click
+- **Proxmox Backup Server** (*Inventory → Backups*, read-only API token with role `Audit`, format
+  `user@realm!token-id:secret`): datastore usage with estimated full date and garbage collection, failed tasks of the
+  last 7 days (backup, verify, prune, GC, sync), and per VM, container or host the age of the newest backup and whether
+  it was verified. Checked every 15 minutes; the notification *Backup problem* reports new failed tasks, datastores at
+  90 % or unavailable, and backups older than 48 hours. The PBS host itself is patched by the normal agent.
 
 **Operations**
 - Docker image with built-in healthcheck, notice in the dashboard when a new AIOPatcher version is available
