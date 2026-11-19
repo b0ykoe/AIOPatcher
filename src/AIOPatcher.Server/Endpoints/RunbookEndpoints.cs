@@ -136,7 +136,7 @@ public static class RunbookEndpoints
         return Results.Ok(ToDto(runbook, lastRuns.GetValueOrDefault(runbook.Id), clock, await MembersAsync(db, ct)));
     }
 
-    private static async Task<IResult> CreateRunbook(RunbookRequest request, AppDbContext db, ServerClock clock, AuditLog audit, CancellationToken ct)
+    public static async Task<IResult> CreateRunbook(RunbookRequest request, AppDbContext db, ServerClock clock, AuditLog audit, CancellationToken ct)
     {
         var runbook = new Runbook { Name = "" };
         if (await ApplyAsync(runbook, request, db, ct) is { } problem)
@@ -274,6 +274,12 @@ public static class RunbookEndpoints
         // Ein Host ist nur in einem Plan ausgewählt: hier ausgewählte Hosts verlassen andere Pläne
         var moved = await db.RunbookWaveHosts.Where(m => allHostIds.Contains(m.HostId) && m.Wave!.RunbookId != runbook.Id).ToListAsync(ct);
         db.RunbookWaveHosts.RemoveRange(moved);
+
+        // Bewusst ausgewählt: eine frühere Ausnahme ("aus allen Plänen genommen") ist damit aufgehoben
+        foreach (var host in await db.Hosts.Where(h => allHostIds.Contains(h.Id) && h.PlanExcluded).ToListAsync(ct))
+        {
+            host.PlanExcluded = false;
+        }
 
         db.RunbookWaves.RemoveRange(runbook.Waves);
         runbook.Waves = waves.Select((w, index) => new RunbookWave

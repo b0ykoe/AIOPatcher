@@ -16,6 +16,7 @@ import { openSetupWizard } from "../components/SetupWizard";
 import { UpdateBanner } from "../components/UpdateBanner";
 import { CardTitle, confirmAction, HostStatusLabel, JobStatusBadge, notifyError, reportBulk, StatCard } from "../components/ui";
 import { TemplatePicker } from "./PlansPage";
+import { HypervisorCard } from "../components/plans/HypervisorCard";
 
 interface Todo {
   key: string;
@@ -244,6 +245,8 @@ export function OverviewPage() {
           <StatCard label={t("overview.withAutoPatch")} value={`${o.autoPatchHosts} / ${o.hosts}`} icon={<IconClockPlay size={20} />} color="violet" />
         </SimpleGrid>
       )}
+
+      <HypervisorCard hosts={active} />
 
       <section>
         <CardTitle actions={<Anchor component={Link} to="/hosts" size="sm">{t("overview.allHosts")}</Anchor>}>{t("nav.hosts")}</CardTitle>

@@ -772,6 +772,16 @@ const de = {
       allowServerUpdate: "Server-Update",
     },
   },
+  hypervisors: {
+    title: "Hypervisoren",
+    hint: "Anstehende Updates der Proxmox-Hosts. Sie werden regelmäßig gescannt; ein Plan mit Freigabe installiert erst, wenn du zustimmst.",
+    useTemplate: "Plan mit Freigabe anlegen",
+    updates_one: "{{count}} Update · {{security}} Sec",
+    updates_other: "{{count}} Updates · {{security}} Sec",
+    upToDate: "aktuell",
+    notScanned: "noch nicht gescannt",
+    showUpdates: "Updates ansehen",
+  },
   timings: {
     title: "Weitere Intervalle",
     intro: "Wie oft AIOPatcher Daten von den Agents holt und Integrationen abfragt. Kürzer heißt aktueller, aber mehr Last auf Hosts und APIs. Gilt sofort, ohne Neustart.",
@@ -1601,6 +1611,7 @@ const de = {
       security: { name: "Security täglich", text: "Jede Nacht 2–4 Uhr nur Sicherheitsupdates, kein Neustart. Für Server, die selten neu starten dürfen." },
       testFirst: { name: "Test-Host zuerst", text: "Zuerst Hosts mit Tag „test“, dann 1 Stunde Pause, dann der Rest. Bei Fehlern hält der Plan an." },
       proxmox: { name: "Proxmox sicher", text: "VMs und Container mit Snapshot und Backup-Prüfung zuerst, der Proxmox-Host selbst zuletzt und erst nach Freigabe." },
+      hypervisor: { name: "Hypervisor mit Freigabe", text: "Nur die Proxmox-Hosts (werden automatisch gefunden): sonntags prüfen und anzeigen, installiert wird erst nach deiner Freigabe, ohne Neustart." },
     },
   },
   metrics: {

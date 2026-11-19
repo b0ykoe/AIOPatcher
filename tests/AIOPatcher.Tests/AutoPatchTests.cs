@@ -287,6 +287,24 @@ public sealed class PatchPlanTests : IDisposable
     }
 
     [Fact]
+    public async Task SelectingAnExcludedHostInAPlan_LiftsTheExclusion()
+    {
+        var pve = Host("pve");
+        pve.PlanExcluded = true;
+        await _db.SaveChangesAsync();
+
+        // Vorlage "Hypervisor mit Freigabe": der Proxmox-Host ist direkt ausgewählt
+        var request = new AIOPatcher.Server.Endpoints.RunbookEndpoints.RunbookRequest("Hypervisor", null, RunbookFailurePolicy.StopImmediately, true, 64, "04:00", 240,
+            [new("Proxmox-Host", PatchScope.All, false, true, [pve.Id])]);
+        await AIOPatcher.Server.Endpoints.RunbookEndpoints.CreateRunbook(request, _db, new ServerClock(new AIOPatcher.Server.Options.AIOPatcherOptions()),
+            new AuditLog(_db, new Microsoft.AspNetCore.Http.HttpContextAccessor()), CancellationToken.None);
+
+        Assert.False((await _db.Hosts.SingleAsync(h => h.Id == pve.Id)).PlanExcluded);
+        var member = (await PatchPlans.ResolveAsync(_db, CancellationToken.None))[pve.Id];
+        Assert.Equal(("Hypervisor", PlanVia.Host), (member.PlanName, member.Via));
+    }
+
+    [Fact]
     public async Task PauseBetweenGroups_DelaysNextGroup()
     {
         var second = Host("web02", "late");

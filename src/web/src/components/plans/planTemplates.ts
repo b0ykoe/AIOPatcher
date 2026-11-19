@@ -28,7 +28,7 @@ export interface PlanDraft {
   groups: GroupDraft[];
 }
 
-export type TemplateKey = "homelab" | "security" | "testFirst" | "proxmox";
+export type TemplateKey = "homelab" | "security" | "testFirst" | "proxmox" | "hypervisor";
 
 const SUNDAY = 64;
 const DAILY = 127;
@@ -93,6 +93,15 @@ export function fromTemplate(key: TemplateKey, hosts: HostSummary[], othersTaken
           emptyGroup(t("plans.groupGuests"), { scope: "All", allowReboot: true, snapshotBeforePatch: true, requireBackupWithinHours: 48, hostIds: guests }),
           emptyGroup(t("plans.groupHypervisor"), { scope: "All", allowReboot: true, requireApproval: true, hostIds: nodes }),
         ],
+      };
+    }
+    case "hypervisor": {
+      // Nur die Proxmox-Hosts selbst: anzeigen, und installiert wird erst nach deiner Freigabe (auch ausgenommene)
+      const nodes = hosts.filter((h) => isProxmoxHost(h) && h.status !== "Revoked").map((h) => h.id);
+      return {
+        ...emptyPlan(), name: t("plans.tpl.hypervisor.name"), description: t("plans.tpl.hypervisor.text"), failurePolicy: "StopImmediately",
+        scheduleDays: SUNDAY, scheduleStart: "04:00", scheduleDurationMinutes: 240,
+        groups: [emptyGroup(t("plans.groupHypervisor"), { scope: "All", allowReboot: false, requireApproval: true, hostIds: nodes })],
       };
     }
   }

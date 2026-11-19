@@ -8,6 +8,14 @@ Written for users, not as a list of commits.
 
 ## [Unreleased]
 
+### Added
+- **Hypervisors on the overview:** a **Hypervisors** card lists your Proxmox hosts (found automatically) with their
+  pending and security updates, reboot status and how they are patched (plan, excluded or no plan), with
+  **View updates** per host.
+- **Plan template "Hypervisor with approval":** only the Proxmox hosts, checked on Sundays; the updates are shown and
+  installed only after you approve them, without a reboot. The overview card offers it while a hypervisor has no
+  plan. Selecting an excluded host in a plan lifts its exclusion.
+
 ## [0.14.3] - 2026-11-19
 
 ### Added

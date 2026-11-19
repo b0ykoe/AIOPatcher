@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router";
-import { Alert, Anchor, Badge, Button, Card, Group, Modal, SimpleGrid, Stack, Table, Text, ThemeIcon, Tooltip, UnstyledButton } from "@mantine/core";
+import { Alert, Anchor, Badge, Button, Card, Group, Modal, SimpleGrid, Stack, Table, Text, ThemeIcon, Tooltip, UnstyledButton, useMatches } from "@mantine/core";
 import {
   IconBolt, IconCalendarTime, IconCamera, IconClock, IconFlask, IconHandStop, IconHomeCog, IconHourglass, IconPlayerPlay, IconPlus, IconRefresh,
-  IconServer2, IconSettings, IconShieldCheck, IconTemplate, IconUsersGroup,
+  IconServer2, IconServerCog, IconSettings, IconShieldCheck, IconTemplate, IconUsersGroup,
 } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import { useSiteScope } from "../siteScope";
@@ -21,6 +21,7 @@ const templates: { key: TemplateKey; icon: typeof IconHomeCog; color: string }[]
   { key: "security", icon: IconShieldCheck, color: "teal" },
   { key: "testFirst", icon: IconFlask, color: "cyan" },
   { key: "proxmox", icon: IconServer2, color: "orange" },
+  { key: "hypervisor", icon: IconServerCog, color: "grape" },
 ];
 
 /** Patch-Pläne: wann und in welcher Reihenfolge gepatcht wird. Ersetzt Abläufe und Auto-Patch pro Host. */
@@ -225,6 +226,7 @@ export function TemplatePicker({ opened, onClose }: { opened: boolean; onClose: 
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [quick, setQuick] = useState(false);
+  const pickerCols = useMatches({ base: 1, sm: 2 });
   const pick = (key: TemplateKey | null) => {
     onClose();
     navigate(key ? `/auto-patch/plans/new?template=${key}` : "/auto-patch/plans/new");
@@ -242,8 +244,10 @@ export function TemplatePicker({ opened, onClose }: { opened: boolean; onClose: 
         </Group>
       </UnstyledButton>
       <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
-        {templates.map(({ key, icon: Icon, color }) => (
-          <UnstyledButton key={key} onClick={() => pick(key)} className="template-card">
+        {templates.map(({ key, icon: Icon, color }, i) => (
+          <UnstyledButton key={key} onClick={() => pick(key)} className="template-card"
+            // Letzte Vorlage bei ungerader Anzahl über beide Spalten (keine Lücke)
+            style={pickerCols === 2 && templates.length % 2 === 1 && i === templates.length - 1 ? { gridColumn: "span 2" } : undefined}>
             <Group gap="sm" wrap="nowrap" align="flex-start">
               <ThemeIcon size={40} radius="md" variant="light" color={color}><Icon size={22} /></ThemeIcon>
               <div>
