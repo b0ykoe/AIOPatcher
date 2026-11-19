@@ -15,6 +15,13 @@ public static class IntegrationEndpoints
     /// <summary>Proxmox Backup Server: Kurzfassung für die Karte in den Einstellungen.</summary>
     public sealed record BackupSummaryDto(string? Version, int Datastores, int FailedTasks, int StaleGroups, int Groups, DateTime CheckedAt);
 
+/// <summary>Proxmox-VE-Cluster mit Backup-Jobs (und mit Schalter: Gäste ohne Job, fehlgeschlagene Läufe).</summary>
+    public sealed record BackupClusterDto(Guid Id, string Name, string? SiteName, bool Enabled, PveBackupStatus? Status);
+
+    /// <summary>Inventar → Backups: Proxmox Backup Server und Backup-Jobs der Proxmox-VE-Cluster.</summary>
+    /// <param name="ChecksEnabled">Schalter "Backup-Jobs prüfen".</param>
+    public sealed record BackupOverviewDto(bool ChecksEnabled, IReadOnlyList<BackupServerDto> Servers, IReadOnlyList<BackupClusterDto> Clusters);
+
     /// <summary>Proxmox Backup Server mit vollem Zustand (Inventar → Backups).</summary>
     public sealed record BackupServerDto(Guid Id, string Name, string? SiteName, string? BaseUrl, bool Enabled, DateTime? LastCheckAt, string? LastError,
         PbsStatus? Status);
@@ -55,6 +62,7 @@ public static class IntegrationEndpoints
         admin.MapPost("/{id:guid}/opnsense/refresh", RefreshOpnsense);
         admin.MapPost("/{id:guid}/opnsense/update", UpdateOpnsense);
         admin.MapPost("/{id:guid}/pbs/refresh", RefreshBackup);
+        admin.MapPost("/{id:guid}/backup-jobs/refresh", RefreshBackupJobs);
 
         var read = app.MapGroup("/api/integrations").RequireAuthorization();
         read.MapGet("/", List);
@@ -75,10 +83,31 @@ public static class IntegrationEndpoints
             status.Groups.Count(g => ProxmoxBackupMonitor.IsStale(g, status.CheckedAt)), status.Groups.Count, status.CheckedAt);
     }
 
-    private static async Task<List<BackupServerDto>> BackupServers(AppDbContext db, CancellationToken ct) =>
-        (await db.Integrations.AsNoTracking().Include(i => i.Site).Where(i => i.Type == IntegrationType.ProxmoxBackup).OrderBy(i => i.Name).ToListAsync(ct))
-        .Select(i => new BackupServerDto(i.Id, i.Name, i.Site?.Name, i.BaseUrl, i.Enabled, i.LastCheckAt, i.LastError, ProxmoxBackupMonitor.Parse(i.StatusJson)))
-        .ToList();
+    private static async Task<BackupOverviewDto> BackupServers(AppDbContext db, FeatureFlags features, CancellationToken ct)
+    {
+        var integrations = await db.Integrations.AsNoTracking().Include(i => i.Site)
+            .Where(i => i.Type == IntegrationType.ProxmoxBackup || i.Type == IntegrationType.Proxmox)
+            .OrderBy(i => i.Name).ToListAsync(ct);
+        return new BackupOverviewDto(features.IsOn(Feature.BackupJobChecks),
+            integrations.Where(i => i.Type == IntegrationType.ProxmoxBackup)
+                .Select(i => new BackupServerDto(i.Id, i.Name, i.Site?.Name, i.BaseUrl, i.Enabled, i.LastCheckAt, i.LastError, ProxmoxBackupMonitor.Parse(i.StatusJson)))
+                .ToList(),
+            integrations.Where(i => i.Type == IntegrationType.Proxmox)
+                .Select(i => new BackupClusterDto(i.Id, i.Name, i.Site?.Name, i.Enabled, ProxmoxBackupJobsMonitor.Parse(i.StatusJson)))
+                .ToList());
+    }
+
+    private static async Task<IResult> RefreshBackupJobs(Guid id, AppDbContext db, ProxmoxBackupJobsMonitor monitor, CancellationToken ct)
+    {
+        var integration = await db.Integrations.FindAsync([id], ct);
+        if (integration is not { Type: IntegrationType.Proxmox })
+        {
+            return Results.NotFound();
+        }
+
+        var status = await monitor.RefreshAsync(db, integration, ct);
+        return status.Error is { } error ? Results.Problem(error, statusCode: StatusCodes.Status502BadGateway) : Results.NoContent();
+    }
 
     private static async Task<IResult> RefreshBackup(Guid id, AppDbContext db, ProxmoxBackupMonitor monitor, CancellationToken ct)
     {

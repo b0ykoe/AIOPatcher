@@ -67,6 +67,53 @@ public sealed class ProxmoxBackupTests
         Assert.False(ProxmoxBackupMonitor.IsStale(vm, Now));
     }
 
+    [Fact]
+    public void ProxmoxVe_BackupJobs_GuestsAndFailedRuns()
+    {
+        var jobs = ProxmoxBackupJobsMonitor.ParseJobs(JsonNode.Parse("""
+            [{"id":"backup-1a2b","schedule":"21:00","storage":"pbs","all":1,"exclude":"105,106","mode":"snapshot","enabled":1,"next-run":1795100000,"comment":"Nightly"},
+             {"id":"backup-3c4d","schedule":"sun 01:00","storage":"usb","vmid":"100,101","enabled":0},
+             {"id":"backup-old","starttime":"02:30","dow":"mon,wed","storage":"local","pool":"prod"}]
+            """));
+        Assert.Equal(3, jobs.Count);
+        var nightly = jobs.Single(j => j.Id == "backup-1a2b");
+        Assert.True(nightly.All && nightly.Enabled);
+        Assert.Equal(["105", "106"], nightly.Exclude);
+        Assert.NotNull(nightly.NextRun);
+        Assert.False(jobs.Single(j => j.Id == "backup-3c4d").Enabled);
+        Assert.Equal(["100", "101"], jobs.Single(j => j.Id == "backup-3c4d").VmIds);
+        var legacy = jobs.Single(j => j.Id == "backup-old");
+        Assert.True(legacy.Enabled); // "enabled" fehlt = an
+        Assert.Equal(("mon,wed 02:30", "prod"), (legacy.Schedule, legacy.Pool));
+
+        var guests = ProxmoxBackupJobsMonitor.ParseGuests(JsonNode.Parse("""[{"vmid":120,"name":"test-vm","type":"qemu"},{"vmid":105,"name":"tmp","type":"lxc"}]"""));
+        Assert.Equal([105, 120], guests.Select(g => g.VmId));
+
+        var tasks = ProxmoxBackupJobsMonitor.ParseFailedTasks(JsonNode.Parse($$"""
+            [{"upid":"A","type":"vzdump","node":"pve1","id":"","starttime":{{Epoch(Now.AddHours(-3))}},"endtime":{{Epoch(Now.AddHours(-2))}},"status":"job errors"},
+             {"upid":"B","type":"vzdump","node":"pve1","id":"101","starttime":{{Epoch(Now.AddHours(-1))}},"status":"OK"},
+             {"upid":"C","type":"qmstart","node":"pve1","id":"101","starttime":{{Epoch(Now)}},"status":"failed"},
+             {"upid":"D","type":"vzdump","node":"pve2","id":"130","starttime":{{Epoch(Now.AddDays(-9))}},"status":"interrupted"}]
+            """), Now.AddDays(-7));
+        Assert.Equal("A", Assert.Single(tasks).Upid);
+        Assert.Null(tasks[0].Guest);
+
+        // Erstes Prüfen: alle Gäste ohne Job einmal zusammen, aber keine alten Fehlläufe
+        var first = new PveBackupStatus(jobs, guests, tasks, Now);
+        var problems = ProxmoxBackupJobsMonitor.Problems(null, first);
+        Assert.Contains("2 guest(s) without a backup job", Assert.Single(problems).Title);
+
+        // Danach nur Neues
+        var next = first with { NotBackedUp = [.. guests, new PveGuest(140, "new-vm", "qemu")], FailedTasks = [new PveBackupTask("E", "pve1", "140", Now, Now, "storage full"), .. tasks] };
+        problems = ProxmoxBackupJobsMonitor.Problems(first, next);
+        Assert.Equal(2, problems.Count);
+        Assert.Contains(problems, p => p.Title.Contains("1 guest(s)") && p.Message.Contains("140 new-vm"));
+        Assert.Contains(problems, p => p.Title.Contains("1 backup run(s) failed") && p.Message.Contains("pve1 140: storage full"));
+
+        // Schalter aus: nichts auszuwerten
+        Assert.Empty(ProxmoxBackupJobsMonitor.Problems(next, next with { NotBackedUp = null, FailedTasks = null }));
+    }
+
     private static PbsStatus Status(DateTime at, double usedPercent, IReadOnlyList<PbsTask> failed, params PbsGroup[] groups) =>
         new("3.2-7", [new PbsDatastore("main", 1000, (long)(usedPercent * 10), 0, null, null, null, null, null)], failed, 10, 0, groups, at);
 

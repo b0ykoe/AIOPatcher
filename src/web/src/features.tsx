@@ -26,7 +26,8 @@ export type Feature =
   | "RebootCheck"
   | "AutoUpdateControl"
   | "Metrics"
-  | "MonitoringClients";
+  | "MonitoringClients"
+  | "BackupJobChecks";
 
 export interface FeatureState {
   feature: Feature;

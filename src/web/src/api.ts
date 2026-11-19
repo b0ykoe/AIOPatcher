@@ -854,6 +854,45 @@ export interface PbsStatus {
   checkedAt: string;
 }
 
+/** Backup-Job aus Proxmox VE (Datacenter → Backup). */
+export interface PveBackupJob {
+  id: string;
+  enabled: boolean;
+  schedule: string | null;
+  storage: string | null;
+  all: boolean;
+  vmIds: string[];
+  pool: string | null;
+  exclude: string[];
+  mode: string | null;
+  comment: string | null;
+  nextRun: string | null;
+  node: string | null;
+}
+
+export interface PveBackupStatus {
+  jobs: PveBackupJob[];
+  /** nur mit Schalter "Backup-Jobs prüfen" */
+  notBackedUp: { vmId: number; name: string | null; type: string | null }[] | null;
+  failedTasks: { upid: string; node: string | null; guest: string | null; start: string; end: string | null; status: string }[] | null;
+  checkedAt: string;
+  error: string | null;
+}
+
+export interface BackupCluster {
+  id: string;
+  name: string;
+  siteName: string | null;
+  enabled: boolean;
+  status: PveBackupStatus | null;
+}
+
+export interface BackupOverview {
+  checksEnabled: boolean;
+  servers: BackupServer[];
+  clusters: BackupCluster[];
+}
+
 /** Proxmox Backup Server mit letztem Zustand (Inventar → Backups). */
 export interface BackupServer {
   id: string;

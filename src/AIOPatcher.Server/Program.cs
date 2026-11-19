@@ -169,6 +169,8 @@ builder.Services.AddSingleton<OpnsenseMonitor>();
 builder.Services.AddSingleton<ProxmoxBackupClientFactory>();
 builder.Services.AddSingleton<ProxmoxBackupMonitor>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<ProxmoxBackupMonitor>());
+builder.Services.AddSingleton<ProxmoxBackupJobsMonitor>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<ProxmoxBackupJobsMonitor>());
 builder.Services.AddHostedService(sp => sp.GetRequiredService<OpnsenseMonitor>());
 builder.Services.AddHttpClient(CveService.HttpClientName, c =>
 {

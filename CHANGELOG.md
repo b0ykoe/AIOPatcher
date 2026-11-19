@@ -8,6 +8,12 @@ Written for users, not as a list of commits.
 
 ## [Unreleased]
 
+### Added
+- **Proxmox VE backup jobs** under **Inventory → Backups**: every backup job from Datacenter → Backup with schedule,
+  target, which guests it covers and the next run. Turn on **Check backup jobs** under **Settings → Features &
+  security** to also see guests that are in no backup job and failed backup runs of the last 7 days; both are reported
+  with the **Backup problem** notification. Off by default, then AIOPatcher only shows the jobs.
+
 ## [0.12.0] - 2026-11-19
 
 ### Added

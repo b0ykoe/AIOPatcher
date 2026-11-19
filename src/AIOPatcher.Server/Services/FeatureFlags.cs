@@ -49,6 +49,9 @@ public enum Feature
 
     /// <summary>Monitoring-Clients (Wazuh, Checkmk) installieren, konfigurieren und deinstallieren (Lesen läuft immer mit).</summary>
     MonitoringClients,
+
+    /// <summary>Proxmox VE: Gäste ohne Backup-Job und fehlgeschlagene Backup-Läufe prüfen und melden (sonst nur Jobs anzeigen).</summary>
+    BackupJobChecks,
 }
 
 public enum FeatureRisk
@@ -93,6 +96,7 @@ public sealed class FeatureFlags(AIOPatcherOptions options)
         new(Feature.MonitoringClients, false, FeatureRisk.High, "hosts"),
         new(Feature.SnapshotTests, true, FeatureRisk.Low, "integrations"),
         new(Feature.OpnsenseUpdates, false, FeatureRisk.High, "integrations"),
+        new(Feature.BackupJobChecks, false, FeatureRisk.Low, "integrations"),
         new(Feature.ApiTokens, true, FeatureRisk.Medium, "access"),
         new(Feature.CveLookup, true, FeatureRisk.Low, "external"),
         new(Feature.ContainerChecks, true, FeatureRisk.Low, "external"),
@@ -212,6 +216,7 @@ public sealed class FeatureFlags(AIOPatcherOptions options)
         Feature.AutoUpdateControl => german ? "Update-Automatik der Hosts steuern" : "Control hosts' automatic updates",
         Feature.Metrics => german ? "Auslastung erfassen" : "Collect utilization",
         Feature.MonitoringClients => german ? "Monitoring-Clients verwalten" : "Manage monitoring clients",
+        Feature.BackupJobChecks => german ? "Backup-Jobs prüfen" : "Check backup jobs",
         _ => feature.ToString(),
     };
 }

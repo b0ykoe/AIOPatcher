@@ -4,7 +4,8 @@ import { IconAlertTriangle, IconClockExclamation, IconDatabase, IconRefresh, Ico
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
 import { useCan } from "../App";
-import { api, formatDateTime, formatRelative, type BackupServer, type PbsGroup } from "../api";
+import { api, formatDateTime, formatRelative, type BackupOverview, type PbsGroup } from "../api";
+import { BackupJobsSection } from "../components/BackupJobsSection";
 import { CardTitle, EmptyState, errorText, notifyError, StatCard } from "../components/ui";
 import { formatBytes, MetricRow, percentOf, UsageMeter } from "../components/metrics/charts";
 
@@ -17,15 +18,16 @@ const typeLabel = (type: string) => (type === "vm" ? "VM" : type === "ct" ? "CT"
 export function BackupsPage() {
   const { t } = useTranslation();
   const can = useCan();
-  const [servers, setServers] = useState<BackupServer[] | null>(null);
+  const [data, setData] = useState<BackupOverview | null>(null);
+  const servers = data?.servers ?? null;
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [filter, setFilter] = useState<"problems" | "all">("problems");
 
   const load = useCallback(() => {
-    api.get<BackupServer[]>("/api/backups")
-      .then((list) => {
-        setServers(list);
+    api.get<BackupOverview>("/api/backups")
+      .then((overview) => {
+        setData(overview);
         setError(null);
       })
       .catch((e) => setError(errorText(e)));
@@ -60,8 +62,8 @@ export function BackupsPage() {
   }, [servers]);
 
   if (error) return <Alert color="red">{error}</Alert>;
-  if (!servers) return <Loader size="sm" />;
-  if (servers.length === 0) {
+  if (!data || !servers) return <Loader size="sm" />;
+  if (servers.length === 0 && data.clusters.length === 0) {
     return (
       <Card>
         <EmptyState icon={<IconDatabase size={28} />} title={t("pbs.emptyTitle")} text={t("pbs.emptyText")}
@@ -72,12 +74,12 @@ export function BackupsPage() {
 
   return (
     <Stack gap="md">
-      <SimpleGrid cols={{ base: 2, md: 4 }}>
+      {servers.length > 0 && <SimpleGrid cols={{ base: 2, md: 4 }}>
         <StatCard label={t("pbs.statGroups")} value={totals.groups} icon={<IconShieldCheck size={20} />} color="teal" />
         <StatCard label={t("pbs.statStale")} value={totals.stale} icon={<IconClockExclamation size={20} />} color="orange" />
         <StatCard label={t("pbs.statVerifyFailed")} value={totals.verifyFailed} icon={<IconShieldX size={20} />} color="red" />
         <StatCard label={t("pbs.statFailedTasks")} value={totals.failedTasks} icon={<IconAlertTriangle size={20} />} color="red" />
-      </SimpleGrid>
+      </SimpleGrid>}
 
       {servers.map((server) => {
         const status = server.status;
@@ -219,6 +221,10 @@ export function BackupsPage() {
           </Stack>
         );
       })}
+
+      {data.clusters.map((cluster) => (
+        <BackupJobsSection key={cluster.id} cluster={cluster} checksEnabled={data.checksEnabled} onChanged={load} />
+      ))}
 
       {can.admin && (
         <Text size="xs" c="dimmed">

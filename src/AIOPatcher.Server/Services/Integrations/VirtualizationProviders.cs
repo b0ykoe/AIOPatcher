@@ -119,6 +119,9 @@ public sealed class ProxmoxProvider(Integration integration, IntegrationHttp htt
         return (parts[0], parts[1], parts[2]);
     }
 
+    /// <summary>Beliebiger lesender Aufruf (z. B. Backup-Jobs); Fehler als <see cref="IntegrationException"/>.</summary>
+    public Task<JsonNode?> GetAsync(string path, CancellationToken ct) => SendAsync(HttpMethod.Get, path, null, ct);
+
     public async Task<string> TestAsync(CancellationToken ct)
     {
         var version = await SendAsync(HttpMethod.Get, "version", null, ct);

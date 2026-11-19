@@ -180,6 +180,9 @@ tested against real systems, but against mocked APIs and unit tests):
   last 7 days (backup, verify, prune, GC, sync), and per VM, container or host the age of the newest backup and whether
   it was verified. Checked every 15 minutes; the notification *Backup problem* reports new failed tasks, datastores at
   90 % or unavailable, and backups older than 48 hours. The PBS host itself is patched by the normal agent.
+- **Proxmox VE backup jobs** (*Inventory → Backups*): the backup jobs from Datacenter → Backup with schedule, target,
+  guests (all / except / list / pool) and next run. With the switch *Check backup jobs* (off by default) also guests
+  without any backup job and failed backup runs of the last 7 days, reported as *Backup problem*.
 
 **Operations**
 - Docker image with built-in healthcheck, notice in the dashboard when a new AIOPatcher version is available
@@ -423,6 +426,7 @@ every switch itself, also for API tokens and patch plans; hidden buttons are onl
 | Manage firewalls | **off** | Rule sets cannot be rolled out. |
 | Fix SSH/RDP | **off** | Recommendations cannot be applied by click. |
 | Manage users | **off** | No locking, admin rights, passwords or SSH keys via the dashboard. |
+| Check backup jobs | **off** | Proxmox VE backup jobs are only shown; guests without a job and failed runs are not checked or reported. |
 | Manage monitoring clients | **off** | Wazuh and Checkmk clients cannot be installed, pointed to a new target or uninstalled (their state is still shown). |
 
 Every change ends up in the audit log. Changing switches only works with a browser login as admin, not with an API token.
