@@ -19,6 +19,24 @@ public static class IntegrationEndpoints
     public sealed record MappingRequest(Guid? IntegrationId, string? ExternalId);
     public sealed record AutoMapResultDto(int Mapped, IReadOnlyList<string> Hosts);
 
+    /// <summary>
+    /// Proxmox-API-Token muss "benutzer@realm!token-id=secret" sein. Häufigster Fehler: nur das Secret (UUID) eingefügt,
+    /// das endet in HTTP 401. null = Format passt.
+    /// </summary>
+    public static string? ProxmoxTokenProblem(string token)
+    {
+        if (System.Text.RegularExpressions.Regex.IsMatch(token, @"^[^@\s!=]+@[^!\s=]+![^=\s]+=\S+$"))
+        {
+            return null;
+        }
+
+        return Guid.TryParse(token, out _)
+            ? L.T("Das ist nur das Secret. Proxmox braucht Benutzer, Token-ID und Secret: root@pam!aiopatcher=" + token,
+                "That is only the secret. Proxmox needs user, token ID and secret: root@pam!aiopatcher=" + token)
+            : L.T("Format: benutzer@realm!token-id=secret, z. B. root@pam!aiopatcher=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+                "Format: user@realm!token-id=secret, e.g. root@pam!aiopatcher=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx");
+    }
+
     public static void MapIntegrationEndpoints(this IEndpointRouteBuilder app)
     {
         var admin = app.MapGroup("/api/integrations").RequireAuthorization(UserAccounts.AdminPolicy);
@@ -153,6 +171,11 @@ public static class IntegrationEndpoints
         if (!IntegrationHttp.IsValidFingerprint(fingerprint))
         {
             errors["tlsFingerprintSha256"] = [L.T("SHA-256-Fingerprint: 64 Hex-Zeichen.", "SHA-256 fingerprint: 64 hex characters.")];
+        }
+
+        if (request.Type == IntegrationType.Proxmox && !string.IsNullOrWhiteSpace(request.Secret) && ProxmoxTokenProblem(request.Secret.Trim()) is { } tokenProblem)
+        {
+            errors["secret"] = [tokenProblem];
         }
 
         if (request.KeepSnapshots is < 1 or > 20)

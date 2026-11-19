@@ -312,8 +312,15 @@ function IntegrationModal({ integration, sites, onClose, onSaved }: { integratio
     }
   };
 
+  // Häufigster Fehler: nur das Secret (UUID) eingefügt → Proxmox antwortet mit 401
+  const trimmed = secret.trim();
+  const secretProblem = type !== "Proxmox" || trimmed === "" || /^[^@\s!=]+@[^!\s=]+![^=\s]+=\S+$/.test(trimmed)
+    ? null
+    : /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(trimmed)
+      ? t("integrations.proxmoxOnlySecret")
+      : t("integrations.proxmoxBadFormat");
   const secretLabel = type === "Proxmox" ? t("integrations.proxmoxToken") : type === "HetznerCloud" ? t("integrations.hetznerToken") : t("integrations.opnsenseKey");
-  const secretHint = type === "Proxmox" ? "root@pam!aiopatcher=xxxxxxxx-…" : type === "HetznerCloud" ? undefined : "key:secret";
+  const secretHint = type === "Opnsense" ? "key:secret" : undefined;
 
   return (
     <Modal opened={integration !== null} onClose={onClose} size="lg" title={<Text fw={800}>{integration === "new" ? t("integrations.add") : t("integrations.edit")}</Text>}>
@@ -332,11 +339,18 @@ function IntegrationModal({ integration, sites, onClose, onSaved }: { integratio
         {type !== "HetznerCloud" && (
           <TextInput label={t("integrations.url")} placeholder={type === "Proxmox" ? "https://pve.example:8006" : "https://fw.example"} value={baseUrl} onChange={(e) => setBaseUrl(e.currentTarget.value)} />
         )}
+        {type === "Proxmox" && (
+          <Alert color="blue" p="sm" title={t("integrations.proxmoxFormatTitle")}>
+            <Code block fz="sm" mb={6}>root@pam!aiopatcher=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx</Code>
+            <Text size="xs">{t("integrations.proxmoxFormatText")}</Text>
+          </Alert>
+        )}
         <PasswordInput
           label={secretLabel}
           description={integration !== "new" ? t("integrations.secretKeep") : secretHint}
           value={secret}
           onChange={(e) => setSecret(e.currentTarget.value)}
+          error={secretProblem}
         />
         {type !== "HetznerCloud" && (
           <TextInput label={t("integrations.fingerprint")} description={t("integrations.fingerprintHint")} value={fingerprint} onChange={(e) => setFingerprint(e.currentTarget.value)} ff="monospace" />
@@ -358,7 +372,7 @@ function IntegrationModal({ integration, sites, onClose, onSaved }: { integratio
         {error && <Alert color="red">{error}</Alert>}
         <Group justify="flex-end">
           <Button variant="default" onClick={onClose}>{t("common.cancel")}</Button>
-          <Button variant="gradient" className="gradient-button" loading={busy} disabled={!name.trim() || (integration === "new" && !secret)} onClick={() => void save()}>
+          <Button variant="gradient" className="gradient-button" loading={busy} disabled={!name.trim() || (integration === "new" && !secret) || secretProblem !== null} onClick={() => void save()}>
             {t("common.save")}
           </Button>
         </Group>

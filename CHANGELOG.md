@@ -12,6 +12,9 @@ Written for users, not as a list of commits.
 - **Host page:** a short line under the host name shows at a glance where Wazuh and Checkmk report to, e.g. *Wazuh active: 10.0.0.20:1514*, or whether a client is disconnected, stopped or not installed. Below it you see the client's error and the last action that failed or is running (with a link to the job); a failed client also shows up in the host's hints instead of "All good, nothing to do here right now."
 - **Install command:** new options `--allow-monitoring-changes` (`install.sh`) and `-AllowMonitoringChanges` (`install.ps1`), also for lite agents. **Add host** has switches for both permissions and presets them when the matching features are on, so new hosts are allowed right away.
 
+### Improved
+- **Proxmox integration:** the API token format (`user@realm!token-id=secret`) is now shown prominently above the token field. Entering only the secret is caught right away with an explanation instead of failing later with error 401, and a 401 from Proxmox explains the format too.
+
 ## [0.11.0] - 2026-11-19
 
 ### Added

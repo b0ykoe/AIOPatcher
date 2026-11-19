@@ -838,6 +838,10 @@ const de = {
     tagsSaved: "Tags gespeichert",
   },
   integrations: {
+    proxmoxFormatTitle: "Format des API-Tokens: Benutzer, Token-ID und Secret zusammen",
+    proxmoxFormatText: "Proxmox zeigt beim Anlegen (Datacenter → Permissions → API Tokens) Token-ID und Secret getrennt an. Hier gehört beides zusammen hinein: Token-ID (z. B. root@pam!aiopatcher), dann =, dann das Secret. Nur das Secret allein ergibt Fehler 401.",
+    proxmoxOnlySecret: "Das ist nur das Secret. Davor gehört die Token-ID mit =, z. B. root@pam!aiopatcher=<Secret>.",
+    proxmoxBadFormat: "Format: benutzer@realm!token-id=secret, z. B. root@pam!aiopatcher=xxxxxxxx-…",
     intro: "Verbindungen zu Proxmox VE, Hetzner Cloud und OPNsense. Für Snapshots vor dem Patch, Backup-Prüfung und Firewall-Status. Zugangsdaten werden verschlüsselt gespeichert.",
     add: "Integration hinzufügen",
     edit: "Integration bearbeiten",
