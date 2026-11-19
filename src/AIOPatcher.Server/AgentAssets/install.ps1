@@ -158,7 +158,10 @@ function Install-LiteAgent {
 <?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <RegistrationInfo><Description>AIOPatcher lite agent: reports updates to the AIOPatcher server and runs approved patch jobs.</Description></RegistrationInfo>
-  <Triggers><BootTrigger><Enabled>true</Enabled><Delay>PT1M</Delay></BootTrigger></Triggers>
+  <Triggers>
+    <BootTrigger><Enabled>true</Enabled><Delay>PT1M</Delay></BootTrigger>
+    <TimeTrigger><StartBoundary>$((Get-Date).AddMinutes(5).ToString('yyyy-MM-ddTHH:mm:ss'))</StartBoundary><Repetition><Interval>PT5M</Interval><StopAtDurationEnd>false</StopAtDurationEnd></Repetition><Enabled>true</Enabled></TimeTrigger>
+  </Triggers>
   <Principals><Principal id="Author"><UserId>S-1-5-18</UserId><RunLevel>HighestAvailable</RunLevel></Principal></Principals>
   <Settings>
     <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
@@ -201,7 +204,7 @@ function Install-LiteAgent {
             Fail 'The agent is running but has not checked in with the server after 90 s (firewall, TLS 1.2, network access for the site?).'
         }
     }
-    Info "Autostart: scheduled task '$ServiceName' (SYSTEM, at system startup, restart 1 minute after a crash)."
+    Info "Autostart: scheduled task '$ServiceName' (SYSTEM, at system startup and every 5 minutes if not running, restart 1 minute after a crash)."
     Info "Done. Log: $logFile"
 }
 
@@ -212,6 +215,8 @@ if (-not $DownloadOnly -and -not $isAdmin) { Fail 'Please run PowerShell as Admi
 # --- Uninstall -----------------------------------------------------------------------------------
 if ($Uninstall) {
     Info 'Removing the AIOPatcher agent ...'
+    # Watchdog task first, otherwise it could start the service again while it is being removed
+    try { & schtasks.exe /Delete /TN 'AIOPatcherAgentWatchdog' /F 2>&1 | Out-Null } catch { }
     $svc = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
     if ($svc) {
         if ($svc.Status -ne 'Stopped') { Stop-Service -Name $ServiceName -Force }
@@ -376,6 +381,8 @@ try {
 
     # --- 3. Install (on update: briefly stop the service) -----------------------------------------
     $svc = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+    # The watchdog task would start the service again in the middle of the update; the agent re-enables it on start.
+    try { & schtasks.exe /Change /TN 'AIOPatcherAgentWatchdog' /DISABLE 2>&1 | Out-Null } catch { }
     if ($svc -and $svc.Status -ne 'Stopped') {
         Info 'Stopping the running agent for the update ...'
         Stop-Service -Name $ServiceName -Force

@@ -8,6 +8,17 @@ Written for users, not as a list of commits.
 
 ## [Unreleased]
 
+### Fixed
+- **Windows hosts stayed offline after a reboot that did not happen:** the agent asked for the reboot without
+  forcing programs to close. When a program blocked it, Windows stopped the agent service but did not restart, and
+  nothing started the agent again. The reboot now closes blocking programs, and a scheduled task
+  (`AIOPatcherAgentWatchdog`, SYSTEM) starts the agent service again within 5 minutes if it is not running. The agent
+  creates that task itself on start; uninstalling removes it. The lite agent's task also checks every 5 minutes.
+
+### Upgrade notes
+- A Windows host that is offline right now needs its agent started once by hand (`Start-Service AIOPatcherAgent`)
+  or a reboot. To stop the agent for good, disable the task `AIOPatcherAgentWatchdog` as well.
+
 ## [0.14.6] - 2026-11-19
 
 ### Fixed

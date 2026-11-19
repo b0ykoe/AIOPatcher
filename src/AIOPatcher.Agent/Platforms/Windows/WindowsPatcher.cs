@@ -16,10 +16,12 @@ public sealed class WindowsPatcher : IPatchPlatform
 
     public async Task<bool> RequestRebootAsync(Action<string> log, CancellationToken ct)
     {
-        log("$ shutdown.exe /r /t 60");
+        // /f: Programme, die das Herunterfahren blockieren, werden geschlossen. Sonst bricht Windows den Neustart ab,
+        // nachdem es den Agent-Dienst schon beendet hat (der Wächter AgentWatchdog startet ihn dann wieder).
+        log("$ shutdown.exe /r /f /t 60");
         var exit = await ProcessRunner.RunStreamingAsync(
             Path.Combine(Environment.SystemDirectory, "shutdown.exe"),
-            ["/r", "/t", "60", "/d", "p:2:17", "/c", "AIOPatcher: reboot after patch job"],
+            ["/r", "/f", "/t", "60", "/d", "p:2:17", "/c", "AIOPatcher: reboot after patch job"],
             TimeSpan.FromSeconds(30), log, ct);
         return exit == 0;
     }

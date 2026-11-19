@@ -376,6 +376,7 @@ public sealed class SelfMaintenance(AgentState state, ILogger<SelfMaintenance> l
         static string Q(string s) => "'" + s.Replace("'", "''") + "'";
         return $"Start-Sleep -Seconds {(int)UpdateState.ConfirmTimeout.TotalSeconds}; " +
                $"if (Test-Path -LiteralPath {Q(pending)}) {{ " +
+               "& schtasks.exe /Change /TN AIOPatcherAgentWatchdog /DISABLE | Out-Null; " +
                $"Stop-Service -Name {WindowsServiceName} -Force; " +
                $"Get-Process -Name aiopatcher-agent | Where-Object {{ $_.Path -eq {Q(exe)} }} | Stop-Process -Force; " +
                "Start-Sleep -Seconds 2; " +

@@ -1581,7 +1581,8 @@ function Invoke-Task($Task) {
         & $log '[agent] Triggering reboot. The result will be reported after the reboot.'
         Send-Log $id $lines
         Write-Json (Join-Path $StateDir 'pending-result.json') @{ jobId = $id; outcome = $r.outcome; summary = $r.summary; rebootRequestedUtc = (UtcNow); awaitReboot = $true }
-        & shutdown.exe /r /t 60 /c 'AIOPatcher: reboot after patch job' | Out-Null
+        # /f: close programs that block the shutdown; otherwise Windows may abort the reboot after stopping the agent
+        & shutdown.exe /r /f /t 60 /c 'AIOPatcher: reboot after patch job' | Out-Null
         if ($LASTEXITCODE -eq 0) { return $null }
         Remove-Item (Join-Path $StateDir 'pending-result.json') -Force
         $r.outcome = 'Failed'

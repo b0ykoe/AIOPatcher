@@ -124,6 +124,10 @@ switch (commandLine.Command)
         builder.Services.AddSingleton<IAgentModule, AgentSelfModule>();
         builder.Services.AddSingleton<ModuleHost>();
         builder.Services.AddHostedService<PollService>();
+        if (OperatingSystem.IsWindows())
+        {
+            builder.Services.AddHostedService<AIOPatcher.Agent.Platforms.Windows.AgentWatchdog>();
+        }
 
         await builder.Build().RunAsync(cts.Token);
         return 0;
