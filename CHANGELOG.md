@@ -8,6 +8,8 @@ Written for users, not as a list of commits.
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-11-19
+
 ### Added
 - **Container status:** The Containers tab of a host now also lists stopped containers and shows whether each one is
   running, stopped (with exit code and since when), restarting or unhealthy.
