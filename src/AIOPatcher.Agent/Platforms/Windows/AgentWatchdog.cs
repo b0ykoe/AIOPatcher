@@ -12,6 +12,9 @@ public static class AgentWatchdogTask
     public const string TaskName = "AIOPatcherAgentWatchdog";
     public const string ServiceName = "AIOPatcherAgent";
 
+    /// <summary>Windows-Pfad immer mit "\" (Path.Combine nähme auf Linux, z. B. in der CI, "/").</summary>
+    public static string WindowsPath(string directory, string file) => directory.TrimEnd('\\', '/') + "\\" + file;
+
     /// <summary>Aufgabe als XML (Task Scheduler 1.2): ab Start alle 5 Minuten "sc.exe start", höchstens 1 Minute Laufzeit.</summary>
     public static string Xml(string systemDirectory, DateTime startLocal) => $"""
         <?xml version="1.0" encoding="UTF-16"?>
@@ -33,7 +36,7 @@ public static class AgentWatchdogTask
             <StartWhenAvailable>true</StartWhenAvailable>
             <Enabled>true</Enabled>
           </Settings>
-          <Actions Context="Author"><Exec><Command>{SecurityElement.Escape(Path.Combine(systemDirectory, "sc.exe"))}</Command><Arguments>start {ServiceName}</Arguments></Exec></Actions>
+          <Actions Context="Author"><Exec><Command>{SecurityElement.Escape(WindowsPath(systemDirectory, "sc.exe"))}</Command><Arguments>start {ServiceName}</Arguments></Exec></Actions>
         </Task>
         """;
 }
