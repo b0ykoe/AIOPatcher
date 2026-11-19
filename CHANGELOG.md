@@ -8,6 +8,8 @@ Written for users, not as a list of commits.
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-11-19
+
 ### Added
 - **Notification styles per channel:** choose **Short** (title and link), **Standard** (as before), **Detailed** (plus
   host, site, event and time) or **Rich**, the service's own formatting: Telegram with a bold title and an "Open in
