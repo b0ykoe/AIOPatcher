@@ -234,7 +234,8 @@ public static class HostEndpoints
         op.MapPost("/hosts/{id:guid}/revoke", RevokeHost);
         op.MapPost("/hosts/{id:guid}/agent-update/retry", RetryAgentUpdate);
         op.MapPost("/hosts/{id:guid}/agent-update/now", UpdateAgentNow);
-        op.MapPost("/hosts/agent-update/now", UpdateAllAgentsNow);
+        op.MapPost("/hosts/agent-update/now", (BulkHostsRequest? request, AppDbContext db, AuditLog audit, AgentDownloads downloads, FeatureFlags features, CancellationToken ct) =>
+            UpdateAllAgentsNow(db, audit, downloads, features, ct, request?.HostIds));
         op.MapDelete("/hosts/{id:guid}/reboot-check", DismissRebootCheck);
         op.MapPost("/hosts/{id:guid}/containers/recheck", RecheckContainers);
         api.MapGet("/hosts/{id:guid}/containers/{name}/vulnerabilities", ContainerVulnerabilities);
@@ -524,13 +525,23 @@ public static class HostEndpoints
     /// <param name="Unavailable">Veraltete Agents, bei denen es so nicht geht, je Grund (lite, featureOff, noBuild, unsigned, agentNoUpdate, unknown).</param>
     public sealed record BulkAgentUpdateDto(int Requested, IReadOnlyDictionary<string, int> Unavailable);
 
-    /// <summary>"Agents aktualisieren" in der Hostliste: allen veralteten Agents das Update beim nächsten Abruf anbieten.</summary>
-    private static async Task<IResult> UpdateAllAgentsNow(AppDbContext db, AuditLog audit, AgentDownloads downloads, FeatureFlags features, CancellationToken ct)
+    /// <summary>
+    /// "Agents aktualisieren" in der Hostliste: veralteten Agents das Update sofort beim nächsten Abruf anbieten (ohne auf
+    /// das Intervall zu warten, auch nach einem gescheiterten Versuch). Mit hostIds nur für die ausgewählten Hosts.
+    /// </summary>
+    public static async Task<IResult> UpdateAllAgentsNow(AppDbContext db, AuditLog audit, AgentDownloads downloads, FeatureFlags features, CancellationToken ct,
+        Guid[]? hostIds = null)
     {
         var now = DateTime.UtcNow;
         var requested = new List<string>();
         var unavailable = new Dictionary<string, int>();
-        foreach (var host in await db.Hosts.Where(h => !h.IsRevoked && h.AgentVersion != null).ToListAsync(ct))
+        var query = db.Hosts.Where(h => !h.IsRevoked && h.AgentVersion != null);
+        if (hostIds is { Length: > 0 })
+        {
+            query = query.Where(h => hostIds.Contains(h.Id));
+        }
+
+        foreach (var host in await query.ToListAsync(ct))
         {
             var blocked = host.AgentUpdateBlockedVersion;
             host.AgentUpdateBlockedVersion = null;

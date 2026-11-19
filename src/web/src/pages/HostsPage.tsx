@@ -116,6 +116,25 @@ export function HostsPage() {
       },
     });
 
+  // Nur die ausgewählten Hosts (veraltet oder gescheitert); aktuelle Agents überspringt der Server
+  const updateSelectedAgents = () =>
+    confirmAction({
+      title: t("hostsPage.agentsUpdateSelectedTitle", { count: selection.length }),
+      message: t("hostsPage.agentsUpdateSelectedText"),
+      confirmLabel: t("hostsPage.agentsUpdateSelected"),
+      onConfirm: async () => {
+        try {
+          const result = await api.post<{ requested: number; unavailable: Record<string, number> }>("/api/hosts/agent-update/now", { hostIds: selection });
+          const skipped = Object.values(result.unavailable).reduce((a, b) => a + b, 0);
+          notifySuccess(t("hostsPage.agentsUpdateDone", { count: result.requested }),
+            skipped > 0 ? t("hostsPage.agentsUpdateSkipped", { count: skipped }) : result.requested === 0 ? t("hostsPage.agentsUpdateNone") : undefined);
+          await load();
+        } catch (e) {
+          notifyError(e);
+        }
+      },
+    });
+
   const names = selectedHosts.slice(0, 5).map((h) => h.name).join(", ") + (selectedHosts.length > 5 ? t("hostsPage.andMore", { count: selectedHosts.length - 5 }) : "");
 
   return (
@@ -383,6 +402,11 @@ export function HostsPage() {
                   <Button size="sm" variant="light" leftSection={<IconScan size={16} />} onClick={() => void runBulk("Scan")}>
                     {t("hostsPage.scan")}
                   </Button>
+                  {isOn("AgentSelfUpdate") && (
+                    <Button size="sm" variant="light" leftSection={<IconRefresh size={16} />} onClick={updateSelectedAgents}>
+                      {t("hostsPage.agentsUpdateSelected")}
+                    </Button>
+                  )}
                   {isOn("Reboots") && <Button
                     size="sm"
                     variant="light"

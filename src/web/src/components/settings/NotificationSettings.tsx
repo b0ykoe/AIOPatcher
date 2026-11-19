@@ -49,6 +49,7 @@ import {
 import type { RemoteSiteItem } from "../../sharing";
 import { confirmAction, EmptyState, errorText, notifyError, notifySuccess } from "../ui";
 import { GuidePanel } from "../GuidePanel";
+import { NotificationPreview } from "./NotificationPreview";
 
 const channelTypes: ChannelType[] = ["Ntfy", "Email", "Webhook", "Discord", "Slack", "Telegram"];
 
@@ -366,6 +367,8 @@ export function ChannelModal({ channel, sites, remoteSites = [], onClose, onSave
             </Text>
           </div>
         )}
+
+        <NotificationPreview type={type} style={style} />
 
         <Select
           label={t("notifications.site")}

@@ -410,6 +410,10 @@ const de = {
   hostsPage: {
     agentsUpdate_one: "Agent aktualisieren ({{count}})",
     agentsUpdate_other: "Agents aktualisieren ({{count}})",
+    agentsUpdateSelected: "Agent aktualisieren",
+    agentsUpdateSelectedTitle: "Agent auf {{count}} Hosts aktualisieren?",
+    agentsUpdateSelectedText: "Veraltete Agents bekommen die neue Version sofort beim nächsten Abruf, ohne auf das Intervall zu warten, auch nach einem gescheiterten Versuch. Aktuelle Agents und Lite-Agents bleiben unverändert.",
+    agentsUpdateNone: "Die ausgewählten Agents sind schon aktuell.",
     agentsUpdateTitle: "Veraltete Agents aktualisieren",
     agentsUpdateText_one: "{{count}} Agent ist älter als der Server. Er bekommt das Update beim nächsten Abruf angeboten (meist innerhalb einer Minute), testet die neue Version und kehrt bei Problemen zur alten zurück.",
     agentsUpdateText_other: "{{count}} Agents sind älter als der Server. Sie bekommen das Update beim nächsten Abruf angeboten (meist innerhalb einer Minute), testen die neue Version und kehren bei Problemen zur alten zurück.",
@@ -855,6 +859,9 @@ const de = {
   },
   notifications: {
     style: "Stil",
+    preview: "Vorschau",
+    previewHint: "Beispielnachricht in diesem Stil, ungefähr so, wie der Dienst sie anzeigt.",
+    previewSubject: "Betreff",
     styleShort: "Kurz",
     styleStandard: "Standard",
     styleDetailed: "Ausführlich",

@@ -28,6 +28,44 @@ public static class NotificationEndpoints
         group.MapPut("/{id:guid}", Update);
         group.MapDelete("/{id:guid}", Delete);
         group.MapPost("/{id:guid}/test", Test);
+        group.MapPost("/preview", Preview);
+    }
+
+    public sealed record PreviewRequest(ChannelType Type, NotificationStyle Style);
+
+    /// <summary>Vorschau im Kanal-Dialog: Beispielnachricht, genau so formatiert, wie sie verschickt würde.</summary>
+    public static IResult Preview(PreviewRequest request, ServerClock clock, Options.AIOPatcherOptions options, PublicAccess? access)
+    {
+        var n = new Notification(NotificationEvents.JobFailed, L.T("rigidtest: Patch fehlgeschlagen", "rigidtest: Patch failed"),
+            L.T("1 von 2 Updates installiert, 1 fehlgeschlagen", "1 of 2 updates installed, 1 failed"), NotificationSeverity.Critical, LinkPath: "/jobs/preview");
+        var details = new NotificationDetails("rigidtest", "Homelab", NotificationFormat.EventLabel(n.Event), TimeZoneInfo.ConvertTimeFromUtc(n.CreatedAt, clock.Zone));
+        var link = NotificationTexts.DashboardUrl(options, n.LinkPath, access?.Current.DashboardUrl);
+        var style = request.Style;
+        System.Text.Json.Nodes.JsonNode payload = request.Type switch
+        {
+            ChannelType.Telegram => NotificationFormat.Telegram(style, n, details, "123", link, withButton: true),
+            ChannelType.Discord => NotificationFormat.Discord(style, n, details, link),
+            ChannelType.Slack => NotificationFormat.Slack(style, n, details, link),
+            ChannelType.Email => new System.Text.Json.Nodes.JsonObject
+            {
+                ["subject"] = $"[AIOPatcher] {n.Title}",
+                ["text"] = NotificationFormat.MailText(style, n, details, link),
+                ["html"] = style == NotificationStyle.Rich ? NotificationFormat.MailHtml(n, details, link) : null,
+            },
+            ChannelType.Ntfy => new System.Text.Json.Nodes.JsonObject
+            {
+                ["title"] = style == NotificationStyle.Short ? null : n.Title,
+                ["body"] = NotificationFormat.NtfyBody(style, n, details),
+                ["markdown"] = style == NotificationStyle.Rich,
+                ["click"] = link,
+            },
+            _ => new System.Text.Json.Nodes.JsonObject
+            {
+                ["event"] = n.Event.ToString(), ["severity"] = n.Severity.ToString(), ["title"] = n.Title, ["message"] = n.Message,
+                ["site"] = details.Site, ["host"] = details.Host, ["eventLabel"] = details.Event, ["url"] = link, ["timestamp"] = n.CreatedAt.ToString("O"),
+            },
+        };
+        return Results.Text(payload.ToJsonString(), "application/json");
     }
 
     private static async Task<List<ChannelDto>> List(AppDbContext db, NotificationSenders senders, CancellationToken ct) =>

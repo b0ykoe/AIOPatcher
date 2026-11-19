@@ -90,4 +90,19 @@ public sealed class NotificationStyleTests
         command.CommandText = "SELECT dflt_value FROM pragma_table_info('NotificationChannels') WHERE name = 'Style'";
         Assert.Equal("'Standard'", command.ExecuteScalar() as string);
     }
+
+    [Theory]
+    [InlineData(ChannelType.Telegram, NotificationStyle.Rich, "reply_markup")]
+    [InlineData(ChannelType.Discord, NotificationStyle.Rich, "embeds")]
+    [InlineData(ChannelType.Slack, NotificationStyle.Rich, "blocks")]
+    [InlineData(ChannelType.Email, NotificationStyle.Rich, "html")]
+    [InlineData(ChannelType.Ntfy, NotificationStyle.Rich, "markdown")]
+    [InlineData(ChannelType.Webhook, NotificationStyle.Short, "eventLabel")]
+    public void Preview_UsesTheRealFormatter(ChannelType type, NotificationStyle style, string key)
+    {
+        var options = new AIOPatcher.Server.Options.AIOPatcherOptions();
+        var result = AIOPatcher.Server.Endpoints.NotificationEndpoints.Preview(new(type, style), new ServerClock(options), options, null);
+        var json = JsonNode.Parse(Assert.IsType<Microsoft.AspNetCore.Http.HttpResults.ContentHttpResult>(result).ResponseContent!)!.AsObject();
+        Assert.True(json.ContainsKey(key), key + " missing in " + json.ToJsonString());
+    }
 }

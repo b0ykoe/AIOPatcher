@@ -281,4 +281,32 @@ public sealed class AgentUpdateTests : IDisposable
         Assert.True(ScanSchedule.IsAllowedAgentMinutes(15));
         Assert.False(ScanSchedule.IsAllowedAgentMinutes(0));
     }
+
+    [Fact]
+    public async Task UpdateSelectedAgents_OnlyTheSelectedOutdatedHosts()
+    {
+        using var key = UpdateSigningKey.LoadOrCreate(Path.Combine(_dir, "ca"), NullLogger.Instance);
+        var downloads = Downloads(key, releaseSignature: false);
+        using var connection = new SqliteConnection("Data Source=:memory:");
+        connection.Open();
+        using var db = new AppDbContext(new DbContextOptionsBuilder<AppDbContext>().UseSqlite(connection).Options);
+        db.Database.Migrate();
+        var site = new Site { Name = "Home" };
+        var hosts = new[] { "a", "b", "c" }.Select(n => { var h = StatusHost("0.0.1"); h.Site = site; h.Name = n; h.Hostname = n; h.CertificateThumbprint = n; return h; }).ToList();
+        var current = StatusHost("999.0.0");
+        current.Site = site;
+        current.CertificateThumbprint = "cur";
+        db.Hosts.AddRange([.. hosts, current]);
+        await db.SaveChangesAsync();
+
+        var result = await HostEndpoints.UpdateAllAgentsNow(db, new AuditLog(db, new Microsoft.AspNetCore.Http.HttpContextAccessor()), downloads,
+            new FeatureFlags(new AIOPatcherOptions()), default, [hosts[0].Id, hosts[2].Id, current.Id]);
+
+        var dto = Assert.IsType<Microsoft.AspNetCore.Http.HttpResults.Ok<HostEndpoints.BulkAgentUpdateDto>>(result).Value!;
+        Assert.Equal(2, dto.Requested);
+        Assert.NotNull(hosts[0].AgentUpdateRequestedAt);
+        Assert.Null(hosts[1].AgentUpdateRequestedAt); // nicht ausgewählt
+        Assert.NotNull(hosts[2].AgentUpdateRequestedAt);
+        Assert.Null(current.AgentUpdateRequestedAt); // schon aktuell
+    }
 }

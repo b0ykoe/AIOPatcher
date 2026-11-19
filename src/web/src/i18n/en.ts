@@ -411,6 +411,10 @@ const en: Translation = {
   hostsPage: {
     agentsUpdate_one: "Update agent ({{count}})",
     agentsUpdate_other: "Update agents ({{count}})",
+    agentsUpdateSelected: "Update agent",
+    agentsUpdateSelectedTitle: "Update the agent on {{count}} hosts?",
+    agentsUpdateSelectedText: "Outdated agents get the new version right away on their next check-in, without waiting for the interval, also after a failed attempt. Current agents and lite agents stay as they are.",
+    agentsUpdateNone: "The selected agents are already up to date.",
     agentsUpdateTitle: "Update outdated agents",
     agentsUpdateText_one: "{{count}} agent is older than the server. It is offered the update on its next poll (usually within a minute), tests the new version and goes back to the old one if there is a problem.",
     agentsUpdateText_other: "{{count}} agents are older than the server. They are offered the update on their next poll (usually within a minute), test the new version and go back to the old one if there is a problem.",
@@ -856,6 +860,9 @@ const en: Translation = {
   },
   notifications: {
     style: "Style",
+    preview: "Preview",
+    previewHint: "Sample message in this style, roughly as the service shows it.",
+    previewSubject: "Subject",
     styleShort: "Short",
     styleStandard: "Standard",
     styleDetailed: "Detailed",

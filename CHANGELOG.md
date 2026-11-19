@@ -8,6 +8,15 @@ Written for users, not as a list of commits.
 
 ## [Unreleased]
 
+### Added
+- **Update the agent on selected hosts:** select hosts in the host list and choose **Update agent**. Outdated agents get
+  the new version right away on their next check-in, without waiting for the interval, also after a failed attempt.
+- **Preview of notification styles:** the channel dialog shows a sample message in the chosen style, roughly as
+  Telegram, Discord, Slack, email or ntfy will show it, made by the same code that sends real messages.
+
+### Fixed
+- The CI check failed on Linux because of a path in a new test; the release itself was not affected.
+
 ## [0.15.0] - 2026-11-19
 
 ### Added
