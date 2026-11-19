@@ -261,6 +261,32 @@ public sealed class PatchPlanTests : IDisposable
     }
 
     [Fact]
+    public async Task ExcludedHost_IsNotPickedUpByRulesOrOthers_UntilIncludedAgain()
+    {
+        var pve = Host("pve", "prod");
+        var nas = Host("nas");
+        _db.Runbooks.Add(new Runbook
+        {
+            Name = "Alle",
+            CreatedAt = DateTime.UtcNow.AddMinutes(1),
+            Waves = [new RunbookWave { Order = 1, Name = "Prod", MemberTags = "prod" }, new RunbookWave { Order = 2, Name = "Rest", IncludeOthers = true }],
+        });
+        pve.PlanExcluded = true;
+        nas.PlanExcluded = true;
+        await _db.SaveChangesAsync();
+
+        var members = await PatchPlans.ResolveAsync(_db, CancellationToken.None);
+        Assert.False(members.ContainsKey(pve.Id)); // Tag-Regel greift nicht
+        Assert.False(members.ContainsKey(nas.Id)); // "alle übrigen" greift nicht
+
+        var audit = new AuditLog(_db, new Microsoft.AspNetCore.Http.HttpContextAccessor());
+        await AIOPatcher.Server.Endpoints.HostEndpoints.IncludeInPlansAsync([pve.Id, nas.Id], _db, audit, CancellationToken.None);
+        members = await PatchPlans.ResolveAsync(_db, CancellationToken.None);
+        Assert.Equal(PlanVia.Rule, members[pve.Id].Via);
+        Assert.Equal(PlanVia.Others, members[nas.Id].Via);
+    }
+
+    [Fact]
     public async Task PauseBetweenGroups_DelaysNextGroup()
     {
         var second = Host("web02", "late");

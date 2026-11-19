@@ -89,7 +89,7 @@ export function OverviewPage() {
   const security = active.filter((h) => h.securityUpdates > 0 && h.kevUpdates === 0);
   const reboot = active.filter((h) => h.rebootRequired);
   const offline = active.filter((h) => h.status === "Offline");
-  const unplanned = active.filter((h) => !h.planId);
+  const unplanned = active.filter((h) => !h.planId && !h.planExcluded);
   const doublePatch = active.filter((h) => h.autoPatch.enabled && h.nativeAutoUpdatesEnabled);
   const names = (list: HostSummary[]) => list.slice(0, 4).map((h) => h.name).join(", ") + (list.length > 4 ? ` +${list.length - 4}` : "");
 

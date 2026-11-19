@@ -209,7 +209,7 @@ export function HostsPage() {
                           <Menu.Item onClick={() => selectWhere((h) => h.status === "Online")}>{t("hostsPage.selOnline")}</Menu.Item>
                           <Menu.Item onClick={() => selectWhere((h) => h.securityUpdates > 0)}>{t("hostsPage.selSecurity")}</Menu.Item>
                           <Menu.Item onClick={() => selectWhere((h) => h.rebootRequired)}>{t("overview.rebootRequired")}</Menu.Item>
-                          <Menu.Item onClick={() => selectWhere((h) => !h.planId && h.status !== "Revoked")}>{t("hostsPage.selNoPlan")}</Menu.Item>
+                          <Menu.Item onClick={() => selectWhere((h) => !h.planId && !h.planExcluded && h.status !== "Revoked")}>{t("hostsPage.selNoPlan")}</Menu.Item>
                           <Menu.Divider />
                           <Menu.Item onClick={() => setSelected(new Set())}>{t("hostsPage.selNone")}</Menu.Item>
                         </Menu.Dropdown>

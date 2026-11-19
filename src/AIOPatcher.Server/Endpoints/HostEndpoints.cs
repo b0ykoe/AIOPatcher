@@ -53,7 +53,8 @@ public static class HostEndpoints
         string? Channel = null,
         string? AgentUpdate = null,
         HostMappingDto? Mapping = null,
-        AgentPolicyReport? Policy = null);
+        AgentPolicyReport? Policy = null,
+        bool PlanExcluded = false);
 
     /// <summary>Zuordnung zu einer Proxmox-VM bzw. einem Hetzner-Server, für Listen ("pve · VM 131").</summary>
     public sealed record HostMappingDto(Guid IntegrationId, string IntegrationName, IntegrationType Type, string ExternalId, bool Manual);
@@ -65,6 +66,8 @@ public static class HostEndpoints
     public sealed record PlanAssignmentRequest(Guid? PlanId, Guid? GroupId);
 
     public sealed record BulkPlanAssignmentRequest(Guid[] HostIds, Guid? PlanId, Guid? GroupId);
+
+    public sealed record BulkHostsRequest(Guid[] HostIds);
 
     /// <summary>Days: Bitmaske Mo=1, Di=2, Mi=4, Do=8, Fr=16, Sa=32, So=64. Start in Ortszeit des Servers.</summary>
     public sealed record AutoPatchDto(
@@ -204,6 +207,8 @@ public static class HostEndpoints
         api.MapGet("/hosts/{id:guid}", GetHost);
         op.MapPut("/hosts/{id:guid}/plan", (Guid id, PlanAssignmentRequest request, AppDbContext db, AuditLog audit, CancellationToken ct) =>
             AssignPlanAsync([id], request.PlanId, request.GroupId, db, audit, ct));
+        op.MapPost("/hosts/plan/include", (BulkHostsRequest request, AppDbContext db, AuditLog audit, CancellationToken ct) =>
+            IncludeInPlansAsync(request.HostIds ?? [], db, audit, ct));
         op.MapPut("/hosts/plan", (BulkPlanAssignmentRequest request, AppDbContext db, AuditLog audit, CancellationToken ct) =>
             AssignPlanAsync(request.HostIds ?? [], request.PlanId, request.GroupId, db, audit, ct));
         api.MapGet("/server-info", async (ServerClock clock, ReleaseCheck releases, AppDbContext db, CancellationToken ct) =>
@@ -282,6 +287,7 @@ public static class HostEndpoints
             .Where(h => ids.Contains(h.Id) && h.IntegrationId != null && h.ExternalId != null)
             .Select(h => new { h.Id, Mapping = new HostMappingDto(h.IntegrationId!.Value, h.Integration!.Name, h.Integration.Type, h.ExternalId!, h.MappingManual) })
             .ToDictionaryAsync(x => x.Id, x => x.Mapping, ct);
+        var excluded = (await db.Hosts.AsNoTracking().Where(h => ids.Contains(h.Id) && h.PlanExcluded).Select(h => h.Id).ToListAsync(ct)).ToHashSet();
         var policies = await db.Hosts.AsNoTracking().Where(h => ids.Contains(h.Id) && h.ReportedPolicy != null)
             .Select(h => new { h.Id, h.ReportedPolicy }).ToDictionaryAsync(h => h.Id, h => PolicyReport.Parse(h.ReportedPolicy), ct);
         var latestAgent = AgentDownloads.AgentVersion;
@@ -292,7 +298,7 @@ public static class HostEndpoints
         return summaries.Select(s =>
         {
             // Weg des Agents: direkt (intern) oder über den Reverse Proxy
-            s = s with { Channel = channels.GetValueOrDefault(s.Id), Mapping = mappings.GetValueOrDefault(s.Id), Policy = policies.GetValueOrDefault(s.Id) };
+            s = s with { Channel = channels.GetValueOrDefault(s.Id), Mapping = mappings.GetValueOrDefault(s.Id), Policy = policies.GetValueOrDefault(s.Id), PlanExcluded = excluded.Contains(s.Id) };
             if (s.AgentVersion is { } v && !v.EndsWith("-lite", StringComparison.Ordinal) && AgentDownloads.IsNewer(latestAgent, v))
             {
                 s = s with { AgentUpdate = blockedAgents.Contains(s.Id) ? AgentUpdateStatus.Failed : "outdated" };
@@ -349,7 +355,7 @@ public static class HostEndpoints
             KevHosts: hosts.Count(h => h.KevUpdates > 0),
             KevUpdates: hosts.Sum(h => h.KevUpdates),
             ContainerUpdates: hosts.Sum(h => h.ContainerUpdates),
-            HostsWithoutPlan: hosts.Count(h => h.PlanId is null)));
+            HostsWithoutPlan: hosts.Count(h => h.PlanId is null && !h.PlanExcluded)));
     }
 
     private static async Task<IResult> GetHosts(Guid? siteId, AppDbContext db, AIOPatcherOptions options, ServerClock clock, CancellationToken ct)
@@ -902,7 +908,28 @@ public static class HostEndpoints
 
         foreach (var host in hosts)
         {
-            audit.Add("patch-plan.assigned", group is null ? $"{host.Name}: removed from patch plans" : $"{host.Name}: plan group {group.Name}", siteId: host.SiteId, hostId: host.Id);
+            // Entfernen gilt für alle Pläne, auch über Regeln und "alle übrigen"; Zuordnen hebt das wieder auf
+            host.PlanExcluded = group is null;
+            audit.Add("patch-plan.assigned", group is null ? $"{host.Name}: removed from all patch plans (rules included)" : $"{host.Name}: plan group {group.Name}", siteId: host.SiteId, hostId: host.Id);
+        }
+
+        await db.SaveChangesAsync(ct);
+        return Results.NoContent();
+    }
+
+    /// <summary>"Wieder automatisch zuordnen": Ausnahme aufheben, danach gelten Regeln und "alle übrigen" wieder.</summary>
+    public static async Task<IResult> IncludeInPlansAsync(Guid[] hostIds, AppDbContext db, AuditLog audit, CancellationToken ct)
+    {
+        if (hostIds.Length is 0 or > JobPlanner.MaxHostsPerRequest)
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]> { ["hostIds"] = [L.T($"1 bis {JobPlanner.MaxHostsPerRequest} Hosts auswählen.", $"Select 1 to {JobPlanner.MaxHostsPerRequest} hosts.")] });
+        }
+
+        var hosts = await db.Hosts.Where(h => hostIds.Contains(h.Id) && h.PlanExcluded).ToListAsync(ct);
+        foreach (var host in hosts)
+        {
+            host.PlanExcluded = false;
+            audit.Add("patch-plan.included", $"{host.Name}: rules and \"all others\" apply again", siteId: host.SiteId, hostId: host.Id);
         }
 
         await db.SaveChangesAsync(ct);

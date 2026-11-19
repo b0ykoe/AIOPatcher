@@ -48,7 +48,7 @@ export function PlansPage() {
     return () => clearInterval(timer);
   }, [load]);
 
-  const unplanned = hosts.filter((h) => !h.planId && h.status !== "Revoked");
+  const unplanned = hosts.filter((h) => !h.planId && !h.planExcluded && h.status !== "Revoked");
 
   const start = (plan: Runbook, members: number) =>
     confirmAction({

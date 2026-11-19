@@ -106,7 +106,7 @@ export function PlanEditorPage() {
     }
     const others = draft.groups.find((g) => g.includeOthers);
     if (others) {
-      const rest = active.filter((h) => !taken.has(h.id) && (!h.planId || h.planVia === "Others" || plans.find((p) => p.id === h.planId)?.id === id)).map((h) => h.name);
+      const rest = active.filter((h) => !h.planExcluded && !taken.has(h.id) && (!h.planId || h.planVia === "Others" || plans.find((p) => p.id === h.planId)?.id === id)).map((h) => h.name);
       result.set(others.key, [...(result.get(others.key) ?? []), ...rest]);
     }
     return result;

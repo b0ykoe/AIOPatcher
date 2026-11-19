@@ -3,9 +3,10 @@ import { Link } from "react-router";
 import { Alert, Badge, Button, Card, Group, Stack, Text, ThemeIcon } from "@mantine/core";
 import { IconAlertTriangle, IconBolt, IconCalendarTime, IconSettings, IconUsersGroup } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
-import { describeWindow, formatWindowStart, type HostModule, type HostSummary } from "../../api";
+import { api, describeWindow, formatWindowStart, type HostModule, type HostSummary } from "../../api";
 import { useCan } from "../../App";
 import { useFeatures } from "../../features";
+import { notifyError, notifySuccess } from "../ui";
 import { canControlNativeUpdates, NativeUpdatesButton } from "../NativeUpdatesButton";
 import { AssignPlanModal } from "./AssignPlanModal";
 import { QuickPlanModal } from "./QuickPlanModal";
@@ -19,6 +20,15 @@ export function PlanCard({ host, modules, onChanged }: { host: HostSummary; modu
   const [quick, setQuick] = useState(false);
   const a = host.autoPatch;
   const isLinux = host.osFamily === "Linux";
+  const include = async () => {
+    try {
+      await api.post("/api/hosts/plan/include", { hostIds: [host.id] });
+      notifySuccess(t("plans.included"));
+      onChanged();
+    } catch (e) {
+      notifyError(e);
+    }
+  };
 
   return (
     <Card>
@@ -28,6 +38,7 @@ export function PlanCard({ host, modules, onChanged }: { host: HostSummary; modu
           <div>
             <Group gap="xs">
               <Text fw={700}>{host.scheduledRunbook ?? t("overview.noPlan")}</Text>
+              {!host.planId && host.planExcluded && <Badge size="sm" color="orange">{t("plans.excluded")}</Badge>}
               {host.planId && (
                 <Badge size="sm" color="gray">
                   {host.planVia === "Rule" ? t("plans.viaRule") : host.planVia === "Others" ? t("plans.viaOthers") : t("plans.viaHost")}
@@ -41,7 +52,7 @@ export function PlanCard({ host, modules, onChanged }: { host: HostSummary; modu
                 {a.enabled ? ` · ${describeWindow(a)}` : ` · ${t("plans.manualOnly")}`}
               </Text>
             ) : (
-              <Text size="sm" c="dimmed">{t("plans.noPlanText")}</Text>
+              <Text size="sm" c="dimmed">{host.planExcluded ? t("plans.excludedText") : t("plans.noPlanText")}</Text>
             )}
             {a.enabled && a.nextWindowStart && <Text size="xs" c="dimmed">{t("plans.next", { start: formatWindowStart(a.nextWindowStart) })}</Text>}
             {a.lastWindowNote && <Text size="xs" c="dimmed">{a.lastWindowNote}</Text>}
@@ -50,6 +61,9 @@ export function PlanCard({ host, modules, onChanged }: { host: HostSummary; modu
         <Group gap="xs">
           {host.planId && (
             <Button component={Link} to={`/auto-patch/plans/${host.planId}`} variant="subtle" size="compact-xs" leftSection={<IconSettings size={12} />}>{t("plans.openPlan")}</Button>
+          )}
+          {can.operate && host.planExcluded && !host.planId && (
+            <Button variant="light" color="gray" size="compact-xs" onClick={() => void include()}>{t("plans.include")}</Button>
           )}
           {can.operate && (
             <Button variant="light" color="gray" size="compact-xs" leftSection={<IconBolt size={12} />} onClick={() => setQuick(true)}>{t("plans.quick")}</Button>

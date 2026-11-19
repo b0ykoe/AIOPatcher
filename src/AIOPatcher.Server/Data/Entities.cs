@@ -128,6 +128,12 @@ public sealed class ManagedHost
     public Guid? FirewallVersionId { get; set; }
     public DateTime? FirewallAppliedAt { get; set; }
 
+    /// <summary>
+    /// "Aus allen Plänen genommen": kein Patch-Plan erfasst den Host, auch nicht über Tag-/Site-Regeln oder "alle übrigen"
+    /// (z. B. der Proxmox-Host selbst). Wird beim Zuordnen zu einem Plan wieder aufgehoben.
+    /// </summary>
+    public bool PlanExcluded { get; set; }
+
     // Auto-Patch
     public bool AutoPatchEnabled { get; set; }
     public PatchScope AutoPatchScope { get; set; } = PatchScope.Security;

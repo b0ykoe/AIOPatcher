@@ -1233,6 +1233,9 @@ namespace AIOPatcher.Server.Data.Migrations
                         .HasMaxLength(128)
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("PlanExcluded")
+                        .HasColumnType("INTEGER");
+
                     b.Property<int>("ProtocolVersion")
                         .HasColumnType("INTEGER");
 

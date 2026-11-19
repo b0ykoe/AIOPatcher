@@ -146,6 +146,8 @@ export interface HostSummary {
   mapping?: HostMapping | null;
   /** lokale policy.json laut Agent (nur Anzeige); null = nicht gemeldet */
   policy?: AgentPolicyReport | null;
+  /** aus allen Patch-Plänen genommen (auch Regeln und "alle übrigen" erfassen ihn nicht) */
+  planExcluded?: boolean;
   /** Patch-Plan des Hosts (null = keiner, kein automatisches Patchen); scheduledRunbook = Name */
   planId: string | null;
   planGroup: string | null;

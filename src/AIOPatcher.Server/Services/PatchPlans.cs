@@ -31,11 +31,12 @@ public static class PatchPlans
             .OrderBy(r => r.CreatedAt).ThenBy(r => r.Name)
             .AsSplitQuery()
             .ToListAsync(ct);
-        var hosts = await db.Hosts.AsNoTracking().Where(h => !h.IsRevoked).Select(h => new HostInfo(h.Id, h.SiteId, h.Tags)).ToListAsync(ct);
+        var hosts = await db.Hosts.AsNoTracking().Where(h => !h.IsRevoked).Select(h => new HostInfo(h.Id, h.SiteId, h.Tags, h.PlanExcluded)).ToListAsync(ct);
         return Resolve(plans, hosts);
     }
 
-    public sealed record HostInfo(Guid Id, Guid SiteId, string? Tags);
+    /// <param name="Excluded">Aus allen Plänen genommen: Regeln und "alle übrigen" erfassen ihn nicht.</param>
+    public sealed record HostInfo(Guid Id, Guid SiteId, string? Tags, bool Excluded = false);
 
     public static Dictionary<Guid, PlanMembership> Resolve(IReadOnlyList<Runbook> plans, IReadOnlyList<HostInfo> hosts)
     {
@@ -55,7 +56,7 @@ public static class PatchPlans
 
         foreach (var g in groups.Where(g => HasRule(g.Group)))
         {
-            foreach (var host in hosts.Where(h => !result.ContainsKey(h.Id) && MatchesRule(g.Group, h)))
+            foreach (var host in hosts.Where(h => !h.Excluded && !result.ContainsKey(h.Id) && MatchesRule(g.Group, h)))
             {
                 result[host.Id] = Member(g, PlanVia.Rule);
             }
@@ -63,7 +64,7 @@ public static class PatchPlans
 
         if (groups.FirstOrDefault(g => g.Group.IncludeOthers) is { Plan: not null } others)
         {
-            foreach (var host in hosts.Where(h => !result.ContainsKey(h.Id)))
+            foreach (var host in hosts.Where(h => !h.Excluded && !result.ContainsKey(h.Id)))
             {
                 result[host.Id] = Member(others, PlanVia.Others);
             }
