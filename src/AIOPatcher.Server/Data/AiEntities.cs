@@ -69,3 +69,37 @@ public sealed class AiUsageDay
 
     public long OutputTokens { get; set; }
 }
+
+/// <summary>Eine Anfrage an die KI: wofür, mit welchem Modell, wie viele Tokens (laut Anbieter), wie lange, mit welchem Ergebnis.</summary>
+public sealed class AiRequestRecord
+{
+    public long Id { get; set; }
+
+    public DateTime At { get; set; }
+
+    /// <summary>"packages" (Bündel von Paket-Zusammenfassungen), "host" (Zusammenfassung eines Hosts) oder "test".</summary>
+    [MaxLength(20)]
+    public required string Kind { get; set; }
+
+    [MaxLength(150)]
+    public required string Model { get; set; }
+
+    /// <summary>Host, für den die Anfrage lief (kein Fremdschlüssel: der Eintrag bleibt, wenn der Host gelöscht wird).</summary>
+    public Guid? HostId { get; set; }
+
+    /// <summary>Pakete in der Anfrage (bei "host": anstehende Updates).</summary>
+    public int Items { get; set; }
+
+    public long InputTokens { get; set; }
+
+    public long OutputTokens { get; set; }
+
+    public int DurationMs { get; set; }
+
+    /// <summary>"ok", "error" oder "rateLimited".</summary>
+    [MaxLength(20)]
+    public required string Outcome { get; set; }
+
+    [MaxLength(300)]
+    public string? Error { get; set; }
+}

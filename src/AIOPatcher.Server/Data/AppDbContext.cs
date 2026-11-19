@@ -44,6 +44,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<AiSettingsRecord> AiSettings => Set<AiSettingsRecord>();
     public DbSet<HostUpdateSummary> HostUpdateSummaries => Set<HostUpdateSummary>();
     public DbSet<AiUsageDay> AiUsage => Set<AiUsageDay>();
+    public DbSet<AiRequestRecord> AiRequests => Set<AiRequestRecord>();
     public DbSet<FirewallProfile> FirewallProfiles => Set<FirewallProfile>();
     public DbSet<ComplianceBaseline> ComplianceBaselines => Set<ComplianceBaseline>();
     public DbSet<ComplianceBaselineHost> ComplianceBaselineHosts => Set<ComplianceBaselineHost>();
@@ -250,6 +251,12 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
         {
             e.ToTable("AiSettings");
             e.Property(x => x.Id).ValueGeneratedNever();
+        });
+
+        b.Entity<AiRequestRecord>(e =>
+        {
+            e.ToTable("AiRequests");
+            e.HasIndex(x => x.At);
         });
 
         b.Entity<AiUsageDay>(e =>

@@ -150,7 +150,8 @@ tested against real systems, but against mocked APIs and unit tests):
   "What do these updates bring?". Only package names, versions and changelog texts are sent, no host names or
   addresses; the API key is stored encrypted. Each package version is summarized once for all hosts, packages are
   bundled into requests of 25, short changelogs are shown as they are without the AI, and the settings page shows
-  the token usage of the last 30 days.
+  the token usage of the last 30 days, the rate limits of the key and every single request with its tokens. When the
+  rate limit is reached, summaries pause until it refills.
 - **Program inventory**: dpkg/snap and Windows programs, with available version and links (winget manifest,
   Debian tracker, Launchpad, vendor); on Windows **program updates via winget** (Windows 10/11, Server 2025)
 - **Docker containers**: detects newer images in the registry (display/notification only, updates nothing). The agent reports

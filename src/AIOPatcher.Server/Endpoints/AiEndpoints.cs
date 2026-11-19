@@ -12,8 +12,10 @@ public static class AiEndpoints
 {
     /// <param name="HasApiKey">Ein Schlüssel ist gespeichert (der Schlüssel selbst verlässt den Server nie).</param>
     /// <param name="Usage">Verbrauch der letzten Tage laut Anbieter.</param>
+    /// <param name="Limits">Ratenlimits des Schlüssels aus der letzten Antwort (nur für den eingestellten Anbieter).</param>
+    /// <param name="PausedUntil">Ratenlimit erreicht: Zusammenfassungen pausieren bis dahin.</param>
     public sealed record AiSettingsDto(bool Enabled, string Provider, string Model, string DefaultModel, string? BaseUrl, bool HasApiKey, string Language,
-        string? UpdatedBy, DateTime? UpdatedAt, AiUsageDto Usage);
+        string? UpdatedBy, DateTime? UpdatedAt, AiUsageDto Usage, AiRateLimits? Limits, DateTime? PausedUntil);
 
     public sealed record AiUsageDto(int Days, int Requests, long InputTokens, long OutputTokens);
 
@@ -24,20 +26,28 @@ public static class AiEndpoints
 
     public sealed record AiTestResult(bool Ok, string? Text, string? Error);
 
+    /// <summary>Eine Anfrage aus dem Protokoll (Tokens laut Anbieter).</summary>
+    public sealed record AiRequestDto(long Id, DateTime At, string Kind, string Model, Guid? HostId, string? HostName, int Items, long InputTokens,
+        long OutputTokens, int DurationMs, string Outcome, string? Error);
+
     public static void MapAiEndpoints(this IEndpointRouteBuilder app)
     {
         var admin = app.MapGroup("/api/settings/ai").RequireAuthorization(UserAccounts.AdminPolicy);
-        admin.MapGet("", (UpdateSummaries summaries, AppDbContext db, CancellationToken ct) => DtoAsync(summaries.Settings, summaries, db, ct));
+        admin.MapGet("", (UpdateSummaries summaries, AiClient ai, AppDbContext db, CancellationToken ct) => DtoAsync(summaries.Settings, summaries, ai, db, ct));
         admin.MapPut("", SaveAsync);
         admin.MapPost("/test", TestAsync);
+        admin.MapGet("/requests", RequestsAsync);
     }
 
-    private static async Task<AiSettingsDto> DtoAsync(AiSettingsRecord s, UpdateSummaries summaries, AppDbContext db, CancellationToken ct)
+    private static async Task<AiSettingsDto> DtoAsync(AiSettingsRecord s, UpdateSummaries summaries, AiClient ai, AppDbContext db, CancellationToken ct)
     {
-        var (requests, input, output) = await UpdateSummaries.UsageAsync(db, DateTime.UtcNow, UsageDays, ct);
+        var now = DateTime.UtcNow;
+        var (requests, input, output) = await UpdateSummaries.UsageAsync(db, now, UsageDays, ct);
         return new(s.Enabled, s.Provider, s.Model, AiClient.DefaultModel(s.Provider), s.BaseUrl,
             !string.IsNullOrEmpty(s.ProtectedApiKey) && summaries.ApiKeyOf(s) is not null, s.Language, s.UpdatedBy, s.UpdatedAt,
-            new AiUsageDto(UsageDays, requests, input, output));
+            new AiUsageDto(UsageDays, requests, input, output),
+            ai.Limits is { } limits && limits.Provider == s.Provider ? limits : null,
+            summaries.PausedUntil > now ? summaries.PausedUntil : null);
     }
 
     private static Dictionary<string, string[]> Validate(AiSettingsRequest request)
@@ -93,7 +103,7 @@ public static class AiEndpoints
     }
 
     private static async Task<IResult> SaveAsync(AiSettingsRequest request, ClaimsPrincipal user, AppDbContext db, AuditLog audit, UpdateSummaries summaries,
-        CancellationToken ct)
+        AiClient ai, CancellationToken ct)
     {
         if (Validate(request) is { Count: > 0 } errors)
         {
@@ -124,7 +134,19 @@ public static class AiEndpoints
             }
         }
 
-        return Results.Ok(await DtoAsync(row, summaries, db, ct));
+        return Results.Ok(await DtoAsync(row, summaries, ai, db, ct));
+    }
+
+    /// <summary>Die letzten Anfragen an die KI, neueste zuerst.</summary>
+    private static async Task<IResult> RequestsAsync(AppDbContext db, CancellationToken ct, int limit = 100)
+    {
+        var rows = await db.AiRequests.AsNoTracking()
+            .OrderByDescending(r => r.At).ThenByDescending(r => r.Id)
+            .Take(Math.Clamp(limit, 1, 500))
+            .Select(r => new AiRequestDto(r.Id, r.At, r.Kind, r.Model, r.HostId, db.Hosts.Where(h => h.Id == r.HostId).Select(h => h.Name).FirstOrDefault(),
+                r.Items, r.InputTokens, r.OutputTokens, r.DurationMs, r.Outcome, r.Error))
+            .ToListAsync(ct);
+        return Results.Ok(rows);
     }
 
     /// <summary>Probeanfrage mit den Werten aus dem Formular (noch nicht gespeichert); ohne neuen Schlüssel gilt der gespeicherte.</summary>

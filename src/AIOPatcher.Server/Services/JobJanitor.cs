@@ -71,6 +71,10 @@ public sealed class JobJanitor(IServiceScopeFactory scopes, AIOPatcherOptions op
             .Where(c => c.FetchedAt < changelogsBefore && !db.PendingUpdates.Any(u => u.Name == c.Name && u.AvailableVersion == c.Version))
             .ExecuteDeleteAsync(ct);
 
+        // Protokoll der KI-Anfragen: 90 Tage (die Tagessummen bleiben)
+        var aiBefore = now - Ai.UpdateSummaries.KeepRequests;
+        await db.AiRequests.Where(r => r.At < aiBefore).ExecuteDeleteAsync(ct);
+
         if (stale.Count > 0 || deleted > 0 || samples > 0 || tasks > 0)
         {
             logger.LogInformation("Cleaned up: {Stale} stale jobs, {Lines} old log lines, {Samples} metric samples, {Tasks} agent tasks",

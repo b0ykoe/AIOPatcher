@@ -8,6 +8,17 @@ Written for users, not as a list of commits.
 
 ## [Unreleased]
 
+### Added
+- **Limits of the API key:** **Settings → AI** shows the rate limits of your Claude or ChatGPT key (requests, input and
+  output tokens: how much is left and when it refills), read from the provider's responses. Credit and spend limits are
+  not available to normal API keys and are still only shown in the provider's console.
+- **Recent requests:** Every request to the AI is listed with purpose, host, model, number of packages, input and
+  output tokens, duration and result. Single requests are kept for 90 days.
+
+### Improved
+- **Rate limits no longer cause errors:** When the key hits its rate limit, summaries pause until the limit refills and
+  then continue automatically, instead of marking packages as failed for 6 hours.
+
 ## [0.9.1] - 2026-11-19
 
 ### Improved

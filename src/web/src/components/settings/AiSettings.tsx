@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
-import { Alert, Button, Card, Group, List, Loader, PasswordInput, SegmentedControl, Select, SimpleGrid, Stack, Switch, Text, TextInput } from "@mantine/core";
-import { IconAlertTriangle, IconArrowDownRight, IconArrowUpRight, IconCheck, IconCoins, IconPlugConnected, IconSend, IconShieldLock, IconSparkles } from "@tabler/icons-react";
+import { Alert, Badge, Button, Card, Group, List, Loader, PasswordInput, SegmentedControl, Select, SimpleGrid, Stack, Switch, Table, Text, TextInput, Tooltip } from "@mantine/core";
+import { IconAlertTriangle, IconArrowDownRight, IconArrowUpRight, IconCheck, IconClockPause, IconCoins, IconGauge, IconList, IconPlugConnected, IconSend, IconShieldLock, IconSparkles } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
-import { api, formatDateTime, type AiSettings as AiSettingsDto, type AiProvider } from "../../api";
-import { MetricRow } from "../metrics/charts";
+import { api, formatDateTime, formatRelative, type AiLimit, type AiRequest, type AiSettings as AiSettingsDto, type AiProvider } from "../../api";
+import { MetricRow, percentOf, UsageMeter } from "../metrics/charts";
 import { CardTitle, errorText, notifyError, notifySuccess } from "../ui";
 
 /** Einstellungen → KI: Anbieter für die Zusammenfassungen der Patchnotes (Claude, ChatGPT, lokales Modell). */
@@ -20,6 +20,7 @@ export function AiSettings() {
   const [test, setTest] = useState<{ ok: boolean; text: string | null; error: string | null } | null>(null);
   const [testing, setTesting] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [requests, setRequests] = useState<AiRequest[] | null>(null);
 
   const apply = (s: AiSettingsDto) => {
     setSaved(s);
@@ -31,8 +32,11 @@ export function AiSettings() {
     setApiKey("");
   };
 
+  const loadRequests = () => api.get<AiRequest[]>("/api/settings/ai/requests?limit=50").then(setRequests).catch(() => setRequests([]));
+
   useEffect(() => {
     api.get<AiSettingsDto>("/api/settings/ai").then(apply).catch((e) => setLoadError(errorText(e)));
+    void loadRequests();
   }, []);
 
   const body = (keyChange?: string) => ({
@@ -57,8 +61,11 @@ export function AiSettings() {
     setTest(null);
     try {
       setTest(await api.post("/api/settings/ai/test", body()));
-      // der Test zählt zum Verbrauch
-      api.get<AiSettingsDto>("/api/settings/ai").then((s) => setSaved((old) => (old ? { ...old, usage: s.usage } : s))).catch(() => undefined);
+      // der Test zählt zum Verbrauch und bringt die Limits des Schlüssels mit
+      api.get<AiSettingsDto>("/api/settings/ai")
+        .then((s) => setSaved((old) => (old ? { ...old, usage: s.usage, limits: s.limits, pausedUntil: s.pausedUntil } : s)))
+        .catch(() => undefined);
+      void loadRequests();
     } catch (e) {
       setTest({ ok: false, text: null, error: errorText(e) });
     } finally {
@@ -71,10 +78,17 @@ export function AiSettings() {
 
   const defaultModel = provider === "anthropic" ? "claude-opus-5-5" : "";
   const number = (n: number) => n.toLocaleString(i18n.language);
+  const time = (iso: string) => new Date(iso).toLocaleTimeString(i18n.language);
+  const limits = saved.limits;
+  const limitRows: ["limitRequests" | "limitTokens" | "limitInput" | "limitOutput", AiLimit | null][] = limits
+    ? [["limitRequests", limits.requests], ["limitTokens", limits.tokens], ["limitInput", limits.inputTokens], ["limitOutput", limits.outputTokens]]
+    : [];
+  const outcomeColor = { ok: "teal", error: "red", rateLimited: "yellow" } as const;
 
   return (
+    <Stack gap="md">
     <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
-      <Card style={{ gridRow: "span 2" }}>
+      <Card>
         <CardTitle icon={<IconSparkles size={18} />}>{t("ai.title")}</CardTitle>
         <Stack gap="sm">
           <Text size="sm" c="dimmed">{t("ai.intro")}</Text>
@@ -115,6 +129,43 @@ export function AiSettings() {
         </Stack>
       </Card>
 
+      <Card style={{ gridRow: "span 2" }}>
+        <CardTitle icon={<IconCoins size={18} />}>{t("ai.usageTitle")}</CardTitle>
+        <Stack gap="sm">
+          {saved.pausedUntil && (
+            <Alert color="yellow" icon={<IconClockPause size={18} />} title={t("ai.pausedTitle")}>
+              <Text size="sm">{t("ai.paused", { time: time(saved.pausedUntil) })}</Text>
+            </Alert>
+          )}
+          <Alert color="yellow" icon={<IconAlertTriangle size={18} />} title={t("ai.usageWarnTitle")}>
+            <Text size="sm">{t("ai.usageWarn")}</Text>
+          </Alert>
+          <Text size="sm" c="dimmed">{t("ai.usageSaving")}</Text>
+          <Text size="xs" c="dimmed" tt="uppercase" fw={700}>{t("ai.usagePeriod", { days: saved.usage.days })}</Text>
+          <Stack gap={6}>
+            <MetricRow icon={<IconSend size={14} />} label={t("ai.usageRequests")} value={number(saved.usage.requests)} />
+            <MetricRow icon={<IconArrowUpRight size={14} />} label={t("ai.usageInput")} value={number(saved.usage.inputTokens)} />
+            <MetricRow icon={<IconArrowDownRight size={14} />} label={t("ai.usageOutput")} value={number(saved.usage.outputTokens)} />
+          </Stack>
+          {provider === "compatible" && <Text size="xs" c="dimmed">{t("ai.usageLocal")}</Text>}
+
+          <Group gap={6} mt="xs"><IconGauge size={14} /><Text size="xs" c="dimmed" tt="uppercase" fw={700}>{t("ai.limitsTitle")}</Text></Group>
+          {limits && limits.provider === provider ? (
+            <>
+              <Stack gap="sm">
+                {limitRows.filter(([, l]) => l).map(([key, l]) => (
+                  <UsageMeter key={key} size="sm" label={t(`ai.${key}`)} percent={percentOf(l!.limit - l!.remaining, l!.limit)}
+                    detail={t("ai.limitDetail", { left: number(l!.remaining), max: number(l!.limit) })} />
+                ))}
+              </Stack>
+              <Text size="xs" c="dimmed">{t("ai.limitsObserved", { when: formatRelative(limits.observedAt) })}</Text>
+            </>
+          ) : (
+            <Text size="sm" c="dimmed">{provider === "compatible" ? t("ai.limitsNoneLocal") : t("ai.limitsNone")}</Text>
+          )}
+        </Stack>
+      </Card>
+
       <Card>
         <CardTitle icon={<IconShieldLock size={18} />}>{t("ai.privacyTitle")}</CardTitle>
         <Stack gap="sm">
@@ -127,23 +178,53 @@ export function AiSettings() {
           <Text size="sm" c="dimmed">{t("ai.privacyLocal")}</Text>
         </Stack>
       </Card>
-
-      <Card>
-        <CardTitle icon={<IconCoins size={18} />}>{t("ai.usageTitle")}</CardTitle>
-        <Stack gap="sm">
-          <Alert color="yellow" icon={<IconAlertTriangle size={18} />} title={t("ai.usageWarnTitle")}>
-            <Text size="sm">{t("ai.usageWarn")}</Text>
-          </Alert>
-          <Text size="sm" c="dimmed">{t("ai.usageSaving")}</Text>
-          <Text size="xs" c="dimmed" tt="uppercase" fw={700}>{t("ai.usagePeriod", { days: saved.usage.days })}</Text>
-          <Stack gap={6}>
-            <MetricRow icon={<IconSend size={14} />} label={t("ai.usageRequests")} value={number(saved.usage.requests)} />
-            <MetricRow icon={<IconArrowUpRight size={14} />} label={t("ai.usageInput")} value={number(saved.usage.inputTokens)} />
-            <MetricRow icon={<IconArrowDownRight size={14} />} label={t("ai.usageOutput")} value={number(saved.usage.outputTokens)} />
-          </Stack>
-          {provider === "compatible" && <Text size="xs" c="dimmed">{t("ai.usageLocal")}</Text>}
-        </Stack>
-      </Card>
     </SimpleGrid>
+
+    <Card p={0}>
+      <CardTitle inset icon={<IconList size={18} />} description={t("ai.requestsHint")}>{t("ai.requestsTitle")}</CardTitle>
+      {requests === null ? <Loader m="md" size="sm" /> : requests.length === 0 ? (
+        <Text size="sm" c="dimmed" px="md" pb="md">{t("ai.requestsEmpty")}</Text>
+      ) : (
+        <Table.ScrollContainer minWidth={900}>
+          <Table>
+            <Table.Thead>
+              <Table.Tr>
+                <Table.Th>{t("ai.colTime")}</Table.Th>
+                <Table.Th>{t("ai.colKind")}</Table.Th>
+                <Table.Th>{t("ai.colHost")}</Table.Th>
+                <Table.Th>{t("ai.colModel")}</Table.Th>
+                <Table.Th ta="right">{t("ai.colItems")}</Table.Th>
+                <Table.Th ta="right">{t("ai.colInput")}</Table.Th>
+                <Table.Th ta="right">{t("ai.colOutput")}</Table.Th>
+                <Table.Th ta="right">{t("ai.colDuration")}</Table.Th>
+                <Table.Th>{t("ai.colOutcome")}</Table.Th>
+              </Table.Tr>
+            </Table.Thead>
+            <Table.Tbody>
+              {requests.map((r) => (
+                <Table.Tr key={r.id}>
+                  <Table.Td><Text size="sm" style={{ whiteSpace: "nowrap" }}>{formatDateTime(r.at)}</Text></Table.Td>
+                  <Table.Td><Text size="sm">{t(`ai.kind_${r.kind}`)}</Text></Table.Td>
+                  <Table.Td><Text size="sm" c={r.hostName ? undefined : "dimmed"}>{r.hostName ?? "–"}</Text></Table.Td>
+                  <Table.Td><Text size="xs" ff="monospace" c="dimmed">{r.model}</Text></Table.Td>
+                  <Table.Td ta="right" style={{ fontVariantNumeric: "tabular-nums" }}>{number(r.items)}</Table.Td>
+                  <Table.Td ta="right" style={{ fontVariantNumeric: "tabular-nums" }}>{number(r.inputTokens)}</Table.Td>
+                  <Table.Td ta="right" style={{ fontVariantNumeric: "tabular-nums" }}>{number(r.outputTokens)}</Table.Td>
+                  <Table.Td ta="right" style={{ fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
+                    {(r.durationMs / 1000).toLocaleString(i18n.language, { maximumFractionDigits: 1 })} s
+                  </Table.Td>
+                  <Table.Td>
+                    <Tooltip label={r.error} disabled={!r.error} multiline w={320}>
+                      <Badge size="sm" variant="light" color={outcomeColor[r.outcome]}>{t(`ai.outcome_${r.outcome}`)}</Badge>
+                    </Tooltip>
+                  </Table.Td>
+                </Table.Tr>
+              ))}
+            </Table.Tbody>
+          </Table>
+        </Table.ScrollContainer>
+      )}
+    </Card>
+    </Stack>
   );
 }

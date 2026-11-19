@@ -220,6 +220,41 @@ export interface AiSettings {
   updatedAt: string | null;
   /** Verbrauch der letzten Tage laut Anbieter */
   usage: { days: number; requests: number; inputTokens: number; outputTokens: number };
+  /** Ratenlimits des Schlüssels aus der letzten Antwort (null: noch keine Anfrage oder Anbieter meldet keine) */
+  limits: AiRateLimits | null;
+  /** Ratenlimit erreicht: Zusammenfassungen pausieren bis dahin */
+  pausedUntil: string | null;
+}
+
+export interface AiLimit {
+  limit: number;
+  remaining: number;
+  resetAt: string | null;
+}
+
+export interface AiRateLimits {
+  provider: AiProvider;
+  observedAt: string;
+  requests: AiLimit | null;
+  tokens: AiLimit | null;
+  inputTokens: AiLimit | null;
+  outputTokens: AiLimit | null;
+}
+
+/** Eine Anfrage an die KI (Protokoll unter Einstellungen → KI) */
+export interface AiRequest {
+  id: number;
+  at: string;
+  kind: "packages" | "host" | "test";
+  model: string;
+  hostId: string | null;
+  hostName: string | null;
+  items: number;
+  inputTokens: number;
+  outputTokens: number;
+  durationMs: number;
+  outcome: "ok" | "error" | "rateLimited";
+  error: string | null;
 }
 
 /** "Was bringen diese Updates?" eines Hosts */

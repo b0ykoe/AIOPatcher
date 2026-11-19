@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -38,6 +39,9 @@ public sealed partial class UpdateSummaries : BackgroundService
     /// <summary>Fehlgeschlagene Paket-Zusammenfassungen erst nach dieser Zeit erneut versuchen (kostet sonst bei jedem Scan).</summary>
     public static readonly TimeSpan RetryErrorsAfter = TimeSpan.FromHours(6);
 
+    /// <summary>So lange bleibt jede einzelne Anfrage im Protokoll.</summary>
+    public static readonly TimeSpan KeepRequests = TimeSpan.FromDays(90);
+
     private const string ProtectorPurpose = "AIOPatcher.AiKey.v1";
 
     /// <summary>Erst so lange nach dem Vormerken bearbeiten: das auslösende Ergebnis (Scan, Patchnotes) ist dann gespeichert.</summary>
@@ -50,6 +54,7 @@ public sealed partial class UpdateSummaries : BackgroundService
     private readonly AiClient _ai;
     private readonly ILogger<UpdateSummaries> _logger;
     private volatile AiSettingsRecord _settings = new();
+    private long _pausedUntilTicks;
 
     public UpdateSummaries(IServiceScopeFactory scopes, IDataProtectionProvider protection, AiClient ai, UpdateChangelogs changelogs, ILogger<UpdateSummaries> logger)
     {
@@ -63,6 +68,16 @@ public sealed partial class UpdateSummaries : BackgroundService
     public AiSettingsRecord Settings => _settings;
 
     public bool Active => _settings.Enabled;
+
+    /// <summary>Ratenlimit erreicht: bis dahin keine Anfragen, danach geht es mit den vorgemerkten Hosts weiter.</summary>
+    public DateTime PausedUntil => new(Interlocked.Read(ref _pausedUntilTicks), DateTimeKind.Utc);
+
+    private void Pause(DateTime until)
+    {
+        var max = DateTime.UtcNow + RetryErrorsAfter;
+        Interlocked.Exchange(ref _pausedUntilTicks, (until > max ? max : until).Ticks);
+        _logger.LogInformation("AI rate limit reached, summaries paused until {Until:u}", PausedUntil);
+    }
 
     public async Task LoadAsync(AppDbContext db, CancellationToken ct) =>
         _settings = await db.AiSettings.AsNoTracking().SingleOrDefaultAsync(s => s.Id == 1, ct) ?? new AiSettingsRecord();
@@ -111,7 +126,9 @@ public sealed partial class UpdateSummaries : BackgroundService
     {
         await foreach (var (hostId, at) in _queue.Reader.ReadAllAsync(stoppingToken))
         {
-            if (at + Settle - DateTime.UtcNow is { Ticks: > 0 } wait)
+            // erst nach dem Settle, bei erreichtem Ratenlimit erst danach
+            var due = at + Settle > PausedUntil ? at + Settle : PausedUntil;
+            if (due - DateTime.UtcNow is { Ticks: > 0 } wait)
             {
                 await Task.Delay(wait, stoppingToken);
             }
@@ -182,7 +199,14 @@ public sealed partial class UpdateSummaries : BackgroundService
         foreach (var batch in Batches(todo))
         {
             // Fehler (Schlüssel falsch, Anbieter nicht erreichbar): die übrigen Bündel gar nicht erst schicken
-            if (!await SummarizeBatchAsync(db, settings, key, label, batch, now, ct))
+            var result = await SummarizeBatchAsync(db, settings, key, label, hostId, batch, now, ct);
+            if (result == BatchResult.RateLimited)
+            {
+                Enqueue(hostId); // nach der Pause weiter, auch mit der Zusammenfassung für den Host
+                return;
+            }
+
+            if (result == BatchResult.Failed)
             {
                 break;
             }
@@ -213,25 +237,32 @@ public sealed partial class UpdateSummaries : BackgroundService
             return $"- {u.Name} {u.CurrentVersion ?? "(new)"} -> {u.AvailableVersion}{(u.IsSecurity ? " [security]" : "")}: {(text.Length > 0 ? text : "no release notes")}";
         });
 
+        string? text = null;
+        string? error = null;
+        try
+        {
+            text = (await CallAsync(db, settings, key, "host", hostId, updates.Count, HostPrompt(settings.Language),
+                $"{updates.Count} pending updates on one server:\n{Truncate(string.Join("\n", lines), 40_000)}", 2048, now, ct)).Text;
+        }
+        catch (AiRateLimitException ex)
+        {
+            // kein Fehler: nach der Pause neu versuchen, bis dahin bleibt die alte Zusammenfassung
+            Pause(ex.RetryAt);
+            Enqueue(hostId);
+            return;
+        }
+        catch (AiException ex)
+        {
+            error = Truncate(ex.Message);
+        }
+
         if (summary is null)
         {
             db.HostUpdateSummaries.Add(summary = new HostUpdateSummary { HostId = hostId, Fingerprint = fingerprint });
         }
 
-        try
-        {
-            var answer = await _ai.CompleteAsync(settings, key, HostPrompt(settings.Language),
-                $"{updates.Count} pending updates on one server:\n{Truncate(string.Join("\n", lines), 40_000)}", 2048, ct);
-            await RecordUsageAsync(db, answer, now, ct);
-            summary.Text = answer.Text;
-            summary.Error = null;
-        }
-        catch (AiException ex)
-        {
-            summary.Text = null;
-            summary.Error = Truncate(ex.Message);
-        }
-
+        summary.Text = text;
+        summary.Error = error;
         summary.Fingerprint = fingerprint;
         summary.Model = label;
         summary.UpdateCount = updates.Count;
@@ -242,13 +273,42 @@ public sealed partial class UpdateSummaries : BackgroundService
     /// <summary>Kurzer Testlauf für die Einstellungsseite (dasselbe Format wie die echten Paket-Anfragen).</summary>
     public async Task<string> TestAsync(AppDbContext db, AiSettingsRecord settings, string? apiKey, DateTime now, CancellationToken ct)
     {
-        var answer = await _ai.CompleteAsync(settings, apiKey, PackagePrompt(settings.Language), PackageRequest([
+        var answer = await CallAsync(db, settings, apiKey, "test", null, 1, PackagePrompt(settings.Language), PackageRequest([
             new PackageInput(null!, "openssl", "3.0.15-1~deb12u1", "3.0.16-1~deb12u1",
                 "3.0.16-1~deb12u1:\n  * Import 3.0.16\n    - CVE-2024-13176 (Timing side-channel in ECDSA signature computation).\n" +
                 "    - CVE-2024-9143 (Low-level invalid GF(2^m) parameters lead to OOB memory access)."),
-        ]), MaxTokensFor(1), ct);
-        await RecordUsageAsync(db, answer, now, ct);
+        ]), MaxTokensFor(1), now, ct);
         return answer.Text;
+    }
+
+    /// <summary>
+    /// Eine Anfrage an die KI und ihr Eintrag im Protokoll (Tokens, Dauer, Ergebnis) samt Tagessumme. Speichert dabei
+    /// auch übrige Änderungen im Kontext.
+    /// </summary>
+    private async Task<AiAnswer> CallAsync(AppDbContext db, AiSettingsRecord settings, string? apiKey, string kind, Guid? hostId, int items, string system,
+        string user, int maxTokens, DateTime now, CancellationToken ct)
+    {
+        var watch = Stopwatch.StartNew();
+        var entry = new AiRequestRecord { At = now, Kind = kind, Model = AiClient.Label(settings), HostId = hostId, Items = items, Outcome = "ok" };
+        try
+        {
+            var answer = await _ai.CompleteAsync(settings, apiKey, system, user, maxTokens, ct);
+            entry.InputTokens = answer.InputTokens;
+            entry.OutputTokens = answer.OutputTokens;
+            entry.DurationMs = (int)watch.ElapsedMilliseconds;
+            db.AiRequests.Add(entry);
+            await RecordUsageAsync(db, answer, now, ct);
+            return answer;
+        }
+        catch (AiException ex)
+        {
+            entry.DurationMs = (int)watch.ElapsedMilliseconds;
+            entry.Outcome = ex is AiRateLimitException ? "rateLimited" : "error";
+            entry.Error = Truncate(ex.Message);
+            db.AiRequests.Add(entry);
+            await db.SaveChangesAsync(ct);
+            throw;
+        }
     }
 
     /// <summary>Verbrauch der letzten Tage (Anfragen, Tokens laut Anbieter).</summary>
@@ -277,16 +337,24 @@ public sealed partial class UpdateSummaries : BackgroundService
     /// <summary>Ein Paket für die gebündelte Anfrage (Excerpt = Changelog seit der installierten Version, gekürzt).</summary>
     private sealed record PackageInput(PackageChangelogRecord Record, string Name, string? From, string To, string Excerpt);
 
-    private async Task<bool> SummarizeBatchAsync(AppDbContext db, AiSettingsRecord settings, string? key, string label, List<PackageInput> batch, DateTime now,
-        CancellationToken ct)
+    private enum BatchResult { Done, Failed, RateLimited }
+
+    private async Task<BatchResult> SummarizeBatchAsync(AppDbContext db, AiSettingsRecord settings, string? key, string label, Guid hostId,
+        List<PackageInput> batch, DateTime now, CancellationToken ct)
     {
         Dictionary<string, string> answers;
         string? error = null;
         try
         {
-            var answer = await _ai.CompleteAsync(settings, key, PackagePrompt(settings.Language), PackageRequest(batch), MaxTokensFor(batch.Count), ct);
-            await RecordUsageAsync(db, answer, now, ct);
+            var answer = await CallAsync(db, settings, key, "packages", hostId, batch.Count, PackagePrompt(settings.Language), PackageRequest(batch),
+                MaxTokensFor(batch.Count), now, ct);
             answers = ParsePackageAnswer(answer.Text, batch.Select(p => p.Name));
+        }
+        catch (AiRateLimitException ex)
+        {
+            // kein Fehler am Paket: nach der Pause neu
+            Pause(ex.RetryAt);
+            return BatchResult.RateLimited;
         }
         catch (AiException ex)
         {
@@ -315,7 +383,7 @@ public sealed partial class UpdateSummaries : BackgroundService
         }
 
         await db.SaveChangesAsync(ct);
-        return error is null;
+        return error is null ? BatchResult.Done : BatchResult.Failed;
     }
 
     /// <summary>Schon erledigt: kurzer Changelog, oder Zusammenfassung mit derselben Sprache und demselben Modell (Fehler erst nach einer Weile neu).</summary>

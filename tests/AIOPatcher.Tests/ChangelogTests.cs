@@ -226,6 +226,11 @@ public sealed class ChangelogTests : IDisposable
 
         public HashSet<string> Skip { get; } = [];
 
+        /// <summary>Antwort-Status (429 = Ratenlimit) und zusätzliche Header (z. B. x-ratelimit-*).</summary>
+        public int Status { get; set; } = 200;
+
+        public Dictionary<string, string> Headers { get; } = [];
+
         private static readonly System.Text.RegularExpressions.Regex Package = new(@"### ([a-z0-9.+-]+)");
 
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
@@ -240,7 +245,41 @@ public sealed class ChangelogTests : IDisposable
                 choices = new[] { new { message = new { role = "assistant", content = answer } } },
                 usage = new { prompt_tokens = 100, completion_tokens = 20 },
             });
-            return new HttpResponseMessage(System.Net.HttpStatusCode.OK) { Content = new StringContent(json, System.Text.Encoding.UTF8, "application/json") };
+            var response = Status == 200
+                ? new HttpResponseMessage(System.Net.HttpStatusCode.OK) { Content = new StringContent(json, System.Text.Encoding.UTF8, "application/json") }
+                : new HttpResponseMessage((System.Net.HttpStatusCode)Status) { Content = new StringContent("""{"error":{"type":"rate_limit_error"}}""") };
+            foreach (var (name, value) in Headers)
+            {
+                response.Headers.TryAddWithoutValidation(name, value);
+            }
+
+            return response;
+        }
+    }
+
+    /// <summary>Nachgebaute Claude-API (Messages) mit Ratenlimit-Headern.</summary>
+    private sealed class FakeClaude : HttpMessageHandler
+    {
+        public List<string> Requests { get; } = [];
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+        {
+            Requests.Add(await request.Content!.ReadAsStringAsync(ct));
+            var response = new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+            {
+                Content = new StringContent("""
+                    {"id":"msg_01","type":"message","role":"assistant","model":"claude-haiku-5-5",
+                     "content":[{"type":"text","text":"openssl: Fixes two CVEs."}],
+                     "stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":120,"output_tokens":15}}
+                    """, System.Text.Encoding.UTF8, "application/json"),
+            };
+            response.Headers.Add("anthropic-ratelimit-requests-limit", "50");
+            response.Headers.Add("anthropic-ratelimit-requests-remaining", "49");
+            response.Headers.Add("anthropic-ratelimit-requests-reset", "2026-11-19T10:00:30Z");
+            response.Headers.Add("anthropic-ratelimit-input-tokens-limit", "40000");
+            response.Headers.Add("anthropic-ratelimit-input-tokens-remaining", "39000");
+            response.Headers.Add("anthropic-ratelimit-input-tokens-reset", "2026-11-19T10:00:02Z");
+            return response;
         }
     }
 
@@ -300,6 +339,13 @@ public sealed class ChangelogTests : IDisposable
         Assert.Equal((2, 200L, 40L), (usage.Requests, usage.InputTokens, usage.OutputTokens));
         Assert.Equal((2, 200L, 40L), await AIOPatcher.Server.Services.Ai.UpdateSummaries.UsageAsync(_db, Now, 30, CancellationToken.None));
 
+        // jede Anfrage im Protokoll: wofür, wie viele Pakete, Tokens
+        var log = await _db.AiRequests.OrderBy(r => r.Id).ToListAsync();
+        Assert.Equal(["packages", "host"], log.Select(r => r.Kind));
+        Assert.Equal((2, 100L, 20L, "ok", (Guid?)host.Id), (log[0].Items, log[0].InputTokens, log[0].OutputTokens, log[0].Outcome, log[0].HostId));
+        Assert.Equal(3, log[1].Items);
+        Assert.All(log, r => Assert.Equal("compatible/llama3.1", r.Model));
+
         // nichts geändert: kein neuer Aufruf
         await summaries.RunHostAsync(_db, host.Id, Now, CancellationToken.None);
         Assert.Equal(2, chat.Requests.Count);
@@ -358,5 +404,88 @@ public sealed class ChangelogTests : IDisposable
             [new UpdateChangelogs.Section("1.2-1", null, "  [ Jane Doe ]\n  * New upstream release.")]));
         Assert.Equal("", AIOPatcher.Server.Services.Ai.UpdateSummaries.Brief([]));
         Assert.Null(AIOPatcher.Server.Services.Ai.UpdateSummaries.Brief(UpdateChangelogs.Since(OpenSsl, "3.0.15-1~deb12u1")));
+    }
+
+    [Fact]
+    public void ParseLimits_ReadsClaudeAndOpenAiHeaders()
+    {
+        var now = new DateTime(2026, 11, 19, 10, 0, 0, DateTimeKind.Utc);
+        var claude = new Dictionary<string, string>
+        {
+            ["anthropic-ratelimit-requests-limit"] = "50", ["anthropic-ratelimit-requests-remaining"] = "0",
+            ["anthropic-ratelimit-requests-reset"] = "2026-11-19T10:00:40Z",
+            ["anthropic-ratelimit-output-tokens-limit"] = "8000", ["anthropic-ratelimit-output-tokens-remaining"] = "7000",
+            ["anthropic-ratelimit-output-tokens-reset"] = "2026-11-19T10:00:05Z",
+        };
+        var limits = AIOPatcher.Server.Services.Ai.AiClient.ParseLimits("anthropic", claude.GetValueOrDefault, now)!;
+        Assert.Equal(new AIOPatcher.Server.Services.Ai.AiLimit(50, 0, now.AddSeconds(40)), limits.Requests);
+        Assert.Equal(8000, limits.OutputTokens!.Limit);
+        Assert.Null(limits.InputTokens);
+        // ausgeschöpftes Anfrage-Limit: weiter, wenn es wieder voll ist; retry-after hat Vorrang
+        Assert.Equal(now.AddSeconds(40), AIOPatcher.Server.Services.Ai.AiClient.RetryAt(claude.GetValueOrDefault, limits, now));
+        Assert.Equal(now.AddSeconds(12), AIOPatcher.Server.Services.Ai.AiClient.RetryAt(new Dictionary<string, string> { ["retry-after"] = "12" }.GetValueOrDefault, limits, now));
+
+        var openAi = new Dictionary<string, string>
+        {
+            ["x-ratelimit-limit-requests"] = "500", ["x-ratelimit-remaining-requests"] = "499", ["x-ratelimit-reset-requests"] = "120ms",
+            ["x-ratelimit-limit-tokens"] = "30000", ["x-ratelimit-remaining-tokens"] = "0", ["x-ratelimit-reset-tokens"] = "1m2.5s",
+        };
+        limits = AIOPatcher.Server.Services.Ai.AiClient.ParseLimits("openai", openAi.GetValueOrDefault, now)!;
+        Assert.Equal(new AIOPatcher.Server.Services.Ai.AiLimit(500, 499, now.AddMilliseconds(120)), limits.Requests);
+        Assert.Equal(new AIOPatcher.Server.Services.Ai.AiLimit(30000, 0, now.AddSeconds(62.5)), limits.Tokens);
+        Assert.Equal(now.AddSeconds(62.5), AIOPatcher.Server.Services.Ai.AiClient.RetryAt(openAi.GetValueOrDefault, limits, now));
+
+        // lokale Modelle ohne Header
+        Assert.Null(AIOPatcher.Server.Services.Ai.AiClient.ParseLimits("compatible", _ => null, now));
+    }
+
+    [Fact]
+    public async Task Claude_SdkResponseHeaders_AreRead()
+    {
+        var claude = new FakeClaude();
+        var ai = new AIOPatcher.Server.Services.Ai.AiClient(new Factory(claude));
+        var answer = await ai.CompleteAsync(new AiSettingsRecord { Provider = "anthropic", Model = "claude-haiku-5-5" }, "test-key", "system", "user", 256,
+            CancellationToken.None);
+
+        Assert.Equal("openssl: Fixes two CVEs.", answer.Text);
+        Assert.Equal((120L, 15L), (answer.InputTokens, answer.OutputTokens));
+        Assert.Equal("anthropic", ai.Limits!.Provider);
+        Assert.Equal(new AIOPatcher.Server.Services.Ai.AiLimit(50, 49, new DateTime(2026, 11, 19, 10, 0, 30, DateTimeKind.Utc)), ai.Limits.Requests);
+        Assert.Equal(39000, ai.Limits.InputTokens!.Remaining);
+    }
+
+    [Fact]
+    public async Task Summaries_RateLimited_PauseWithoutErrors_AndContinueLater()
+    {
+        var chat = new FakeChat { Status = 429, Headers = { ["retry-after"] = "30" } };
+        var summaries = Summaries(chat);
+        var host = Host(supportsChangelog: true);
+        _db.Hosts.Add(host);
+        _db.PendingUpdates.Add(new PendingUpdate { Host = host, Name = "libssl3", CurrentVersion = "3.0.15-1~deb12u1", AvailableVersion = "3.0.16-1~deb12u1" });
+        _db.PackageChangelogs.Add(new PackageChangelogRecord { Name = "libssl3", Version = "3.0.16-1~deb12u1", Text = OpenSsl, FetchedAt = Now });
+        await _db.SaveChangesAsync();
+
+        var before = DateTime.UtcNow;
+        await summaries.RunHostAsync(_db, host.Id, Now, CancellationToken.None);
+
+        // kein Fehler am Paket, keine Host-Zusammenfassung angefangen, Pause bis zum Reset
+        var record = await _db.PackageChangelogs.SingleAsync();
+        Assert.Null(record.Summary);
+        Assert.Null(record.SummaryError);
+        Assert.Null(record.SummaryAt);
+        Assert.Single(chat.Requests);
+        Assert.False(await _db.HostUpdateSummaries.AnyAsync());
+        Assert.InRange(summaries.PausedUntil, before.AddSeconds(29), DateTime.UtcNow.AddSeconds(31));
+        var limited = await _db.AiRequests.SingleAsync();
+        Assert.Equal(("packages", "rateLimited", 0L), (limited.Kind, limited.Outcome, limited.InputTokens));
+
+        // nach der Pause: weiter wie gewohnt
+        chat.Status = 200;
+        chat.Headers.Clear();
+        chat.Headers["x-ratelimit-limit-requests"] = "500";
+        chat.Headers["x-ratelimit-remaining-requests"] = "498";
+        await summaries.RunHostAsync(_db, host.Id, Now, CancellationToken.None);
+        Assert.Equal("Package summary", (await _db.PackageChangelogs.SingleAsync()).Summary);
+        Assert.Equal("- Host summary", (await _db.HostUpdateSummaries.SingleAsync()).Text);
     }
 }
