@@ -597,6 +597,8 @@ Everything is off by default: the switch *Manage monitoring clients*, the Admin 
 sudo aiopatcher-agent policy set allowMonitoringChanges true
 ```
 
+Or right at installation: `install.sh … --allow-monitoring-changes` or `install.ps1 … -AllowMonitoringChanges` (also for lite agents). *Add host* adds these options to the command automatically when the matching features are on (switches in the dialog).
+
 Lite agents have no `policy set` command: add `"allowMonitoringChanges": true` to their `policy.json` instead. Reading the state works without that. During registration, the Checkmk password briefly appears in the host's process
 list (`cmk-agent-ctl` only reads it from the command line or interactively).
 

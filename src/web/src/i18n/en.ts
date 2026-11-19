@@ -290,6 +290,10 @@ const en: Translation = {
     allowlistHint: "CIDRs, comma-separated. Only agents from these addresses may enroll and check in.",
   },
   addHost: {
+    allowSystem: "Allow firewall, SSH/RDP and user changes",
+    allowSystemHint: "Writes allowSystemChanges into the host's policy.json (--allow-system-changes). Preset when the feature is on in the dashboard.",
+    allowMonitoring: "Allow managing monitoring clients (Wazuh, Checkmk)",
+    allowMonitoringHint: "Writes allowMonitoringChanges into the host's policy.json (--allow-monitoring-changes). Preset when the feature is on in the dashboard.",
     internal: "In the network / via VPN",
     external: "Outside (cloud)",
     internalHint: "The host reaches the server directly at {{url}}.",
@@ -1129,6 +1133,8 @@ const en: Translation = {
     gettingStarted: "Continue setup",
   },
   monitoring: {
+    quickActive: "active",
+    quickRunning: "running",
     cardTitle: "Monitoring clients",
     clientsTitle: "{{product}} clients",
     state_ok: "matches",

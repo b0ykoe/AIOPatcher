@@ -28,6 +28,8 @@ param(
     [string]$DownloadOnly,
     # Allow firewall, RDP and user changes from the dashboard (policy.json allowSystemChanges; off by default)
     [switch]$AllowSystemChanges,
+    # Allow installing, reconfiguring and uninstalling Wazuh/Checkmk clients (policy.json allowMonitoringChanges; off by default)
+    [switch]$AllowMonitoringChanges,
     # Force the lite agent (PowerShell). Automatic on Server 2008 R2 / Windows 7.
     [switch]$Lite
 )
@@ -98,6 +100,16 @@ function Get-LiteTask {
     try { return $scheduler.GetFolder('\').GetTask($ServiceName) } catch { return $null }
 }
 
+# Lite agent: no "policy set" command, so set the key in policy.json directly (other keys stay).
+function Set-LitePolicy([string]$Key) {
+    $path = Join-Path $StateDir 'policy.json'
+    $policy = if (Test-Path $path) { (Get-Content -Path $path -Raw -Encoding UTF8) | ConvertFrom-Json } else { New-Object PSObject }
+    if ($null -eq $policy) { $policy = New-Object PSObject }
+    $policy | Add-Member -NotePropertyName $Key -NotePropertyValue $true -Force
+    Set-Content -Path "$path.tmp" -Value (ConvertTo-Json -InputObject $policy -Depth 10) -Encoding UTF8
+    Move-Item -Path "$path.tmp" -Destination $path -Force
+}
+
 function Install-LiteAgent {
     Info 'Old Windows: installing the lite agent (scans and installs updates, reboots).'
     $file = Join-Path $tmp 'aiopatcher-agent-lite.ps1'
@@ -126,6 +138,11 @@ function Install-LiteAgent {
         if ($Force) { Remove-Item (Join-Path $StateDir 'pending-result.json') -Force -ErrorAction SilentlyContinue }
         & $ps -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $liteFile @enrollArgs
         if ($LASTEXITCODE -ne 0) { Fail 'Enrollment failed.' }
+    }
+
+    if ($AllowMonitoringChanges) {
+        Set-LitePolicy 'allowMonitoringChanges'
+        Info 'Installing and reconfiguring Wazuh/Checkmk clients from the dashboard allowed (policy.json).'
     }
 
     Info 'Self-test ...'
@@ -367,6 +384,11 @@ try {
     if ($AllowSystemChanges) {
         & $Exe policy set allowSystemChanges true --state-dir $StateDir | Out-Null
         Info 'Changes to firewall, RDP and users from the dashboard allowed (policy.json).'
+    }
+
+    if ($AllowMonitoringChanges) {
+        & $Exe policy set allowMonitoringChanges true --state-dir $StateDir | Out-Null
+        Info 'Installing and reconfiguring Wazuh/Checkmk clients from the dashboard allowed (policy.json).'
     }
 
     # --- 5. Self-test before starting the service -------------------------------------------------

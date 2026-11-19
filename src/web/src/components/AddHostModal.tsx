@@ -1,9 +1,19 @@
 import { useEffect, useState } from "react";
-import { Alert, Button, Code, CopyButton, Group, Modal, SegmentedControl, Select, Stack, Tabs, Text, TextInput, Tooltip, ActionIcon } from "@mantine/core";
+import { Alert, Button, Code, CopyButton, Group, Modal, SegmentedControl, Select, Stack, Switch, Tabs, Text, TextInput, Tooltip, ActionIcon } from "@mantine/core";
 import { IconBrandUbuntu, IconBrandWindows, IconCheck, IconCopy, IconInfoCircle, IconKey, IconWorld } from "@tabler/icons-react";
 import { api, formatDateTime, type EnrollmentTokenCreated, type Site } from "../api";
 import { useTranslation } from "react-i18next";
 import { notifyError } from "./ui";
+import { useFeatures } from "../features";
+
+/** Freigaben, die der Installer gleich in die policy.json des Hosts schreibt. */
+interface Allow {
+  system: boolean;
+  monitoring: boolean;
+}
+
+const linuxFlags = (a: Allow) => (a.system ? " --allow-system-changes" : "") + (a.monitoring ? " --allow-monitoring-changes" : "");
+const windowsFlags = (a: Allow) => (a.system ? " -AllowSystemChanges" : "") + (a.monitoring ? " -AllowMonitoringChanges" : "");
 
 interface AgentDownload {
   runtimeId: string;
@@ -14,13 +24,13 @@ interface AgentDownload {
  * Linux: Die CA wird gegen den Fingerprint geprüft (nur sha256sum/base64, kein openssl nötig),
  * erst danach wird das Skript über die gepinnte CA geladen und als root ausgeführt.
  */
-function linuxInstallCommand(c: EnrollmentTokenCreated): string {
+function linuxInstallCommand(c: EnrollmentTokenCreated, a: Allow): string {
   return [
     `S="${c.serverUrl}"; F="${c.caFingerprintSha256}"; T="${c.token}"`,
     `SUDO=$([ "$(id -u)" = 0 ] || echo sudo); CA=$(mktemp)`,
     `curl -fsSk "$S/agent/ca" -o "$CA" && [ "$(sed '/-----/d' "$CA" | tr -d '\\r\\n' | base64 -d | sha256sum | cut -c1-64 | tr a-f A-F)" = "$F" ] \\`,
     `  || { echo "Aborted: server not reachable or CA fingerprint does not match."; false; } \\`,
-    `  && { curl -fsS --cacert "$CA" "$S/agent/install.sh" | $SUDO bash -s -- --server "$S" --token "$T" --fingerprint "$F" \\`,
+    `  && { curl -fsS --cacert "$CA" "$S/agent/install.sh" | $SUDO bash -s -- --server "$S" --token "$T" --fingerprint "$F"${linuxFlags(a)} \\`,
     `  || echo "Installation failed (see messages above)."; }; rm -f "$CA"`,
   ].join("\n");
 }
@@ -29,13 +39,13 @@ function linuxInstallCommand(c: EnrollmentTokenCreated): string {
  * Windows PowerShell 5.1 kann der CA vor dem Download noch nicht vertrauen. Darum: install.ps1 einmal ungeprüft
  * laden, aber nur ausführen, wenn die SHA-256 zu dem Wert passt, den das Dashboard hier mitgibt.
  */
-function windowsInstallCommand(c: EnrollmentTokenCreated, scriptSha256: string): string {
+function windowsInstallCommand(c: EnrollmentTokenCreated, scriptSha256: string, a: Allow): string {
   return [
     `$S='${c.serverUrl}'; $F='${c.caFingerprintSha256}'; $T='${c.token}'; $H='${scriptSha256}'`,
     `[Net.ServicePointManager]::SecurityProtocol = 'Tls12'; $P = Join-Path $env:TEMP 'aiopatcher-install.ps1'`,
     `[Net.ServicePointManager]::ServerCertificateValidationCallback = { $true }`,
     `try { (New-Object Net.WebClient).DownloadFile("$S/agent/install.ps1", $P) } finally { [Net.ServicePointManager]::ServerCertificateValidationCallback = $null }`,
-    `if ((Get-FileHash $P -Algorithm SHA256).Hash -eq $H) { powershell.exe -NoProfile -ExecutionPolicy Bypass -File $P -Server $S -Token $T -Fingerprint $F } else { Write-Host 'Aborted: checksum of install.ps1 does not match.' -ForegroundColor Red }`,
+    `if ((Get-FileHash $P -Algorithm SHA256).Hash -eq $H) { powershell.exe -NoProfile -ExecutionPolicy Bypass -File $P -Server $S -Token $T -Fingerprint $F${windowsFlags(a)} } else { Write-Host 'Aborted: checksum of install.ps1 does not match.' -ForegroundColor Red }`,
     `Remove-Item $P -ErrorAction SilentlyContinue`,
   ].join("\n");
 }
@@ -45,24 +55,24 @@ function windowsInstallCommand(c: EnrollmentTokenCreated, scriptSha256: string):
  * Proxy). TLS gehört dort dem Proxy, darum prüft der Befehl Skript und Agent gegen Prüfsummen, die das Dashboard hier
  * mitgibt. Die interne Adresse bleibt erster Weg (falls der Host doch per VPN hinkommt).
  */
-function linuxExternalCommand(c: EnrollmentTokenCreated): string {
+function linuxExternalCommand(c: EnrollmentTokenCreated, a: Allow): string {
   return [
     `S="${c.serverUrl}"; P="${c.publicUrl}"; F="${c.caFingerprintSha256}"; T="${c.token}"`,
     `H="${c.linuxInstallScriptSha256}"; A="${c.agentSha256}"`,
     `SUDO=$([ "$(id -u)" = 0 ] || echo sudo); I=$(mktemp)`,
     `curl -fsS "$P/agent/install.sh" -o "$I" && [ "$(sha256sum "$I" | cut -c1-64 | tr a-f A-F)" = "$H" ] \\`,
     `  || { echo "Aborted: public address not reachable or checksum of install.sh does not match."; false; } \\`,
-    `  && { $SUDO bash "$I" --server "$S" --public-url "$P" --sha256 "$A" --token "$T" --fingerprint "$F" \\`,
+    `  && { $SUDO bash "$I" --server "$S" --public-url "$P" --sha256 "$A" --token "$T" --fingerprint "$F"${linuxFlags(a)} \\`,
     `  || echo "Installation failed (see messages above)."; }; rm -f "$I"`,
   ].join("\n");
 }
 
-function windowsExternalCommand(c: EnrollmentTokenCreated, scriptSha256: string): string {
+function windowsExternalCommand(c: EnrollmentTokenCreated, scriptSha256: string, a: Allow): string {
   return [
     `$S='${c.serverUrl}'; $P='${c.publicUrl}'; $F='${c.caFingerprintSha256}'; $T='${c.token}'; $H='${scriptSha256}'; $A='${c.agentSha256}'`,
     `[Net.ServicePointManager]::SecurityProtocol = 'Tls12'; $I = Join-Path $env:TEMP 'aiopatcher-install.ps1'`,
     `(New-Object Net.WebClient).DownloadFile("$P/agent/install.ps1", $I)`,
-    `if ((Get-FileHash $I -Algorithm SHA256).Hash -eq $H) { powershell.exe -NoProfile -ExecutionPolicy Bypass -File $I -Server $S -PublicUrl $P -Sha256 $A -Token $T -Fingerprint $F } else { Write-Host 'Aborted: checksum of install.ps1 does not match.' -ForegroundColor Red }`,
+    `if ((Get-FileHash $I -Algorithm SHA256).Hash -eq $H) { powershell.exe -NoProfile -ExecutionPolicy Bypass -File $I -Server $S -PublicUrl $P -Sha256 $A -Token $T -Fingerprint $F${windowsFlags(a)} } else { Write-Host 'Aborted: checksum of install.ps1 does not match.' -ForegroundColor Red }`,
     `Remove-Item $I -ErrorAction SilentlyContinue`,
   ].join("\n");
 }
@@ -76,12 +86,17 @@ export function AddHostModal({ opened, onClose }: { opened: boolean; onClose: ()
   const [downloads, setDownloads] = useState<AgentDownload[]>([]);
   const [busy, setBusy] = useState(false);
   const [where, setWhere] = useState<"internal" | "external">("internal");
+  const { list: features } = useFeatures();
+  const [allow, setAllow] = useState<Allow>({ system: false, monitoring: false });
 
   useEffect(() => {
     if (!opened) return;
     setCreated(null);
     setWhere("internal");
     setLabel("");
+    // Was im Dashboard eingeschaltet ist, gibt der Befehl dem Host gleich frei
+    const on = (f: string) => features.find((x) => x.feature === f)?.enabled === true;
+    setAllow({ system: on("FirewallManagement") || on("RemoteAccessFixes") || on("UserManagement"), monitoring: on("MonitoringClients") });
     void api.get<Site[]>("/api/sites").then((s) => {
       setSites(s);
       setSiteId((current) => current ?? s[0]?.id ?? null);
@@ -143,6 +158,12 @@ export function AddHostModal({ opened, onClose }: { opened: boolean; onClose: ()
               <IconWorld size={12} style={{ verticalAlign: "-2px" }} /> {t("addHost.noPublic")}
             </Text>
           )}
+          <Stack gap={6}>
+            <Switch size="sm" label={t("addHost.allowSystem")} description={t("addHost.allowSystemHint")} checked={allow.system}
+              onChange={(e) => setAllow((a) => ({ ...a, system: e.currentTarget.checked }))} />
+            <Switch size="sm" label={t("addHost.allowMonitoring")} description={t("addHost.allowMonitoringHint")} checked={allow.monitoring}
+              onChange={(e) => setAllow((a) => ({ ...a, monitoring: e.currentTarget.checked }))} />
+          </Stack>
           <Tabs defaultValue="linux" variant="pills" radius="md">
             <Tabs.List mb="sm">
               <Tabs.Tab value="linux" leftSection={<IconBrandUbuntu size={16} />}>
@@ -156,7 +177,7 @@ export function AddHostModal({ opened, onClose }: { opened: boolean; onClose: ()
               {where === "external" && !(created.linuxInstallScriptSha256 && created.agentSha256) ? (
                 <Alert color="red">{t("addHost.externalMissing")}</Alert>
               ) : (
-                <CommandBlock text={where === "external" ? linuxExternalCommand(created) : linuxInstallCommand(created)} />
+                <CommandBlock text={where === "external" ? linuxExternalCommand(created, allow) : linuxInstallCommand(created, allow)} />
               )}
               <Text size="xs" c="dimmed" mt="xs">
                 {t("addHost.linuxHint")}
@@ -167,7 +188,7 @@ export function AddHostModal({ opened, onClose }: { opened: boolean; onClose: ()
                 where === "external" && !created.agentSha256?.includes("win-x64=") ? (
                   <Alert color="red">{t("addHost.externalMissing")}</Alert>
                 ) : (
-                  <CommandBlock text={where === "external" ? windowsExternalCommand(created, created.windowsInstallScriptSha256) : windowsInstallCommand(created, created.windowsInstallScriptSha256)} />
+                  <CommandBlock text={where === "external" ? windowsExternalCommand(created, created.windowsInstallScriptSha256, allow) : windowsInstallCommand(created, created.windowsInstallScriptSha256, allow)} />
                 )
               ) : (
                 <Alert color="red">{t("addHost.ps1Missing")}</Alert>

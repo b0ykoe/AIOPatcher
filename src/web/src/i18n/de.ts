@@ -289,6 +289,10 @@ const de = {
     allowlistHint: "CIDRs, durch Komma getrennt. Nur Agents von diesen Adressen dürfen sich registrieren und melden.",
   },
   addHost: {
+    allowSystem: "Firewall-, SSH/RDP- und Benutzeränderungen erlauben",
+    allowSystemHint: "Schreibt allowSystemChanges in die policy.json des Hosts (--allow-system-changes). Vorbelegt, wenn die Funktion im Dashboard an ist.",
+    allowMonitoring: "Monitoring-Clients verwalten erlauben (Wazuh, Checkmk)",
+    allowMonitoringHint: "Schreibt allowMonitoringChanges in die policy.json des Hosts (--allow-monitoring-changes). Vorbelegt, wenn die Funktion im Dashboard an ist.",
     internal: "Im Netz / per VPN",
     external: "Außerhalb (Cloud)",
     internalHint: "Der Host erreicht den Server direkt unter {{url}}.",
@@ -1128,6 +1132,8 @@ const de = {
     gettingStarted: "Einrichtung fortsetzen",
   },
   monitoring: {
+    quickActive: "aktiv",
+    quickRunning: "läuft",
     cardTitle: "Monitoring-Clients",
     clientsTitle: "{{product}}-Clients",
     state_ok: "passt",

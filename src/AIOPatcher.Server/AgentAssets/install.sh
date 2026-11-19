@@ -29,6 +29,7 @@ UNINSTALL=0
 PURGE=0
 DOWNLOAD_ONLY=""
 ALLOW_SYSTEM_CHANGES=0
+ALLOW_MONITORING_CHANGES=0
 FORCE_LITE=0
 
 die() { echo "Error: $*" >&2; exit 1; }
@@ -48,6 +49,8 @@ Options:
   --download-only DIR   Only download and verify, install nothing (test)
   --allow-system-changes  Allow firewall, SSH and user changes from the dashboard
                         (policy.json allowSystemChanges; off by default)
+  --allow-monitoring-changes  Allow installing, reconfiguring and uninstalling Wazuh/Checkmk
+                        clients from the dashboard (policy.json allowMonitoringChanges; off by default)
   --lite                Force the lite agent (Python). Chosen automatically on old systems (glibc < 2.27,
                         OpenSSL < 1.1.1, e.g. Ubuntu 16.04, Debian 9).
 EOF
@@ -65,6 +68,7 @@ while [ $# -gt 0 ]; do
     --purge) PURGE=1; shift ;;
     --download-only) DOWNLOAD_ONLY="${2:-}"; shift 2 ;;
     --allow-system-changes) ALLOW_SYSTEM_CHANGES=1; shift ;;
+    --allow-monitoring-changes) ALLOW_MONITORING_CHANGES=1; shift ;;
     --lite) FORCE_LITE=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) usage; die "Unknown option: $1" ;;
@@ -254,6 +258,29 @@ if [ "$ALLOW_SYSTEM_CHANGES" -eq 1 ] && [ "$LITE" -eq 1 ]; then
 elif [ "$ALLOW_SYSTEM_CHANGES" -eq 1 ]; then
   "$BIN" policy set allowSystemChanges true --state-dir "$STATE" >/dev/null
   info "Changes to firewall, SSH and users from the dashboard allowed (policy.json)."
+fi
+
+if [ "$ALLOW_MONITORING_CHANGES" -eq 1 ]; then
+  if [ "$LITE" -eq 1 ]; then
+    # The lite agent has no "policy set" command: set the key in policy.json, keep everything else
+    python3 - "$STATE/policy.json" <<'PY' || die "Could not update policy.json."
+import json, os, sys
+path = sys.argv[1]
+policy = {}
+if os.path.exists(path):
+    with open(path) as f:
+        policy = json.load(f) or {}
+policy["allowMonitoringChanges"] = True
+with open(path + ".tmp", "w") as f:
+    json.dump(policy, f, indent=2)
+    f.write("\n")
+os.chmod(path + ".tmp", 0o600)
+os.replace(path + ".tmp", path)
+PY
+  else
+    "$BIN" policy set allowMonitoringChanges true --state-dir "$STATE" >/dev/null
+  fi
+  info "Installing and reconfiguring Wazuh/Checkmk clients from the dashboard allowed (policy.json)."
 fi
 
 # --- 5. Self-test before starting the service -----------------------------------------------------

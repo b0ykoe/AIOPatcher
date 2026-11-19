@@ -8,6 +8,10 @@ Written for users, not as a list of commits.
 
 ## [Unreleased]
 
+### Added
+- **Host page:** a short line under the host name shows at a glance where Wazuh and Checkmk report to, e.g. *Wazuh active: 10.0.0.20:1514*, or whether a client is disconnected, stopped or not installed.
+- **Install command:** new options `--allow-monitoring-changes` (`install.sh`) and `-AllowMonitoringChanges` (`install.ps1`), also for lite agents. **Add host** has switches for both permissions and presets them when the matching features are on, so new hosts are allowed right away.
+
 ## [0.11.0] - 2026-11-19
 
 ### Added

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { HostMonitoringCard } from "../components/monitoring/HostMonitoringCard";
+import { HostMonitoringStrip } from "../components/monitoring/HostMonitoringStrip";
 import { ActionIcon, Alert, Anchor, Badge, Button, Card, Group, Loader, Menu, SegmentedControl, Stack, Switch, Table, Tabs, TagsInput, Text, Tooltip } from "@mantine/core";
 import {
   IconAlertTriangle,
@@ -264,11 +265,14 @@ export function HostDetailPage() {
           {t("hostDetail.factsLine", { seen: formatRelative(h.lastSeenAt), uptime: formatUptime(host.uptime), agent: h.agentVersion ?? "–" })}
           {h.channel === "public" && ` · ${t("hostDetail.viaPublic")}`}
         </>}
-        extra={splitTags(h.tags).length > 0 && (
-          <Group gap="xs" mt="xs">
-            {splitTags(h.tags).map((tag) => <Badge key={tag} size="sm" variant="outline" color="gray" radius="sm">{tag}</Badge>)}
-          </Group>
-        )}
+        extra={<>
+          {splitTags(h.tags).length > 0 && (
+            <Group gap="xs" mt="xs">
+              {splitTags(h.tags).map((tag) => <Badge key={tag} size="sm" variant="outline" color="gray" radius="sm">{tag}</Badge>)}
+            </Group>
+          )}
+          <HostMonitoringStrip hostId={h.id} />
+        </>}
         actions={can.operate && <>
           {isOn("PatchJobs") && <Menu position="bottom-end" width={270} closeOnItemClick>
             <Menu.Target>
