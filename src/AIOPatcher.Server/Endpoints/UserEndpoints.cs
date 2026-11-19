@@ -29,7 +29,7 @@ public static class UserEndpoints
     private static async Task<List<UserDto>> List(AppDbContext db, CancellationToken ct) =>
         (await db.Users.OrderBy(u => u.Username).ToListAsync(ct)).Select(ToDto).ToList();
 
-    private static async Task<IResult> Create(CreateUserRequest request, ClaimsPrincipal principal, AppDbContext db, AIOPatcherOptions options, AuditLog audit, CancellationToken ct)
+    private static async Task<IResult> Create(CreateUserRequest request, ClaimsPrincipal principal, AppDbContext db, AIOPatcherOptions options, AuditLog audit, PublicAccess access, CancellationToken ct)
     {
         if (UserAccounts.ValidateUsername(request.Username) is { } error)
         {
@@ -52,11 +52,11 @@ public static class UserEndpoints
         db.Users.Add(user);
         audit.Add("user.created", $"{username} ({request.Role})");
         await db.SaveChangesAsync(ct);
-        return Results.Ok(new InviteResponse(ToDto(user), UserAccounts.InviteUrl(options, token), user.InviteExpiresAt!.Value));
+        return Results.Ok(new InviteResponse(ToDto(user), UserAccounts.InviteUrl(options, token, access.Current.DashboardUrl), user.InviteExpiresAt!.Value));
     }
 
     /// <summary>Neue Einladung: setzt Passwort und TOTP zurück (z. B. Smartphone verloren).</summary>
-    private static async Task<IResult> Reinvite(Guid id, ClaimsPrincipal principal, AppDbContext db, AIOPatcherOptions options, AuditLog audit, CancellationToken ct)
+    private static async Task<IResult> Reinvite(Guid id, ClaimsPrincipal principal, AppDbContext db, AIOPatcherOptions options, AuditLog audit, PublicAccess access, CancellationToken ct)
     {
         var user = await db.Users.FindAsync([id], ct);
         if (user is null)
@@ -79,7 +79,7 @@ public static class UserEndpoints
         var passkeys = await db.Passkeys.Where(p => p.UserId == user.Id).ExecuteDeleteAsync(ct);
         audit.Add("user.reinvited", passkeys > 0 ? $"{user.Username} ({passkeys} passkeys removed)" : user.Username);
         await db.SaveChangesAsync(ct);
-        return Results.Ok(new InviteResponse(ToDto(user), UserAccounts.InviteUrl(options, token), user.InviteExpiresAt!.Value));
+        return Results.Ok(new InviteResponse(ToDto(user), UserAccounts.InviteUrl(options, token, access.Current.DashboardUrl), user.InviteExpiresAt!.Value));
     }
 
     private static async Task<IResult> Update(Guid id, UpdateUserRequest request, ClaimsPrincipal principal, AppDbContext db, AuditLog audit, CancellationToken ct)

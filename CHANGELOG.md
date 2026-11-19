@@ -9,6 +9,12 @@ Written for users, not as a list of commits.
 ## [Unreleased]
 
 ### Fixed
+- **Links in notifications and invites use your public address:** with a dashboard address set under
+  Settings → Public access (e.g. `https://patch.example.com`), messages and user invitations now link there instead of
+  `https://<server-ip>:9443`.
+- **No more false alarms for login consoles after a reboot:** services that only run while someone is logged in or
+  switched to a console (`getty@tty6`, `serial-getty@…`, `user@…`, sessions, and Windows per-user services like
+  `CDPUserSvc_1a2b3`) are no longer reported as missing.
 - **Windows hosts stayed offline after a reboot that did not happen:** the agent asked for the reboot without
   forcing programs to close. When a program blocked it, Windows stopped the agent service but did not restart, and
   nothing started the agent again. The reboot now closes blocking programs, and a scheduled task

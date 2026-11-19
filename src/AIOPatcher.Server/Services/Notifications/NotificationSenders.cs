@@ -45,7 +45,8 @@ public sealed class ChannelConfig
 public sealed class NotificationSenders(
     IHttpClientFactory httpFactory,
     IDataProtectionProvider dataProtection,
-    AIOPatcherOptions options)
+    AIOPatcherOptions options,
+    PublicAccess? publicAccess = null)
 {
     private const string ProtectorPurpose = "AIOPatcher.NotificationChannel.Config";
     public const string HttpClientName = "notifications";
@@ -78,7 +79,7 @@ public sealed class NotificationSenders(
         try
         {
             var config = Unprotect(channel.ProtectedConfig);
-            var link = NotificationTexts.DashboardUrl(options, n.LinkPath);
+            var link = NotificationTexts.DashboardUrl(options, n.LinkPath, publicAccess?.Current.DashboardUrl);
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
             timeout.CancelAfter(TimeSpan.FromSeconds(20));
 

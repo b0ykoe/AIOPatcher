@@ -46,6 +46,38 @@ public sealed class RebootCheckTests : IDisposable
         _connection.Dispose();
     }
 
+    [Theory]
+    [InlineData("getty@tty6.service", true)]
+    [InlineData("serial-getty@ttyS0.service", true)]
+    [InlineData("autovt@tty2.service", true)]
+    [InlineData("user@1000.service", true)]
+    [InlineData("session-12.scope", true)]
+    [InlineData("CDPUserSvc_4a1b2", true)]
+    [InlineData("OneSyncSvc_1f2e3d", true)]
+    [InlineData("nginx.service", false)]
+    [InlineData("docker.service", false)]
+    [InlineData("W32Time", false)]
+    [InlineData("MSSQL$SQLEXPRESS", false)]
+    public void SessionServices_AreNotReportedAsMissing(string name, bool ignored) =>
+        Assert.Equal(ignored, RebootCheck.IsSessionService(name));
+
+    [Fact]
+    public void Compare_SkipsLoginConsoles()
+    {
+        var before = new ServiceSnapshot(DateTime.UtcNow.AddHours(-1), DateTime.UtcNow.AddHours(-1), ["nginx.service", "getty@tty6.service"], null, null);
+        var missing = RebootCheck.Compare(before, new RunningServices(TimeSpan.FromHours(1), [], null));
+        Assert.Equal(["nginx.service"], missing.Select(m => m.Name));
+    }
+
+    [Fact]
+    public void NotificationLinks_UseThePublicDashboardAddress()
+    {
+        var options = new AIOPatcherOptions { PublicHostname = "10.3.0.106", DashboardPort = 9443 };
+        Assert.Equal("https://10.3.0.106:9443/hosts/1", NotificationTexts.DashboardUrl(options, "/hosts/1"));
+        Assert.Equal("https://patch.example.com/hosts/1", NotificationTexts.DashboardUrl(options, "/hosts/1", "https://patch.example.com/"));
+        Assert.Equal("https://patch.example.com/invite/abc", UserAccounts.InviteUrl(options, "abc", "https://patch.example.com"));
+    }
+
     // --- Agent: Ausgaben lesen -----------------------------------------------------------------------
 
     [Fact]

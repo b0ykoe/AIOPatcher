@@ -34,8 +34,11 @@ public static class UserAccounts
         return token;
     }
 
-    public static string InviteUrl(AIOPatcherOptions options, string token) =>
-        $"https://{options.UrlHost}:{options.DashboardPort}/invite/{token}";
+    /// <summary>Einladungslink: über die öffentliche Dashboard-Adresse, wenn eingerichtet, sonst intern mit Port.</summary>
+    public static string InviteUrl(AIOPatcherOptions options, string token, string? publicDashboardUrl = null) =>
+        string.IsNullOrWhiteSpace(publicDashboardUrl)
+            ? $"https://{options.UrlHost}:{options.DashboardPort}/invite/{token}"
+            : $"{publicDashboardUrl.TrimEnd('/')}/invite/{token}";
 
     public static async Task<UserAccount?> FindByInviteAsync(AppDbContext db, string token, DateTime now, CancellationToken ct)
     {

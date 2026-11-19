@@ -37,7 +37,7 @@ public sealed partial class RebootCheckJsonContext : JsonSerializerContext;
 /// direkt vor Patch- und Neustart-Jobs; nach einem Neustart wartet er <see cref="Settle"/>, damit langsame Dienste
 /// hochkommen, und vergleicht dann.
 /// </summary>
-public static class RebootCheck
+public static partial class RebootCheck
 {
     /// <summary>So lange nach dem Systemstart warten, bevor verglichen wird.</summary>
     public static readonly TimeSpan Settle = TimeSpan.FromMinutes(5);
@@ -70,13 +70,24 @@ public static class RebootCheck
         return host.BootedAt is { } booted && context.Now - booted < Settle;
     }
 
-    /// <summary>Was vorher lief und jetzt nicht.</summary>
+    /// <summary>
+    /// Dienste, die nur bei Anmeldung oder Bedarf laufen und nach einem Neustart zu Recht fehlen: Login-Konsolen
+    /// (getty@tty6 läuft erst, wenn jemand auf tty6 umschaltet), Benutzer-Sitzungen und unter Windows Dienste pro
+    /// angemeldetem Benutzer (CDPUserSvc_1a2b3, die Endung wechselt bei jeder Anmeldung).
+    /// </summary>
+    public static bool IsSessionService(string name) =>
+        SessionServicePattern().IsMatch(name);
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"^((serial-|container-)?getty@|autovt@|console-getty.|user@|user-runtime-dir@|session-[^.]+.scope$)|^[A-Za-z][A-Za-z0-9]+_[0-9a-f]{4,8}$", System.Text.RegularExpressions.RegexOptions.IgnoreCase)]
+    private static partial System.Text.RegularExpressions.Regex SessionServicePattern();
+
+    /// <summary>Was vorher lief und jetzt nicht (ohne Dienste, die nur bei Anmeldung laufen).</summary>
     public static List<RebootCheckItem> Compare(ServiceSnapshot before, RunningServices now)
     {
         var services = now.Services.ToHashSet(StringComparer.OrdinalIgnoreCase);
         var stopped = (now.StoppedServices ?? []).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var missing = before.Services
-            .Where(s => !services.Contains(s))
+            .Where(s => !services.Contains(s) && !IsSessionService(s))
             .Select(s => new RebootCheckItem("service", s, stopped.Contains(s) ? "stopped" : null))
             .ToList();
 

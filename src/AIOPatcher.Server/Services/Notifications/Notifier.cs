@@ -100,6 +100,12 @@ public sealed class NotificationDispatcher(
 /// <summary>Helfer, damit Ereignisquellen einheitliche Texte und Links erzeugen.</summary>
 public static class NotificationTexts
 {
-    public static string DashboardUrl(AIOPatcherOptions options, string? path) =>
-        $"https://{options.UrlHost}:{options.DashboardPort}{path ?? "/"}";
+    /// <summary>
+    /// Link ins Dashboard: die öffentliche Dashboard-Adresse aus Einstellungen → Öffentlicher Zugang, wenn eingerichtet
+    /// (z. B. https://patch.example.com), sonst die interne Adresse mit Port.
+    /// </summary>
+    public static string DashboardUrl(AIOPatcherOptions options, string? path, string? publicDashboardUrl = null) =>
+        string.IsNullOrWhiteSpace(publicDashboardUrl)
+            ? $"https://{options.UrlHost}:{options.DashboardPort}{path ?? "/"}"
+            : publicDashboardUrl.TrimEnd('/') + (path ?? "/");
 }
