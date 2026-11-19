@@ -11,6 +11,10 @@ Written for users, not as a list of commits.
 ### Improved
 - **New versions show up faster:** AIOPatcher now checks GitHub for a new release every 15 minutes instead of once a
   day, so the update notice (and **Update now**) appears shortly after a release.
+- **More intervals in the settings:** under Settings → General → **More intervals** you set how often AIOPatcher
+  measures utilization, collects system data, container status, software and compliance, the state of monitoring
+  clients, queries Proxmox backups/PBS and OPNsense, syncs shared sites and looks for a new version. Each has a
+  sensible default and a lower limit; changes apply right away without a restart.
 
 ## [0.14.0] - 2026-11-19
 

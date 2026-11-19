@@ -340,6 +340,15 @@ export interface ScanSettings {
   allowedAgentMinutes: number[];
   updatedBy: string | null;
   updatedAt: string | null;
+  /** weitere Intervalle (Auslastung, Systemdaten, Integrationen, Versionsprüfung …) */
+  timings: TimingSetting[] | null;
+}
+
+export interface TimingSetting {
+  key: "metrics" | "system" | "containers" | "inventory" | "monitoring" | "backups" | "opnsense" | "sharing" | "releaseCheck";
+  minutes: number;
+  defaultMinutes: number;
+  allowed: number[];
 }
 
 /** reason: stopped = Dienst gestoppt/fehlgeschlagen, noRestart = Container ohne Restart-Policy, null = läuft einfach nicht */

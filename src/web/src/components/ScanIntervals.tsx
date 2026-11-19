@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { Card, Select, SimpleGrid, Stack, Text } from "@mantine/core";
-import { IconRadar } from "@tabler/icons-react";
+import { IconClockHour4, IconRadar } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
-import { api, formatDateTime, formatRelative, type HostDetail, type ScanSettings } from "../api";
+import { api, formatDateTime, formatRelative, type HostDetail, type ScanSettings, type TimingSetting } from "../api";
 import { useCan } from "../App";
 import { CardTitle, notifyError, notifySuccess } from "./ui";
 
@@ -58,6 +58,44 @@ export function ScanSettingsCard({ className }: { className?: string }) {
           value={settings ? String(settings.agentUpdateMinutes) : null} onChange={(v) => v && void save({ agentUpdateMinutes: Number(v) })} />
         {!can.admin && <Text size="xs" c="dimmed">{t("scan.adminOnly")}</Text>}
       </Stack>
+    </Card>
+  );
+}
+
+/**
+ * Einstellungen → Allgemein: weitere Intervalle (wie oft der Server Daten von Agents anfordert und Integrationen
+ * abfragt). Nur wählbare Werte; Untergrenzen schützen Hosts und fremde APIs. Gilt ohne Neustart.
+ */
+export function TimingsCard({ className }: { className?: string }) {
+  const { t } = useTranslation();
+  const can = useCan();
+  const [settings, setSettings] = useScanSettings();
+  const every = (m: number) => (m < 60 ? t("scan.everyMinutes", { count: m }) : t("scan.everyHours", { count: m / 60 }));
+
+  const save = async (timing: TimingSetting, minutes: number) => {
+    try {
+      setSettings(await api.put<ScanSettings>("/api/settings/scan/timings", { key: timing.key, minutes }));
+      notifySuccess(t("scan.saved"));
+    } catch (e) {
+      notifyError(e);
+    }
+  };
+
+  return (
+    <Card className={className}>
+      <CardTitle icon={<IconClockHour4 size={18} />} description={t("timings.intro")}>{t("timings.title")}</CardTitle>
+      <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="md" verticalSpacing="sm">
+        {(settings?.timings ?? []).map((timing) => (
+          <Select key={timing.key} label={t(`timings.${timing.key}.label`)} description={t(`timings.${timing.key}.hint`)}
+            allowDeselect={false} disabled={!can.admin}
+            data={timing.allowed.map((m) => ({
+              value: String(m),
+              label: m === timing.defaultMinutes ? t("scan.defaultOption", { interval: every(m) }) : every(m),
+            }))}
+            value={String(timing.minutes)} onChange={(v) => v && void save(timing, Number(v))} />
+        ))}
+      </SimpleGrid>
+      {!can.admin && <Text size="xs" c="dimmed" mt="sm">{t("scan.adminOnly")}</Text>}
     </Card>
   );
 }

@@ -6,7 +6,7 @@ import { useTranslation } from "react-i18next";
 import { api, type ServerInfo } from "../../api";
 import { MirrorStatusLine } from "../../pages/CveLookupPage";
 import { openSetupWizard } from "../SetupWizard";
-import { ScanSettingsCard } from "../ScanIntervals";
+import { ScanSettingsCard, TimingsCard } from "../ScanIntervals";
 import { CardTitle } from "../ui";
 
 /** Einstellungen → Allgemein: Version, Zeitzone, CVE-Datenbank, Assistent, API. */
@@ -60,6 +60,8 @@ export function GeneralSettings() {
           <Anchor component={Link} to="/developer" size="sm"><Group gap={4}><IconApi size={16} />{t("settings.generalApiOpen")}</Group></Anchor>
         </Stack>
       </Card>
+
+      <TimingsCard className="card-full" />
     </div>
   );
 }

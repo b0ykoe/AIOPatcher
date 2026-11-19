@@ -407,6 +407,11 @@
   grid-row: span 2;
 }
 
+/* Karte über die ganze Breite des Rasters (z. B. Einstellungen → Allgemein → weitere Intervalle) */
+.card-grid > .card-full {
+  grid-column: 1 / -1;
+}
+
 /* Zwei große Abschnitte nebeneinander, sobald jeder ~640 px bekommt (Regeln). */
 .split-grid {
   display: grid;
