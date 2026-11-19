@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
-import { Alert, Anchor, Badge, Card, Group, Loader, SegmentedControl, Stack, Table, Text, TextInput, ThemeIcon, Tooltip } from "@mantine/core";
-import { IconAlertTriangle, IconBox, IconBrandDocker, IconCpu, IconDatabase, IconDeviceDesktop, IconGauge, IconSearch, IconServer, IconStack2 } from "@tabler/icons-react";
+import { Alert, Anchor, Badge, Button, Card, Group, Loader, SegmentedControl, Stack, Table, Text, TextInput, ThemeIcon, Tooltip } from "@mantine/core";
+import { IconAlertTriangle, IconBox, IconBrandDocker, IconCpu, IconDatabase, IconDeviceDesktop, IconGauge, IconListDetails, IconSearch, IconServer, IconStack2 } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import { useSiteScope } from "../siteScope";
 import { api, formatRelative, type HostUtilization, type ProxmoxResource, type ProxmoxUtilization, type Utilization } from "../api";
 import { CardTitle, EmptyState, PageHeader } from "../components/ui";
 import { formatBytes, percentOf, Sparkline, UsageCell, UsageMeter } from "../components/metrics/charts";
+import { mappingLink } from "../components/MappingBadge";
+import { useCan } from "../App";
 
 /** Messung älter als 15 Minuten: Host aus oder Agent hängt. */
 const staleAfterMs = 15 * 60 * 1000;
@@ -97,6 +99,7 @@ type GuestFilter = "all" | "running" | "unmanaged";
 
 function ProxmoxSection({ data, match }: { data: ProxmoxUtilization; match: (name: string) => boolean }) {
   const { t } = useTranslation();
+  const can = useCan();
   const [show, setShow] = useState<GuestFilter>("all");
   const nodes = data.resources.filter((r) => r.resource.type === "node");
   const storages = data.resources.filter((r) => r.resource.type === "storage" && r.resource.maxDisk);
@@ -112,6 +115,11 @@ function ProxmoxSection({ data, match }: { data: ProxmoxUtilization; match: (nam
         <Group gap="xs">
           <Text fw={700}>Proxmox · {data.name}</Text>
           {data.at && <Text size="xs" c="dimmed">{formatRelative(data.at)}</Text>}
+          {can.admin && (
+            <Button size="compact-xs" variant="light" component={Link} to={mappingLink(data.integrationId)} leftSection={<IconListDetails size={14} />}>
+              {t("integrations.map")}
+            </Button>
+          )}
         </Group>
         <SegmentedControl size="xs" value={show} onChange={(v) => setShow(v as GuestFilter)} data={[
           { value: "all", label: t("metrics.guestsAll") },
@@ -167,7 +175,9 @@ function ProxmoxSection({ data, match }: { data: ProxmoxUtilization; match: (nam
                 </Table.Tr>
               </Table.Thead>
               <Table.Tbody>
-                {guests.map(({ resource: g, hostId, hostName }) => <GuestRow key={g.id} guest={g} hostId={hostId} hostName={hostName} />)}
+                {guests.map(({ resource: g, hostId, hostName, manual }) => (
+                  <GuestRow key={g.id} guest={g} hostId={hostId} hostName={hostName} manual={manual ?? false} integrationId={data.integrationId} />
+                ))}
                 {guests.length === 0 && (
                   <Table.Tr><Table.Td colSpan={6}><Text size="sm" c="dimmed" ta="center" py="sm">{t("metrics.noGuests")}</Text></Table.Td></Table.Tr>
                 )}
@@ -180,8 +190,11 @@ function ProxmoxSection({ data, match }: { data: ProxmoxUtilization; match: (nam
   );
 }
 
-function GuestRow({ guest: g, hostId, hostName }: { guest: ProxmoxResource; hostId: string | null; hostName: string | null }) {
+function GuestRow({ guest: g, hostId, hostName, manual, integrationId }: {
+  guest: ProxmoxResource; hostId: string | null; hostName: string | null; manual: boolean; integrationId: string;
+}) {
   const { t } = useTranslation();
+  const can = useCan();
   const running = g.status === "running";
   return (
     <Table.Tr style={{ opacity: running ? 1 : 0.6 }}>
@@ -217,9 +230,22 @@ function GuestRow({ guest: g, hostId, hostName }: { guest: ProxmoxResource; host
           )}
       </Table.Td>
       <Table.Td>
-        {hostId
-          ? <Anchor component={Link} to={`/hosts/${hostId}?tab=metrics`} size="sm">{hostName}</Anchor>
-          : <Badge size="sm" color="gray">{t("metrics.unmanaged")}</Badge>}
+        {hostId ? (
+          <Group gap={6} wrap="nowrap">
+            <Anchor component={Link} to={`/hosts/${hostId}?tab=metrics`} size="sm">{hostName}</Anchor>
+            {manual && (
+              <Tooltip label={t("integrations.mapManualHint")}>
+                <Badge size="sm" color="grape">{t("integrations.mapManual")}</Badge>
+              </Tooltip>
+            )}
+          </Group>
+        ) : (
+          <Tooltip label={t("metrics.unmanagedHint")} multiline w={280}>
+            {can.admin
+              ? <Badge size="sm" color="gray" component={Link} to={mappingLink(integrationId)} style={{ cursor: "pointer" }}>{t("metrics.unmanaged")}</Badge>
+              : <Badge size="sm" color="gray">{t("metrics.unmanaged")}</Badge>}
+          </Tooltip>
+        )}
       </Table.Td>
     </Table.Tr>
   );

@@ -41,6 +41,11 @@ Written for users, not as a list of commits.
   automatic mapping to the right host or **Unlink** it. A badge shows whether a mapping is **auto** or **manual**,
   and **Not mapped** shows what is still missing. Mappings whose VM no longer exists are listed as **not found**, so
   you can remove them. A VM always belongs to one host only.
+- **See where a mapping points:** the host list shows a small badge such as **pve · VM 131** or
+  **hetzner · Server 4711** for every mapped host (the tooltip names the integration and whether it is auto or manual).
+  On Utilization the Proxmox guests show their host and a **manual** badge; guests without a host now say **no host**
+  instead of "not enrolled". For admins the badges, the **Map** button next to each Proxmox cluster and the
+  integration name on the host page lead straight to the mapping table of that integration.
 
 ### Improved
 - **Auto-map respects your choices:** mappings you set or removed by hand (in the new table or on the host page) are

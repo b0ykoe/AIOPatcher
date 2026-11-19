@@ -7,6 +7,7 @@ import { api, type HostDetail, type Integration, type MachineInfo } from "../api
 import { useCan } from "../App";
 import { errorText, notifyError, notifySuccess } from "./ui";
 import { SourceBadge } from "./settings/IntegrationMappingModal";
+import { mappingLink } from "./MappingBadge";
 
 /** Zuordnung Host ↔ Proxmox-VM bzw. Hetzner-Server: Voraussetzung für Snapshots und Backup-Prüfung. */
 export function MappingCard({ host, onSaved }: { host: HostDetail; onSaved: () => void }) {
@@ -64,7 +65,14 @@ export function MappingCard({ host, onSaved }: { host: HostDetail; onSaved: () =
               )}
             </Group>
             <Text size="sm" c="dimmed">
-              {host.integrationId ? `${host.integrationName} · ${host.externalId}` : t("mapping.none")}
+              {host.integrationId ? (
+                <>
+                  {can.admin
+                    ? <Anchor component={Link} to={mappingLink(host.integrationId)} size="sm">{host.integrationName}</Anchor>
+                    : host.integrationName}
+                  {` · ${host.externalId}`}
+                </>
+              ) : t("mapping.none")}
             </Text>
           </div>
         </Group>

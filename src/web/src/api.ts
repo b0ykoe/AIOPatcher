@@ -126,6 +126,8 @@ export interface HostSummary {
   containerUpdates: number;
   /** mit Proxmox-VM bzw. Hetzner-Server verknüpft */
   mapped: boolean;
+  /** Worauf die Zuordnung zeigt (null = keine) */
+  mapping?: HostMapping | null;
   /** Patch-Plan des Hosts (null = keiner, kein automatisches Patchen); scheduledRunbook = Name */
   planId: string | null;
   planGroup: string | null;
@@ -1044,6 +1046,16 @@ export interface MachineInfo {
   addresses: string[];
 }
 
+/** Zuordnung eines Hosts zu einer Proxmox-VM bzw. einem Hetzner-Server (für Listen). */
+export interface HostMapping {
+  integrationId: string;
+  integrationName: string;
+  type: IntegrationType;
+  /** Proxmox "node/qemu/131", Hetzner Server-ID */
+  externalId: string;
+  manual: boolean;
+}
+
 /** Settings → Integrations → Zuordnen: VM bzw. Server mit zugeordnetem Host. */
 export interface MappingMachine {
   externalId: string;
@@ -1180,7 +1192,8 @@ export interface ProxmoxUtilization {
   name: string;
   at: string | null;
   error: string | null;
-  resources: { resource: ProxmoxResource; hostId: string | null; hostName: string | null }[];
+  /** manual: Zuordnung von Hand gesetzt */
+  resources: { resource: ProxmoxResource; hostId: string | null; hostName: string | null; manual?: boolean }[];
 }
 
 export interface Utilization {

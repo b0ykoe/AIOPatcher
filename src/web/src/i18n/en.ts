@@ -982,6 +982,7 @@ const en: Translation = {
     remove: "Remove mapping",
     hint: "Required for snapshots and backup checks in patch plans.",
     unlinkedHint: "Mapping removed by hand; Auto-map leaves this host alone until you map it again",
+    badgeHint: "{{type}} {{name}} · {{machine}} · {{source}}",
   },
   security: {
     recheck: "Check again",
@@ -1574,9 +1575,10 @@ const en: Translation = {
     type: "Type",
     guestsAll: "All",
     guestsRunning: "Running",
-    guestsUnmanaged: "Without agent ({{count}})",
+    guestsUnmanaged: "Without host ({{count}})",
     noGuests: "No matching VMs or containers.",
-    unmanaged: "not enrolled",
+    unmanaged: "no host",
+    unmanagedHint: "Not mapped to an AIOPatcher host: either no agent runs there or the name differs. Choose the host by hand under Settings → Integrations → Map.",
     vmDiskHint: "For VMs Proxmox only reports the disk size, not its usage. With an agent it is on the host page.",
   },
   nativeUpdates: {

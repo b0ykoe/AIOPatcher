@@ -981,6 +981,7 @@ const de = {
     remove: "Zuordnung entfernen",
     hint: "Nötig für Snapshots und Backup-Prüfung in Patch-Plänen.",
     unlinkedHint: "Zuordnung von Hand entfernt; die Auto-Zuordnung lässt diesen Host in Ruhe, bis du ihn wieder zuordnest",
+    badgeHint: "{{type}} {{name}} · {{machine}} · {{source}}",
   },
   security: {
     recheck: "Neu prüfen",
@@ -1573,9 +1574,10 @@ const de = {
     type: "Typ",
     guestsAll: "Alle",
     guestsRunning: "Laufend",
-    guestsUnmanaged: "Ohne Agent ({{count}})",
+    guestsUnmanaged: "Ohne Host ({{count}})",
     noGuests: "Keine passenden VMs oder Container.",
-    unmanaged: "nicht eingetragen",
+    unmanaged: "kein Host",
+    unmanagedHint: "Keinem AIOPatcher-Host zugeordnet: entweder läuft dort kein Agent, oder der Name weicht ab. Unter Einstellungen → Integrationen → Zuordnen kannst du den Host von Hand wählen.",
     vmDiskHint: "Proxmox meldet bei VMs nur die Größe der Platte, nicht die Belegung. Mit Agent steht sie auf der Host-Seite.",
   },
   nativeUpdates: {

@@ -20,7 +20,7 @@ import {
   Tooltip,
 } from "@mantine/core";
 import { IconBrandUbuntu, IconCloud, IconDatabase, IconEdit, IconFlame, IconLink, IconListDetails, IconPlugConnected, IconPlus, IconRefresh, IconServer2, IconTrash } from "@tabler/icons-react";
-import { Link } from "react-router";
+import { Link, useSearchParams } from "react-router";
 import { useTranslation } from "react-i18next";
 import { api, formatRelative, type Integration, type IntegrationTestResult, type IntegrationType, type Site } from "../../api";
 import { CardTitle, confirmAction, EmptyState, errorText, notifyError, notifySuccess } from "../ui";
@@ -61,6 +61,19 @@ export function IntegrationSettings() {
     load();
     void api.get<Site[]>("/api/sites").then(setSites).catch(() => {});
   }, [load]);
+
+  // ?map=<id> (Links aus Hosts, Auslastung, Host-Seite): Zuordnungs-Dialog dieser Integration öffnen
+  const [params, setParams] = useSearchParams();
+  const mapParam = params.get("map");
+  useEffect(() => {
+    if (!mapParam || !items) return;
+    const target = items.find((i) => i.id === mapParam && mappable(i.type));
+    if (target) setMapping(target);
+    setParams((p) => {
+      p.delete("map");
+      return p;
+    }, { replace: true });
+  }, [mapParam, items, setParams]);
 
   const test = async (i: Integration) => {
     setBusy(i.id);

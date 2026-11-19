@@ -19,7 +19,8 @@ public static class MetricsEndpoints
         IReadOnlyList<MetricPoint> Recent);
 
     /// <summary>Gast oder Knoten einer Proxmox-Integration, mit Zuordnung zum AIOPatcher-Host (falls eingetragen).</summary>
-    public sealed record ProxmoxResourceDto(ProxmoxResource Resource, Guid? HostId, string? HostName);
+    /// <param name="Manual">Zuordnung von Hand gesetzt (Settings → Integrations → Zuordnen).</param>
+    public sealed record ProxmoxResourceDto(ProxmoxResource Resource, Guid? HostId, string? HostName, bool Manual = false);
 
     public sealed record ProxmoxUtilizationDto(Guid IntegrationId, string Name, DateTime? At, string? Error, IReadOnlyList<ProxmoxResourceDto> Resources);
 
@@ -85,7 +86,7 @@ public static class MetricsEndpoints
             }
 
             proxmox.Add(new ProxmoxUtilizationDto(integration.Id, integration.Name, at, error,
-                items.Select(x => new ProxmoxResourceDto(x.Resource, x.Host?.Id, x.Host?.Name)).ToList()));
+                items.Select(x => new ProxmoxResourceDto(x.Resource, x.Host?.Id, x.Host?.Name, x.Host?.MappingManual ?? false)).ToList()));
         }
 
         return Results.Ok(new UtilizationDto(true, hostDtos, proxmox));

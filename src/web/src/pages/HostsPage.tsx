@@ -25,6 +25,7 @@ import { useSiteScope } from "../siteScope";
 import { AssignPlanModal } from "../components/plans/AssignPlanModal";
 import { UsageCompact } from "../components/metrics/charts";
 import { OsIcon } from "../components/OsIcon";
+import { MappingBadge } from "../components/MappingBadge";
 import { confirmAction, EmptyState, HostStatusLabel, notifyError, notifySuccess, PageHeader, reportBulk } from "../components/ui";
 
 export function HostsPage() {
@@ -175,6 +176,7 @@ export function HostsPage() {
                       {h.containerUpdates > 0 && <ContainerUpdatesBadge hostId={h.id} count={h.containerUpdates} />}
                       {h.rebootRequired && <Badge size="sm" color="yellow">{t("overview.rebootRequired")}</Badge>}
                       {h.scheduledRunbook && <Badge size="sm" color="violet" leftSection={<IconClock size={11} />}>{h.scheduledRunbook}</Badge>}
+                      {h.mapping && <MappingBadge mapping={h.mapping} />}
                     </Group>
                   </Stack>
                 </Group>
@@ -249,6 +251,7 @@ export function HostsPage() {
                               {tag}
                             </Badge>
                           ))}
+                          {h.mapping && <MappingBadge mapping={h.mapping} />}
                         </Group>
                       </Table.Td>
                       <Table.Td>

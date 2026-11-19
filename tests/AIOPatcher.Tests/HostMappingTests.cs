@@ -1,3 +1,4 @@
+using AIOPatcher.Contracts;
 using AIOPatcher.Server.Data;
 using AIOPatcher.Server.Endpoints;
 using AIOPatcher.Server.Services;
@@ -139,6 +140,30 @@ public sealed class HostMappingTests : IDisposable
         Assert.Empty(HostMapping.AutoMap(_pve.Id, [warz, other], machines, ["pve/qemu/131"]));
         Assert.Equal("pve/qemu/131", warz.ExternalId);
         Assert.Null(other.IntegrationId);
+    }
+
+    [Fact]
+    public async Task Host_list_shows_which_integration_the_mapping_points_to()
+    {
+        var warz = Host("WARZ-APP");
+        await HostMapping.AssignAsync(_db, warz, _pve.Id, "pve/qemu/131", CancellationToken.None);
+        var free = Host("mail");
+        _db.SaveChanges();
+
+        static HostEndpoints.HostSummaryDto Summary(ManagedHost h) => new(h.Id, h.SiteId, "Homelab", h.Name, h.Hostname, OsFamily.Windows, null, null, null,
+            null, null, HostEndpoints.HostStatus.Online, false, false, 0, 0,
+            new HostEndpoints.AutoPatchDto(false, PatchScope.Security, false, 0, new TimeOnly(3, 0), 0), null, null, 0, 0, h.IntegrationId != null);
+
+        var list = await HostEndpoints.EnrichAsync(_db, [Summary(warz), Summary(free)], new ServerClock(new AIOPatcher.Server.Options.AIOPatcherOptions()), CancellationToken.None);
+
+        var mapping = list.Single(s => s.Id == warz.Id).Mapping;
+        Assert.NotNull(mapping);
+        Assert.Equal(_pve.Id, mapping.IntegrationId);
+        Assert.Equal("pve", mapping.IntegrationName);
+        Assert.Equal(IntegrationType.Proxmox, mapping.Type);
+        Assert.Equal("pve/qemu/131", mapping.ExternalId);
+        Assert.True(mapping.Manual);
+        Assert.Null(list.Single(s => s.Id == free.Id).Mapping);
     }
 
     [Fact]
