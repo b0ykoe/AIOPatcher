@@ -18,13 +18,24 @@ public sealed class ScanSchedule
     public static readonly int[] AllowedAgentMinutes = [15, 60, 120, 180, 360, 720, 1440];
 
     private volatile ScanSettingsRecord _current = new();
+    private volatile IReadOnlyDictionary<string, int> _timings = new Dictionary<string, int>();
 
     public ScanSettingsRecord Current => _current;
 
     public async Task LoadAsync(AppDbContext db, CancellationToken ct) =>
-        _current = await db.ScanSettings.AsNoTracking().SingleOrDefaultAsync(s => s.Id == 1, ct) ?? new ScanSettingsRecord();
+        Use(await db.ScanSettings.AsNoTracking().SingleOrDefaultAsync(s => s.Id == 1, ct) ?? new ScanSettingsRecord());
 
-    public void Use(ScanSettingsRecord settings) => _current = settings;
+    public void Use(ScanSettingsRecord settings)
+    {
+        _timings = Timings.Parse(settings.TimingsJson);
+        _current = settings;
+    }
+
+    /// <summary>Eingestelltes Intervall (siehe <see cref="Timings"/>), sonst der Standard.</summary>
+    public TimeSpan Interval(string key) => _timings.TryGetValue(key, out var minutes) ? TimeSpan.FromMinutes(minutes) : Timings.Default(key);
+
+    /// <summary>Eingestellte Minuten je Schlüssel (nur Abweichungen).</summary>
+    public IReadOnlyDictionary<string, int> TimingOverrides => _timings;
 
     public TimeSpan UpdateScanInterval(ManagedHost host) => TimeSpan.FromHours(host.UpdateScanHours ?? _current.UpdateScanHours);
 

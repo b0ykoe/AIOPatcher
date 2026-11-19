@@ -20,7 +20,7 @@ public sealed class MonitoringServerModule : ServerModule
         }
 
         var last = context.LastRequested(Id, ModuleActions.Status);
-        return last is null || context.Now - last >= Interval || context.LastRequested(Id, ModuleActions.Change) > last
+        return last is null || context.Now - last >= context.Timing(Timings.Monitoring) || context.LastRequested(Id, ModuleActions.Change) > last
             ? new PlannedTask(ModuleActions.Status)
             : null;
     }

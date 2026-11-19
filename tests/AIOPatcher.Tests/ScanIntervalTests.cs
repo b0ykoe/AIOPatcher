@@ -76,6 +76,62 @@ public sealed class ScanIntervalTests : IDisposable
         Assert.Null(new UpdatesServerModule().Due(host, context, null));
     }
 
+    [Fact]
+    public void Timings_DefaultsThenSettingsWithoutRestart()
+    {
+        var host = Host("web1");
+        bool MetricsDue(double minutesAgo) =>
+            new MetricsServerModule().Due(host, new ModuleContext(_db, new Notifier(), _features, _downloads, null, Now,
+                new Dictionary<(string, string), DateTime> { [(AgentModules.Metrics, ModuleActions.Sample)] = Now.AddMinutes(-minutesAgo) }, _schedule), null) is not null;
+
+        // Standard 5 Minuten
+        Assert.Equal(TimeSpan.FromMinutes(5), _schedule.Interval(Timings.Metrics));
+        Assert.False(MetricsDue(4));
+        Assert.True(MetricsDue(5));
+
+        // Auf 15 Minuten gestellt: gilt sofort
+        _schedule.Use(new ScanSettingsRecord { TimingsJson = Timings.With(null, Timings.Metrics, 15) });
+        Assert.False(MetricsDue(10));
+        Assert.True(MetricsDue(15));
+        Assert.Equal(TimeSpan.FromMinutes(15), _schedule.Interval(Timings.ReleaseCheck)); // andere bleiben beim Standard
+    }
+
+    [Fact]
+    public void Timings_StoreOnlyDeviations_AndDropInvalidValues()
+    {
+        var json = Timings.With(null, Timings.Opnsense, 60);
+        json = Timings.With(json, Timings.Sharing, 15);
+        Assert.Equal("""{"opnsense":60,"sharing":15}""", json);
+
+        // Zurück auf den Standard entfernt den Eintrag
+        json = Timings.With(json, Timings.Opnsense, 30);
+        json = Timings.With(json, Timings.Sharing, 5);
+        Assert.Null(json);
+
+        // Unbekannte Schlüssel und nicht wählbare Werte (z. B. Versionsprüfung jede Minute) fallen beim Lesen weg
+        var parsed = Timings.Parse("""{"releaseCheck":1,"nope":5,"metrics":10}""");
+        Assert.Equal(new Dictionary<string, int> { ["metrics"] = 10 }, parsed);
+        Assert.Empty(Timings.Parse("kaputt"));
+    }
+
+    [Fact]
+    public async Task Timings_EndpointValidatesAndSaves()
+    {
+        var admin = new System.Security.Claims.ClaimsPrincipal(new System.Security.Claims.ClaimsIdentity([new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.Name, "admin")], "test"));
+        var audit = new AuditLog(_db, new Microsoft.AspNetCore.Http.HttpContextAccessor());
+
+        var bad = await AIOPatcher.Server.Endpoints.ScanSettingsEndpoints.SaveTimingAsync(new("releaseCheck", 1), admin, _db, audit, _schedule, default);
+        Assert.IsNotType<Microsoft.AspNetCore.Http.HttpResults.Ok<AIOPatcher.Server.Endpoints.ScanSettingsEndpoints.ScanSettingsDto>>(bad);
+        var unknown = await AIOPatcher.Server.Endpoints.ScanSettingsEndpoints.SaveTimingAsync(new("nope", 15), admin, _db, audit, _schedule, default);
+        Assert.IsNotType<Microsoft.AspNetCore.Http.HttpResults.Ok<AIOPatcher.Server.Endpoints.ScanSettingsEndpoints.ScanSettingsDto>>(unknown);
+
+        var ok = await AIOPatcher.Server.Endpoints.ScanSettingsEndpoints.SaveTimingAsync(new("backups", 60), admin, _db, audit, _schedule, default);
+        var dto = Assert.IsType<Microsoft.AspNetCore.Http.HttpResults.Ok<AIOPatcher.Server.Endpoints.ScanSettingsEndpoints.ScanSettingsDto>>(ok).Value!;
+        Assert.Equal(60, dto.Timings!.Single(t => t.Key == "backups").Minutes);
+        Assert.Equal(TimeSpan.FromHours(1), _schedule.Interval(Timings.Backups));
+        Assert.Equal("""{"backups":60}""", (await _db.ScanSettings.SingleAsync()).TimingsJson);
+    }
+
     [Theory]
     [InlineData(null, true)]
     [InlineData(1, true)]

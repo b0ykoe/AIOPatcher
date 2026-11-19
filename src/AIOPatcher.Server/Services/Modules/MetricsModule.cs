@@ -40,7 +40,7 @@ public sealed class MetricsServerModule : ServerModule
     public override string Id => AgentModules.Metrics;
 
     public override PlannedTask? Due(ManagedHost host, ModuleContext context, string? polledVersion) =>
-        context.Features.IsOn(Feature.Metrics) && context.Older(Id, ModuleActions.Sample, MetricsHistory.Interval)
+        context.Features.IsOn(Feature.Metrics) && context.Older(Id, ModuleActions.Sample, context.Timing(Timings.Metrics))
             ? new PlannedTask(ModuleActions.Sample)
             : null;
 

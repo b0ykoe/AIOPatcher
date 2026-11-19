@@ -12,7 +12,12 @@ namespace AIOPatcher.Server.Endpoints;
 public static class ScanSettingsEndpoints
 {
     public sealed record ScanSettingsDto(int UpdateScanHours, int ImageCheckHours, IReadOnlyList<int> AllowedHours, string? UpdatedBy, DateTime? UpdatedAt,
-        int AgentUpdateMinutes, IReadOnlyList<int> AllowedAgentMinutes);
+        int AgentUpdateMinutes, IReadOnlyList<int> AllowedAgentMinutes, IReadOnlyList<TimingDto>? Timings = null);
+
+    /// <summary>Weiteres Intervall (siehe <see cref="Services.Timings"/>): eingestellt, Standard, wählbare Werte in Minuten.</summary>
+    public sealed record TimingDto(string Key, int Minutes, int DefaultMinutes, IReadOnlyList<int> Allowed);
+
+    public sealed record TimingRequest(string Key, int Minutes);
 
     /// <param name="AgentUpdateMinutes">null = unverändert lassen.</param>
     public sealed record ScanSettingsRequest(int UpdateScanHours, int ImageCheckHours, int? AgentUpdateMinutes = null);
@@ -25,11 +30,47 @@ public static class ScanSettingsEndpoints
         var api = app.MapGroup("/api").RequireAuthorization();
         api.MapGet("/settings/scan", (ScanSchedule schedule) => Dto(schedule.Current));
         api.MapPut("/settings/scan", SaveAsync).RequireAuthorization(UserAccounts.AdminPolicy);
+        api.MapPut("/settings/scan/timings", SaveTimingAsync).RequireAuthorization(UserAccounts.AdminPolicy);
         api.MapPut("/hosts/{id:guid}/scan", SaveHostAsync).RequireAuthorization(UserAccounts.OperatorPolicy);
     }
 
-    private static ScanSettingsDto Dto(ScanSettingsRecord s) =>
-        new(s.UpdateScanHours, s.ImageCheckHours, ScanSchedule.AllowedHours, s.UpdatedBy, s.UpdatedAt, s.AgentUpdateMinutes, ScanSchedule.AllowedAgentMinutes);
+    private static ScanSettingsDto Dto(ScanSettingsRecord s)
+    {
+        var overrides = Timings.Parse(s.TimingsJson);
+        var timings = Timings.All
+            .Select(d => new TimingDto(d.Key, overrides.TryGetValue(d.Key, out var m) ? m : d.DefaultMinutes, d.DefaultMinutes, d.Allowed))
+            .ToList();
+        return new(s.UpdateScanHours, s.ImageCheckHours, ScanSchedule.AllowedHours, s.UpdatedBy, s.UpdatedAt, s.AgentUpdateMinutes, ScanSchedule.AllowedAgentMinutes, timings);
+    }
+
+    /// <summary>Ein weiteres Intervall setzen (nur wählbare Werte; der Standard entfernt die Abweichung).</summary>
+    public static async Task<IResult> SaveTimingAsync(TimingRequest request, ClaimsPrincipal user, AppDbContext db, AuditLog audit, ScanSchedule schedule, CancellationToken ct)
+    {
+        if (Timings.Find(request.Key) is not { } definition)
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]> { ["key"] = [L.T("Unbekanntes Intervall.", "Unknown interval.")] });
+        }
+
+        if (!definition.Allowed.Contains(request.Minutes))
+        {
+            var allowed = string.Join(", ", definition.Allowed);
+            return Results.ValidationProblem(new Dictionary<string, string[]> { ["minutes"] = [L.T($"Erlaubt sind {allowed} Minuten.", $"Allowed are {allowed} minutes.")] });
+        }
+
+        var row = await db.ScanSettings.SingleOrDefaultAsync(s => s.Id == 1, ct);
+        if (row is null)
+        {
+            db.ScanSettings.Add(row = new ScanSettingsRecord());
+        }
+
+        row.TimingsJson = Timings.With(row.TimingsJson, request.Key, request.Minutes);
+        row.UpdatedBy = user.Identity?.Name;
+        row.UpdatedAt = DateTime.UtcNow;
+        audit.Add("scan.timing", $"{request.Key} every {request.Minutes} min{(request.Minutes == definition.DefaultMinutes ? " (default)" : "")}");
+        await db.SaveChangesAsync(ct);
+        schedule.Use(row);
+        return Results.Ok(Dto(row));
+    }
 
     private static Dictionary<string, string[]> Validate(int? updateScanHours, int? imageCheckHours)
     {

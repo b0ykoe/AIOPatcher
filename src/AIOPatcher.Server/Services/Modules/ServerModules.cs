@@ -38,6 +38,9 @@ public sealed class ModuleContext(
     /// <summary>Abstand zwischen Agent-Update-Angeboten (Einstellungen; ohne Schedule der feste Standard).</summary>
     public TimeSpan AgentUpdateInterval => schedule?.AgentUpdateInterval ?? ServerModule.InventoryInterval;
 
+    /// <summary>Einstellbares Intervall (Einstellungen → Intervalle), ohne Einstellungen der Standard.</summary>
+    public TimeSpan Timing(string key) => schedule?.Interval(key) ?? Timings.Default(key);
+
     /// <summary>Wann der Server diese Aktion bei diesem Host zuletzt angefordert hat (aus AgentTasks).</summary>
     public DateTime? LastRequested(string module, string action) =>
         lastRequested.TryGetValue((module, action), out var at) ? at : null;
@@ -102,7 +105,7 @@ public sealed class SystemServerModule : ServerModule
         var restarted = host.AgentRestartedAt is { } at && !(context.LastRequested(Id, ModuleActions.Describe) >= at);
         // Update-Automatik umgestellt: Stand gleich neu melden lassen
         var autoUpdatesChanged = context.LastRequested(AgentModules.Updates, ModuleActions.Change) > context.LastRequested(Id, ModuleActions.Describe);
-        return context.Older(Id, ModuleActions.Describe, Interval) || restarted || autoUpdatesChanged || versionChanged && context.Older(Id, ModuleActions.Describe, TimeSpan.FromMinutes(1))
+        return context.Older(Id, ModuleActions.Describe, context.Timing(Timings.System)) || restarted || autoUpdatesChanged || versionChanged && context.Older(Id, ModuleActions.Describe, TimeSpan.FromMinutes(1))
             ? new PlannedTask(ModuleActions.Describe)
             : null;
     }
@@ -219,7 +222,7 @@ public sealed class SoftwareServerModule : ServerModule
     {
         // auch nach jedem Update-Scan: installierte Versionen sind Grundlage für den CVE-Abgleich ohne Update
         var last = context.LastRequested(Id, ModuleActions.Inventory);
-        return last is null || context.Now - last >= InventoryInterval || context.LastRequested(Id, ModuleActions.AppUpdate) > last
+        return last is null || context.Now - last >= context.Timing(Timings.Inventory) || context.LastRequested(Id, ModuleActions.AppUpdate) > last
                || context.LastRequested(AgentModules.Updates, ModuleActions.Scan) > last
             ? new PlannedTask(ModuleActions.Inventory)
             : null;
@@ -254,7 +257,7 @@ public sealed class DockerServerModule : ServerModule
         var last = context.LastRequested(Id, ModuleActions.Inventory);
         var asked = host.ContainersRequestedAt > last || context.LastRequested(AgentModules.Updates, ModuleActions.Scan) > last
                     || context.LastRequested(Id, ModuleActions.AppUpdate) > last; // nach "Container aktualisieren" gleich neu melden
-        if (context.Older(Id, ModuleActions.Inventory, Interval) || asked)
+        if (context.Older(Id, ModuleActions.Inventory, context.Timing(Timings.Containers)) || asked)
         {
             return new PlannedTask(ModuleActions.Inventory);
         }
@@ -360,7 +363,7 @@ public sealed class ComplianceServerModule(string id, string readAction) : Serve
         }
 
         var last = context.LastRequested(Id, readAction);
-        return last is null || context.Now - last >= InventoryInterval || context.LastRequested(Id, ModuleActions.Change) > last
+        return last is null || context.Now - last >= context.Timing(Timings.Inventory) || context.LastRequested(Id, ModuleActions.Change) > last
             ? new PlannedTask(readAction)
             : null;
     }

@@ -5,15 +5,14 @@ using AIOPatcher.Server.Options;
 namespace AIOPatcher.Server.Services;
 
 /// <summary>
-/// Prüft alle 15 Minuten, ob es eine neuere AIOPatcher-Version gibt (GitHub-Releases des konfigurierten Repositorys;
-/// 4 Abfragen pro Stunde, weit unter dem Limit von 60 ohne Anmeldung). Aktualisiert wird nie automatisch: Das
-/// Dashboard zeigt den Hinweis mit Befehl bzw. dem Knopf "Jetzt aktualisieren".
+/// Prüft regelmäßig, ob es eine neuere AIOPatcher-Version gibt (GitHub-Releases des konfigurierten Repositorys).
+/// Standard alle 15 Minuten, einstellbar (<see cref="Timings.ReleaseCheck"/>, nie öfter: GitHub erlaubt ohne Anmeldung 60
+/// Abfragen pro Stunde). Aktualisiert wird nie automatisch: Das Dashboard zeigt den Hinweis mit Befehl bzw. dem Knopf
+/// "Jetzt aktualisieren".
 /// </summary>
-public sealed class ReleaseCheck(IHttpClientFactory httpFactory, AIOPatcherOptions options, ILogger<ReleaseCheck> logger, FeatureFlags features) : BackgroundService
+public sealed class ReleaseCheck(IHttpClientFactory httpFactory, AIOPatcherOptions options, ILogger<ReleaseCheck> logger, FeatureFlags features, ScanSchedule? schedule = null) : BackgroundService
 {
     public sealed record LatestRelease(string Version, string Url, DateTime? PublishedAt);
-
-    public static readonly TimeSpan Interval = TimeSpan.FromMinutes(15);
 
     public LatestRelease? Latest { get; private set; }
 
@@ -27,7 +26,7 @@ public sealed class ReleaseCheck(IHttpClientFactory httpFactory, AIOPatcherOptio
         }
 
         await Task.Delay(TimeSpan.FromMinutes(2), stoppingToken);
-        using var timer = new PeriodicTimer(Interval);
+        using var timer = new PeriodicTimer(Timings.Default(Timings.ReleaseCheck));
         do
         {
             if (!features.IsOn(Feature.ReleaseCheck))
@@ -54,7 +53,7 @@ public sealed class ReleaseCheck(IHttpClientFactory httpFactory, AIOPatcherOptio
                 logger.LogWarning("Release check failed: {Message}", ex.Message);
             }
         }
-        while (await timer.WaitForNextTickAsync(stoppingToken));
+        while (Timings.Retime(timer, schedule, Timings.ReleaseCheck) && await timer.WaitForNextTickAsync(stoppingToken));
     }
 }
 

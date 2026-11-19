@@ -9,7 +9,8 @@ namespace AIOPatcher.Server.Services.Integrations;
 /// Fragt Proxmox Backup Server alle 15 Minuten ab (Datastores, Tasks, Backup-Gruppen) und meldet Probleme:
 /// fehlgeschlagene Tasks, Datastore ab 90 % voll, Backup-Gruppen ohne neues Backup seit 48 Stunden.
 /// </summary>
-public sealed class ProxmoxBackupMonitor(IServiceScopeFactory scopes, ProxmoxBackupClientFactory clients, Notifier notifier, ILogger<ProxmoxBackupMonitor> logger)
+public sealed class ProxmoxBackupMonitor(IServiceScopeFactory scopes, ProxmoxBackupClientFactory clients, Notifier notifier, ILogger<ProxmoxBackupMonitor> logger,
+    ScanSchedule? schedule = null)
     : BackgroundService
 {
     private static readonly TimeSpan Interval = TimeSpan.FromMinutes(15);
@@ -37,7 +38,7 @@ public sealed class ProxmoxBackupMonitor(IServiceScopeFactory scopes, ProxmoxBac
                 logger.LogError(ex, "Proxmox Backup Server monitor failed");
             }
         }
-        while (await timer.WaitForNextTickAsync(stoppingToken));
+        while (Timings.Retime(timer, schedule, Timings.Backups) && await timer.WaitForNextTickAsync(stoppingToken));
     }
 
     /// <summary>Zustand abfragen und speichern. Fehler landen in Integration.LastError (der letzte Zustand bleibt stehen).</summary>

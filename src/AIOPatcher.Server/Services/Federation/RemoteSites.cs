@@ -382,7 +382,7 @@ public sealed class RemoteSites(AppDbContext db, FederationClient client, Server
 }
 
 /// <summary>Gleicht alle verbundenen Instanzen alle 5 Minuten ab.</summary>
-public sealed class FederationSync(IServiceScopeFactory scopes, ILogger<FederationSync> logger) : BackgroundService
+public sealed class FederationSync(IServiceScopeFactory scopes, ILogger<FederationSync> logger, ScanSchedule? schedule = null) : BackgroundService
 {
     public static readonly TimeSpan Interval = TimeSpan.FromMinutes(5);
 
@@ -408,6 +408,6 @@ public sealed class FederationSync(IServiceScopeFactory scopes, ILogger<Federati
                 logger.LogError(ex, "Federation sync failed");
             }
         }
-        while (await timer.WaitForNextTickAsync(stoppingToken));
+        while (Timings.Retime(timer, schedule, Timings.Sharing) && await timer.WaitForNextTickAsync(stoppingToken));
     }
 }

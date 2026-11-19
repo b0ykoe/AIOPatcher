@@ -20,6 +20,10 @@ public sealed class ScanSettingsRecord
     /// <summary>Neue Agent-Version höchstens alle n Minuten anbieten (15, 60, 120, 180, 360, 720, 1440).</summary>
     public int AgentUpdateMinutes { get; set; } = 360;
 
+    /// <summary>Weitere Intervalle in Minuten, nur Abweichungen vom Standard (siehe <see cref="Services.Timings"/>).</summary>
+    [MaxLength(2000)]
+    public string? TimingsJson { get; set; }
+
     [MaxLength(200)]
     public string? UpdatedBy { get; set; }
 

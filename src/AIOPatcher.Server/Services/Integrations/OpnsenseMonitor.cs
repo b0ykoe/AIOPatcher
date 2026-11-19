@@ -10,7 +10,7 @@ namespace AIOPatcher.Server.Services.Integrations;
 /// <summary>
 /// Fragt OPNsense-Firewalls regelmäßig ab: Firmware-Stand (einmal täglich mit Update-Suche) und ARP-Tabelle fürs IPAM.
 /// </summary>
-public sealed class OpnsenseMonitor(IServiceScopeFactory scopes, OpnsenseClientFactory clients, Notifier notifier, ILogger<OpnsenseMonitor> logger) : BackgroundService
+public sealed class OpnsenseMonitor(IServiceScopeFactory scopes, OpnsenseClientFactory clients, Notifier notifier, ILogger<OpnsenseMonitor> logger, ScanSchedule? schedule = null) : BackgroundService
 {
     private static readonly TimeSpan Interval = TimeSpan.FromMinutes(30);
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
@@ -41,7 +41,7 @@ public sealed class OpnsenseMonitor(IServiceScopeFactory scopes, OpnsenseClientF
                 logger.LogError(ex, "OPNsense monitor failed");
             }
         }
-        while (await timer.WaitForNextTickAsync(stoppingToken));
+        while (Timings.Retime(timer, schedule, Timings.Opnsense) && await timer.WaitForNextTickAsync(stoppingToken));
     }
 
     /// <summary>Status abfragen und ARP importieren. Fehler landen in Integration.LastError.</summary>

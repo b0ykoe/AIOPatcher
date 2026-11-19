@@ -32,7 +32,7 @@ public sealed record PveBackupStatus(IReadOnlyList<PveBackupJob> Jobs, IReadOnly
 /// Gäste ohne Backup-Job und fehlgeschlagene vzdump-Läufe (letzte 7 Tage), und meldet Neues als "Backup-Problem".
 /// </summary>
 public sealed class ProxmoxBackupJobsMonitor(IServiceScopeFactory scopes, VirtualizationProviderFactory providers, FeatureFlags features, Notifier notifier,
-    ILogger<ProxmoxBackupJobsMonitor> logger) : BackgroundService
+    ILogger<ProxmoxBackupJobsMonitor> logger, ScanSchedule? schedule = null) : BackgroundService
 {
     private static readonly TimeSpan Interval = TimeSpan.FromMinutes(15);
     private static readonly TimeSpan TaskWindow = TimeSpan.FromDays(7);
@@ -58,7 +58,7 @@ public sealed class ProxmoxBackupJobsMonitor(IServiceScopeFactory scopes, Virtua
                 logger.LogError(ex, "Proxmox backup job monitor failed");
             }
         }
-        while (await timer.WaitForNextTickAsync(stoppingToken));
+        while (Timings.Retime(timer, schedule, Timings.Backups) && await timer.WaitForNextTickAsync(stoppingToken));
     }
 
     /// <summary>Jobs (und mit Schalter: Lücken, Fehler) lesen und speichern. Ein Lesefehler steht im Zustand, nicht in Integration.LastError.</summary>

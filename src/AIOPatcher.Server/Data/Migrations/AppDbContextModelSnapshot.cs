@@ -2206,6 +2206,10 @@ namespace AIOPatcher.Server.Data.Migrations
                     b.Property<int>("ImageCheckHours")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("TimingsJson")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
                     b.Property<int>("UpdateScanHours")
                         .HasColumnType("INTEGER");
 
