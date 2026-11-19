@@ -19,6 +19,10 @@ Written for users, not as a list of commits.
 ### Improved
 - The update notice now shows `sudo aiopatcher-update` for setup installations and the compose commands as a fallback.
 
+### Upgrade notes
+- The button needs this agent version on the server host; agents update themselves. Updating to 0.13.0 itself still
+  works the usual way (`sudo aiopatcher-update`); the button is available from the next release on.
+
 ## [0.12.1] - 2026-11-19
 
 ### Added
