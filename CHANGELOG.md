@@ -8,6 +8,8 @@ Written for users, not as a list of commits.
 
 ## [Unreleased]
 
+## [0.9.2] - 2026-11-19
+
 ### Added
 - **Limits of the API key:** **Settings → AI** shows the rate limits of your Claude or ChatGPT key (requests, input and
   output tokens: how much is left and when it refills), read from the provider's responses. Credit and spend limits are
