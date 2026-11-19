@@ -1132,6 +1132,12 @@ const de = {
     gettingStarted: "Einrichtung fortsetzen",
   },
   monitoring: {
+    attention: "Monitoring-Client mit Problem: {{list}}. Details stehen unter dem Hostnamen.",
+    lastRunning: "{{action}} läuft …",
+    lastFailed: "{{action}} fehlgeschlagen",
+    lastRejected: "{{action}} abgelehnt",
+    openJob: "Job ansehen",
+    policyBlockedShort: "Änderungen auf diesem Host nicht freigegeben (allowMonitoringChanges).",
     quickActive: "aktiv",
     quickRunning: "läuft",
     cardTitle: "Monitoring-Clients",

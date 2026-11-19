@@ -426,6 +426,33 @@ public sealed class MonitoringTests : IDisposable
     }
 
     [Fact]
+    public async Task LastAction_NewestMonitoringJobPerProduct()
+    {
+        var host = Host(new Site { Name = "Home" });
+        _db.Hosts.Add(host);
+        PatchJob Job(SystemChangeKind kind, string product, JobStatus status, int minutesAgo, string summary) => new()
+        {
+            HostId = host.Id, Type = JobType.SystemChange, Status = status, RequestedBy = "admin:test", Summary = summary,
+            CreatedAt = DateTime.UtcNow.AddMinutes(-minutesAgo), FinishedAt = DateTime.UtcNow.AddMinutes(-minutesAgo + 1),
+            Payload = JsonSerializer.Serialize(new SystemChange(kind, Monitoring: new MonitoringSpec(product)), AgentJsonContext.Default.SystemChange),
+        };
+        _db.Jobs.AddRange(
+            Job(SystemChangeKind.MonitoringInstall, "wazuh", JobStatus.Succeeded, 60, "installed"),
+            Job(SystemChangeKind.MonitoringConfigure, "wazuh", JobStatus.Failed, 10, "Registration failed"),
+            Job(SystemChangeKind.MonitoringUninstall, "checkmk", JobStatus.Running, 2, "Uninstall Checkmk client"),
+            Job(SystemChangeKind.UserLock, "wazuh", JobStatus.Failed, 1, "other change"));
+        await _db.SaveChangesAsync();
+
+        var actions = await MonitoringEndpoints.LastActionsAsync(_db, host.Id, default);
+        Assert.Equal(2, actions.Count);
+        Assert.Equal(("configure", JobStatus.Failed, "Registration failed"), (actions[(host.Id, "wazuh")].Action, actions[(host.Id, "wazuh")].Status, actions[(host.Id, "wazuh")].Summary));
+        Assert.Equal(JobStatus.Running, actions[(host.Id, "checkmk")].Status);
+
+        var row = MonitoringEndpoints.Row(host, [], [], actions);
+        Assert.Equal("configure", row.Products.Single(p => p.Product == "wazuh").LastAction!.Action);
+    }
+
+    [Fact]
     public void ServerModule_AsksForStatusHourlyAndAfterChanges()
     {
         var features = new FeatureFlags(new AIOPatcherOptions());

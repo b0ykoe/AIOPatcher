@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { HostMonitoringCard } from "../components/monitoring/HostMonitoringCard";
 import { HostMonitoringStrip } from "../components/monitoring/HostMonitoringStrip";
+import { hasMonitoringProblem, productName } from "../components/monitoring/MonitoringShared";
 import { ActionIcon, Alert, Anchor, Badge, Button, Card, Group, Loader, Menu, SegmentedControl, Stack, Switch, Table, Tabs, TagsInput, Text, Tooltip } from "@mantine/core";
 import {
   IconAlertTriangle,
@@ -21,12 +22,13 @@ import {
   IconPackage,
   IconPackageOff,
   IconPower,
+  IconRadar,
   IconRefresh,
   IconScan,
   IconShieldCheck,
   IconTrash,
 } from "@tabler/icons-react";
-import { api, ApiError, formatDateTime, kbOf, splitTags, formatRelative, formatUptime, isActiveJob, type HostDetail, type Job, type JobType, type PatchScope } from "../api";
+import { api, ApiError, formatDateTime, kbOf, splitTags, formatRelative, formatUptime, isActiveJob, type HostDetail, type Job, type JobType, type MonitoringHostRow, type PatchScope } from "../api";
 import { HostScanCard } from "../components/ScanIntervals";
 import { ChangelogModal } from "../components/ChangelogModal";
 import { HostUpdateSummaryCard } from "../components/UpdateSummary";
@@ -66,6 +68,7 @@ export function HostDetailPage() {
   const [holdFor, setHoldFor] = useState<{ pattern: string; hostId: string } | undefined>(undefined);
   const [changelogFor, setChangelogFor] = useState<string | null>(null);
   const [knownTags, setKnownTags] = useState<string[]>([]);
+  const [monitoring, setMonitoring] = useState<MonitoringHostRow | null>(null);
 
   useEffect(() => {
     void api.get<string[]>("/api/tags").then(setKnownTags).catch(() => {});
@@ -73,9 +76,14 @@ export function HostDetailPage() {
 
   const load = useCallback(async () => {
     try {
-      const [detail, hostJobs] = await Promise.all([api.get<HostDetail>(`/api/hosts/${id}`), api.get<Job[]>(`/api/jobs?hostId=${id}&limit=20`)]);
+      const [detail, hostJobs, monitoringRow] = await Promise.all([
+        api.get<HostDetail>(`/api/hosts/${id}`),
+        api.get<Job[]>(`/api/jobs?hostId=${id}&limit=20`),
+        api.get<MonitoringHostRow>(`/api/hosts/${id}/monitoring`).catch(() => null),
+      ]);
       setHost(detail);
       setJobs(hostJobs);
+      setMonitoring(monitoringRow);
     } catch (e) {
       setError(e instanceof ApiError && e.status === 404 ? t("hostDetail.notFound") : errorText(e));
     }
@@ -179,6 +187,14 @@ export function HostDetailPage() {
 
   // Was gerade jemanden braucht (Überblick, oben links)
   const attention: React.ReactNode[] = [];
+  const monitoringProblems = (monitoring?.products ?? []).filter(hasMonitoringProblem).map((p) => productName(p.product));
+  if (monitoringProblems.length > 0) {
+    attention.push(
+      <Alert key="monitoring" color="red" icon={<IconRadar size={18} />}>
+        <Text size="sm">{t("monitoring.attention", { list: monitoringProblems.join(", ") })}</Text>
+      </Alert>,
+    );
+  }
   if (h.rebootRequired) {
     attention.push(
       <Alert key="reboot" color="yellow" icon={<IconRefresh size={18} />}>
@@ -271,7 +287,7 @@ export function HostDetailPage() {
               {splitTags(h.tags).map((tag) => <Badge key={tag} size="sm" variant="outline" color="gray" radius="sm">{tag}</Badge>)}
             </Group>
           )}
-          <HostMonitoringStrip hostId={h.id} />
+          <HostMonitoringStrip row={monitoring} />
         </>}
         actions={can.operate && <>
           {isOn("PatchJobs") && <Menu position="bottom-end" width={270} closeOnItemClick>
@@ -360,7 +376,7 @@ export function HostDetailPage() {
                   ) : <Text size="sm" c="dimmed">{t("metrics.noSampleHint")}</Text>}
                 </Card>
               )}
-              <HostMonitoringCard hostId={h.id} />
+              <HostMonitoringCard row={monitoring} onChanged={() => void load()} />
               <Card>
                 <CardTitle>{t("hostDetail.facts")}</CardTitle>
                 <Stack gap="xs">

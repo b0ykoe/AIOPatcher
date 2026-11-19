@@ -1133,6 +1133,12 @@ const en: Translation = {
     gettingStarted: "Continue setup",
   },
   monitoring: {
+    attention: "Monitoring client with a problem: {{list}}. Details are under the host name.",
+    lastRunning: "{{action}} running …",
+    lastFailed: "{{action}} failed",
+    lastRejected: "{{action}} rejected",
+    openJob: "View job",
+    policyBlockedShort: "Changes not allowed on this host (allowMonitoringChanges).",
     quickActive: "active",
     quickRunning: "running",
     cardTitle: "Monitoring clients",

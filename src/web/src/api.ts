@@ -849,12 +849,22 @@ export interface MonitoringClient {
   disconnectedSince: string | null;
 }
 
+/** Letzte Monitoring-Aktion (Job) für Host und Produkt. */
+export interface MonitoringLastAction {
+  jobId: string;
+  action: MonitoringAction;
+  status: JobStatus;
+  summary: string | null;
+  at: string;
+}
+
 export interface MonitoringProductState {
   product: MonitoringProduct;
   targetId: string | null;
   targetName: string | null;
   state: MonitoringState;
   client: MonitoringClient | null;
+  lastAction: MonitoringLastAction | null;
 }
 
 export interface MonitoringHostRow {

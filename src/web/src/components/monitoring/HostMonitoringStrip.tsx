@@ -1,26 +1,34 @@
-import { useEffect, useState } from "react";
-import { Box, Group, Text, Tooltip, type MantineColor } from "@mantine/core";
+import { Box, Group, Stack, Text, Tooltip, type MantineColor } from "@mantine/core";
 import { useTranslation } from "react-i18next";
-import { api, type MonitoringHostRow, type MonitoringProductState } from "../../api";
-import { MonitoringStateBadge, productName } from "./MonitoringShared";
+import { type MonitoringHostRow, type MonitoringProductState } from "../../api";
+import { clientProblem, LastActionLine, MonitoringStateBadge, productName } from "./MonitoringShared";
 
 /**
  * Kurzübersicht im Kopf der Host-Seite: "Wazuh aktiv: wazuh.example.com:1514", "Checkmk getrennt: …".
+ * Darunter Fehler: laufende bzw. fehlgeschlagene letzte Aktion (mit Link zum Job), sonst der Fehlertext des Clients.
  * Nur Produkte mit installiertem Client oder geltendem Ziel.
  */
-export function HostMonitoringStrip({ hostId }: { hostId: string }) {
-  const [row, setRow] = useState<MonitoringHostRow | null>(null);
-
-  useEffect(() => {
-    api.get<MonitoringHostRow>(`/api/hosts/${hostId}/monitoring`).then(setRow).catch(() => setRow(null));
-  }, [hostId]);
+export function HostMonitoringStrip({ row }: { row: MonitoringHostRow | null }) {
+  const { t } = useTranslation();
 
   const shown = row?.products.filter((p) => p.client !== null || p.targetId !== null) ?? [];
   if (shown.length === 0) return null;
+  const isActive = (p: MonitoringProductState) => p.lastAction !== null && ["Queued", "Running", "Failed", "Rejected"].includes(p.lastAction.status);
   return (
-    <Group gap="lg" mt="xs" wrap="wrap" style={{ rowGap: 4 }}>
-      {shown.map((p) => <Quick key={p.product} p={p} />)}
-    </Group>
+    <Stack gap={2} mt="xs">
+      <Group gap="lg" wrap="wrap" style={{ rowGap: 4 }}>
+        {shown.map((p) => <Quick key={p.product} p={p} />)}
+      </Group>
+      {shown.map((p) =>
+        isActive(p) ? <LastActionLine key={p.product} p={p} withProduct />
+        : clientProblem(p) ? (
+          <Text key={p.product} size="xs" c="red" lineClamp={2}>{productName(p.product)}: {clientProblem(p)}</Text>
+        ) : null,
+      )}
+      {row && row.changesAllowed === false && shown.some((p) => p.state !== "ok") && (
+        <Text size="xs" c="dimmed">{t("monitoring.policyBlockedShort")}</Text>
+      )}
+    </Stack>
   );
 }
 

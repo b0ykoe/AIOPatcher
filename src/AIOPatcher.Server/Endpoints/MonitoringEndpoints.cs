@@ -34,7 +34,11 @@ public static class MonitoringEndpoints
     public sealed record ClientDto(string Variant, string? Version, bool ServiceRunning, IReadOnlyList<string> Addresses, bool? Connected, string? Detail,
         bool CanConfigure, bool Held, DateTime SeenAt, DateTime? DisconnectedSince);
 
-    public sealed record ProductStateDto(string Product, Guid? TargetId, string? TargetName, string State, ClientDto? Client);
+/// <summary>Letzte Monitoring-Aktion (Job) für Host und Produkt: läuft noch, fehlgeschlagen, erfolgreich.</summary>
+    /// <param name="Action">"install", "configure" oder "uninstall".</param>
+    public sealed record LastActionDto(Guid JobId, string Action, JobStatus Status, string? Summary, DateTime At);
+
+    public sealed record ProductStateDto(string Product, Guid? TargetId, string? TargetName, string State, ClientDto? Client, LastActionDto? LastAction = null);
 
     /// <param name="AgentSupports">Agent kennt das Modul monitoring (sonst zu alt).</param>
     /// <param name="ChangesAllowed">policy.json allowMonitoringChanges laut letztem Status (null = noch nicht gemeldet).</param>
@@ -64,8 +68,9 @@ public static class MonitoringEndpoints
         var targets = await db.MonitoringTargets.AsNoTracking().Include(t => t.Site).OrderBy(t => t.Product).ThenBy(t => t.Site == null ? "" : t.Site.Name).ToListAsync(ct);
         var hosts = await db.Hosts.AsNoTracking().Include(h => h.Site).Where(h => !h.IsRevoked).OrderBy(h => h.Name).ToListAsync(ct);
         var clients = (await db.MonitoringClients.AsNoTracking().ToListAsync(ct)).ToLookup(c => c.HostId);
+        var actions = await LastActionsAsync(db, null, ct);
         return new OverviewDto(features.IsOn(Feature.MonitoringClients), targets.Select(ToDto).ToList(),
-            hosts.Select(h => Row(h, targets, clients[h.Id].ToList())).ToList());
+            hosts.Select(h => Row(h, targets, clients[h.Id].ToList(), actions)).ToList());
     }
 
     private static async Task<IResult> ForHost(Guid id, AppDbContext db, CancellationToken ct)
@@ -78,10 +83,53 @@ public static class MonitoringEndpoints
 
         var targets = await db.MonitoringTargets.AsNoTracking().ToListAsync(ct);
         var clients = await db.MonitoringClients.AsNoTracking().Where(c => c.HostId == id).ToListAsync(ct);
-        return Results.Ok(Row(host, targets, clients));
+        return Results.Ok(Row(host, targets, clients, await LastActionsAsync(db, id, ct)));
     }
 
-    public static HostRowDto Row(ManagedHost host, IReadOnlyList<MonitoringTarget> targets, IReadOnlyList<MonitoringClientState> clients)
+    /// <summary>Jüngster Monitoring-Job je Host und Produkt (letzte 30 Tage).</summary>
+    public static async Task<Dictionary<(Guid HostId, string Product), LastActionDto>> LastActionsAsync(AppDbContext db, Guid? hostId, CancellationToken ct)
+    {
+        var since = DateTime.UtcNow.AddDays(-30);
+        var jobs = await db.Jobs.AsNoTracking()
+            .Where(j => j.Type == JobType.SystemChange && j.CreatedAt >= since && j.Payload != null && j.Payload.Contains("Monitoring")
+                        && (hostId == null || j.HostId == hostId))
+            .OrderByDescending(j => j.CreatedAt)
+            .Select(j => new { j.Id, j.HostId, j.Status, j.Summary, j.Payload, j.CreatedAt, j.FinishedAt })
+            .Take(2000)
+            .ToListAsync(ct);
+
+        var result = new Dictionary<(Guid, string), LastActionDto>();
+        foreach (var job in jobs)
+        {
+            SystemChange? change;
+            try
+            {
+                change = System.Text.Json.JsonSerializer.Deserialize(job.Payload!, AgentJsonContext.Default.SystemChange);
+            }
+            catch (System.Text.Json.JsonException)
+            {
+                continue;
+            }
+
+            if (change?.Monitoring is not { } spec || AgentModules.ForChange(change.Kind) != AgentModules.Monitoring)
+            {
+                continue;
+            }
+
+            var action = change.Kind switch
+            {
+                SystemChangeKind.MonitoringInstall => "install",
+                SystemChangeKind.MonitoringConfigure => "configure",
+                _ => "uninstall",
+            };
+            result.TryAdd((job.HostId, spec.Product), new LastActionDto(job.Id, action, job.Status, job.Summary, job.FinishedAt ?? job.CreatedAt));
+        }
+
+        return result;
+    }
+
+    public static HostRowDto Row(ManagedHost host, IReadOnlyList<MonitoringTarget> targets, IReadOnlyList<MonitoringClientState> clients,
+        IReadOnlyDictionary<(Guid HostId, string Product), LastActionDto>? actions = null)
     {
         var products = MonitoringProducts.All
             .Select(product =>
@@ -90,7 +138,8 @@ public static class MonitoringEndpoints
                 var client = clients.FirstOrDefault(c => c.Product == product);
                 return new ProductStateDto(product, target?.Id, target?.Name, MonitoringService.Evaluate(target, client),
                     client is null ? null : new ClientDto(client.Variant, client.Version, client.ServiceRunning, client.AddressList, client.Connected, client.Detail,
-                        client.CanConfigure, client.Held, client.SeenAt, client.DisconnectedSince));
+                        client.CanConfigure, client.Held, client.SeenAt, client.DisconnectedSince),
+                    actions?.GetValueOrDefault((host.Id, product)));
             })
             .ToList();
         return new HostRowDto(host.Id, host.Name, host.SiteId, host.Site?.Name, host.OsFamily, host.OsName, host.LastSeenAt,

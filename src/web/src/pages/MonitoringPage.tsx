@@ -8,7 +8,7 @@ import { api, formatRelative, type MonitoringAction, type MonitoringHostRow, typ
 import { CardTitle, EmptyState, errorText, StatCard } from "../components/ui";
 import { FeatureOffHint } from "../features";
 import {
-  actionLabel, actionsFor, blockReason, ClientLabel, ConnectionText, MonitoringActionModal, MonitoringStateBadge, productName,
+  actionLabel, actionsFor, blockReason, ClientLabel, ConnectionText, LastActionLine, MonitoringActionModal, MonitoringStateBadge, productName,
 } from "../components/monitoring/MonitoringShared";
 
 type Request = { product: MonitoringProduct; action: MonitoringAction; rows: MonitoringHostRow[]; update?: boolean };
@@ -123,6 +123,7 @@ export function MonitoringPage() {
                         <Tooltip label={p.client?.detail ?? p.targetName ?? ""} disabled={!p.client?.detail && !p.targetName} multiline w={320}>
                           <span><MonitoringStateBadge state={p.state} /></span>
                         </Tooltip>
+                        <LastActionLine p={p} />
                       </Table.Td>
                       <Table.Td>{p.client ? <ClientLabel client={p.client} /> : <Text size="sm" c="dimmed">{t("monitoring.notInstalled")}</Text>}</Table.Td>
                       <Table.Td>

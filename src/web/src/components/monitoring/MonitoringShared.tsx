@@ -1,14 +1,54 @@
 import { useState } from "react";
-import { Alert, Badge, Button, Code, Group, List, Modal, Stack, Text, type MantineColor } from "@mantine/core";
+import { Alert, Anchor, Badge, Button, Code, Group, List, Modal, Stack, Text, Tooltip, type MantineColor } from "@mantine/core";
 import { IconAlertTriangle } from "@tabler/icons-react";
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
-import { api, type ChangeResult, type MonitoringAction, type MonitoringClient, type MonitoringHostRow, type MonitoringProduct, type MonitoringProductState, type MonitoringState, type OsFamily } from "../../api";
+import { Link } from "react-router";
+import { api, formatRelative, type ChangeResult, type MonitoringAction, type MonitoringClient, type MonitoringHostRow, type MonitoringProduct, type MonitoringProductState, type MonitoringState, type OsFamily } from "../../api";
 import { errorText, notifyError, reportBulk } from "../ui";
 
 export const monitoringProducts: MonitoringProduct[] = ["wazuh", "checkmk"];
 
 export const productName = (product: MonitoringProduct) => (product === "wazuh" ? "Wazuh" : "Checkmk");
+
+/** Hat dieses Produkt auf dem Host ein Problem (fehlgeschlagene letzte Aktion, getrennt, Dienst aus)? */
+export function hasMonitoringProblem(p: MonitoringProductState): boolean {
+  const failed = p.lastAction !== null && (p.lastAction.status === "Failed" || p.lastAction.status === "Rejected");
+  return failed || (p.client !== null && (!p.client.serviceRunning || p.client.connected === false));
+}
+
+/** Fehlertext des Clients, wenn er rot ist (getrennt, Dienst aus); sonst null. */
+export function clientProblem(p: MonitoringProductState): string | null {
+  const c = p.client;
+  if (!c || !c.detail) return null;
+  return !c.serviceRunning || c.connected === false || !c.canConfigure ? c.detail : null;
+}
+
+/**
+ * Letzte Aktion, sofern sie gerade läuft oder fehlgeschlagen ist: "Auf Ziel umstellen fehlgeschlagen: …" mit Link zum Job.
+ * withProduct: Produktname voranstellen (Kurzzeile im Kopf der Host-Seite).
+ */
+export function LastActionLine({ p, withProduct = false }: { p: MonitoringProductState; withProduct?: boolean }) {
+  const { t } = useTranslation();
+  const a = p.lastAction;
+  if (!a) return null;
+  const running = a.status === "Queued" || a.status === "Running";
+  const failed = a.status === "Failed" || a.status === "Rejected";
+  if (!running && !failed) return null;
+
+  const action = actionLabel(t, a.action);
+  const head = running ? t("monitoring.lastRunning", { action }) : a.status === "Rejected" ? t("monitoring.lastRejected", { action }) : t("monitoring.lastFailed", { action });
+  const text = `${withProduct ? `${productName(p.product)}: ` : ""}${head}${failed && a.summary ? `: ${a.summary}` : ""}`;
+  return (
+    <Group gap={6} wrap="nowrap" align="flex-start">
+      <Tooltip label={a.summary ?? head} multiline maw={420} disabled={!a.summary}>
+        <Text size="xs" c={running ? "cyan" : "red"} lineClamp={2} style={{ minWidth: 0 }}>{text}</Text>
+      </Tooltip>
+      <Text size="xs" c="dimmed" style={{ whiteSpace: "nowrap" }}>{formatRelative(a.at)}</Text>
+      <Anchor component={Link} to={`/jobs/${a.jobId}`} size="xs" style={{ whiteSpace: "nowrap" }}>{t("monitoring.openJob")}</Anchor>
+    </Group>
+  );
+}
 
 const stateColor: Record<MonitoringState, MantineColor> = {
   ok: "teal",
