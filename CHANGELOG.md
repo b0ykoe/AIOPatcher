@@ -8,6 +8,11 @@ Written for users, not as a list of commits.
 
 ## [Unreleased]
 
+### Improved
+- **Host names with their site:** with more than one site, host pickers (patch plans, exclude host, compliance
+  baselines, quick plan, VM mapping) show the site next to the name, e.g. **pbs · Homelab**, so hosts with the same name
+  can be told apart.
+
 ### Fixed
 - **Saving a patch plan failed with "An error occurred while processing your request":** changes to an existing plan
   were not saved (error 500, "FOREIGN KEY constraint failed" in the log). Editing plans works again.

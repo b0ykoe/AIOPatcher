@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Alert, Button, Group, Modal, MultiSelect, SegmentedControl, Select, Stack, Switch, Text, TextInput } from "@mantine/core";
 import { TimeInput } from "@mantine/dates";
 import { IconBolt, IconInfoCircle } from "@tabler/icons-react";
+import { hostOptions } from "../../hostOptions";
 import { useTranslation } from "react-i18next";
 import { api, weekdays, type HostSummary, type PatchScope, type Runbook } from "../../api";
 import { notifyError, notifySuccess } from "../ui";
@@ -69,7 +70,7 @@ export function QuickPlanModal({ opened, onClose, onDone, hostIds = [] }: {
       <Stack gap="md">
         <Text size="sm" c="dimmed">{t("plans.quickText")}</Text>
         <MultiSelect label={t("plans.quickHosts")} searchable clearable value={selected} onChange={setSelected}
-          data={hosts.map((h) => ({ value: h.id, label: h.planId ? `${h.name} (${h.scheduledRunbook ?? "…"})` : h.name }))} />
+          data={hostOptions(hosts, (h) => (h.planId ? `(${h.scheduledRunbook ?? "…"})` : null))} />
         <div>
           <Text size="sm" fw={500} mb={4}>{t("plans.quickWhat")}</Text>
           <SegmentedControl fullWidth value={scope} onChange={(v) => setScope(v as PatchScope)}

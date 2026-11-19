@@ -5,6 +5,7 @@ import {
   Switch, TagsInput, Text, TextInput, Textarea, ThemeIcon, Tooltip, UnstyledButton,
 } from "@mantine/core";
 import { IconBrandWindows, IconFileText, IconKey, IconPencil, IconPlus, IconServer, IconShieldCheck, IconTerminal2, IconTrash, IconUsers, IconWand } from "@tabler/icons-react";
+import { hostOptions } from "../../hostOptions";
 import { useTranslation } from "react-i18next";
 import { useSiteScope } from "../../siteScope";
 import { api, ApiError, splitTags, type HostSummary, type Site } from "../../api";
@@ -244,7 +245,7 @@ function BaselineEditor({ baseline, initial, others, onClose, onSaved }: {
 
         {/* Geltung */}
         <Section icon={<IconServer size={18} />} title={t("baselines.secMembers")} hint={t("baselines.secMembersHint")}>
-          <MultiSelect label={t("plans.pickHosts")} data={hosts.map((h) => ({ value: h.id, label: h.name }))} value={draft.hostIds} searchable clearable hidePickedOptions
+          <MultiSelect label={t("plans.pickHosts")} data={hostOptions(hosts)} value={draft.hostIds} searchable clearable hidePickedOptions
             onChange={(v) => setDraft({ ...draft, hostIds: v })} />
           <Group grow align="flex-start">
             <TagsInput label={t("plans.byTag")} data={tags} value={splitTags(draft.memberTags)} clearable onChange={(v) => setDraft({ ...draft, memberTags: v.join(",") || null })} />

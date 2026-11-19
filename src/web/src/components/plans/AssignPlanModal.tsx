@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Alert, Button, Group, Modal, MultiSelect, Select, Stack, Text } from "@mantine/core";
+import { hostOptions } from "../../hostOptions";
 import { useTranslation } from "react-i18next";
 import { api, type HostSummary, type Runbook } from "../../api";
 import { errorText, notifySuccess } from "../ui";
@@ -57,7 +58,7 @@ export function AssignPlanModal({ opened, onClose, onDone, hostIds, hosts }: {
     <Modal opened={opened} onClose={onClose} title={<Text fw={800}>{t("plans.assignTitle")}</Text>} size="lg">
       <Stack>
         {hosts && (
-          <MultiSelect label={t("nav.hosts")} data={hosts.map((h) => ({ value: h.id, label: h.name }))} value={selected} onChange={setSelected} searchable clearable />
+          <MultiSelect label={t("nav.hosts")} data={hostOptions(hosts)} value={selected} onChange={setSelected} searchable clearable />
         )}
         {plans.length === 0 ? (
           <Alert color="yellow">{t("plans.noPlansYet")}</Alert>

@@ -6,6 +6,7 @@ import {
 } from "@mantine/core";
 import { TimeInput } from "@mantine/dates";
 import { IconAlertTriangle, IconArrowDown, IconArrowUp, IconPlus, IconTrash, IconUsersGroup } from "@tabler/icons-react";
+import { hostLabel } from "../hostOptions";
 import { useTranslation } from "react-i18next";
 import { api, splitTags, weekdays, type HostSummary, type PatchScope, type Runbook, type ServerInfo, type Site } from "../api";
 import { useCan } from "../App";
@@ -68,7 +69,9 @@ export function PlanEditorPage() {
   const active = useMemo(() => hosts.filter((h) => h.status !== "Revoked"), [hosts]);
   const hostOptions = useMemo(() => {
     const bySite = new Map<string, { value: string; label: string }[]>();
-    for (const h of active) bySite.set(h.siteName, [...(bySite.get(h.siteName) ?? []), { value: h.id, label: h.name }]);
+    // Gewählte Einträge zeigen nur das Label: bei mehreren Sites mit Site, damit gleichnamige Hosts unterscheidbar sind
+    const multiSite = new Set(active.map((h) => h.siteName)).size > 1;
+    for (const h of active) bySite.set(h.siteName, [...(bySite.get(h.siteName) ?? []), { value: h.id, label: hostLabel(h, multiSite) }]);
     return [...bySite.entries()].map(([group, items]) => ({ group, items }));
   }, [active]);
   const othersElsewhere = plans.find((p) => p.id !== id && p.waves.some((w) => w.includeOthers));

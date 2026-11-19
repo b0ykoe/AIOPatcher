@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ActionIcon, Alert, Badge, Group, Loader, Modal, SegmentedControl, Select, Stack, Table, Text, TextInput, Tooltip } from "@mantine/core";
 import { useMediaQuery } from "@mantine/hooks";
 import { IconSearch, IconServer2, IconUnlink } from "@tabler/icons-react";
+import { hostOptions } from "../../hostOptions";
 import { useTranslation } from "react-i18next";
 import { api, type Integration, type MappingHost, type MappingMachine, type MappingOverview } from "../../api";
 import { EmptyState, errorText, notifyError, notifySuccess } from "../ui";
@@ -65,7 +66,7 @@ export function IntegrationMappingModal({ integration, onClose }: { integration:
     );
   }, [data, filter, search]);
 
-  const hostOptions = useMemo(() => (data?.hosts ?? []).map((h) => ({ value: h.id, label: h.name })), [data]);
+  const hostChoices = useMemo(() => hostOptions(data?.hosts ?? []), [data]);
   const hostsById = useMemo(() => new Map((data?.hosts ?? []).map((h) => [h.id, h])), [data]);
 
   const hostSelect = (m: MappingMachine) => (
@@ -75,7 +76,7 @@ export function IntegrationMappingModal({ integration, onClose }: { integration:
       allowDeselect={false}
       placeholder={t("integrations.mapChooseHost")}
       aria-label={t("integrations.mapChooseHostFor", { machine: m.name })}
-      data={hostOptions}
+      data={hostChoices}
       value={m.hostId}
       onChange={(v) => v && v !== m.hostId && void save(m, v)}
       disabled={saving === m.externalId}

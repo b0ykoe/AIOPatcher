@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router";
 import { Anchor, Button, Card, Group, Modal, MultiSelect, Stack, Text } from "@mantine/core";
 import { IconBan, IconPlus } from "@tabler/icons-react";
+import { hostOptions } from "../../hostOptions";
 import { useTranslation } from "react-i18next";
 import { api, type HostSummary } from "../../api";
 import { useCan } from "../../App";
@@ -76,7 +77,7 @@ export function ExcludedHostsCard({ hosts, onChanged }: { hosts: HostSummary[]; 
       <Modal opened={adding} onClose={() => setAdding(false)} title={<Text fw={800}>{t("plans.excludeHost")}</Text>}>
         <Stack>
           <Text size="sm" c="dimmed">{t("plans.excludeHint")}</Text>
-          <MultiSelect label={t("nav.hosts")} data={candidates.map((h) => ({ value: h.id, label: h.name }))} value={selected} onChange={setSelected}
+          <MultiSelect label={t("nav.hosts")} data={hostOptions(candidates)} value={selected} onChange={setSelected}
             searchable clearable />
           <Group justify="flex-end">
             <Button variant="gradient" className="gradient-button" disabled={selected.length === 0} loading={busy} onClick={() => void exclude()}>
