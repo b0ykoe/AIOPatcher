@@ -8,6 +8,8 @@ Written for users, not as a list of commits.
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-11-19
+
 ### Added
 - **Update AIOPatcher from the dashboard:** enroll the server host as an agent and allow it once with
   `aiopatcher-agent policy set allowServerUpdate true` (or `install.sh --allow-server-update`). The update notice then
