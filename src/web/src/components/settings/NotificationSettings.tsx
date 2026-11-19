@@ -58,7 +58,7 @@ const typeIcon: Record<ChannelType, typeof IconBell> = {
   Telegram: IconBrandTelegram,
 };
 
-const defaultEvents: NotificationEvent[] = ["JobFailed", "HostOffline", "RunNeedsAttention", "RunFinished", "KevDetected", "ContainerStopped"];
+const defaultEvents: NotificationEvent[] = ["JobFailed", "HostOffline", "RunNeedsAttention", "RunFinished", "KevDetected", "ContainerStopped", "MonitoringDisconnected"];
 
 export function NotificationSettings() {
   const { t } = useTranslation();

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
+import { HostMonitoringCard } from "../components/monitoring/HostMonitoringCard";
 import { ActionIcon, Alert, Anchor, Badge, Button, Card, Group, Loader, Menu, SegmentedControl, Stack, Switch, Table, Tabs, TagsInput, Text, Tooltip } from "@mantine/core";
 import {
   IconAlertTriangle,
@@ -355,6 +356,7 @@ export function HostDetailPage() {
                   ) : <Text size="sm" c="dimmed">{t("metrics.noSampleHint")}</Text>}
                 </Card>
               )}
+              <HostMonitoringCard hostId={h.id} />
               <Card>
                 <CardTitle>{t("hostDetail.facts")}</CardTitle>
                 <Stack gap="xs">

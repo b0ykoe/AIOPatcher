@@ -25,7 +25,8 @@ export type Feature =
   | "AptSourceFixes"
   | "RebootCheck"
   | "AutoUpdateControl"
-  | "Metrics";
+  | "Metrics"
+  | "MonitoringClients";
 
 export interface FeatureState {
   feature: Feature;

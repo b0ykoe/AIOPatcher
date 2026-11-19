@@ -25,6 +25,7 @@ import { api, formatRelative, type Integration, type IntegrationTestResult, type
 import { CardTitle, confirmAction, EmptyState, errorText, notifyError, notifySuccess } from "../ui";
 import { GuidePanel } from "../GuidePanel";
 import { FeatureOffHint, useFeatures } from "../../features";
+import { MonitoringTargets } from "../monitoring/MonitoringTargets";
 
 
 const types: IntegrationType[] = ["Proxmox", "HetznerCloud", "Opnsense"];
@@ -244,6 +245,8 @@ export function IntegrationSettings() {
           );
         })}
       </div>
+
+      <MonitoringTargets sites={sites} />
 
       <Card>
         <CardTitle icon={<IconBrandUbuntu size={18} />}>{t("integrations.permissionsTitle")}</CardTitle>

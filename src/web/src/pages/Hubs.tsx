@@ -1,4 +1,4 @@
-import { IconApps, IconBug, IconCalendarTime, IconListCheck, IconNetwork, IconShieldCheck, IconShieldHalfFilled, IconShieldLock } from "@tabler/icons-react";
+import { IconApps, IconBug, IconRadar, IconCalendarTime, IconListCheck, IconNetwork, IconShieldCheck, IconShieldHalfFilled, IconShieldLock } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import { useSimple } from "../App";
 import { SectionPage } from "../components/SectionTabs";
@@ -6,6 +6,7 @@ import { CompliancePage } from "./CompliancePage";
 import { CveLookupPage } from "./CveLookupPage";
 import { IpamPage } from "./IpamPage";
 import { JobsPage } from "./JobsPage";
+import { MonitoringPage } from "./MonitoringPage";
 import { PlansPage } from "./PlansPage";
 import { RulesPage } from "./RulesPage";
 import { SecurityPage } from "./SecurityPage";
@@ -38,13 +39,14 @@ export function AutoPatchHub() {
   );
 }
 
-/** Inventar: installierte Programme und Netzwerk (IPAM). */
+/** Inventar: installierte Programme, Netzwerk (IPAM) und Monitoring-Clients (Wazuh, Checkmk). */
 export function InventoryHub() {
   const { t } = useTranslation();
   return (
     <SectionPage title={t("nav.inventory")} description={t("hubs.inventoryDescription")} sections={[
       { value: "software", label: t("nav.software"), icon: IconApps, element: <SoftwarePage /> },
       { value: "network", label: t("hubs.network"), icon: IconNetwork, element: <IpamPage /> },
+      { value: "monitoring", label: t("hubs.monitoring"), icon: IconRadar, element: <MonitoringPage /> },
     ]} />
   );
 }

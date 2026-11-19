@@ -714,6 +714,7 @@ export const notificationEvents = [
   "AgentUpdateFailed",
   "RebootCheckFailed",
   "ContainerStopped",
+  "MonitoringDisconnected",
 ] as const;
 export type NotificationEvent = (typeof notificationEvents)[number];
 
@@ -802,6 +803,86 @@ export interface OpnsenseFirmware {
   packageUpdates: number;
   rebootRequired: boolean;
   statusMessage: string | null;
+}
+
+export type MonitoringProduct = "wazuh" | "checkmk";
+export type MonitoringState = "missing" | "ok" | "otherTarget" | "outdated" | "tooNew" | "disconnected" | "unsupported" | "noTarget";
+export type MonitoringAction = "install" | "configure" | "uninstall";
+
+/** Ziel für Monitoring-Clients: Wazuh-Manager bzw. Checkmk-Site (je Site von AIOPatcher oder für alle). */
+export interface MonitoringTarget {
+  id: string;
+  name: string;
+  product: MonitoringProduct;
+  siteId: string | null;
+  siteName: string | null;
+  address: string | null;
+  port: number | null;
+  protocol: string | null;
+  enrollment: "new" | "keys";
+  enrollmentPort: number | null;
+  groups: string | null;
+  managerVersion: string | null;
+  siteUrl: string | null;
+  receiverPort: number | null;
+  registrationUser: string | null;
+  onlyFrom: string | null;
+  legacyPackageUrl: string | null;
+  tlsFingerprintSha256: string | null;
+  siteVersion: string | null;
+  hasSecret: boolean;
+  updatedAt: string;
+  lastError: string | null;
+}
+
+export interface MonitoringClient {
+  /** "wazuh", "wazuh5", "ossec", "checkmk-ctl", "checkmk-legacy", "checkmk-ini" */
+  variant: string;
+  version: string | null;
+  serviceRunning: boolean;
+  addresses: string[];
+  connected: boolean | null;
+  detail: string | null;
+  canConfigure: boolean;
+  held: boolean;
+  seenAt: string;
+  disconnectedSince: string | null;
+}
+
+export interface MonitoringProductState {
+  product: MonitoringProduct;
+  targetId: string | null;
+  targetName: string | null;
+  state: MonitoringState;
+  client: MonitoringClient | null;
+}
+
+export interface MonitoringHostRow {
+  hostId: string;
+  hostName: string;
+  siteId: string;
+  siteName: string | null;
+  osFamily: OsFamily;
+  osName: string | null;
+  lastSeenAt: string | null;
+  /** Agent kennt das Modul (sonst zu alt) */
+  agentSupports: boolean;
+  /** policy.json allowMonitoringChanges; null = noch nicht gemeldet */
+  changesAllowed: boolean | null;
+  scannedAt: string | null;
+  products: MonitoringProductState[];
+}
+
+export interface MonitoringOverview {
+  enabled: boolean;
+  targets: MonitoringTarget[];
+  hosts: MonitoringHostRow[];
+}
+
+export interface ChangeResult {
+  created: number;
+  skipped: { hostId: string; hostName: string; reason: string }[];
+  jobId: string | null;
 }
 
 export interface IntegrationTestResult {
