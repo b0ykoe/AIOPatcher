@@ -8,6 +8,8 @@ Written for users, not as a list of commits.
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-11-19
+
 ### Improved
 - **AI summaries use far fewer requests:** Packages are bundled into one request per 25 packages instead of one
   request each, so 100 new updates now take about 5 requests instead of 101. Short changelogs (e.g. "New upstream
