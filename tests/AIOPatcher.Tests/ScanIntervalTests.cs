@@ -97,6 +97,17 @@ public sealed class ScanIntervalTests : IDisposable
     }
 
     [Fact]
+    public async Task ReleaseCheck_CheckNow_OnlyWithRepositoryAndFeature()
+    {
+        // Ohne Repository fragt "Jetzt prüfen" GitHub nicht ab (HTTP würde hier mangels Factory scheitern)
+        var check = new ReleaseCheck(null!, new AIOPatcherOptions { UpdateCheckRepository = "" },
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<ReleaseCheck>.Instance, _features);
+        Assert.False(await check.CheckNowAsync(default));
+        Assert.Null(check.CheckedAt);
+        Assert.Equal(TimeSpan.FromMinutes(1), ReleaseCheck.ManualCooldown);
+    }
+
+    [Fact]
     public void Timings_StoreOnlyDeviations_AndDropInvalidValues()
     {
         var json = Timings.With(null, Timings.Opnsense, 60);

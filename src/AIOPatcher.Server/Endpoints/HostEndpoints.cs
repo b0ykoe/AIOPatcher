@@ -225,6 +225,12 @@ public static class HostEndpoints
                 releases.Latest?.Version, releases.Latest?.Url, releases.UpdateAvailable, hosts, running);
         });
         api.MapPost("/server/update", StartServerUpdate).RequireAuthorization(UserAccounts.AdminPolicy);
+        // Einstellungen → Allgemein: "Jetzt prüfen" (höchstens einmal pro Minute, sonst gilt das letzte Ergebnis)
+        api.MapPost("/server/check-update", async (ReleaseCheck releases, CancellationToken ct) =>
+        {
+            var checkedNow = await releases.CheckNowAsync(ct);
+            return Results.Ok(new { checkedNow, checkedAt = releases.CheckedAt, error = releases.LastError, latestVersion = releases.Latest?.Version, updateAvailable = releases.UpdateAvailable });
+        }).RequireAuthorization(UserAccounts.AdminPolicy);
         op.MapPost("/hosts/{id:guid}/revoke", RevokeHost);
         op.MapPost("/hosts/{id:guid}/agent-update/retry", RetryAgentUpdate);
         op.MapPost("/hosts/{id:guid}/agent-update/now", UpdateAgentNow);

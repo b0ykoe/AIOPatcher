@@ -1,18 +1,39 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { Anchor, Badge, Button, Card, Group, Stack, Text } from "@mantine/core";
-import { IconApi, IconWand } from "@tabler/icons-react";
+import { IconApi, IconRefresh, IconWand } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
-import { api, type ServerInfo } from "../../api";
+import { api, formatRelative, type ServerInfo } from "../../api";
+import { useCan } from "../../App";
 import { MirrorStatusLine } from "../../pages/CveLookupPage";
 import { openSetupWizard } from "../SetupWizard";
 import { ScanSettingsCard, TimingsCard } from "../ScanIntervals";
-import { CardTitle } from "../ui";
+import { CardTitle, notifyError, notifySuccess } from "../ui";
 
 /** Einstellungen → Allgemein: Version, Zeitzone, CVE-Datenbank, Assistent, API. */
 export function GeneralSettings() {
   const { t } = useTranslation();
   const [info, setInfo] = useState<ServerInfo | null>(null);
+  const can = useCan();
+  const [checking, setChecking] = useState(false);
+  const [checkedAt, setCheckedAt] = useState<string | null>(null);
+
+  /** Sofort bei GitHub nachsehen (Server begrenzt auf einmal pro Minute). */
+  const checkNow = async () => {
+    setChecking(true);
+    try {
+      const r = await api.post<{ checkedNow: boolean; checkedAt: string | null; error: string | null; latestVersion: string | null; updateAvailable: boolean }>("/api/server/check-update");
+      setCheckedAt(r.checkedAt);
+      setInfo(await api.get<ServerInfo>("/api/server-info"));
+      if (r.error) notifyError(new Error(r.error), t("settings.checkFailed"));
+      else if (r.updateAvailable && r.latestVersion) notifySuccess(t("settings.updateAvailable", { version: r.latestVersion }), t("settings.updateAvailableHint"));
+      else notifySuccess(t("settings.upToDate"), r.checkedNow ? undefined : t("settings.checkedRecently"));
+    } catch (e) {
+      notifyError(e);
+    } finally {
+      setChecking(false);
+    }
+  };
 
   useEffect(() => {
     void api.get<ServerInfo>("/api/server-info").then(setInfo).catch(() => {});
@@ -29,7 +50,11 @@ export function GeneralSettings() {
               {t("settings.updateAvailable", { version: info.latestVersion })}
             </Badge>
           ) : info?.latestVersion ? <Badge size="sm" color="teal">{t("settings.upToDate")}</Badge> : null}
+          {can.admin && (
+            <Button size="compact-xs" variant="light" leftSection={<IconRefresh size={12} />} loading={checking} onClick={() => void checkNow()}>{t("settings.checkNow")}</Button>
+          )}
         </Group>
+        {checkedAt && <Text size="xs" c="dimmed" mt={4}>{t("settings.lastChecked", { when: formatRelative(checkedAt) })}</Text>}
         <Text fw={700} mt="md" mb={4}>{t("settings.generalTimeZone")}</Text>
         <Text ff="monospace">{info?.timeZone ?? "…"}</Text>
         <Text size="xs" c="dimmed">{t("settings.generalTimeZoneHint")}</Text>
