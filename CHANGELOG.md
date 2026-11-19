@@ -8,6 +8,11 @@ Written for users, not as a list of commits.
 
 ## [Unreleased]
 
+### Fixed
+- **Check now really checks:** the button could show an old result when the automatic check had run shortly before,
+  so a new version did not show up. It now always asks GitHub (only double clicks within 10 seconds are skipped) and
+  says which version GitHub reports as the latest. A refused request (GitHub limit) is named as such.
+
 ## [0.14.4] - 2026-11-19
 
 ### Added

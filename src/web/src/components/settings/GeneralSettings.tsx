@@ -16,18 +16,19 @@ export function GeneralSettings() {
   const [info, setInfo] = useState<ServerInfo | null>(null);
   const can = useCan();
   const [checking, setChecking] = useState(false);
-  const [checkedAt, setCheckedAt] = useState<string | null>(null);
+  const [checked, setChecked] = useState<{ at: string; latest: string | null } | null>(null);
 
-  /** Sofort bei GitHub nachsehen (Server begrenzt auf einmal pro Minute). */
+  /** Sofort bei GitHub nachsehen; die Meldung nennt, welche Version GitHub als neueste meldet. */
   const checkNow = async () => {
     setChecking(true);
     try {
       const r = await api.post<{ checkedNow: boolean; checkedAt: string | null; error: string | null; latestVersion: string | null; updateAvailable: boolean }>("/api/server/check-update");
-      setCheckedAt(r.checkedAt);
+      if (r.checkedAt) setChecked({ at: r.checkedAt, latest: r.latestVersion });
       setInfo(await api.get<ServerInfo>("/api/server-info"));
       if (r.error) notifyError(new Error(r.error), t("settings.checkFailed"));
       else if (r.updateAvailable && r.latestVersion) notifySuccess(t("settings.updateAvailable", { version: r.latestVersion }), t("settings.updateAvailableHint"));
-      else notifySuccess(t("settings.upToDate"), r.checkedNow ? undefined : t("settings.checkedRecently"));
+      else if (r.latestVersion) notifySuccess(t("settings.upToDate"), t("settings.latestRelease", { version: r.latestVersion }));
+      else notifyError(new Error(t("settings.noRelease")), t("settings.checkFailed"));
     } catch (e) {
       notifyError(e);
     } finally {
@@ -54,7 +55,12 @@ export function GeneralSettings() {
             <Button size="compact-xs" variant="light" leftSection={<IconRefresh size={12} />} loading={checking} onClick={() => void checkNow()}>{t("settings.checkNow")}</Button>
           )}
         </Group>
-        {checkedAt && <Text size="xs" c="dimmed" mt={4}>{t("settings.lastChecked", { when: formatRelative(checkedAt) })}</Text>}
+        {checked && (
+          <Text size="xs" c="dimmed" mt={4}>
+            {t("settings.lastChecked", { when: formatRelative(checked.at) })}
+            {checked.latest ? ` · ${t("settings.latestRelease", { version: checked.latest })}` : ""}
+          </Text>
+        )}
         <Text fw={700} mt="md" mb={4}>{t("settings.generalTimeZone")}</Text>
         <Text ff="monospace">{info?.timeZone ?? "…"}</Text>
         <Text size="xs" c="dimmed">{t("settings.generalTimeZoneHint")}</Text>

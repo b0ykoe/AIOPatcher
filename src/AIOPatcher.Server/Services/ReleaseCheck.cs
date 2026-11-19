@@ -23,23 +23,28 @@ public sealed class ReleaseCheck(IHttpClientFactory httpFactory, AIOPatcherOptio
 
     public string? LastError { get; private set; }
 
-    /// <summary>"Jetzt prüfen" höchstens einmal pro Minute (GitHub ohne Anmeldung: 60 Abfragen pro Stunde).</summary>
-    public static readonly TimeSpan ManualCooldown = TimeSpan.FromMinutes(1);
+    /// <summary>
+    /// Schutz nur vor Doppelklicks auf "Jetzt prüfen": die automatische Prüfung zählt nicht mit, damit der Knopf immer
+    /// wirklich nachsieht (GitHub ohne Anmeldung erlaubt 60 Abfragen pro Stunde, das reicht für Klicks dicke).
+    /// </summary>
+    public static readonly TimeSpan ManualCooldown = TimeSpan.FromSeconds(10);
 
     private readonly SemaphoreSlim _gate = new(1, 1);
+    private DateTime? _lastManual;
 
     /// <summary>
     /// Sofort bei GitHub nachsehen (Knopf in den Einstellungen). false = nicht abgefragt: kein Repository konfiguriert,
-    /// Schalter "Versionsprüfung" aus oder die letzte Abfrage ist jünger als <see cref="ManualCooldown"/>.
+    /// Schalter "Versionsprüfung" aus oder der letzte Klick ist jünger als <see cref="ManualCooldown"/>.
     /// </summary>
     public async Task<bool> CheckNowAsync(CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(options.UpdateCheckRepository) || !features.IsOn(Feature.ReleaseCheck)
-            || CheckedAt is { } last && DateTime.UtcNow - last < ManualCooldown)
+            || _lastManual is { } last && DateTime.UtcNow - last < ManualCooldown)
         {
             return false;
         }
 
+        _lastManual = DateTime.UtcNow;
         await CheckAsync(ct);
         return true;
     }
@@ -65,7 +70,10 @@ public sealed class ReleaseCheck(IHttpClientFactory httpFactory, AIOPatcherOptio
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
         {
-            LastError = ex.Message;
+            LastError = ex is HttpRequestException { StatusCode: System.Net.HttpStatusCode.Forbidden or System.Net.HttpStatusCode.TooManyRequests }
+                ? L.T("GitHub hat die Abfrage abgelehnt (Limit: 60 Abfragen pro Stunde und IP-Adresse). Später erneut versuchen.",
+                    "GitHub refused the request (limit: 60 requests per hour and IP address). Try again later.")
+                : ex.Message;
             logger.LogWarning("Release check failed: {Message}", ex.Message);
         }
         finally

@@ -104,7 +104,7 @@ public sealed class ScanIntervalTests : IDisposable
             Microsoft.Extensions.Logging.Abstractions.NullLogger<ReleaseCheck>.Instance, _features);
         Assert.False(await check.CheckNowAsync(default));
         Assert.Null(check.CheckedAt);
-        Assert.Equal(TimeSpan.FromMinutes(1), ReleaseCheck.ManualCooldown);
+        Assert.Equal(TimeSpan.FromSeconds(10), ReleaseCheck.ManualCooldown);
     }
 
     [Fact]
