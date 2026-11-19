@@ -395,6 +395,7 @@ services:
       AIOPatcher__AgentPort: "8443"
       AIOPatcher__AgentProxyPort: "8080" # HTTP for your own reverse proxy (Settings → Public access), LAN only
       AIOPatcher__Language: "$LANGUAGE_ARG"
+      AIOPatcher__UpdateCheckRepository: "b0ykoe/AIOPatcher" # new versions are only shown, never installed; "" = off
       TZ: "$TIMEZONE"
 EOF
   if [ -n "$TRUSTED" ]; then echo "      AIOPatcher__TrustedProxies: \"$TRUSTED\" # only this proxy may pass on the client IP"; fi

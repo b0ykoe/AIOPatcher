@@ -63,10 +63,13 @@ public sealed class AIOPatcherOptions
     public bool AgentAutoUpdate { get; set; } = true;
 
     /// <summary>
-    /// GitHub-Repository ("owner/name"), dessen Releases auf neue AIOPatcher-Versionen geprüft werden.
-    /// Leer = keine Prüfung. Es wird nichts automatisch installiert.
+    /// GitHub-Repository ("owner/name"), dessen Releases auf neue AIOPatcher-Versionen geprüft werden. Standard: das
+    /// offizielle Repository (fehlte bis 0.14.5 in Installationen per setup.sh, die dann nie prüften). Leer = keine
+    /// Prüfung. Es wird nichts automatisch installiert.
     /// </summary>
-    public string? UpdateCheckRepository { get; set; }
+    public string? UpdateCheckRepository { get; set; } = DefaultUpdateCheckRepository;
+
+    public const string DefaultUpdateCheckRepository = "b0ykoe/AIOPatcher";
 
     /// <summary>
     /// Funktionen, die im Dashboard nicht eingeschaltet werden können (kommagetrennt), z. B. "AppUpdates,OpnsenseUpdates".

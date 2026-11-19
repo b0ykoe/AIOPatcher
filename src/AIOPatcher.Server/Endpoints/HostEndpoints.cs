@@ -229,7 +229,7 @@ public static class HostEndpoints
         api.MapPost("/server/check-update", async (ReleaseCheck releases, CancellationToken ct) =>
         {
             var checkedNow = await releases.CheckNowAsync(ct);
-            return Results.Ok(new { checkedNow, checkedAt = releases.CheckedAt, error = releases.LastError, latestVersion = releases.Latest?.Version, updateAvailable = releases.UpdateAvailable });
+            return Results.Ok(new { checkedNow, checkedAt = releases.CheckedAt, error = releases.NotPossibleReason() ?? releases.LastError, latestVersion = releases.Latest?.Version, updateAvailable = releases.UpdateAvailable });
         }).RequireAuthorization(UserAccounts.AdminPolicy);
         op.MapPost("/hosts/{id:guid}/revoke", RevokeHost);
         op.MapPost("/hosts/{id:guid}/agent-update/retry", RetryAgentUpdate);

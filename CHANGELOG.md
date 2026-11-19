@@ -8,6 +8,17 @@ Written for users, not as a list of commits.
 
 ## [Unreleased]
 
+### Fixed
+- **Installations made with the setup script never looked for new versions:** the GitHub repository for the version
+  check was missing in the generated configuration, so neither the update notice nor **Check now** ever found a new
+  release (and **Check now** wrongly said "up to date"). The official repository is now the default; set
+  `AIOPatcher__UpdateCheckRepository` to an empty value to turn the check off. **Check now** says clearly when it cannot
+  check.
+
+### Upgrade notes
+- Servers installed with the setup script get this version once by hand (`sudo aiopatcher-update`); after that the
+  update notice and **Update now** work.
+
 ## [0.14.5] - 2026-11-19
 
 ### Improved

@@ -38,8 +38,7 @@ public sealed class ReleaseCheck(IHttpClientFactory httpFactory, AIOPatcherOptio
     /// </summary>
     public async Task<bool> CheckNowAsync(CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(options.UpdateCheckRepository) || !features.IsOn(Feature.ReleaseCheck)
-            || _lastManual is { } last && DateTime.UtcNow - last < ManualCooldown)
+        if (NotPossibleReason() is not null || _lastManual is { } last && DateTime.UtcNow - last < ManualCooldown)
         {
             return false;
         }
@@ -48,6 +47,14 @@ public sealed class ReleaseCheck(IHttpClientFactory httpFactory, AIOPatcherOptio
         await CheckAsync(ct);
         return true;
     }
+
+    /// <summary>Warum gar nicht geprüft wird (für die Meldung am Knopf); null = Prüfung möglich.</summary>
+    public string? NotPossibleReason() =>
+        string.IsNullOrWhiteSpace(options.UpdateCheckRepository)
+            ? L.T("Die Versionsprüfung ist ausgeschaltet (AIOPatcher__UpdateCheckRepository ist leer).", "The version check is off (AIOPatcher__UpdateCheckRepository is empty).")
+            : !features.IsOn(Feature.ReleaseCheck)
+                ? L.T("Der Schalter „Versionsprüfung“ ist aus (Einstellungen → Funktionen & Sicherheit).", "The \"Version check\" switch is off (Settings → Features & security).")
+                : null;
 
     private async Task CheckAsync(CancellationToken ct)
     {

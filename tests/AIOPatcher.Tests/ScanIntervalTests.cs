@@ -104,6 +104,11 @@ public sealed class ScanIntervalTests : IDisposable
             Microsoft.Extensions.Logging.Abstractions.NullLogger<ReleaseCheck>.Instance, _features);
         Assert.False(await check.CheckNowAsync(default));
         Assert.Null(check.CheckedAt);
+        Assert.Contains("UpdateCheckRepository", check.NotPossibleReason());
+
+        // Standard ist das offizielle Repository (Installationen per setup.sh setzten es bis 0.14.5 nicht und prüften nie)
+        Assert.Equal("b0ykoe/AIOPatcher", new AIOPatcherOptions().UpdateCheckRepository);
+        Assert.Null(new ReleaseCheck(null!, new AIOPatcherOptions(), Microsoft.Extensions.Logging.Abstractions.NullLogger<ReleaseCheck>.Instance, _features).NotPossibleReason());
         Assert.Equal(TimeSpan.FromSeconds(10), ReleaseCheck.ManualCooldown);
     }
 
