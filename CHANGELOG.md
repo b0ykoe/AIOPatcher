@@ -8,6 +8,8 @@ Written for users, not as a list of commits.
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-11-19
+
 ### Added
 - **Monitoring clients (Wazuh, Checkmk):** AIOPatcher installs, updates, reconfigures and uninstalls the Wazuh and
   Checkmk clients on your hosts, on Windows and Linux, including legacy clients on old systems. Add a Wazuh manager or a
