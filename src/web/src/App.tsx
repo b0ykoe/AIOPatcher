@@ -71,6 +71,7 @@ import { CveLookupPage, normalizeCveId } from "./pages/CveLookupPage";
 import { RunPage } from "./pages/RunPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { SetupPage } from "./pages/SetupPage";
+import { SharedSitePage } from "./pages/SharedSitePage";
 import { SitePicker, SiteScopeProvider } from "./siteScope";
 
 type AuthState =
@@ -377,6 +378,7 @@ function Shell({ me, onMeChanged, onLoggedOut }: { me: Me; onMeChanged: (me: Me)
               <Route path="/" element={<OverviewPage />} />
               <Route path="/hosts" element={<HostsPage />} />
               <Route path="/hosts/:id" element={<HostDetailPage />} />
+              <Route path="/shared/:id" element={<SharedSitePage />} />
               <Route path="/jobs/:id" element={<JobPage />} />
               <Route path="/runs/:id" element={<RunPage />} />
               <Route path="/utilization" element={<UtilizationPage />} />

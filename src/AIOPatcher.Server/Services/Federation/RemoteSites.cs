@@ -85,13 +85,13 @@ public sealed class RemoteSites(AppDbContext db, FederationClient client, Server
         {
             // Schon verbunden (andere Site derselben Instanz): mit dem vorhandenen Zertifikat signieren.
             instance.BaseUrl = parsed.BaseUrl;
-            response = await client.SendAsync<JoinResponse>(Target(instance), HttpMethod.Post, FederationProtocol.JoinPath, request, ct);
+            response = await JoinAsync(Target(instance), request, sign: true, ct);
         }
         else
         {
             var key = client.CreateKey();
             var target = new FederationTarget(parsed.BaseUrl, parsed.CaFingerprint, info.CaCertificatePem, null, null);
-            response = await client.SendAsync<JoinResponse>(target, HttpMethod.Post, FederationProtocol.JoinPath, request with { CsrPem = key.CsrPem }, ct, sign: false);
+            response = await JoinAsync(target, request with { CsrPem = key.CsrPem }, sign: false, ct);
             if (response.CertificatePem is null)
             {
                 throw new FederationException(0, "No certificate in the answer.");
@@ -137,6 +137,33 @@ public sealed class RemoteSites(AppDbContext db, FederationClient client, Server
         await TrySnapshotAsync(instance, site, now, notify: false, ct);
         await db.SaveChangesAsync(ct);
         return site;
+    }
+
+    /// <summary>Annahme bei A; dessen (englische, sprachneutrale) Ablehnungen in die Sprache dieser Instanz übersetzen.</summary>
+    private async Task<JoinResponse> JoinAsync(FederationTarget target, JoinRequest request, bool sign, CancellationToken ct)
+    {
+        try
+        {
+            return await client.SendAsync<JoinResponse>(target, HttpMethod.Post, FederationProtocol.JoinPath, request, ct, sign);
+        }
+        catch (FederationException ex) when (ex.Status is 403 or 404 or 429)
+        {
+            throw new FederationException(ex.Status, JoinError(ex));
+        }
+    }
+
+    public static string JoinError(FederationException ex)
+    {
+        var left = System.Text.RegularExpressions.Regex.Match(ex.Message, @"\((\d+) attempts left\)");
+        return ex.Status switch
+        {
+            404 => L.T("Einladung ungültig, schon benutzt oder abgelaufen. Bitte um eine neue.", "Invite is invalid, already used or expired. Ask for a new one."),
+            429 => L.T("Zu viele Versuche. Bitte kurz warten.", "Too many attempts. Please wait a moment."),
+            403 when left.Success => L.T($"Falscher Code (noch {left.Groups[1].Value} Versuche).", $"Wrong code ({left.Groups[1].Value} attempts left)."),
+            403 when ex.Message.Contains("no longer valid", StringComparison.Ordinal) =>
+                L.T("Falscher Code. Die Einladung ist jetzt ungültig; bitte um eine neue.", "Wrong code. The invite is no longer valid; ask for a new one."),
+            _ => ex.Message,
+        };
     }
 
     private static void Apply(RemoteSite site, ShareInfo share)

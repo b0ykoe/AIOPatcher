@@ -1,9 +1,10 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { useLocation, useSearchParams } from "react-router";
+import { useLocation, useNavigate, useSearchParams } from "react-router";
 import { ActionIcon, Badge, Box, Button, Group, Menu, Text } from "@mantine/core";
-import { IconBuildingCommunity, IconCheck, IconChevronDown, IconWorld } from "@tabler/icons-react";
+import { IconBuildingCommunity, IconCheck, IconChevronDown, IconShare, IconWorld } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import { api, type Site } from "./api";
+import { remoteStatusColor, type RemoteSiteItem } from "./sharing";
 
 // Globale Site-Auswahl: gilt für alle Seiten, steht in der URL (?site=) und wird im Browser gemerkt.
 
@@ -39,6 +40,8 @@ interface SiteScopeValue {
   site: Site | null;
   /** null, solange noch nicht geladen */
   sites: Site[] | null;
+  /** Geteilte Sites anderer Instanzen (Site-Sharing): kein Filter, sondern eine eigene Seite (/shared/:id). */
+  remoteSites: RemoteSiteItem[];
   setSiteId: (siteId: string | null) => void;
   reloadSites: () => void;
   /** API-Pfad mit siteId der aktuellen Auswahl; ändert sich mit der Auswahl (taugt als Effekt-Abhängigkeit). */
@@ -46,7 +49,7 @@ interface SiteScopeValue {
 }
 
 const SiteScopeContext = createContext<SiteScopeValue>({
-  siteId: null, site: null, sites: null, setSiteId: () => {}, reloadSites: () => {}, scoped: (p) => p,
+  siteId: null, site: null, sites: null, remoteSites: [], setSiteId: () => {}, reloadSites: () => {}, scoped: (p) => p,
 });
 
 export const useSiteScope = () => useContext(SiteScopeContext);
@@ -57,11 +60,13 @@ export function SiteScopeProvider({ children }: { children: ReactNode }) {
   const urlSite = params.get(param);
   const [siteId, setState] = useState<string | null>(() => urlSite ?? readStored());
   const [sites, setSites] = useState<Site[] | null>(null);
+  const [remoteSites, setRemoteSites] = useState<RemoteSiteItem[]>([]);
   // Ziel einer eigenen Änderung: bis die URL nachgezogen hat, nicht aus der (alten) URL übernehmen.
   const pending = useRef<string | null | undefined>(undefined);
 
   const reloadSites = useCallback(() => {
     void api.get<Site[]>("/api/sites").then(setSites).catch(() => {});
+    void api.get<RemoteSiteItem[]>("/api/remote-sites").then(setRemoteSites).catch(() => setRemoteSites([]));
   }, []);
 
   // Beim Seitenwechsel neu laden: neue oder gelöschte Sites (Einstellungen) sollen gleich auftauchen.
@@ -107,10 +112,11 @@ export function SiteScopeProvider({ children }: { children: ReactNode }) {
     siteId,
     site: sites?.find((s) => s.id === siteId) ?? null,
     sites,
+    remoteSites,
     setSiteId,
     reloadSites,
     scoped: (path: string) => withSite(path, siteId),
-  }), [siteId, sites, setSiteId, reloadSites]);
+  }), [siteId, sites, remoteSites, setSiteId, reloadSites]);
 
   return <SiteScopeContext.Provider value={value}>{children}</SiteScopeContext.Provider>;
 }
@@ -121,8 +127,9 @@ export function SiteScopeProvider({ children }: { children: ReactNode }) {
  */
 export function SitePicker({ compact = false }: { compact?: boolean }) {
   const { t } = useTranslation();
-  const { siteId, site, sites, setSiteId, reloadSites } = useSiteScope();
-  if (!sites || (sites.length < 2 && !siteId)) return null;
+  const { siteId, site, sites, remoteSites, setSiteId, reloadSites } = useSiteScope();
+  const navigate = useNavigate();
+  if (!sites || (sites.length < 2 && !siteId && remoteSites.length === 0)) return null;
 
   const label = site?.name ?? t("siteScope.all");
   const icon = siteId ? <IconBuildingCommunity size={compact ? 20 : 16} /> : <IconWorld size={compact ? 20 : 16} opacity={0.7} />;
@@ -174,6 +181,23 @@ export function SitePicker({ compact = false }: { compact?: boolean }) {
             <Text size="sm" truncate>{s.name}</Text>
           </Menu.Item>
         ))}
+        {remoteSites.length > 0 && (
+          <>
+            <Menu.Divider />
+            <Menu.Label>{t("sharing.sharedWithMe")}</Menu.Label>
+            {remoteSites.map((r) => (
+              <Menu.Item
+                key={r.id}
+                leftSection={<IconShare size={16} />}
+                rightSection={<Badge size="sm" color={remoteStatusColor[r.status]}>{r.hostCount}</Badge>}
+                onClick={() => navigate(`/shared/${r.id}`)}
+              >
+                <Text size="sm" truncate>{r.name}</Text>
+                <Text size="xs" c="dimmed" truncate>{r.instanceName}</Text>
+              </Menu.Item>
+            ))}
+          </>
+        )}
         <Text size="xs" c="dimmed" px="sm" py={6}>{t("siteScope.hint")}</Text>
       </Menu.Dropdown>
     </Menu>

@@ -336,6 +336,22 @@ public sealed class SiteSharingTests : IDisposable
         Assert.Equal("Ended", RemoteSites.Status(site, _now));
     }
 
+    [Fact]
+    public void JoinErrors_FromOtherInstanceAreTranslated()
+    {
+        L.Use("de");
+        try
+        {
+            Assert.Equal("Falscher Code (noch 3 Versuche).", RemoteSites.JoinError(new FederationException(403, "Wrong code (3 attempts left).")));
+            Assert.Contains("jetzt ungültig", RemoteSites.JoinError(new FederationException(403, "Wrong code. The invite is no longer valid.")));
+            Assert.Contains("abgelaufen", RemoteSites.JoinError(new FederationException(404, "Invite is invalid, used or expired.")));
+        }
+        finally
+        {
+            L.Use("en");
+        }
+    }
+
     /// <summary>Minimaler Service-Provider für das Gate (liest nur die Optionen).</summary>
     private sealed class SingleService(AIOPatcherOptions options) : IServiceProvider
     {

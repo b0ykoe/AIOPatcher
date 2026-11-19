@@ -80,7 +80,7 @@ public sealed class SharingService(
                     L.T($"Einladung für {invite.Site.Name} ungültig", $"Invite for {invite.Site.Name} burned"),
                     L.T($"{FederationProtocol.MaxFailedCodes} falsche Codes. Die Einladung ist ungültig; bei Bedarf eine neue erstellen.",
                         $"{FederationProtocol.MaxFailedCodes} wrong codes. The invite is no longer valid; create a new one if needed."),
-                    NotificationSeverity.Warning, SiteId: invite.SiteId, LinkPath: "/settings?tab=sharing"));
+                    NotificationSeverity.Warning, SiteId: invite.SiteId, LinkPath: "/settings/sharing"));
                 await db.SaveChangesAsync(ct);
                 return FederationResult<JoinResponse>.Fail(StatusCodes.Status403Forbidden, "Wrong code. The invite is no longer valid.");
             }
@@ -148,7 +148,7 @@ public sealed class SharingService(
         notifier.Publish(new Notification(NotificationEvents.SharingActivity,
             L.T($"{peer.Name} hat {invite.Site.Name} angenommen", $"{peer.Name} accepted {invite.Site.Name}"),
             L.T($"Die Site ist jetzt mit der Instanz {peer.Name} geteilt ({share.Level}).", $"The site is now shared with the instance {peer.Name} ({share.Level})."),
-            NotificationSeverity.Info, SiteId: invite.SiteId, LinkPath: "/settings?tab=sharing"));
+            NotificationSeverity.Info, SiteId: invite.SiteId, LinkPath: "/settings/sharing"));
         await db.SaveChangesAsync(ct);
 
         return new FederationResult<JoinResponse>(new JoinResponse(peer.Id, certificatePem, ToInfo(share, invite.Site)));
@@ -193,7 +193,7 @@ public sealed class SharingService(
         notifier.Publish(new Notification(NotificationEvents.SharingActivity,
             L.T($"{peer.Name} hat {share.Site?.Name} entfernt", $"{peer.Name} removed {share.Site?.Name}"),
             L.T("Die Freigabe ist beendet.", "The share has ended."),
-            NotificationSeverity.Info, SiteId: share.SiteId, LinkPath: "/settings?tab=sharing"));
+            NotificationSeverity.Info, SiteId: share.SiteId, LinkPath: "/settings/sharing"));
         await db.SaveChangesAsync(ct);
     }
 

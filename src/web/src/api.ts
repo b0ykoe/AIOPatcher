@@ -737,6 +737,7 @@ export const notificationEvents = [
   "ContainerStopped",
   "MonitoringDisconnected",
   "BackupProblem",
+  "SharingActivity",
 ] as const;
 export type NotificationEvent = (typeof notificationEvents)[number];
 
@@ -764,6 +765,7 @@ export interface NotificationChannel {
   config: ChannelConfig;
   lastSentAt: string | null;
   lastError: string | null;
+  remoteSiteId: string | null;
 }
 
 // --- Regeln: Patchpausen und zurückgehaltene Updates ---------------------------------------------

@@ -44,6 +44,7 @@ import {
   type NotificationEvent,
   type Site,
 } from "../../api";
+import type { RemoteSiteItem } from "../../sharing";
 import { confirmAction, EmptyState, errorText, notifyError, notifySuccess } from "../ui";
 import { GuidePanel } from "../GuidePanel";
 
@@ -64,6 +65,7 @@ export function NotificationSettings() {
   const { t } = useTranslation();
   const [channels, setChannels] = useState<NotificationChannel[] | null>(null);
   const [sites, setSites] = useState<Site[]>([]);
+  const [remoteSites, setRemoteSites] = useState<RemoteSiteItem[]>([]);
   const [editing, setEditing] = useState<NotificationChannel | "new" | null>(null);
   const [picking, setPicking] = useState(false);
   const [newType, setNewType] = useState<ChannelType>("Ntfy");
@@ -83,6 +85,7 @@ export function NotificationSettings() {
   useEffect(() => {
     load();
     void api.get<Site[]>("/api/sites").then(setSites).catch(() => {});
+    void api.get<RemoteSiteItem[]>("/api/remote-sites").then(setRemoteSites).catch(() => {});
   }, [load]);
 
   const test = async (c: NotificationChannel) => {
@@ -152,7 +155,9 @@ export function NotificationSettings() {
                   <div>
                     <Text fw={700}>{c.name}</Text>
                     <Text size="xs" c="dimmed">
-                      {t(`notifications.type${c.type}`)} · {c.siteId ? sites.find((s) => s.id === c.siteId)?.name ?? "?" : t("notifications.allSites")}
+                      {t(`notifications.type${c.type}`)} · {c.remoteSiteId
+                        ? `${remoteSites.find((r) => r.id === c.remoteSiteId)?.name ?? "?"} (${t("sharing.badgeShared")})`
+                        : c.siteId ? sites.find((s) => s.id === c.siteId)?.name ?? "?" : t("notifications.allSites")}
                     </Text>
                   </div>
                 </Group>
@@ -197,7 +202,7 @@ export function NotificationSettings() {
       </div>
 
       <ChannelTypePicker opened={picking} onClose={() => setPicking(false)} onPick={(type) => { setPicking(false); setNewType(type); setEditing("new"); }} />
-      <ChannelModal channel={editing} initialType={newType} sites={sites} onClose={() => setEditing(null)} onSaved={load} />
+      <ChannelModal channel={editing} initialType={newType} sites={sites} remoteSites={remoteSites} onClose={() => setEditing(null)} onSaved={load} />
     </Stack>
   );
 }
@@ -227,8 +232,8 @@ export function ChannelTypePicker({ opened, onClose, onPick }: { opened: boolean
   );
 }
 
-export function ChannelModal({ channel, sites, onClose, onSaved, initialType = "Ntfy" }: {
-  channel: NotificationChannel | "new" | null; sites: Site[]; onClose: () => void; onSaved: () => void; initialType?: ChannelType;
+export function ChannelModal({ channel, sites, remoteSites = [], onClose, onSaved, initialType = "Ntfy" }: {
+  channel: NotificationChannel | "new" | null; sites: Site[]; remoteSites?: RemoteSiteItem[]; onClose: () => void; onSaved: () => void; initialType?: ChannelType;
 }) {
   const { t } = useTranslation();
   const [name, setName] = useState("");
@@ -250,7 +255,8 @@ export function ChannelModal({ channel, sites, onClose, onSaved, initialType = "
     } else {
       setName(channel.name);
       setType(channel.type);
-      setSiteId(channel.siteId);
+      // Geteilte Site einer anderen Instanz als "remote:<id>" in derselben Auswahl
+      setSiteId(channel.remoteSiteId ? `remote:${channel.remoteSiteId}` : channel.siteId);
       setEvents(channel.events);
       setConfig(channel.config);
     }
@@ -266,7 +272,8 @@ export function ChannelModal({ channel, sites, onClose, onSaved, initialType = "
   const save = async () => {
     setBusy(true);
     setError(null);
-    const body = { name, type, enabled: channel === "new" ? true : channel?.enabled ?? true, events, siteId, config };
+    const remote = siteId?.startsWith("remote:") ? siteId.slice("remote:".length) : null;
+    const body = { name, type, enabled: channel === "new" ? true : channel?.enabled ?? true, events, siteId: remote ? null : siteId, remoteSiteId: remote, config };
     try {
       if (channel === "new") await api.post("/api/notification-channels", body);
       else if (channel) await api.put(`/api/notification-channels/${channel.id}`, body);
@@ -344,7 +351,14 @@ export function ChannelModal({ channel, sites, onClose, onSaved, initialType = "
 
         <Select
           label={t("notifications.site")}
-          data={[{ value: "", label: t("notifications.allSites") }, ...sites.map((s) => ({ value: s.id, label: s.name }))]}
+          data={[
+            { value: "", label: t("notifications.allSites") },
+            ...sites.map((s) => ({ value: s.id, label: s.name })),
+            ...(remoteSites.length > 0
+              ? [{ group: t("sharing.sharedWithMe"), items: remoteSites.map((r) => ({ value: `remote:${r.id}`, label: `${r.name} (${r.instanceName})` })) }]
+              : []),
+          ]}
+          description={remoteSites.length > 0 ? t("sharing.notifySiteHint") : undefined}
           value={siteId ?? ""}
           onChange={(v) => setSiteId(v || null)}
           allowDeselect={false}

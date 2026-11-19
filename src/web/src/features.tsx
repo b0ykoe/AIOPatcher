@@ -27,7 +27,8 @@ export type Feature =
   | "AutoUpdateControl"
   | "Metrics"
   | "MonitoringClients"
-  | "BackupJobChecks";
+  | "BackupJobChecks"
+  | "SiteSharing";
 
 export interface FeatureState {
   feature: Feature;

@@ -20,6 +20,17 @@ Written for users, not as a list of commits.
   links you share open the same view. On phones it is the building icon next to the theme switch. The separate site
   fields on Hosts and Reports are gone; IPAM uses the chosen site. The list endpoints of the API accept the same
   optional `siteId` parameter.
+- **Share a site with another AIOPatcher instance:** under Settings → Sites, **Share** creates an invite for one
+  site: a link (send it by email or chat) and a code (send it another way). Your colleague pastes both into their own
+  instance under **Add shared site**, whenever it suits them; after 5 wrong codes the invite is invalid. The site then
+  shows up in their dashboard under **Shared with me** (also in the site picker) with hosts, pending updates, reboot
+  status and jobs, synced every 5 minutes. When sharing you choose once what they may do (view, scan, patch, reboot)
+  and which extras they see (update list, job logs); this cannot be changed later, only ended under
+  Settings → Sharing. Actions from the other instance run like your own jobs: your feature switches and each host's
+  `policy.json` still decide, firewall/SSH/user changes and settings are never possible, and every job shows who
+  started it (`peer:<instance>/<user>`) in the jobs and audit log on both sides. Notifications for a shared site can
+  be chosen per channel; the new event **Site sharing** tells you when an invite is accepted or burned, the share
+  ends or the other instance starts a job.
 
 ### Improved
 - **Setup uses the release image:** `setup.sh` now pulls the prebuilt image from GitHub (ghcr.io) instead of building
@@ -46,6 +57,9 @@ Written for users, not as a list of commits.
 - Update recipes need the new agent (it updates itself) and must be allowed on each host once:
   `sudo aiopatcher-agent policy set allowUpdateRecipes true`. Until then the notice shows this command instead of the
   button. Single containers of a mailcow project can no longer be pulled one by one.
+- Site sharing is off by default. The instance that shares turns on **Share sites** (Settings → Features) and needs
+  an external dashboard address (Settings → Public access), because the other instance connects to its dashboard.
+  Both instances need this version.
 
 ## [0.13.0] - 2026-11-19
 
