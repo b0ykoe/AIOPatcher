@@ -148,6 +148,12 @@ public sealed class ManagedHost
     /// <summary>Proxmox: "node/qemu/101" bzw. "node/lxc/105". Hetzner Cloud: Server-ID.</summary>
     public string? ExternalId { get; set; }
 
+    /// <summary>
+    /// Zuordnung von Hand gesetzt oder von Hand gelöst. Auto-Map fasst solche Hosts nicht an, ein gelöster Host bleibt
+    /// also ohne Zuordnung, bis man ihn wieder von Hand zuordnet.
+    /// </summary>
+    public bool MappingManual { get; set; }
+
     /// <summary>KEV-CVEs, zu denen für diesen Host schon benachrichtigt wurde (kommagetrennt).</summary>
     public string? NotifiedKevCves { get; set; }
 
