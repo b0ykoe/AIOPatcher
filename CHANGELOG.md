@@ -8,16 +8,22 @@ Written for users, not as a list of commits.
 
 ## [Unreleased]
 
+## [0.14.2] - 2026-11-19
+
+### Improved
+- **Excluded hosts at a glance:** below the patch plans a card **Not patched automatically** lists every excluded
+  host with **Assign automatically again**, and **Exclude host** adds more. It has no schedule, so it can never patch
+  them by accident. Two or three plans now fill the full width instead of leaving an empty column.
+
 ### Fixed
 - **"Remove from all plans" now really removes a host:** before, a host stayed in a plan when a rule (tag, site) or
   **all others** picked it up, so e.g. the Proxmox host kept getting automatic updates. Now it is excluded from every
   plan, rules included, and its plan card says **excluded**. **Assign automatically again** on the host lifts that;
   assigning it to a plan does too. Excluded hosts no longer count as "without a plan" in the overview.
 
-### Improved
-- **Excluded hosts at a glance:** below the patch plans a card **Not patched automatically** lists every excluded
-  host with **Assign automatically again**, and **Exclude host** adds more. It has no schedule, so it can never patch
-  them by accident. Two or three plans now fill the full width instead of leaving an empty column.
+### Upgrade notes
+- Hosts you removed from all plans before this version are not excluded yet: on the plans page use **Exclude host**
+  (or on the host **Change plan → Remove from all plans**) once more.
 
 ## [0.14.1] - 2026-11-19
 
