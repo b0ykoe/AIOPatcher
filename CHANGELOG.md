@@ -8,6 +8,25 @@ Written for users, not as a list of commits.
 
 ## [Unreleased]
 
+### Added
+- **Monitoring clients (Wazuh, Checkmk):** AIOPatcher installs, updates, reconfigures and uninstalls the Wazuh and
+  Checkmk clients on your hosts, on Windows and Linux, including legacy clients on old systems. Add a Wazuh manager or a
+  Checkmk site under **Settings → Integrations → Monitoring targets** (per site or for all hosts). **Inventory →
+  Monitoring** shows every host's client (matches, other target, outdated, disconnected, not installed) and points
+  them to a new manager or site in one go, after testing on one host first. Before every change the agent backs up the
+  configuration and restores it if the client does not connect afterwards. The Wazuh manager and the Checkmk site
+  themselves are not managed.
+- Packages come from the AIOPatcher server: Wazuh from packages.wazuh.com in the manager's version (checked against
+  Wazuh's checksum, held so normal patching does not upgrade it past the manager), Checkmk from the site itself.
+- Notification **Monitoring client disconnected**.
+
+### Upgrade notes
+- Everything is off by default: turn on **Manage monitoring clients** under **Settings → Features & security**, and
+  allow it on each host with `aiopatcher-agent policy set allowMonitoringChanges true`.
+- Agents need this version; they update themselves. Lite agents (Ubuntu 16.04, Debian 9, Windows Server 2008 R2,
+  Windows 7) need the install command run again.
+- Choose the new notification for your channels under **Settings → Notifications**.
+
 ## [0.10.0] - 2026-11-19
 
 ### Added

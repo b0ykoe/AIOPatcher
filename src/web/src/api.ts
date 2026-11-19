@@ -871,6 +871,8 @@ export interface MonitoringHostRow {
   changesAllowed: boolean | null;
   scannedAt: string | null;
   products: MonitoringProductState[];
+  /** Lite-Agent (Python/PowerShell-Skript): Freigabe direkt in policy.json */
+  liteAgent: boolean;
 }
 
 export interface MonitoringOverview {

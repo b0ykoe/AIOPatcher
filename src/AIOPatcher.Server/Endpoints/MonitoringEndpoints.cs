@@ -39,7 +39,7 @@ public static class MonitoringEndpoints
     /// <param name="AgentSupports">Agent kennt das Modul monitoring (sonst zu alt).</param>
     /// <param name="ChangesAllowed">policy.json allowMonitoringChanges laut letztem Status (null = noch nicht gemeldet).</param>
     public sealed record HostRowDto(Guid HostId, string HostName, Guid SiteId, string? SiteName, OsFamily OsFamily, string? OsName, DateTime? LastSeenAt,
-        bool AgentSupports, bool? ChangesAllowed, DateTime? ScannedAt, IReadOnlyList<ProductStateDto> Products);
+        bool AgentSupports, bool? ChangesAllowed, DateTime? ScannedAt, IReadOnlyList<ProductStateDto> Products, bool LiteAgent = false);
 
     public sealed record OverviewDto(bool Enabled, IReadOnlyList<TargetDto> Targets, IReadOnlyList<HostRowDto> Hosts);
 
@@ -94,7 +94,8 @@ public static class MonitoringEndpoints
             })
             .ToList();
         return new HostRowDto(host.Id, host.Name, host.SiteId, host.Site?.Name, host.OsFamily, host.OsName, host.LastSeenAt,
-            ModuleJson.Supports(host, AgentModules.Monitoring, ModuleActions.Change), host.MonitoringChangesAllowed, host.MonitoringScannedAt, products);
+            ModuleJson.Supports(host, AgentModules.Monitoring, ModuleActions.Change), host.MonitoringChangesAllowed, host.MonitoringScannedAt, products,
+            host.AgentVersion?.EndsWith("-lite", StringComparison.Ordinal) == true);
     }
 
     private static TargetDto ToDto(MonitoringTarget t) => new(

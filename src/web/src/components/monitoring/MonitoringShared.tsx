@@ -71,7 +71,14 @@ export function blockReason(t: TFunction, row: MonitoringHostRow): string | null
   return null;
 }
 
-export function PolicyCommand({ os }: { os: OsFamily }) {
+export function PolicyCommand({ os, lite = false }: { os: OsFamily; lite?: boolean }) {
+  if (lite) {
+    return (
+      <Code block fz="xs">
+        {`${os === "Windows" ? "C:\\ProgramData\\AIOPatcher\\Agent\\policy.json" : "/var/lib/aiopatcher-agent/policy.json"}\n"allowMonitoringChanges": true`}
+      </Code>
+    );
+  }
   return (
     <Code block fz="xs">
       {os === "Windows"

@@ -193,7 +193,7 @@ tested against real systems, but against mocked APIs and unit tests):
 | Windows Server 2008 R2 SP1, Windows 7 SP1 | **Lite agent** (PowerShell 5.1 and .NET Framework 4.8) |
 
 The install commands pick the Lite agent automatically (to force it: `--lite` or `-Lite`). It only does the
-essentials: system data, scanning and installing updates, reboots, certificate renewal. No self-update (update via the
+essentials: system data, scanning and installing updates, reboots, certificate renewal, monitoring clients (Wazuh, Checkmk). No self-update (update via the
 install command), no programs, containers or compliance. It is a pull agent like the full one.
 
 - **Linux:** Python 3.5+ and `openssl` are preinstalled on Ubuntu 16.04/Debian 9. Service `aiopatcher-agent`
@@ -418,6 +418,7 @@ every switch itself, also for API tokens and patch plans; hidden buttons are onl
 | Manage firewalls | **off** | Rule sets cannot be rolled out. |
 | Fix SSH/RDP | **off** | Recommendations cannot be applied by click. |
 | Manage users | **off** | No locking, admin rights, passwords or SSH keys via the dashboard. |
+| Manage monitoring clients | **off** | Wazuh and Checkmk clients cannot be installed, pointed to a new target or uninstalled (their state is still shown). |
 
 Every change ends up in the audit log. Changing switches only works with a browser login as admin, not with an API token.
 Anything that should never be turned on, you lock on the server, e.g. in the `.env` next to the `docker-compose.yml`:
@@ -457,6 +458,7 @@ Every function is a **module** with fixed actions. The agent rejects any other t
 | `firewall`, `remoteaccess` | `status`, `change` |
 | `users` | `list`, `change` |
 | `agent` | `update` (self-update), `renew` (client certificate) |
+| `monitoring` | `status` (installed Wazuh/Checkmk clients), `change` (install, point to a target, uninstall) |
 
 Modules can be turned off **per host** in the dashboard (host → *Agent & modules*). The server then no longer assigns
 tasks for them. On the host itself, `policy.json` locks modules for good:
@@ -544,6 +546,60 @@ for reverting. AIOPatcher does not touch values set by Group Policy.
 (keys, cron jobs and `su` from sudo remain). Passwords are stored on the server only in encrypted form until they are handed
 to the agent, never appear in the log or audit log, and are deleted even for cancelled or rejected jobs.
 
+## Monitoring clients (Wazuh, Checkmk)
+
+AIOPatcher manages the **clients** of Wazuh and Checkmk on the hosts: install and update them, show their state,
+point them to a manager or site, and uninstall them. It does not manage the Wazuh manager, the Checkmk site or their
+dashboards.
+
+**Targets** (*Settings → Integrations → Monitoring targets*): one Wazuh manager and one Checkmk site per site of
+AIOPatcher, or one for all hosts without their own target.
+
+- **Wazuh:** manager address, port, protocol, agent groups and the manager version. Enrollment is either *Enroll
+  again* (new agent ID, optional enrollment password) or *Keys copied* (you copied `client.keys` to the new manager;
+  only the address changes).
+- **Checkmk:** site URL (e.g. `https://cmk.example.com/mysite`), site version, agent receiver port, registration user
+  and password. For legacy agents without a controller, the IPs of the site (`only_from`).
+
+**Inventory → Monitoring** lists every host with a client or a target: *matches*, *other target*, *outdated*,
+*disconnected* or *not installed*. Actions run per host or for all affected hosts; *Test on … first* starts a single
+host, then the rest. A client that loses its connection triggers the notification *Monitoring client disconnected*.
+
+What the agent detects and changes:
+
+| Client | Detection | Point to the target |
+|---|---|---|
+| Wazuh 3.x/4.x | `ossec.conf` with `<client><server><address>` | Set address, port, protocol. *Enroll again*: empty `client.keys`, set `<enrollment>` (4.x) or run `agent-auth` (3.x). Restart, wait up to 5 minutes for "connected". |
+| Wazuh 5 | `<agent><manager><endpoint>` | Set the endpoint (*Keys copied* only; token enrollment is not supported yet). |
+| OSSEC / Wazuh before 3.0 | `<server-ip>` / `<server-hostname>` | Set the value, `agent-auth`. |
+| Checkmk 2.1+ with agent controller | `cmk-agent-ctl status` | `cmk-agent-ctl register` with the new site, then remove the old registrations. The host must exist in the site. |
+| Checkmk legacy (xinetd, Windows without controller) | `only_from` in xinetd or `check_mk.user.yml` | Set `only_from` to the site IPs. Whether the site can query the agent cannot be checked from the host. |
+| Checkmk 1.x on Windows (`check_mk.ini`) | shown only | Update the client first. |
+
+Before every change the agent backs up the configuration (`monitoring-backup` in its data folder). If the client
+does not connect afterwards, it restores the previous state. Uninstalling also keeps a backup, so a reinstall can
+reuse the identity; the host stays listed in the manager or site until you remove it there.
+
+**Packages** come from the AIOPatcher server, which downloads them once and hands them to the agents over their
+own connection (hosts need no internet access):
+
+- **Wazuh:** `packages.wazuh.com` in exactly the manager version (`.deb` for amd64/arm64, `.msi`), checked
+  against Wazuh's SHA-512 checksum; the MSI must be signed by Wazuh. Only 4.x so far (the 5.x package source is not
+  official yet). On Linux, `wazuh-agent` is held (`apt-mark hold`) so normal patching does not lift it above the
+  manager version; *Update* installs the target version.
+- **Checkmk:** the agent package of the site (`/check_mk/agents/`), so the version matches the site. Windows versions
+  the site's agent no longer supports (2.2: before Server 2012, 2.3 and later: before Server 2016) need a
+  *legacy package URL* in the target, e.g. the MSI of a 2.1 agent.
+
+Everything is off by default: the switch *Manage monitoring clients*, the Admin role, and **every host must allow it**:
+
+```bash
+sudo aiopatcher-agent policy set allowMonitoringChanges true
+```
+
+Lite agents have no `policy set` command: add `"allowMonitoringChanges": true` to their `policy.json` instead. Reading the state works without that. During registration, the Checkmk password briefly appears in the host's process
+list (`cmk-agent-ctl` only reads it from the command line or interactively).
+
 ## Local policy on the host
 
 When registering, the agent creates `policy.json` next to its certificates
@@ -560,6 +616,7 @@ The server cannot change it; it is read again for every job.
   "allowSystemChanges": false,
   "allowSourceFixes": true,
   "allowAutoUpdateChanges": true,
+  "allowMonitoringChanges": false,
   "disabledModules": []
 }
 ```
@@ -568,7 +625,7 @@ The server cannot change it; it is read again for every job.
 e.g. on the Proxmox host itself or the OPNsense VM. `"allowSelfUpdate": false` prevents the agent from installing
 signed updates itself. `"trustServerUpdates": false` only allows updates with a release signature
 (see [Agent updates](#agent-updates)). `"allowSystemChanges": true` allows changes to the firewall, SSH/RDP and
-users (see [Compliance](#compliance-firewall-sshrdp-users), off by default). `"allowSourceFixes": false` prevents the agent from disabling broken package sources (see [Broken package sources](#broken-package-sources-apt)). `"allowAutoUpdateChanges": false` prevents the dashboard from turning unattended-upgrades or Windows Update off or on (see [Auto-patch](#auto-patch)). `"allowAppUpdates": false` forbids program updates via winget and container updates on this host
+users (see [Compliance](#compliance-firewall-sshrdp-users), off by default). `"allowSourceFixes": false` prevents the agent from disabling broken package sources (see [Broken package sources](#broken-package-sources-apt)). `"allowAutoUpdateChanges": false` prevents the dashboard from turning unattended-upgrades or Windows Update off or on (see [Auto-patch](#auto-patch)). `"allowMonitoringChanges": true` allows installing, reconfiguring and uninstalling Wazuh and Checkmk clients (see [Monitoring clients](#monitoring-clients-wazuh-checkmk), off by default). `"allowAppUpdates": false` forbids program updates via winget and container updates on this host
 (both also need `allowPatch: All`). The policy applies in addition to the switches in the dashboard: only what both
 allow is executed.
 

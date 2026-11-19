@@ -73,7 +73,7 @@ export function HostMonitoringCard({ hostId }: { hostId: string }) {
         {enabled && can.admin && blocked && (
           <Alert color="orange" p="xs">
             <Text size="xs" mb={row.changesAllowed === false ? 6 : 0}>{blocked}</Text>
-            {row.changesAllowed === false && <PolicyCommand os={row.osFamily} />}
+            {row.changesAllowed === false && <PolicyCommand os={row.osFamily} lite={row.liteAgent} />}
           </Alert>
         )}
       </Stack>
