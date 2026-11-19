@@ -9,6 +9,9 @@ Written for users, not as a list of commits.
 ## [Unreleased]
 
 ### Improved
+- **Add the rest to a group:** next to **All other hosts** in the plan editor, **Add the rest** puts every host that is
+  not in a plan yet into the group's selection, so you see them in the list and can remove single ones, without turning
+  the switch on. Unlike the switch, new hosts do not join automatically.
 - **Host names with their site:** with more than one site, host pickers (patch plans, exclude host, compliance
   baselines, quick plan, VM mapping) show the site next to the name, e.g. **pbs · Homelab**, so hosts with the same name
   can be told apart.

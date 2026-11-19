@@ -1580,6 +1580,8 @@ const en: Translation = {
     bySite: "Only site",
     anySite: "all sites",
     includeOthers: "All other hosts",
+    addLeftover: "Add the rest ({{count}})",
+    addLeftoverHint: "Adds every host that is not in a plan yet to this group as a fixed selection. Unlike the switch, new hosts do not join automatically later.",
     othersHint: "Every host that is in no other plan, including new ones. Only one group can have it.",
     othersTaken: "Plan \"{{name}}\" already has \"all other hosts\".",
     approval: "Ask for approval first",

@@ -88,6 +88,13 @@ export function PlanEditorPage() {
     set({ groups });
   };
 
+  /**
+   * "Übrige hinzufügen": Hosts, die noch in keinem Plan sind und in keiner Gruppe hier ausgewählt (ausgenommene nicht),
+   * fest in die Auswahl übernehmen, statt den Schalter "Alle übrigen Hosts" einzuschalten.
+   */
+  const selectedHere = new Set(draft.groups.flatMap((g) => g.hostIds));
+  const leftover = active.filter((h) => !h.planExcluded && !selectedHere.has(h.id) && (!h.planId || h.planId === id));
+
   // Vorschau wie der Server: ausgewählt (auch in anderen Plänen) > Regeln > alle übrigen
   const preview = (() => {
     const result = new Map<string, string[]>();
@@ -234,12 +241,20 @@ export function PlanEditorPage() {
                       <Select label={t("plans.bySite")} placeholder={t("plans.anySite")} clearable data={sites.map((s) => ({ value: s.id, label: s.name }))}
                         value={g.memberSiteId} onChange={(v) => update(g.key, { memberSiteId: v })} />
                     </Group>
-                    <Tooltip label={othersElsewhere ? t("plans.othersTaken", { name: othersElsewhere.name }) : t("plans.othersHint")} multiline w={320}>
-                      <div>
-                        <Switch label={t("plans.includeOthers")} checked={g.includeOthers} disabled={!!othersElsewhere && !g.includeOthers}
-                          onChange={(e) => set({ groups: draft.groups.map((x) => ({ ...x, includeOthers: x.key === g.key ? e.currentTarget.checked : false })) })} />
-                      </div>
-                    </Tooltip>
+                    <Group gap="sm" wrap="wrap">
+                      <Tooltip label={othersElsewhere ? t("plans.othersTaken", { name: othersElsewhere.name }) : t("plans.othersHint")} multiline w={320}>
+                        <div>
+                          <Switch label={t("plans.includeOthers")} checked={g.includeOthers} disabled={!!othersElsewhere && !g.includeOthers}
+                            onChange={(e) => set({ groups: draft.groups.map((x) => ({ ...x, includeOthers: x.key === g.key ? e.currentTarget.checked : false })) })} />
+                        </div>
+                      </Tooltip>
+                      <Tooltip label={t("plans.addLeftoverHint")} multiline w={320}>
+                        <Button size="compact-xs" variant="light" disabled={leftover.length === 0}
+                          onClick={() => update(g.key, { hostIds: [...g.hostIds, ...leftover.map((h) => h.id)] })}>
+                          {t("plans.addLeftover", { count: leftover.length })}
+                        </Button>
+                      </Tooltip>
+                    </Group>
                   </Stack>
 
                   {/* Wie */}

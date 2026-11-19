@@ -1579,6 +1579,8 @@ const de = {
     bySite: "Nur Site",
     anySite: "alle Sites",
     includeOthers: "Alle übrigen Hosts",
+    addLeftover: "Übrige hinzufügen ({{count}})",
+    addLeftoverHint: "Nimmt alle Hosts, die noch in keinem Plan sind, fest in die Auswahl dieser Gruppe auf. Anders als der Schalter kommen neue Hosts später nicht automatisch dazu.",
     othersHint: "Jeder Host, der in keinem anderen Plan ist, auch neue. Kann nur eine Gruppe haben.",
     othersTaken: "„Alle übrigen Hosts“ hat schon der Plan „{{name}}“.",
     approval: "Vorher Freigabe einholen",
