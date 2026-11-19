@@ -8,12 +8,14 @@ Written for users, not as a list of commits.
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-11-19
+
 ### Added
 - **AI summaries of release notes:** Under **Settings → AI** connect Claude, ChatGPT or a local model (Ollama,
   LM Studio, vLLM or another OpenAI-compatible API). New updates are then summarized automatically after each scan:
   1 to 3 sentences per package in the release notes window, and **What do these updates bring?** for the whole host
   above the update list. Only package names, versions and changelog texts are sent, no host names or addresses;
-  *Test connection* checks the setup before saving.
+  **Test connection** checks the setup before saving.
 - **Update history on patch jobs:** The page of a patch job lists the updates that were pending when it started,
   whether they were installed, with summary and release notes.
 
