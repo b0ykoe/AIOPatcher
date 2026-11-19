@@ -63,7 +63,7 @@ including whether it came through Cloudflare.
   Whoever controls the proxy (Cloudflare included) can read along, but cannot inject or alter jobs.
 - Secrets (e.g. a new user password) are additionally encrypted by the server for the agent only.
 - Enrolling through the public address: the CA is recognized by its fingerprint, the install script and the agent by
-  checksums that the dashboard writes into the install command (`Add host` → "Outside (cloud)").
+  checksums that the dashboard writes into the install command (`Add host`; with a public address set up, the same command works inside and outside).
 
 **How agents choose the path:** They know both addresses, try the internal one first and automatically fall back to
 the public one when it is not reachable (they retry the internal one every 15 minutes). Existing agents learn the

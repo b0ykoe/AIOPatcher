@@ -109,8 +109,11 @@ IP, not that of the proxy.
   server (between VLANs: a firewall rule to `10.0.0.5:8443`).
 - **The server itself:** enroll it like any other host and add `--allow-server-update` to the command. The update notice
   then gets an **Update now** button (see [Updating](#updating-aiopatcher)).
-- **Hosts outside (cloud):** set up a public address once under **Settings → Public access**, then *Add host* →
-  **Outside (cloud)**.
+- **Hosts outside (cloud):** set up a public address once under **Settings → Public access**. From then on *Add host*
+  gives one command for every host: it tries the server directly first and falls back to the public address.
+- **Local policy:** *Add host* also sets what the host allows (all or only security updates, reboots, firewall/SSH/user
+  changes, monitoring clients, more under *More options*). It is written into the host's `policy.json` and cannot be
+  changed by the server later.
 
 ### Example: Cloudflare → OPNsense → Nginx Proxy Manager → VM
 

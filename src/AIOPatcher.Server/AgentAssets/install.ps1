@@ -30,6 +30,8 @@ param(
     [switch]$AllowSystemChanges,
     # Allow installing, reconfiguring and uninstalling Wazuh/Checkmk clients (policy.json allowMonitoringChanges; off by default)
     [switch]$AllowMonitoringChanges,
+    # Further values for policy.json, e.g. 'allowPatch=Security,allowReboot=false' (keys as in policy.json)
+    [string]$Policy,
     # Force the lite agent (PowerShell). Automatic on Server 2008 R2 / Windows 7.
     [switch]$Lite
 )
@@ -101,11 +103,12 @@ function Get-LiteTask {
 }
 
 # Lite agent: no "policy set" command, so set the key in policy.json directly (other keys stay).
-function Set-LitePolicy([string]$Key) {
+function Set-LitePolicy([string]$Key, $Value = $true) {
     $path = Join-Path $StateDir 'policy.json'
     $policy = if (Test-Path $path) { (Get-Content -Path $path -Raw -Encoding UTF8) | ConvertFrom-Json } else { New-Object PSObject }
     if ($null -eq $policy) { $policy = New-Object PSObject }
-    $policy | Add-Member -NotePropertyName $Key -NotePropertyValue $true -Force
+    if ($Value -eq 'true') { $Value = $true } elseif ($Value -eq 'false') { $Value = $false }
+    $policy | Add-Member -NotePropertyName $Key -NotePropertyValue $Value -Force
     Set-Content -Path "$path.tmp" -Value (ConvertTo-Json -InputObject $policy -Depth 10) -Encoding UTF8
     Move-Item -Path "$path.tmp" -Destination $path -Force
 }
@@ -144,6 +147,8 @@ function Install-LiteAgent {
         Set-LitePolicy 'allowMonitoringChanges'
         Info 'Installing and reconfiguring Wazuh/Checkmk clients from the dashboard allowed (policy.json).'
     }
+    foreach ($p in $PolicyPairs) { Set-LitePolicy $p[0] $p[1] }
+    if ($PolicyPairs.Count -gt 0) { Info "Local policy set: $Policy (policy.json)." }
 
     Info 'Self-test ...'
     & $ps -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $liteFile selftest -StateDir $StateDir
@@ -244,6 +249,21 @@ if ($PublicUrl) {
     if (-not $PublicUrl.StartsWith('https://')) { Fail '-PublicUrl must start with https://.' }
 }
 $Fingerprint = ($Fingerprint -replace '[^0-9A-Fa-f]', '').ToUpperInvariant()
+# -Policy 'allowPatch=Security,allowReboot=false': check everything before anything is installed
+$PolicyPairs = @()
+foreach ($pair in ("$Policy" -split '[,;]')) {
+    $pair = $pair.Trim()
+    if (-not $pair) { continue }
+    $key, $value = $pair -split '=', 2
+    switch -CaseSensitive ($key) {
+        'allowPatch' { if (@('All', 'Security', 'None') -notcontains $value) { Fail '-Policy allowPatch: All, Security or None.' } }
+        { @('allowReboot', 'allowSelfUpdate', 'allowAppUpdates', 'allowSourceFixes', 'allowAutoUpdateChanges', 'allowSystemChanges', 'allowMonitoringChanges', 'allowServerUpdate', 'allowUpdateRecipes', 'trustServerUpdates') -ccontains $_ } {
+            if (@('true', 'false') -notcontains $value) { Fail "-Policy ${key}: true or false." }
+        }
+        default { Fail "-Policy: unknown key in '$pair'." }
+    }
+    $PolicyPairs += , @($key, $value)
+}
 if (-not [Environment]::Is64BitOperatingSystem) { Fail 'Only 64-bit Windows is supported.' }
 
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
@@ -390,6 +410,12 @@ try {
         & $Exe policy set allowMonitoringChanges true --state-dir $StateDir | Out-Null
         Info 'Installing and reconfiguring Wazuh/Checkmk clients from the dashboard allowed (policy.json).'
     }
+
+    foreach ($p in $PolicyPairs) {
+        & $Exe policy set $p[0] $p[1] --state-dir $StateDir | Out-Null
+        if ($LASTEXITCODE -ne 0) { Fail "Could not set $($p[0]) in policy.json." }
+    }
+    if ($PolicyPairs.Count -gt 0) { Info "Local policy set: $Policy (policy.json)." }
 
     # --- 5. Self-test before starting the service -------------------------------------------------
     # Does the agent start, read its enrollment, and reach the server with its certificate?

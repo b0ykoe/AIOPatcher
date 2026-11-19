@@ -21,6 +21,13 @@ Written for users, not as a list of commits.
   Building it yourself is still possible with `--build` (forks, own changes, arm64).
 - **Quick start rewritten:** the three ports, the typical layouts (internal, behind your existing reverse proxy,
   standalone) and a worked example with Cloudflare, OPNsense and Nginx Proxy Manager, including common mistakes.
+- **Add host: one command for inside and outside.** With a public address set up (Settings → Public access) there is
+  no longer a choice between "In the network / via VPN" and "Outside (cloud)": the command tries the server directly
+  first and falls back to the public address, just like the agent does later.
+- **Add host: local policy in the dialog.** Choose right there what the new host allows: all or only security updates,
+  reboots, firewall/SSH/user changes and monitoring clients; under **More options** also automatic updates, program
+  and container updates, broken package sources, app update scripts, agent self-update and updating the AIOPatcher
+  server. The installers take the values with `--policy KEY=VALUE` (Linux) and `-Policy 'KEY=VALUE,...'` (Windows).
 
 ### Upgrade notes
 - Existing installations keep building locally. To switch to the release image, run the setup again and choose

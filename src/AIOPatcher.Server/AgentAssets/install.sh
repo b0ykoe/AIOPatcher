@@ -32,6 +32,7 @@ ALLOW_SYSTEM_CHANGES=0
 ALLOW_MONITORING_CHANGES=0
 ALLOW_SERVER_UPDATE=0
 FORCE_LITE=0
+POLICY=""         # KEY=VALUE pairs for policy.json (--policy), space-separated
 
 die() { echo "Error: $*" >&2; exit 1; }
 info() { echo "==> $*"; }
@@ -54,6 +55,10 @@ Options:
                         clients from the dashboard (policy.json allowMonitoringChanges; off by default)
   --allow-server-update  On the host running the AIOPatcher server: allow "Update now" in the dashboard
                         (policy.json allowServerUpdate; off by default)
+  --policy KEY=VALUE    Set a value in policy.json, repeatable, e.g. --policy allowPatch=Security --policy allowReboot=false
+                        Keys: allowPatch (All|Security|None), allowReboot, allowSelfUpdate, allowAppUpdates,
+                        allowSourceFixes, allowAutoUpdateChanges, allowSystemChanges, allowMonitoringChanges,
+                        allowServerUpdate, allowUpdateRecipes, trustServerUpdates (true|false)
   --lite                Force the lite agent (Python). Chosen automatically on old systems (glibc < 2.27,
                         OpenSSL < 1.1.1, e.g. Ubuntu 16.04, Debian 9).
 EOF
@@ -73,6 +78,7 @@ while [ $# -gt 0 ]; do
     --allow-system-changes) ALLOW_SYSTEM_CHANGES=1; shift ;;
     --allow-monitoring-changes) ALLOW_MONITORING_CHANGES=1; shift ;;
     --allow-server-update) ALLOW_SERVER_UPDATE=1; shift ;;
+    --policy) POLICY="$POLICY ${2:-}"; shift 2 ;;
     --lite) FORCE_LITE=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) usage; die "Unknown option: $1" ;;
@@ -108,6 +114,14 @@ case "$SERVER" in https://*) ;; *) die "--server must start with https://." ;; e
 PUBLIC="${PUBLIC%/}"
 case "$PUBLIC" in ""|https://*) ;; *) die "--public-url must start with https://." ;; esac
 FINGERPRINT="$(printf '%s' "$FINGERPRINT" | tr -d ': ' | tr 'a-f' 'A-F')"
+for pair in $POLICY; do
+  case "${pair%%=*}" in
+    allowPatch) case "${pair#*=}" in All|Security|None) ;; *) die "--policy allowPatch: All, Security or None." ;; esac ;;
+    allowReboot|allowSelfUpdate|allowAppUpdates|allowSourceFixes|allowAutoUpdateChanges|allowSystemChanges|allowMonitoringChanges|allowServerUpdate|allowUpdateRecipes|trustServerUpdates)
+      case "${pair#*=}" in true|false) ;; *) die "--policy ${pair%%=*}: true or false." ;; esac ;;
+    *) die "--policy: unknown key in '$pair'." ;;
+  esac
+done
 
 for tool in curl sha256sum base64 sed tr; do
   command -v "$tool" >/dev/null 2>&1 || die "'$tool' is missing (e.g. apt-get install curl)."
@@ -264,17 +278,17 @@ elif [ "$ALLOW_SYSTEM_CHANGES" -eq 1 ]; then
   info "Changes to firewall, SSH and users from the dashboard allowed (policy.json)."
 fi
 
-if [ "$ALLOW_MONITORING_CHANGES" -eq 1 ]; then
+# Set one value in policy.json. The lite agent has no "policy set" command: edit the file, keep everything else.
+set_policy() {
   if [ "$LITE" -eq 1 ]; then
-    # The lite agent has no "policy set" command: set the key in policy.json, keep everything else
-    python3 - "$STATE/policy.json" <<'PY' || die "Could not update policy.json."
+    python3 - "$STATE/policy.json" "$1" "$2" <<'PY' || die "Could not update policy.json."
 import json, os, sys
-path = sys.argv[1]
+path, key, value = sys.argv[1], sys.argv[2], sys.argv[3]
 policy = {}
 if os.path.exists(path):
     with open(path) as f:
         policy = json.load(f) or {}
-policy["allowMonitoringChanges"] = True
+policy[key] = True if value == "true" else False if value == "false" else value
 with open(path + ".tmp", "w") as f:
     json.dump(policy, f, indent=2)
     f.write("\n")
@@ -282,8 +296,12 @@ os.chmod(path + ".tmp", 0o600)
 os.replace(path + ".tmp", path)
 PY
   else
-    "$BIN" policy set allowMonitoringChanges true --state-dir "$STATE" >/dev/null
+    "$BIN" policy set "$1" "$2" --state-dir "$STATE" >/dev/null || die "Could not set $1 in policy.json."
   fi
+}
+
+if [ "$ALLOW_MONITORING_CHANGES" -eq 1 ]; then
+  set_policy allowMonitoringChanges true
   info "Installing and reconfiguring Wazuh/Checkmk clients from the dashboard allowed (policy.json)."
 fi
 
@@ -293,6 +311,11 @@ elif [ "$ALLOW_SERVER_UPDATE" -eq 1 ]; then
   "$BIN" policy set allowServerUpdate true --state-dir "$STATE" >/dev/null
   info "Updating the AIOPatcher server from the dashboard allowed (policy.json)."
 fi
+
+for pair in $POLICY; do
+  set_policy "${pair%%=*}" "${pair#*=}"
+done
+[ -z "$POLICY" ] || info "Local policy set:$POLICY (policy.json)."
 
 # --- 5. Self-test before starting the service -----------------------------------------------------
 # Does the agent start, does it read its enrollment, does it reach the server with its certificate?
