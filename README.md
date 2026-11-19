@@ -6,50 +6,90 @@ patch Linux (Ubuntu/Debian/Proxmox VE/PBS) and Windows servers, multiple sites, 
 - Architecture & decisions: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 - Setting up the server (VM, Docker, backups, updates): [docs/SERVER-SETUP.md](docs/SERVER-SETUP.md)
 
-## Quick start (setup script, about 15 minutes)
+## Quick start (about 15 minutes)
 
-Requirements: a Debian/Ubuntu server on x64 (e.g. Hetzner CX22 or a VM in the homelab, 2–4 GB RAM) and
-a name or a fixed IP for it: a DNS name (internally e.g. via an override in OPNsense: `patch.home.arpa`)
-or simply the IP. Let's Encrypt needs a public name; without your own domain, `<ip-with-dashes>.nip.io` works, e.g. `1-2-3-4.nip.io`.
+**Requirements:** a Debian/Ubuntu server or VM on x64 (2 GB RAM is enough, e.g. Hetzner CX22 or a VM in the homelab)
+with a fixed IP. The setup pulls the prebuilt release image; building it yourself (`--build`) needs about 4 GB RAM and
+10 GB disk space.
 
-**1. Get the code onto the server** (from your own machine, in the repo; adjust the IP):
+### The three ports
+
+AIOPatcher listens on three ports. Knowing them makes every layout below easy:
+
+| Port | What | Who connects | Behind a reverse proxy? |
+|---|---|---|---|
+| **9443** | Dashboard (HTTPS) | browsers, or your reverse proxy | yes, with scheme **https** |
+| **8443** | Agent API (mTLS) | agents in your network or VPN | **never**: agents log in with a client certificate, a proxy would break it |
+| **8080** | Agent proxy port (HTTP, signed requests) | your reverse proxy, for agents outside | yes, that is what it is for; reachable from the LAN only |
+
+**Name of the server** (`--hostname`): the address the agents in your network use to reach port 8443 directly. That is
+the internal IP (`10.0.0.5`) or an internal DNS name pointing to it (e.g. an override in OPNsense: `patch.home.arpa`),
+not a name that goes through Cloudflare or your reverse proxy. Exception: with the built-in Traefik/nginx and Let's
+Encrypt (layout C) it is the public name; without your own domain, `<ip-with-dashes>.nip.io` works, e.g. `1-2-3-4.nip.io`.
+
+### Choose your layout
+
+| Layout | Typical for | Setup options | Dashboard at |
+|---|---|---|---|
+| **A: internal, direct** | homelab without a domain | `--proxy none` | `https://10.0.0.5:9443` (certificate of the AIOPatcher CA, import `ca.crt` once to silence the warning) |
+| **B: behind your existing reverse proxy** | Nginx Proxy Manager, Traefik, Caddy … already running | `--proxy external --proxy-net <proxy-ip>` | `https://patch.example.com` through your proxy |
+| **C: standalone with its own proxy** | VPS with a public name | `--proxy traefik --tls letsencrypt --email you@example.com` (or `--proxy nginx`) | `https://patch.example.com` |
+
+In every layout, hosts outside your network (cloud) can be added later through a public address of your reverse proxy
+(see [Hosts outside](#hosts-outside-cloud-through-your-own-reverse-proxy)). A worked example for layout B with Cloudflare,
+OPNsense and Nginx Proxy Manager follows [below](#example-cloudflare--opnsense--nginx-proxy-manager--vm).
+
+### 1. Get the code onto the server
 
 ```bash
-git archive --format=tar.gz -o aiopatcher.tar.gz main && scp aiopatcher.tar.gz root@1.2.3.4:/root/
+sudo git clone https://github.com/b0ykoe/AIOPatcher.git /opt/aiopatcher/src
 ```
 
-Or directly on the server from GitHub (public repo; private: with an access token), then continue with the setup command:
+Without internet access to GitHub on the server: from your own machine, in the repo (adjust the IP), then unpack it:
 
 ```bash
-git clone https://github.com/b0ykoe/AIOPatcher.git /opt/aiopatcher/src
+git archive --format=tar.gz -o aiopatcher.tar.gz main && scp aiopatcher.tar.gz root@10.0.0.5:/root/
 ```
-
-**2. Unpack on the server and start the setup:**
 
 ```bash
 mkdir -p /opt/aiopatcher/src && tar -xzf /root/aiopatcher.tar.gz -C /opt/aiopatcher/src
 ```
 
+### 2. Run the setup
+
 ```bash
 sudo bash /opt/aiopatcher/src/deploy/setup.sh
 ```
 
-The script asks:
+It asks:
 
 | Question | Choices |
 |---|---|
-| Name or IP | Suggestion from the hostname or `<ip>.nip.io`; an IP works too (then without Let's Encrypt) |
+| Name or IP | see *Name of the server* above |
 | Dashboard access | **direct** on 9443 · **Traefik** on 443 · **nginx** on 443 · **existing proxy** (Nginx Proxy Manager or similar) |
 | Certificate (with Traefik/nginx) | **Let's Encrypt** (publicly reachable) · **internal** (AIOPatcher CA, for the homelab) · **own files** |
-| Networks for the dashboard | private networks plus the IP you are connecting from via SSH |
-| Firewall | ufw: SSH, agents (8443), dashboard only from these networks |
+| IP of the existing proxy | only for *existing proxy*: its IP, so AIOPatcher sees the real client IPs |
+| Networks for the dashboard | private networks plus the IP you are connecting from via SSH (also applies to port 8080) |
+| Firewall | ufw: SSH, agents (8443), dashboard and proxy port only from these networks |
+| Image | **release from GitHub** (default: no build, updates bring releases only) · **build here** (forks, own changes, arm64; updates bring every commit of the branch) |
+| Auto-Update | update automatically at night (with backup and rollback) or manually |
 
-It then installs Docker (if needed), builds the image, writes `/opt/aiopatcher/docker-compose.yml` (and the
-Traefik or nginx configuration), sets up the firewall, starts everything and shows the **dashboard URL, setup token and
-CA fingerprint**. In the dashboard: enter the token, set up your account and authenticator, then *Add host*.
+Or give the answers directly, one line per layout:
 
-- Everything also works without questions, e.g. `setup.sh --yes --hostname patch.example.com --proxy traefik --tls letsencrypt --email ich@example.com`
-  (`--help` shows all options). `--dry-run` only generates the files for review.
+```bash
+# A: internal, direct
+sudo bash /opt/aiopatcher/src/deploy/setup.sh --hostname 10.0.0.5 --proxy none --allow 10.0.0.0/8
+# B: behind your existing reverse proxy at 10.0.0.2
+sudo bash /opt/aiopatcher/src/deploy/setup.sh --hostname 10.0.0.5 --proxy external --proxy-net 10.0.0.2/32 --allow 10.0.0.0/8
+# C: standalone VPS with Traefik and Let's Encrypt
+sudo bash /opt/aiopatcher/src/deploy/setup.sh --hostname patch.example.com --proxy traefik --tls letsencrypt --email you@example.com
+```
+
+It then installs Docker (if needed), pulls the image, writes `/opt/aiopatcher/docker-compose.yml` (and the Traefik or
+nginx configuration), sets up the firewall, starts everything and shows the **dashboard URL, setup token and CA
+fingerprint**.
+
+- `--yes` accepts the defaults without asking, `--help` shows all options, `--dry-run` only generates the files for review.
 - Running it again is safe: the answers from the last run (`/opt/aiopatcher/setup.conf`) become the suggestions,
   configurations are backed up first, data is kept. Updates do not need it (see below).
 - Hetzner: in addition to ufw, you may need to open the Cloud Firewall (8443 for everyone, dashboard only for you).
@@ -57,7 +97,73 @@ CA fingerprint**. In the dashboard: enter the token, set up your account and aut
   as `.env` next to it (only `AIOPATCHER_HOSTNAME` is required), hardened variant in
   [docs/SERVER-SETUP.md](docs/SERVER-SETUP.md), proxies in [docs/REVERSE-PROXY.md](docs/REVERSE-PROXY.md).
 
-**With Portainer** (prebuilt image, no setup script), via app template:
+### 3. Sign in
+
+Open the dashboard, enter the **setup token**, set up your account and authenticator (or a passkey). Then check
+**Settings → Checks**: everything should be green. Behind a reverse proxy, "Reverse proxy / client IP" must show your own
+IP, not that of the proxy.
+
+### 4. Add hosts
+
+- **Hosts in your network:** *Add host* shows one install command per system. The hosts need to reach port 8443 of the
+  server (between VLANs: a firewall rule to `10.0.0.5:8443`).
+- **The server itself:** enroll it like any other host and add `--allow-server-update` to the command. The update notice
+  then gets an **Update now** button (see [Updating](#updating-aiopatcher)).
+- **Hosts outside (cloud):** set up a public address once under **Settings → Public access**, then *Add host* →
+  **Outside (cloud)**.
+
+### Example: Cloudflare → OPNsense → Nginx Proxy Manager → VM
+
+A common homelab setup (layout B): Cloudflare in front, OPNsense forwards 443 to Nginx Proxy Manager (NPM, `10.0.0.2`),
+AIOPatcher runs on a VM (`10.0.0.5`).
+
+```
+Browser ────> Cloudflare ─> OPNsense (NAT 443) ─> NPM 10.0.0.2 ─https─> AIOPatcher 10.0.0.5:9443   dashboard
+Cloud host ─> Cloudflare ─> OPNsense (NAT 443) ─> NPM 10.0.0.2 ─http──> AIOPatcher 10.0.0.5:8080   agents outside
+LAN host ──────────────────────────── mTLS ──────────────────────────> AIOPatcher 10.0.0.5:8443   agents inside
+```
+
+1. **Setup** on the VM:
+   ```bash
+   sudo bash /opt/aiopatcher/src/deploy/setup.sh --hostname 10.0.0.5 --proxy external --proxy-net 10.0.0.2/32 --allow 10.0.0.0/8
+   ```
+2. **Cloudflare DNS:** `agents.example.com` → your public IP, *Proxied*. SSL/TLS mode **Full (strict)**.
+   For the dashboard, decide:
+   - **internal only** (recommended): no record at Cloudflare. In OPNsense under *Services → Unbound DNS → Overrides*
+     point `patch.example.com` to `10.0.0.2`, and give the NPM proxy host an access list with your networks only.
+   - **public** (at your own risk): `patch.example.com` → your public IP, *Proxied*. See the notes below.
+3. **NPM**, *Hosts → Proxy Hosts*:
+
+   | Domain | Scheme | Forward host | Port | Access list |
+   |---|---|---|---|---|
+   | `patch.example.com` | **https** | `10.0.0.5` | **9443** | your networks (internal only) or public |
+   | `agents.example.com` | **http** | `10.0.0.5` | **8080** | public |
+
+   Tab *SSL*: a certificate browsers trust, e.g. Let's Encrypt. For a name that only exists internally, use the DNS
+   challenge (Cloudflare API token with `Zone:DNS:Edit`). A Cloudflare Origin certificate only works for names that go
+   through Cloudflare. *Websockets Support* is not needed.
+4. **AIOPatcher:** under **Settings → Public access** enter `https://agents.example.com` (and the dashboard address if
+   it is public) and run the test command shown there. It reports live whether the call came through Cloudflare.
+5. **OPNsense:** no port forwards for 8443, 8080 or 9443. Internal networks need a rule to `10.0.0.5:8443`.
+
+**Common mistakes:**
+
+| Symptom | Cause |
+|---|---|
+| 400 "The plain HTTP request was sent to HTTPS port" | proxy host for the dashboard uses scheme `http`; 9443 needs **https** |
+| agents outside cannot connect | agent proxy host points to 8443; it must be **8080** (8443 is mTLS) |
+| 403 or a challenge page for agents | Cloudflare Bot Fight Mode / WAF; add a WAF *Skip* rule for the path `/agent/` |
+| everyone locked out after a few failed logins, the audit log shows one IP | `--proxy-net` missing: AIOPatcher sees only the proxy's IP |
+| internal name does not resolve | DNS rebind protection (OPNsense, router, Pi-hole) blocks public names pointing to private IPs; use a host override |
+
+**Public dashboard:** possible, at your own risk. Then: 2FA or a passkey for every account (or SSO), SSL/TLS
+**Full (strict)**, and ideally Cloudflare Access (Zero Trust) or a WAF rule (e.g. by country) in front of the dashboard
+name only, never in front of the agents name. Keep in mind that an admin account controls every enrolled host, within
+what the host's local policy allows.
+
+### With Portainer
+
+Prebuilt image, no setup script, via app template:
 
 1. Once, enter under *Settings → App Templates → URL* and save:
    `https://raw.githubusercontent.com/b0ykoe/AIOPatcher/main/deploy/portainer-templates.json`
@@ -71,19 +177,25 @@ redeploy the stack. Firewall: 8443 for the agents, 9443 only internal/VPN. Witho
 (Compose path `deploy/docker-compose.yml`) or *Upload*, and load the variables from
 [deploy/.env.example](deploy/.env.example) via *Load variables from .env file*.
 
-**Updating AIOPatcher** – no setup, one command:
+### Updating AIOPatcher
+
+One command, no setup:
 
 ```bash
 sudo aiopatcher-update
 ```
 
-Fetches the new code (`git pull`), builds the image while the old container keeps running, then backs up the data folder
-(`/opt/aiopatcher/backups`, the last three), restarts and waits until AIOPatcher is healthy. If the new
-version does not start, the old image and data are restored automatically. The version number of your own builds follows the latest
-release tag (exactly on `v0.7.0`: `0.7.0`, three commits later: `0.7.0.3`), so it matches the GitHub releases; the agents
-are offered the update as well. `--check` only shows whether there is something new; `--force` builds even
-without new code. Automatically at night: choose "Auto-Update" during setup (systemd timer, log: `journalctl -u aiopatcher-update`).
-With a prebuilt image (`--image`), the command pulls the new image instead (`docker compose pull`).
+- **Release image** (default): pulls the newest release from ghcr.io. Nothing changes between releases.
+- **Built here** (`--build`): fetches the new code (`git pull`) and builds the image while the old container keeps
+  running, so every commit of the checked-out branch arrives. The version number follows the latest release tag (exactly
+  on `v0.7.0`: `0.7.0`, three commits later: `0.7.0.3`), so it matches the GitHub releases; the agents are offered the
+  update as well. Code via `tar` instead of Git: unpack the new version to `/opt/aiopatcher/src` first.
+
+Both then back up the data folder (`/opt/aiopatcher/backups`, the last three), restart and wait until AIOPatcher is
+healthy. If the new version does not start, the old image and data are restored automatically. `--check` only shows
+whether there is something new; `--force` updates even without anything new. Automatically at night: choose
+"Auto-Update" during setup (systemd timer, log: `journalctl -u aiopatcher-update`). To switch between release image and
+building it yourself, run the setup again and answer the image question differently.
 
 **Update from the dashboard:** enroll the server host as an agent and allow it there once:
 
@@ -96,8 +208,7 @@ rollback); AIOPatcher is unavailable for a minute or two and the result appears 
 installations made with the setup script have `aiopatcher-update`; with your own compose file the notice shows the command.
 
 Installations from before this command: once run `cd /opt/aiopatcher/src && sudo git pull && sudo bash deploy/update.sh`,
-after that `aiopatcher-update` is available. Code via `tar` instead of Git: unpack the new version to `/opt/aiopatcher/src`, then
-`sudo aiopatcher-update`.
+after that `aiopatcher-update` is available.
 
 Before every database migration, AIOPatcher itself creates a backup under `/opt/aiopatcher/data/backups`.
 The container has a built-in healthcheck (`docker ps` shows `healthy`). The compose file contains, commented

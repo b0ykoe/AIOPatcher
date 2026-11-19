@@ -8,6 +8,17 @@ Written for users, not as a list of commits.
 
 ## [Unreleased]
 
+### Improved
+- **Setup uses the release image:** `setup.sh` now pulls the prebuilt image from GitHub (ghcr.io) instead of building
+  it on the server. No 10-15 minute build, 2 GB RAM is enough, and `aiopatcher-update` brings releases only.
+  Building it yourself is still possible with `--build` (forks, own changes, arm64).
+- **Quick start rewritten:** the three ports, the typical layouts (internal, behind your existing reverse proxy,
+  standalone) and a worked example with Cloudflare, OPNsense and Nginx Proxy Manager, including common mistakes.
+
+### Upgrade notes
+- Existing installations keep building locally. To switch to the release image, run the setup again and choose
+  "Release from GitHub" at the image question.
+
 ## [0.13.0] - 2026-11-19
 
 ### Added

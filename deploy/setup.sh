@@ -6,7 +6,7 @@
 #   ./deploy/setup.sh --dry-run             only generate and show the files, install nothing
 #
 # What it does:
-#   1. Install Docker (if needed), build the image from this repo (or use --image)
+#   1. Install Docker (if needed), pull the release image from ghcr.io (or build it from this repo with --build)
 #   2. Choose dashboard access: direct (9443), Traefik, nginx or an existing proxy (Nginx Proxy Manager ...)
 #   3. Certificate for the dashboard: Let's Encrypt, internal (certificate from the AIOPatcher CA) or your own files
 #   4. Firewall (ufw): SSH, agents (8443), dashboard and proxy port (8080) only from allowed networks
@@ -37,6 +37,10 @@ AUTO_UPDATE=""     # yes | no: update automatically at night
 ASSUME_YES=0
 DRY_RUN=0
 NO_BUILD=0
+BUILD=0
+IMAGE_SOURCE=""    # release | build
+# Release image built by GitHub Actions (server, web UI and signed agents; linux/amd64)
+RELEASE_IMAGE="ghcr.io/b0ykoe/aiopatcher-server:latest"
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DATE="$(date +%Y%m%d-%H%M%S)"
@@ -56,7 +60,8 @@ Options (anything not given is asked for; with --yes the default applies):
   --allow NETWORKS       networks allowed to reach the dashboard, comma-separated (e.g. 192.168.0.0/16,10.99.0.0/24)
   --proxy-net NETWORK    with --proxy external: IP or network of the existing proxy
   --ufw yes|no           set up the firewall
-  --image NAME           use a prebuilt image instead of building
+  --image NAME           use this image (default: the release image ghcr.io/b0ykoe/aiopatcher-server:latest)
+  --build                build the image here from this repo instead (needs ~4 GB RAM; updates follow the branch)
   --no-build             use the existing image aiopatcher-server:local
   --language de|en       language for notifications etc.
   --timezone ZONE        e.g. Europe/Berlin
@@ -79,6 +84,7 @@ while [ $# -gt 0 ]; do
     --proxy-net) PROXY_NET="${2:-}"; shift 2 ;;
     --ufw) UFW="${2:-}"; shift 2 ;;
     --image) IMAGE="${2:-}"; shift 2 ;;
+    --build) BUILD=1; shift ;;
     --no-build) NO_BUILD=1; shift ;;
     --language) LANGUAGE_ARG="${2:-}"; shift 2 ;;
     --timezone) TIMEZONE="${2:-}"; shift 2 ;;
@@ -237,9 +243,33 @@ choose UFW "Set up the firewall (ufw)?" "yes" yes "Yes: SSH, agents (8443) and d
 case "$UFW" in yes|no) ;; *) die "--ufw: yes or no" ;; esac
 ask LANGUAGE_ARG "Language (de/en)" "de"
 ask TIMEZONE "Time zone" "$(cat /etc/timezone 2>/dev/null || timedatectl show -p Timezone --value 2>/dev/null || echo Europe/Berlin)"
+
+# Image: the release image from GitHub (no build, updates = releases) or built here from the code (updates = every
+# commit of the checked-out branch). Re-runs keep what was chosen last time.
+if [ -z "$IMAGE" ]; then
+  if [ "$BUILD" -eq 1 ] || [ "$NO_BUILD" -eq 1 ]; then
+    IMAGE=aiopatcher-server:local
+  elif [ "$(uname -m)" != x86_64 ]; then
+    info "The release image exists for x64 only; building it here ($(uname -m))."
+    IMAGE=aiopatcher-server:local
+  else
+    SOURCE_DEFAULT=release
+    if [ "${SAVED_IMAGE:-}" = aiopatcher-server:local ]; then SOURCE_DEFAULT=build; fi
+    choose IMAGE_SOURCE "Where should the server image come from?" "$SOURCE_DEFAULT" \
+      release "Release from GitHub ($RELEASE_IMAGE): no build, updates bring releases only" \
+      build "Build here from $REPO: about 4 GB RAM and 10-15 minutes, updates bring every commit of the branch"
+    case "$IMAGE_SOURCE" in
+      release) IMAGE="${SAVED_IMAGE:-$RELEASE_IMAGE}"; [ "$IMAGE" != aiopatcher-server:local ] || IMAGE="$RELEASE_IMAGE" ;;
+      build) IMAGE=aiopatcher-server:local ;;
+      *) die "Image: release or build" ;;
+    esac
+  fi
+fi
+
+if [ "$IMAGE" = aiopatcher-server:local ]; then UPDATE_TEXT="fetch new code, build and restart"; else UPDATE_TEXT="pull the latest release and restart"; fi
 choose AUTO_UPDATE "Update AIOPatcher automatically at night? (otherwise manually: sudo aiopatcher-update)" no \
   no "No, I will update myself (recommended: then you know when something changes)" \
-  yes "Yes, fetch new code, build and restart every night (with backup and rollback on errors)"
+  yes "Yes, $UPDATE_TEXT every night (with backup and rollback on errors)"
 case "$AUTO_UPDATE" in yes|no) ;; *) die "--auto-update: yes or no" ;; esac
 
 # --- Summary -------------------------------------------------------------------------------------------
@@ -255,6 +285,7 @@ cat <<EOF
     Dashboard:     $DASHBOARD_URL  ($PROXY, certificate: $TLS)
     Agents:        https://$URL_HOST:8443
     Allowed:       ${ALLOW_LIST[*]}
+    Image:         $IMAGE$([ "$IMAGE" = aiopatcher-server:local ] && echo " (built here from $REPO)")
     Firewall:      $UFW
     Auto-Update:   $AUTO_UPDATE
     Folder:        $BASE
@@ -310,8 +341,10 @@ tag_version() {
   if [ "$n" -gt 0 ] 2>/dev/null; then echo "$tag.$n"; else echo "$tag"; fi
 }
 BUILD_NUMBER="$SAVED_BUILD_NUMBER"
-if [ -z "$IMAGE" ]; then
-  IMAGE=aiopatcher-server:local
+if [ "$IMAGE" != aiopatcher-server:local ]; then
+  info "Pulling $IMAGE ..."
+  run docker pull "$IMAGE" || die "Could not pull $IMAGE (internet connection to ghcr.io?). Alternative: --build"
+else
   if [ "$NO_BUILD" -eq 0 ]; then
     COMMITS="$(git -c safe.directory="$REPO" -C "$REPO" rev-list --count HEAD 2>/dev/null || echo 0)"
     if [ "$COMMITS" -gt "$BUILD_NUMBER" ]; then BUILD_NUMBER="$COMMITS"; elif [ "$COMMITS" -eq 0 ]; then BUILD_NUMBER=$((BUILD_NUMBER + 1)); fi
