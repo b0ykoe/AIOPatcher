@@ -35,6 +35,11 @@ Written for users, not as a list of commits.
   and container updates, broken package sources, app update scripts, agent self-update and updating the AIOPatcher
   server. The installers take the values with `--policy KEY=VALUE` (Linux) and `-Policy 'KEY=VALUE,...'` (Windows).
 
+### Fixed
+- **Windows install failed since 0.10.0** with "[System.String] does not contain a method named 'ComputeHash'": a
+  variable in `install.ps1` overwrote the `-Sha256` parameter. Installing and updating the Windows agent works again,
+  directly and through the public address.
+
 ### Upgrade notes
 - Existing installations keep building locally. To switch to the release image, run the setup again and choose
   "Release from GitHub" at the image question.

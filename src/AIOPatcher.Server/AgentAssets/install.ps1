@@ -105,11 +105,11 @@ function Get-LiteTask {
 # Lite agent: no "policy set" command, so set the key in policy.json directly (other keys stay).
 function Set-LitePolicy([string]$Key, $Value = $true) {
     $path = Join-Path $StateDir 'policy.json'
-    $policy = if (Test-Path $path) { (Get-Content -Path $path -Raw -Encoding UTF8) | ConvertFrom-Json } else { New-Object PSObject }
-    if ($null -eq $policy) { $policy = New-Object PSObject }
+    $data = if (Test-Path $path) { (Get-Content -Path $path -Raw -Encoding UTF8) | ConvertFrom-Json } else { New-Object PSObject }
+    if ($null -eq $data) { $data = New-Object PSObject }
     if ($Value -eq 'true') { $Value = $true } elseif ($Value -eq 'false') { $Value = $false }
-    $policy | Add-Member -NotePropertyName $Key -NotePropertyValue $Value -Force
-    Set-Content -Path "$path.tmp" -Value (ConvertTo-Json -InputObject $policy -Depth 10) -Encoding UTF8
+    $data | Add-Member -NotePropertyName $Key -NotePropertyValue $Value -Force
+    Set-Content -Path "$path.tmp" -Value (ConvertTo-Json -InputObject $data -Depth 10) -Encoding UTF8
     Move-Item -Path "$path.tmp" -Destination $path -Force
 }
 
@@ -297,8 +297,8 @@ try {
 
     $caBase64 = ($caPem -replace '-----[A-Z ]+-----', '') -replace '\s', ''
     $pinnedCa = New-Object Security.Cryptography.X509Certificates.X509Certificate2 -ArgumentList (, [Convert]::FromBase64String($caBase64))
-    $sha256 = [Security.Cryptography.SHA256]::Create()
-    $actual = [BitConverter]::ToString($sha256.ComputeHash($pinnedCa.RawData)) -replace '-', ''
+    $hasher = [Security.Cryptography.SHA256]::Create()
+    $actual = [BitConverter]::ToString($hasher.ComputeHash($pinnedCa.RawData)) -replace '-', ''
     if ($actual -ne $Fingerprint) { Fail "CA fingerprint mismatch! Expected $Fingerprint, server delivers $actual. Aborting." }
     $caPath = Join-Path $tmp 'ca.crt'
     Set-Content -Path $caPath -Value $caPem -Encoding Ascii
@@ -312,7 +312,7 @@ try {
             try {
                 $oldBase64 = ((Get-Content -Path $oldCaPath -Raw) -replace '-----[A-Z ]+-----', '') -replace '\s', ''
                 $oldCa = New-Object Security.Cryptography.X509Certificates.X509Certificate2 -ArgumentList (, [Convert]::FromBase64String($oldBase64))
-                $oldFingerprint = [BitConverter]::ToString($sha256.ComputeHash($oldCa.RawData)) -replace '-', ''
+                $oldFingerprint = [BitConverter]::ToString($hasher.ComputeHash($oldCa.RawData)) -replace '-', ''
             } catch { $oldFingerprint = 'unreadable' }
         }
         if ($oldFingerprint -ne $Fingerprint) {

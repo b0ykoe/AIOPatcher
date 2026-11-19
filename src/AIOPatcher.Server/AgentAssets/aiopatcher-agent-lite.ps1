@@ -781,16 +781,16 @@ function Update-WazuhConfigText([string]$Text, $Spec, [bool]$NewEnrollment, [boo
     }
 
     if ($servers.Count -eq 0) {
-        $server = [System.Xml.Linq.XElement]::new((Get-XName 'server'))
-        $client.AddFirst($server)
+        $serverEl = [System.Xml.Linq.XElement]::new((Get-XName 'server'))
+        $client.AddFirst($serverEl)
     } else {
-        $server = $servers[0]
+        $serverEl = $servers[0]
         for ($i = 1; $i -lt $servers.Count; $i++) { Remove-XWithWhitespace $servers[$i] }
     }
 
-    Set-XChild $server 'address' $address
-    if ($null -ne $Spec.port) { Set-XChild $server 'port' ([string]$Spec.port) }
-    if ($null -ne $Spec.protocol) { Set-XChild $server 'protocol' ([string]$Spec.protocol) }
+    Set-XChild $serverEl 'address' $address
+    if ($null -ne $Spec.port) { Set-XChild $serverEl 'port' ([string]$Spec.port) }
+    if ($null -ne $Spec.protocol) { Set-XChild $serverEl 'protocol' ([string]$Spec.protocol) }
 
     $enrollment = $client.Element((Get-XName 'enrollment'))
     if ($NewEnrollment -and $EnrollmentBlock) {
