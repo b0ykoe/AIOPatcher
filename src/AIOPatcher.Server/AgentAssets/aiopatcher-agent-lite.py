@@ -260,6 +260,13 @@ def describe(state_dir, policy):
         "addresses": addresses(),
         "architecture": "arm64" if machine in ("aarch64", "arm64") else "x64",
         "modules": modules,
+        # Nur zur Anzeige im Dashboard; der Lite-Agent kennt nur diese Schalter
+        "policy": {
+            "allowPatch": policy.get("allowPatch", "All"),
+            "allowReboot": policy.get("allowReboot", True) is not False,
+            "allowMonitoringChanges": policy.get("allowMonitoringChanges") is True,
+            "disabledModules": sorted(disabled),
+        },
     }
 
 

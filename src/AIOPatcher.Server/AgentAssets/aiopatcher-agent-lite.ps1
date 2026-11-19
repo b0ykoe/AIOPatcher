@@ -229,6 +229,13 @@ function Get-Description($Policy) {
         addresses = $addresses
         architecture = 'x64'
         modules = $mods
+        # Only for display in the dashboard; the lite agent knows only these switches
+        policy = @{
+            allowPatch = $(if ($Policy.allowPatch) { [string]$Policy.allowPatch } else { 'All' })
+            allowReboot = ($Policy.allowReboot -ne $false)
+            allowMonitoringChanges = (($Policy.allowMonitoringChanges -is [bool]) -and $Policy.allowMonitoringChanges)
+            disabledModules = @($disabled | Where-Object { $_ })
+        }
     }
 }
 

@@ -39,7 +39,7 @@ public sealed class SystemModule(IPlatformInventory inventory, SelfMaintenance m
         var description = new SystemDescription(
             AgentState.AgentVersion, Dns.GetHostName(), PlatformInfo.OsFamily, info.OsName, info.OsVersion, info.KernelVersion,
             TimeSpan.FromMilliseconds(Environment.TickCount64), info.RebootRequired, info.NativeAutoUpdatesEnabled,
-            NetworkInventory.Collect(), SelfMaintenance.Architecture, host().Describe(context.Policy), report);
+            NetworkInventory.Collect(), SelfMaintenance.Architecture, host().Describe(context.Policy), report, context.Policy.ToReport());
         var outcome = Json.Ok($"{info.OsName} {info.OsVersion}", description, PullJsonContext.Default.SystemDescription);
         return report is null ? outcome : outcome with { AfterAnswer = _ => { maintenance.ReportDelivered(); return Task.CompletedTask; } };
     }

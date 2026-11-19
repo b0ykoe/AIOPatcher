@@ -8,6 +8,13 @@ Written for users, not as a list of commits.
 
 ## [Unreleased]
 
+### Added
+- **See each host's local policy:** the agent now reports its `policy.json` with the system data. Host → Settings shows
+  a **Local policy** card with every value and the command to change it on the host. The host list shows only what
+  differs from the default as small badges: orange where the host restricts AIOPatcher (e.g. **Security only**,
+  **No reboot**), blue where it allows more than the default (e.g. **System changes**, **Server update**). The
+  dashboard still cannot change the policy; it only shows it. Lite agents report the values they know.
+
 ### Improved
 - **New versions show up faster:** AIOPatcher now checks GitHub for a new release every 15 minutes instead of once a
   day, so the update notice (and **Update now**) appears shortly after a release.

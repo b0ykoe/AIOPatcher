@@ -50,6 +50,10 @@ public sealed record AgentPolicy(PatchPermission AllowPatch = PatchPermission.Al
     bool AllowSystemChanges = false, IReadOnlyList<string>? DisabledModules = null, bool AllowSourceFixes = true,
     bool AllowAutoUpdateChanges = true, bool AllowMonitoringChanges = false, bool AllowServerUpdate = false, bool AllowUpdateRecipes = false)
 {
+    /// <summary>Für die Anzeige im Dashboard (Systemdaten): alle Werte der policy.json.</summary>
+    public AIOPatcher.Contracts.AgentPolicyReport ToReport() => new(AllowPatch.ToString(), AllowReboot, AllowSelfUpdate, AllowAppUpdates, TrustServerUpdates,
+        AllowSystemChanges, AllowSourceFixes, AllowAutoUpdateChanges, AllowMonitoringChanges, AllowServerUpdate, AllowUpdateRecipes, DisabledModules ?? []);
+
     /// <summary>Modul auf diesem Host gesperrt? (system und agent lassen sich nicht sperren.)</summary>
     public bool IsModuleDisabled(string module) =>
         !AIOPatcher.Contracts.AgentModules.Required.Contains(module) && (DisabledModules ?? []).Contains(module, StringComparer.OrdinalIgnoreCase);

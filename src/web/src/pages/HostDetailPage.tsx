@@ -30,6 +30,7 @@ import {
 } from "@tabler/icons-react";
 import { api, ApiError, formatDateTime, kbOf, splitTags, formatRelative, formatUptime, isActiveJob, type HostDetail, type Job, type JobType, type MonitoringHostRow, type PatchScope } from "../api";
 import { HostScanCard } from "../components/ScanIntervals";
+import { HostPolicyCard } from "../components/HostPolicy";
 import { ChangelogModal } from "../components/ChangelogModal";
 import { HostUpdateSummaryCard } from "../components/UpdateSummary";
 import { useTranslation } from "react-i18next";
@@ -527,6 +528,7 @@ export function HostDetailPage() {
             </Card>
             <PlanCard host={h} modules={host.modules} onChanged={() => void load()} />
             <HostScanCard host={host} onSaved={() => void load()} />
+            <HostPolicyCard policy={h.policy} os={h.osFamily} agentVersion={h.agentVersion} />
             {!simple && <MappingCard host={host} onSaved={() => void load()} />}
             {!simple && <AgentModulesCard hostId={h.id} protocol={host.agentProtocol} modules={host.modules ?? []} onChanged={() => void load()} />}
             {can.operate && (

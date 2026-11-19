@@ -99,6 +99,22 @@ export interface InviteInfo {
 export type OsFamily = "Linux" | "Windows";
 export type HostStatus = "Online" | "Offline" | "Pending" | "Revoked";
 
+/** Lokale policy.json eines Hosts, wie der Agent sie meldet; null bei einem Wert = nicht gemeldet (Lite-Agent). */
+export interface AgentPolicyReport {
+  allowPatch: "All" | "Security" | "None";
+  allowReboot: boolean | null;
+  allowSelfUpdate: boolean | null;
+  allowAppUpdates: boolean | null;
+  trustServerUpdates: boolean | null;
+  allowSystemChanges: boolean | null;
+  allowSourceFixes: boolean | null;
+  allowAutoUpdateChanges: boolean | null;
+  allowMonitoringChanges: boolean | null;
+  allowServerUpdate: boolean | null;
+  allowUpdateRecipes: boolean | null;
+  disabledModules: string[] | null;
+}
+
 export interface HostSummary {
   id: string;
   siteId: string;
@@ -128,6 +144,8 @@ export interface HostSummary {
   mapped: boolean;
   /** Worauf die Zuordnung zeigt (null = keine) */
   mapping?: HostMapping | null;
+  /** lokale policy.json laut Agent (nur Anzeige); null = nicht gemeldet */
+  policy?: AgentPolicyReport | null;
   /** Patch-Plan des Hosts (null = keiner, kein automatisches Patchen); scheduledRunbook = Name */
   planId: string | null;
   planGroup: string | null;

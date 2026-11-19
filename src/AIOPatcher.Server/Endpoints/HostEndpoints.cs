@@ -52,7 +52,8 @@ public static class HostEndpoints
         UsageDto? Usage = null,
         string? Channel = null,
         string? AgentUpdate = null,
-        HostMappingDto? Mapping = null);
+        HostMappingDto? Mapping = null,
+        AgentPolicyReport? Policy = null);
 
     /// <summary>Zuordnung zu einer Proxmox-VM bzw. einem Hetzner-Server, für Listen ("pve · VM 131").</summary>
     public sealed record HostMappingDto(Guid IntegrationId, string IntegrationName, IntegrationType Type, string ExternalId, bool Manual);
@@ -281,6 +282,8 @@ public static class HostEndpoints
             .Where(h => ids.Contains(h.Id) && h.IntegrationId != null && h.ExternalId != null)
             .Select(h => new { h.Id, Mapping = new HostMappingDto(h.IntegrationId!.Value, h.Integration!.Name, h.Integration.Type, h.ExternalId!, h.MappingManual) })
             .ToDictionaryAsync(x => x.Id, x => x.Mapping, ct);
+        var policies = await db.Hosts.AsNoTracking().Where(h => ids.Contains(h.Id) && h.ReportedPolicy != null)
+            .Select(h => new { h.Id, h.ReportedPolicy }).ToDictionaryAsync(h => h.Id, h => PolicyReport.Parse(h.ReportedPolicy), ct);
         var latestAgent = AgentDownloads.AgentVersion;
         var blockedAgents = await db.Hosts.AsNoTracking().Where(h => ids.Contains(h.Id) && h.AgentUpdateBlockedVersion == latestAgent)
             .Select(h => h.Id).ToListAsync(ct);
@@ -289,7 +292,7 @@ public static class HostEndpoints
         return summaries.Select(s =>
         {
             // Weg des Agents: direkt (intern) oder über den Reverse Proxy
-            s = s with { Channel = channels.GetValueOrDefault(s.Id), Mapping = mappings.GetValueOrDefault(s.Id) };
+            s = s with { Channel = channels.GetValueOrDefault(s.Id), Mapping = mappings.GetValueOrDefault(s.Id), Policy = policies.GetValueOrDefault(s.Id) };
             if (s.AgentVersion is { } v && !v.EndsWith("-lite", StringComparison.Ordinal) && AgentDownloads.IsNewer(latestAgent, v))
             {
                 s = s with { AgentUpdate = blockedAgents.Contains(s.Id) ? AgentUpdateStatus.Failed : "outdated" };

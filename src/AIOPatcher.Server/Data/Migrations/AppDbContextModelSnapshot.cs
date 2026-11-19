@@ -1246,6 +1246,10 @@ namespace AIOPatcher.Server.Data.Migrations
                         .HasMaxLength(4000)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("ReportedPolicy")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("RunningSnapshot")
                         .HasColumnType("TEXT");
 

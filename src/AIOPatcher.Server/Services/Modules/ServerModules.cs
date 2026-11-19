@@ -129,6 +129,7 @@ public sealed class SystemServerModule : ServerModule
         host.NativeAutoUpdatesEnabled = d.NativeAutoUpdatesEnabled;
         host.Architecture = d.Architecture is "x64" or "arm64" ? d.Architecture : null;
         host.ReportedModules = JsonSerializer.Serialize(d.Modules.Take(32).ToList(), ModuleJson.Default.ListModuleInfo);
+        host.ReportedPolicy = d.Policy is { } policy ? PolicyReport.Serialize(policy) : null;
         await AgentEndpoints.ReplaceAddressesAsync(context.Db, host, d.Addresses ?? [], context.Now, ct);
         if (d.UpdateReport is { } report)
         {

@@ -25,6 +25,7 @@ import { useSiteScope } from "../siteScope";
 import { AssignPlanModal } from "../components/plans/AssignPlanModal";
 import { UsageCompact } from "../components/metrics/charts";
 import { OsIcon } from "../components/OsIcon";
+import { PolicyBadges } from "../components/HostPolicy";
 import { MappingBadge } from "../components/MappingBadge";
 import { confirmAction, EmptyState, HostStatusLabel, notifyError, notifySuccess, PageHeader, reportBulk } from "../components/ui";
 
@@ -177,6 +178,7 @@ export function HostsPage() {
                       {h.rebootRequired && <Badge size="sm" color="yellow">{t("overview.rebootRequired")}</Badge>}
                       {h.scheduledRunbook && <Badge size="sm" color="violet" leftSection={<IconClock size={11} />}>{h.scheduledRunbook}</Badge>}
                       {h.mapping && <MappingBadge mapping={h.mapping} />}
+                      <PolicyBadges policy={h.policy} />
                     </Group>
                   </Stack>
                 </Group>
@@ -252,6 +254,7 @@ export function HostsPage() {
                             </Badge>
                           ))}
                           {h.mapping && <MappingBadge mapping={h.mapping} />}
+                      <PolicyBadges policy={h.policy} />
                         </Group>
                       </Table.Td>
                       <Table.Td>

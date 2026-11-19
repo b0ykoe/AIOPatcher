@@ -117,6 +117,10 @@ public sealed class ManagedHost
     /// <summary>Module laut Agent (JSON-Liste von <see cref="AIOPatcher.Contracts.ModuleInfo"/>).</summary>
     public string? ReportedModules { get; set; }
 
+    /// <summary>Lokale policy.json laut Agent (JSON von <see cref="AIOPatcher.Contracts.AgentPolicyReport"/>), nur Anzeige; null = nicht gemeldet.</summary>
+    [System.ComponentModel.DataAnnotations.MaxLength(2000)]
+    public string? ReportedPolicy { get; set; }
+
     /// <summary>Im Dashboard abgeschaltete Module (kommagetrennt). Für die gibt es keine Aufträge.</summary>
     public string? DisabledModules { get; set; }
 

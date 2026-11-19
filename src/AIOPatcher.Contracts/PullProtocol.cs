@@ -159,7 +159,26 @@ public sealed record SystemDescription(
     IReadOnlyList<NetworkAddress> Addresses,
     string Architecture,
     IReadOnlyList<ModuleInfo> Modules,
-    AgentUpdateReport? UpdateReport = null);
+    AgentUpdateReport? UpdateReport = null,
+    AgentPolicyReport? Policy = null);
+
+/// <summary>
+/// Lokale policy.json des Hosts, nur zur Anzeige gemeldet (der Server kann sie nicht ändern). null bei einem Wert = der
+/// Agent meldet ihn nicht (Lite-Agents kennen nur einen Teil).
+/// </summary>
+public sealed record AgentPolicyReport(
+    string AllowPatch,
+    bool? AllowReboot = null,
+    bool? AllowSelfUpdate = null,
+    bool? AllowAppUpdates = null,
+    bool? TrustServerUpdates = null,
+    bool? AllowSystemChanges = null,
+    bool? AllowSourceFixes = null,
+    bool? AllowAutoUpdateChanges = null,
+    bool? AllowMonitoringChanges = null,
+    bool? AllowServerUpdate = null,
+    bool? AllowUpdateRecipes = null,
+    IReadOnlyList<string>? DisabledModules = null);
 
 /// <param name="BrokenSources">Paketquellen, die beim letzten apt-get update nicht ladbar waren (null = Agent prüft das nicht).</param>
 public sealed record UpdateScanResult(IReadOnlyList<AvailableUpdate> Updates, IReadOnlyList<BrokenAptSource>? BrokenSources = null);
@@ -231,6 +250,7 @@ public sealed record RenewAnswer(string CertificateSigningRequestPem);
 [JsonSerializable(typeof(TaskResultRequest))]
 [JsonSerializable(typeof(TaskResultResponse))]
 [JsonSerializable(typeof(SystemDescription))]
+[JsonSerializable(typeof(AgentPolicyReport))]
 [JsonSerializable(typeof(UpdateScanResult))]
 [JsonSerializable(typeof(List<BrokenAptSource>))]
 [JsonSerializable(typeof(InstallRequest))]

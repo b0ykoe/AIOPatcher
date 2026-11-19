@@ -815,7 +815,8 @@ the table above. Recipes reach hosts with the next agent update.
 
 When registering, the agent creates `policy.json` next to its certificates
 (Linux: `/var/lib/aiopatcher-agent/`, Windows: `C:\ProgramData\AIOPatcher\Agent\`).
-The server cannot change it; it is read again for every job.
+The server cannot change it; it is read again for every job. The agent reports it with the system data, so the
+dashboard shows it under Host → Settings → **Local policy** and marks deviations from the default in the host list.
 
 ```json
 {
