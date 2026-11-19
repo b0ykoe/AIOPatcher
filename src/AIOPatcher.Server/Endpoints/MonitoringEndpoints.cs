@@ -63,13 +63,14 @@ public static class MonitoringEndpoints
         admin.MapPost("/monitoring/actions", Act);
     }
 
-    private static async Task<OverviewDto> Overview(AppDbContext db, FeatureFlags features, CancellationToken ct)
+    /// <summary>Mit siteId: Hosts dieser Site, Ziele dieser Site und Ziele ohne Site (gelten für alle übrigen).</summary>
+    private static async Task<OverviewDto> Overview(Guid? siteId, AppDbContext db, FeatureFlags features, CancellationToken ct)
     {
         var targets = await db.MonitoringTargets.AsNoTracking().Include(t => t.Site).OrderBy(t => t.Product).ThenBy(t => t.Site == null ? "" : t.Site.Name).ToListAsync(ct);
-        var hosts = await db.Hosts.AsNoTracking().Include(h => h.Site).Where(h => !h.IsRevoked).OrderBy(h => h.Name).ToListAsync(ct);
+        var hosts = await db.Hosts.AsNoTracking().Include(h => h.Site).Where(h => !h.IsRevoked && (siteId == null || h.SiteId == siteId)).OrderBy(h => h.Name).ToListAsync(ct);
         var clients = (await db.MonitoringClients.AsNoTracking().ToListAsync(ct)).ToLookup(c => c.HostId);
         var actions = await LastActionsAsync(db, null, ct);
-        return new OverviewDto(features.IsOn(Feature.MonitoringClients), targets.Select(ToDto).ToList(),
+        return new OverviewDto(features.IsOn(Feature.MonitoringClients), targets.Where(t => siteId == null || t.SiteId == null || t.SiteId == siteId).Select(ToDto).ToList(),
             hosts.Select(h => Row(h, targets, clients[h.Id].ToList(), actions)).ToList());
     }
 

@@ -1356,6 +1356,13 @@ const de = {
     fingerprintHint: "Nur für ein selbstsigniertes Zertifikat der Site: SHA-256 des Zertifikats. Leer = normale Zertifikatsprüfung. Gilt beim Laden der Agent-Pakete.",
     clearSecret: "Passwort entfernen",
   },
+  siteScope: {
+    title: "Site anzeigen",
+    all: "Alle Sites",
+    choose: "Site wählen",
+    hint: "Gilt für alle Seiten. Einstellungen und Detailseiten bleiben ungefiltert.",
+    pickForIpam: "Site für IPAM",
+  },
   hubs: {
     securityDescription: "Offene Lücken aller Hosts, CVE-Suche und Compliance an einem Ort.",
     vulnerabilities: "Lücken",

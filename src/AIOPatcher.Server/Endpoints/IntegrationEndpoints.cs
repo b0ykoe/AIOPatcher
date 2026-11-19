@@ -83,10 +83,12 @@ public static class IntegrationEndpoints
             status.Groups.Count(g => ProxmoxBackupMonitor.IsStale(g, status.CheckedAt)), status.Groups.Count, status.CheckedAt);
     }
 
-    private static async Task<BackupOverviewDto> BackupServers(AppDbContext db, FeatureFlags features, CancellationToken ct)
+    /// <summary>Mit siteId: Backup-Server und Cluster dieser Site und solche ohne Site.</summary>
+    private static async Task<BackupOverviewDto> BackupServers(Guid? siteId, AppDbContext db, FeatureFlags features, CancellationToken ct)
     {
         var integrations = await db.Integrations.AsNoTracking().Include(i => i.Site)
             .Where(i => i.Type == IntegrationType.ProxmoxBackup || i.Type == IntegrationType.Proxmox)
+            .Where(i => siteId == null || i.SiteId == null || i.SiteId == siteId)
             .OrderBy(i => i.Name).ToListAsync(ct);
         return new BackupOverviewDto(features.IsOn(Feature.BackupJobChecks),
             integrations.Where(i => i.Type == IntegrationType.ProxmoxBackup)

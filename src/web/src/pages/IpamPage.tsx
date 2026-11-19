@@ -20,6 +20,7 @@ import {
 } from "@mantine/core";
 import { IconAlertTriangle, IconEdit, IconNetwork, IconPlus, IconSearch, IconSparkles, IconTrash } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
+import { useSiteScope } from "../siteScope";
 import { api, formatRelative, type Site } from "../api";
 import { useCan } from "../App";
 import { confirmAction, EmptyState, errorText, notifyError, notifySuccess, PageHeader } from "../components/ui";
@@ -58,7 +59,10 @@ export function IpamPage() {
   const { t } = useTranslation();
   const can = useCan();
   const [sites, setSites] = useState<Site[]>([]);
-  const [siteId, setSiteId] = useState<string | null>(null);
+  // IPAM braucht immer eine Site: die oben gewählte, bei „Alle Sites“ ein eigenes Feld.
+  const { siteId: scopeSite } = useSiteScope();
+  const [localSite, setSiteId] = useState<string | null>(null);
+  const siteId = scopeSite ?? localSite;
   const [subnets, setSubnets] = useState<SubnetItem[]>([]);
   const [addresses, setAddresses] = useState<AddressItem[] | null>(null);
   const [subnetFilter, setSubnetFilter] = useState<string>("");
@@ -138,7 +142,9 @@ export function IpamPage() {
         description={t("ipam.description")}
         actions={
           <>
-            <Select data={sites.map((s) => ({ value: s.id, label: s.name }))} value={siteId} onChange={setSiteId} allowDeselect={false} w={200} />
+            {!scopeSite && (
+              <Select data={sites.map((s) => ({ value: s.id, label: s.name }))} value={siteId} onChange={setSiteId} allowDeselect={false} w={200} aria-label={t("siteScope.pickForIpam")} />
+            )}
             {can.operate && (
               <Button variant="gradient" className="gradient-button" leftSection={<IconPlus size={16} />} onClick={() => setEditSubnet("new")} disabled={!siteId}>
                 {t("ipam.addSubnet")}

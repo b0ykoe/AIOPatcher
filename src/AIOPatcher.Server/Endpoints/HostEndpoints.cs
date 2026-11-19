@@ -312,9 +312,11 @@ public static class HostEndpoints
         }).ToList();
     }
 
-    private static async Task<IResult> GetOverview(AppDbContext db, AIOPatcherOptions options, ServerClock clock, CancellationToken ct)
+    /// <summary>Mit siteId nur Hosts, Jobs und Patch-Pausen dieser Site (globale Pausen gelten mit); die Zahl der Sites bleibt gesamt.</summary>
+    private static async Task<IResult> GetOverview(Guid? siteId, AppDbContext db, AIOPatcherOptions options, ServerClock clock, CancellationToken ct)
     {
-        var hosts = await EnrichAsync(db, await ProjectSummaries(db.Hosts.Where(h => !h.IsRevoked), db.ImageChecks, DateTime.UtcNow - options.OfflineAfter).ToListAsync(ct), clock, ct);
+        var hosts = await EnrichAsync(db, await ProjectSummaries(db.Hosts.Where(h => !h.IsRevoked && (siteId == null || h.SiteId == siteId)), db.ImageChecks,
+            DateTime.UtcNow - options.OfflineAfter).ToListAsync(ct), clock, ct);
         return Results.Ok(new OverviewDto(
             Sites: await db.Sites.CountAsync(ct),
             Hosts: hosts.Count,
@@ -326,9 +328,9 @@ public static class HostEndpoints
             RebootRequired: hosts.Count(h => h.RebootRequired),
             NativeAutoUpdateConflicts: hosts.Count(h => h.NativeAutoUpdatesEnabled),
             AutoPatchHosts: hosts.Count(h => h.AutoPatch.Enabled),
-            RunningJobs: await db.Jobs.CountAsync(j => j.Status == JobStatus.Running || j.Status == JobStatus.Queued, ct),
+            RunningJobs: await db.Jobs.CountAsync(j => (j.Status == JobStatus.Running || j.Status == JobStatus.Queued) && (siteId == null || j.Host!.SiteId == siteId), ct),
             ActiveFreeze: await db.PatchFreezes
-                .Where(f => f.StartsAt <= DateTime.UtcNow && f.EndsAt > DateTime.UtcNow)
+                .Where(f => f.StartsAt <= DateTime.UtcNow && f.EndsAt > DateTime.UtcNow && (siteId == null || f.SiteId == null || f.SiteId == siteId))
                 .OrderBy(f => f.SiteId != null).ThenByDescending(f => f.EndsAt)
                 .Select(f => new FreezeInfoDto(f.Id, f.Name, f.SiteId, f.EndsAt))
                 .FirstOrDefaultAsync(ct),

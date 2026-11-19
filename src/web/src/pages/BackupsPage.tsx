@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Alert, Anchor, Badge, Button, Card, Group, Loader, SegmentedControl, SimpleGrid, Stack, Table, Text, Tooltip } from "@mantine/core";
 import { IconAlertTriangle, IconClockExclamation, IconDatabase, IconRefresh, IconShieldCheck, IconShieldX } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
+import { useSiteScope } from "../siteScope";
 import { Link } from "react-router";
 import { useCan } from "../App";
 import { api, formatDateTime, formatRelative, type BackupOverview, type PbsGroup } from "../api";
@@ -23,15 +24,16 @@ export function BackupsPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [filter, setFilter] = useState<"problems" | "all">("problems");
+  const { scoped } = useSiteScope();
 
   const load = useCallback(() => {
-    api.get<BackupOverview>("/api/backups")
+    api.get<BackupOverview>(scoped("/api/backups"))
       .then((overview) => {
         setData(overview);
         setError(null);
       })
       .catch((e) => setError(errorText(e)));
-  }, []);
+  }, [scoped]);
 
   useEffect(() => {
     load();

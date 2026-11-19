@@ -3,6 +3,7 @@ import { Link } from "react-router";
 import { Alert, Anchor, Badge, Card, Group, Loader, SegmentedControl, Stack, Table, Text, TextInput, ThemeIcon, Tooltip } from "@mantine/core";
 import { IconAlertTriangle, IconBox, IconBrandDocker, IconCpu, IconDatabase, IconDeviceDesktop, IconGauge, IconSearch, IconServer, IconStack2 } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
+import { useSiteScope } from "../siteScope";
 import { api, formatRelative, type HostUtilization, type ProxmoxResource, type ProxmoxUtilization, type Utilization } from "../api";
 import { CardTitle, EmptyState, PageHeader } from "../components/ui";
 import { formatBytes, percentOf, Sparkline, UsageCell, UsageMeter } from "../components/metrics/charts";
@@ -15,10 +16,11 @@ export function UtilizationPage() {
   const { t } = useTranslation();
   const [data, setData] = useState<Utilization | null>(null);
   const [filter, setFilter] = useState("");
+  const { scoped } = useSiteScope();
 
   const load = useCallback(() => {
-    void api.get<Utilization>("/api/utilization").then(setData).catch(() => {});
-  }, []);
+    void api.get<Utilization>(scoped("/api/utilization")).then(setData).catch(() => {});
+  }, [scoped]);
 
   useEffect(() => {
     load();

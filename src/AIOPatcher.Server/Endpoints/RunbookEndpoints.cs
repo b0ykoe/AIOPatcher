@@ -98,12 +98,30 @@ public static class RunbookEndpoints
             .Include(r => r.Waves).ThenInclude(w => w.Hosts).ThenInclude(h => h.Host).ThenInclude(h => h!.Site)
             .AsSplitQuery();
 
-    private static async Task<IResult> ListRunbooks(AppDbContext db, ServerClock clock, CancellationToken ct)
+    private static async Task<IResult> ListRunbooks(Guid? siteId, AppDbContext db, ServerClock clock, CancellationToken ct)
     {
         var runbooks = await WithDetails(db).OrderBy(r => r.Name).ToListAsync(ct);
         var lastRuns = await LastRunsAsync(db, ct);
         var members = await MembersAsync(db, ct);
+        if (siteId is { } site)
+        {
+            var hostSites = await db.Hosts.AsNoTracking().Where(h => !h.IsRevoked).ToDictionaryAsync(h => h.Id, h => h.SiteId, ct);
+            runbooks = runbooks.Where(r => TouchesSite(r, site, members.ByHost, hostSites)).ToList();
+        }
+
         return Results.Ok(runbooks.Select(r => ToDto(r, lastRuns.GetValueOrDefault(r.Id), clock, members)));
+    }
+
+    /// <summary>
+    /// Für die Site-Auswahl: der Plan patcht mindestens einen Host der Site, hat eine Gruppe für diese Site oder hat noch gar
+    /// keine Mitglieder (sonst verschwände ein frisch angelegter Plan).
+    /// </summary>
+    public static bool TouchesSite(Runbook plan, Guid siteId, IReadOnlyDictionary<Guid, PlanMembership> membership, IReadOnlyDictionary<Guid, Guid> hostSites)
+    {
+        var hosts = membership.Where(m => m.Value.PlanId == plan.Id).Select(m => m.Key).ToList();
+        return hosts.Count == 0
+            || plan.Waves.Any(w => w.MemberSiteId == siteId)
+            || hosts.Any(h => hostSites.TryGetValue(h, out var s) && s == siteId);
     }
 
     private static async Task<IResult> GetRunbook(Guid id, AppDbContext db, ServerClock clock, CancellationToken ct)
@@ -350,12 +368,17 @@ public static class RunbookEndpoints
         return Results.Ok(await ProjectRuns(db.RunbookRuns.Where(r => r.Id == run.Id)).SingleAsync(ct));
     }
 
-    private static async Task<IResult> ListRuns(Guid? runbookId, int? limit, AppDbContext db, CancellationToken ct)
+    private static async Task<IResult> ListRuns(Guid? runbookId, Guid? siteId, int? limit, AppDbContext db, CancellationToken ct)
     {
         var query = db.RunbookRuns.AsQueryable();
         if (runbookId is not null)
         {
             query = query.Where(r => r.RunbookId == runbookId);
+        }
+
+        if (siteId is not null)
+        {
+            query = query.Where(r => r.Items.Any(i => i.Host!.SiteId == siteId));
         }
 
         return Results.Ok(await ProjectRuns(query.OrderByDescending(r => r.CreatedAt).Take(Math.Clamp(limit ?? 30, 1, 200))).ToListAsync(ct));

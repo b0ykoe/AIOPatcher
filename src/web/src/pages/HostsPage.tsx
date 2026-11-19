@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router";
-import { ActionIcon, Affix, Badge, Button, Card, Checkbox, Group, Menu, Modal, MultiSelect, Paper, Select, Stack, Switch, Table, TagsInput, Text, TextInput, Tooltip, Transition } from "@mantine/core";
+import { Link, useNavigate } from "react-router";
+import { ActionIcon, Affix, Badge, Button, Card, Checkbox, Group, Menu, Modal, MultiSelect, Paper, Stack, Switch, Table, TagsInput, Text, TextInput, Tooltip, Transition } from "@mantine/core";
 import {
   IconChevronDown,
   IconClock,
@@ -16,10 +16,11 @@ import {
   IconTags,
   IconX,
 } from "@tabler/icons-react";
-import { api, formatRelative, formatWindowStart, splitTags, type BulkJobResult, type HostSummary, type JobType, type PatchScope, type Site } from "../api";
+import { api, formatRelative, formatWindowStart, splitTags, type BulkJobResult, type HostSummary, type JobType, type PatchScope } from "../api";
 import { useTranslation } from "react-i18next";
 import { useCan, useShell, useSimple } from "../App";
 import { useFeatures } from "../features";
+import { useSiteScope } from "../siteScope";
 
 import { AssignPlanModal } from "../components/plans/AssignPlanModal";
 import { UsageCompact } from "../components/metrics/charts";
@@ -33,10 +34,8 @@ export function HostsPage() {
   const simple = useSimple();
   const { openAddHost } = useShell();
   const navigate = useNavigate();
-  const [params, setParams] = useSearchParams();
-  const siteId = params.get("site") ?? "";
+  const { scoped } = useSiteScope(); // Site-Filter kommt aus der globalen Auswahl (?site=)
   const [query, setQuery] = useState("");
-  const [sites, setSites] = useState<Site[]>([]);
   const [hosts, setHosts] = useState<HostSummary[] | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [autoPatchOpen, setAutoPatchOpen] = useState(false);
@@ -45,13 +44,8 @@ export function HostsPage() {
   const [tagsOpen, setTagsOpen] = useState(false);
 
   const load = useCallback(async () => {
-    const q = siteId ? `?siteId=${encodeURIComponent(siteId)}` : "";
-    setHosts(await api.get<HostSummary[]>(`/api/hosts${q}`));
-  }, [siteId]);
-
-  useEffect(() => {
-    void api.get<Site[]>("/api/sites").then(setSites);
-  }, []);
+    setHosts(await api.get<HostSummary[]>(scoped("/api/hosts")));
+  }, [scoped]);
 
   useEffect(() => {
     void load();
@@ -133,14 +127,6 @@ export function HostsPage() {
             {!simple && allTags.length > 0 && (
               <MultiSelect placeholder={tagFilter.length === 0 ? t("rules.tagFilter") : undefined} data={allTags} value={tagFilter} onChange={setTagFilter} clearable w={200} leftSection={<IconTags size={16} />} />
             )}
-            <Select
-              placeholder={t("hostsPage.allSites")}
-              data={sites.map((s) => ({ value: s.id, label: s.name }))}
-              value={siteId || null}
-              onChange={(v) => setParams(v ? { site: v } : {})}
-              clearable
-              w={180}
-            />
             {can.operate && outdatedAgents > 0 && (
               <Button variant="light" leftSection={<IconRefresh size={16} />} onClick={updateAllAgents}>
                 {t("hostsPage.agentsUpdate", { count: outdatedAgents })}

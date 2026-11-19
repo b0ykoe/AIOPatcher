@@ -6,6 +6,7 @@ import {
 } from "@mantine/core";
 import { IconBrandWindows, IconFileText, IconKey, IconPencil, IconPlus, IconServer, IconShieldCheck, IconTerminal2, IconTrash, IconUsers, IconWand } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
+import { useSiteScope } from "../../siteScope";
 import { api, ApiError, splitTags, type HostSummary, type Site } from "../../api";
 import { useCan } from "../../App";
 import {
@@ -57,10 +58,11 @@ export function BaselinesPanel() {
   const [baselines, setBaselines] = useState<Baseline[] | null>(null);
   const [editing, setEditing] = useState<{ baseline: Baseline | null; draft: SaveBaseline } | null>(null);
   const [picking, setPicking] = useState(false);
+  const { siteId } = useSiteScope();
 
   const load = useCallback(() => {
-    complianceApi.baselines().then(setBaselines).catch(() => setBaselines([]));
-  }, []);
+    complianceApi.baselines(siteId).then(setBaselines).catch(() => setBaselines([]));
+  }, [siteId]);
   useEffect(load, [load]);
 
   const startFrom = (key: TemplateKey) => {

@@ -6,6 +6,7 @@ import {
 import { IconAlertTriangle, IconFlame, IconHistory, IconListCheck, IconPlus, IconRocket, IconShieldCheck, IconShieldOff, IconTrash, IconUsers } from "@tabler/icons-react";
 import { BaselinesPanel } from "../components/compliance/Baselines";
 import { useTranslation } from "react-i18next";
+import { useSiteScope } from "../siteScope";
 import { ApiError, formatDateTime, formatRelative } from "../api";
 import { useCan } from "../App";
 import { allowsPort, complianceApi, emptyConfig, type ComplianceSummary, type FirewallConfig, type FirewallProfile, type FirewallRule, type FirewallVersion } from "../compliance";
@@ -54,13 +55,14 @@ export function CompliancePage() {
 function Overview() {
   const { t } = useTranslation();
   const [hosts, setHosts] = useState<ComplianceSummary[] | null>(null);
+  const { siteId } = useSiteScope();
 
   useEffect(() => {
-    const load = () => complianceApi.hosts().then(setHosts).catch(() => setHosts([]));
+    const load = () => complianceApi.hosts(siteId).then(setHosts).catch(() => setHosts([]));
     load();
     const timer = setInterval(load, 15000);
     return () => clearInterval(timer);
-  }, []);
+  }, [siteId]);
 
   if (!hosts) return <Loader />;
   const reported = hosts.filter((h) => h.collectedAt);
@@ -166,11 +168,12 @@ function FirewallProfiles() {
   const [hosts, setHosts] = useState<ComplianceSummary[]>([]);
   const [editing, setEditing] = useState<{ profile: FirewallProfile | null; config: FirewallConfig } | null>(null);
   const [deploying, setDeploying] = useState<{ profile: FirewallProfile; version: FirewallVersion } | null>(null);
+  const { siteId } = useSiteScope();
 
   const load = useCallback(() => {
     complianceApi.profiles().then(setProfiles).catch(() => setProfiles([]));
-    complianceApi.hosts().then(setHosts).catch(() => setHosts([]));
-  }, []);
+    complianceApi.hosts(siteId).then(setHosts).catch(() => setHosts([]));
+  }, [siteId]);
   useEffect(load, [load]);
 
   const canEdit = can.admin;

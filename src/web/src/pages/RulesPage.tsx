@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ActionIcon, Alert, Badge, Button, Card, Group, Modal, SegmentedControl, Select, Stack, Table, Text, TextInput, Tooltip } from "@mantine/core";
 import { IconHandStop, IconPackageOff, IconPlus, IconTrash } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
+import { useSiteScope } from "../siteScope";
 import { api, formatDateTime, type HostSummary, type PackageHold, type PatchFreeze, type Site } from "../api";
 import { useCan } from "../App";
 import { CardTitle, confirmAction, EmptyState, errorText, notifyError, notifySuccess, PageHeader } from "../components/ui";
@@ -19,11 +20,12 @@ export function RulesPage() {
   const [hosts, setHosts] = useState<HostSummary[]>([]);
   const [freezeOpen, setFreezeOpen] = useState(false);
   const [holdOpen, setHoldOpen] = useState(false);
+  const { scoped, siteId } = useSiteScope();
 
   const load = useCallback(() => {
-    api.get<PatchFreeze[]>("/api/patch-freezes").then(setFreezes).catch((e) => notifyError(e));
-    api.get<PackageHold[]>("/api/package-holds").then(setHolds).catch((e) => notifyError(e));
-  }, []);
+    api.get<PatchFreeze[]>(scoped("/api/patch-freezes")).then(setFreezes).catch((e) => notifyError(e));
+    api.get<PackageHold[]>(scoped("/api/package-holds")).then(setHolds).catch((e) => notifyError(e));
+  }, [scoped]);
 
   useEffect(() => {
     load();
@@ -178,13 +180,13 @@ export function RulesPage() {
         </Card>
       </div>
 
-      <FreezeModal opened={freezeOpen} sites={sites} onClose={() => setFreezeOpen(false)} onSaved={load} />
-      <HoldModal opened={holdOpen} sites={sites} hosts={hosts} onClose={() => setHoldOpen(false)} onSaved={load} />
+      <FreezeModal opened={freezeOpen} sites={sites} defaultSiteId={siteId} onClose={() => setFreezeOpen(false)} onSaved={load} />
+      <HoldModal opened={holdOpen} sites={sites} hosts={hosts} defaultSiteId={siteId} onClose={() => setHoldOpen(false)} onSaved={load} />
     </>
   );
 }
 
-function FreezeModal({ opened, sites, onClose, onSaved }: { opened: boolean; sites: Site[]; onClose: () => void; onSaved: () => void }) {
+function FreezeModal({ opened, sites, defaultSiteId, onClose, onSaved }: { opened: boolean; sites: Site[]; defaultSiteId: string | null; onClose: () => void; onSaved: () => void }) {
   const { t } = useTranslation();
   const [name, setName] = useState("");
   const [siteId, setSiteId] = useState("");
@@ -198,12 +200,12 @@ function FreezeModal({ opened, sites, onClose, onSaved }: { opened: boolean; sit
     if (!opened) return;
     const now = new Date();
     setName("");
-    setSiteId("");
+    setSiteId(defaultSiteId ?? ""); // gewählte Site oben als Vorschlag
     setStartsAt(toLocalInput(now));
     setEndsAt(toLocalInput(new Date(now.getTime() + 7 * 86400000)));
     setReason("");
     setError(null);
-  }, [opened]);
+  }, [opened, defaultSiteId]);
 
   const save = async () => {
     setBusy(true);
@@ -255,6 +257,7 @@ export function HoldModal({
   sites,
   hosts,
   initial,
+  defaultSiteId = null,
   onClose,
   onSaved,
 }: {
@@ -262,6 +265,8 @@ export function HoldModal({
   sites: Site[];
   hosts: HostSummary[];
   initial?: { pattern: string; hostId: string };
+  /** Gewählte Site oben: neue Regel gilt dann zunächst für diese Site. */
+  defaultSiteId?: string | null;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -278,13 +283,13 @@ export function HoldModal({
   useEffect(() => {
     if (!opened) return;
     setPattern(initial?.pattern ?? "");
-    setScope(initial ? "host" : "all");
+    setScope(initial ? "host" : defaultSiteId ? "site" : "all");
     setHostId(initial?.hostId ?? null);
-    setSiteId(null);
+    setSiteId(defaultSiteId);
     setReason("");
     setExpiresAt("");
     setError(null);
-  }, [opened, initial]);
+  }, [opened, initial, defaultSiteId]);
 
   const save = async () => {
     setBusy(true);

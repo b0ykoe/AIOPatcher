@@ -3,7 +3,8 @@ import { Link } from "react-router";
 import { Alert, Anchor, Badge, Button, Card, Group, Loader, Select, SimpleGrid, Stack, Table, Text } from "@mantine/core";
 import { IconAlertTriangle, IconBug, IconCircleCheck, IconDownload, IconListCheck, IconPrinter, IconShieldExclamation } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
-import { api, formatDateTime, type Site } from "../api";
+import { api, formatDateTime } from "../api";
+import { useSiteScope } from "../siteScope";
 import { EmptyState, errorText, notifyError, PageHeader, StatCard } from "../components/ui";
 
 const tabular = { fontVariantNumeric: "tabular-nums" } as const;
@@ -40,18 +41,13 @@ interface PatchReport {
 /** Patch-Bericht: Konformität je Host, druckbar (Browser → PDF) und als CSV. */
 export function ReportsPage() {
   const { t } = useTranslation();
-  const [sites, setSites] = useState<Site[]>([]);
-  const [siteId, setSiteId] = useState("");
+  const { siteId } = useSiteScope(); // Site kommt aus der Auswahl oben
   const [days, setDays] = useState("30");
   const [sla, setSla] = useState("14");
   const [report, setReport] = useState<PatchReport | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    void api.get<Site[]>("/api/sites").then(setSites).catch(() => {});
-  }, []);
-
-  const query = `siteId=${encodeURIComponent(siteId)}&days=${days}&slaDays=${sla}`.replace(/^siteId=&/, "");
+  const query = `${siteId ? `siteId=${encodeURIComponent(siteId)}&` : ""}days=${days}&slaDays=${sla}`;
 
   useEffect(() => {
     setReport(null);
@@ -71,13 +67,6 @@ export function ReportsPage() {
         description={report ? t("reports.period", { from: formatDateTime(report.from), to: formatDateTime(report.to) }) : undefined}
         actions={
           <Group gap="sm" className="no-print">
-            <Select
-              data={[{ value: "", label: t("hostsPage.allSites") }, ...sites.map((x) => ({ value: x.id, label: x.name }))]}
-              value={siteId}
-              onChange={(v) => setSiteId(v ?? "")}
-              allowDeselect={false}
-              w={180}
-            />
             <Select
               data={["7", "30", "90", "365"].map((d) => ({ value: d, label: t("reports.lastDays", { count: Number(d) }) }))}
               value={days}

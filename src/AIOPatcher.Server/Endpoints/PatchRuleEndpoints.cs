@@ -38,13 +38,14 @@ public static class PatchRuleEndpoints
 
     // --- Patchpausen --------------------------------------------------------------------------------
 
-    private static async Task<List<FreezeDto>> ListFreezes(AppDbContext db, CancellationToken ct)
+    /// <summary>Mit siteId: Pausen dieser Site und Pausen für alle Sites.</summary>
+    public static async Task<List<FreezeDto>> ListFreezes(Guid? siteId, AppDbContext db, CancellationToken ct)
     {
         var now = DateTime.UtcNow;
         // Abgelaufene Pausen der letzten 30 Tage bleiben zur Nachvollziehbarkeit sichtbar.
         var since = now.AddDays(-30);
         return await db.PatchFreezes
-            .Where(f => f.EndsAt > since)
+            .Where(f => f.EndsAt > since && (siteId == null || f.SiteId == null || f.SiteId == siteId))
             .OrderByDescending(f => f.EndsAt)
             .Select(f => new FreezeDto(f.Id, f.Name, f.SiteId, f.Site != null ? f.Site.Name : null, f.StartsAt, f.EndsAt, f.Reason, f.CreatedBy, f.StartsAt <= now && f.EndsAt > now))
             .ToListAsync(ct);
@@ -111,13 +112,19 @@ public static class PatchRuleEndpoints
 
     // --- Zurückgehaltene Updates --------------------------------------------------------------------
 
-    private static async Task<List<HoldDto>> ListHolds(Guid? hostId, AppDbContext db, CancellationToken ct)
+    /// <summary>Mit siteId: zurückgehaltene Pakete dieser Site, aller Sites und von Hosts dieser Site.</summary>
+    public static async Task<List<HoldDto>> ListHolds(Guid? hostId, Guid? siteId, AppDbContext db, CancellationToken ct)
     {
         var query = db.PackageHolds.AsQueryable();
         if (hostId is not null)
         {
-            var siteId = await db.Hosts.Where(h => h.Id == hostId).Select(h => h.SiteId).FirstOrDefaultAsync(ct);
-            query = query.Where(h => h.HostId == hostId || (h.HostId == null && (h.SiteId == null || h.SiteId == siteId)));
+            var hostSite = await db.Hosts.Where(h => h.Id == hostId).Select(h => h.SiteId).FirstOrDefaultAsync(ct);
+            query = query.Where(h => h.HostId == hostId || (h.HostId == null && (h.SiteId == null || h.SiteId == hostSite)));
+        }
+
+        if (siteId is not null)
+        {
+            query = query.Where(h => h.HostId != null ? h.Host!.SiteId == siteId : h.SiteId == null || h.SiteId == siteId);
         }
 
         return await query

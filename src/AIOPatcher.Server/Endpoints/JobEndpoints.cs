@@ -114,12 +114,17 @@ public static class JobEndpoints
         return Results.Ok(new BulkJobResult(plan.Created.Count, plan.Skipped));
     }
 
-    private static async Task<IResult> ListJobs(Guid? hostId, int? limit, AppDbContext db, CancellationToken ct)
+    private static async Task<IResult> ListJobs(Guid? hostId, Guid? siteId, int? limit, AppDbContext db, CancellationToken ct)
     {
         var query = db.Jobs.AsQueryable();
         if (hostId is not null)
         {
             query = query.Where(j => j.HostId == hostId);
+        }
+
+        if (siteId is not null)
+        {
+            query = query.Where(j => j.Host!.SiteId == siteId);
         }
 
         return Results.Ok(await Project(query.OrderByDescending(j => j.CreatedAt).Take(Math.Clamp(limit ?? 50, 1, 500))).ToListAsync(ct));

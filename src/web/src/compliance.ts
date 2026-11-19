@@ -1,5 +1,6 @@
 // Typen und Aufrufe für Compliance (Firewall, SSH/RDP, Benutzer). Spiegeln AIOPatcher.Contracts/Compliance.cs.
 import { api, type OsFamily } from "./api";
+import { withSite } from "./siteScope";
 
 export interface FirewallRuleInfo {
   text: string;
@@ -266,7 +267,7 @@ export function allowsPort(config: FirewallConfig, port: number): boolean {
 }
 
 export const complianceApi = {
-  hosts: () => api.get<ComplianceSummary[]>("/api/compliance"),
+  hosts: (siteId: string | null = null) => api.get<ComplianceSummary[]>(withSite("/api/compliance", siteId)),
   host: (id: string) => api.get<HostCompliance>(`/api/hosts/${id}/compliance`),
   profiles: () => api.get<FirewallProfile[]>("/api/firewall/profiles"),
   createProfile: (name: string, description: string | null, config: FirewallConfig, note: string | null) =>
@@ -280,7 +281,7 @@ export const complianceApi = {
   revertRemoteAccess: (hostId: string) => api.post<ChangeResult>(`/api/hosts/${hostId}/remote-access/revert`),
   userAction: (hostId: string, userName: string, action: UserAction, extra?: { password?: string; sshKey?: string }) =>
     api.post<ChangeResult>(`/api/hosts/${hostId}/users/action`, { userName, action, ...extra }),
-  baselines: () => api.get<Baseline[]>("/api/compliance/baselines"),
+  baselines: (siteId: string | null = null) => api.get<Baseline[]>(withSite("/api/compliance/baselines", siteId)),
   createBaseline: (body: SaveBaseline) => api.post<{ id: string }>("/api/compliance/baselines", body),
   updateBaseline: (id: string, body: SaveBaseline) => api.put<{ id: string }>(`/api/compliance/baselines/${id}`, body),
   deleteBaseline: (id: string) => api.delete(`/api/compliance/baselines/${id}`),

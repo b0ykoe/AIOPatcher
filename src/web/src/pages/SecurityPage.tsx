@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router";
 import { ActionIcon, Anchor, Badge, Card, Group, HoverCard, Loader, Menu, SegmentedControl, SimpleGrid, Stack, Switch, Table, Text, TextInput, Tooltip } from "@mantine/core";
 import { IconBug, IconDots, IconEye, IconEyeOff, IconFlame, IconSearch, IconShieldCheck, IconShieldOff, IconShieldSearch } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
+import { useSiteScope } from "../siteScope";
 import { api, formatDateTime } from "../api";
 import { useCan } from "../App";
 import { EmptyState, PageHeader, StatCard } from "../components/ui";
@@ -48,12 +49,13 @@ export function SecurityPage() {
   const [query, setQuery] = useState("");
   const [showAcked, setShowAcked] = useState(false);
   const [ackFor, setAckFor] = useState<Vulnerability | null>(null);
+  const { scoped } = useSiteScope();
   const can = useCan();
   const navigate = useNavigate();
 
   const load = useCallback(() => {
-    api.get<Vulnerability[]>("/api/vulnerabilities").then(setItems).catch(() => setItems([]));
-  }, []);
+    api.get<Vulnerability[]>(scoped("/api/vulnerabilities")).then(setItems).catch(() => setItems([]));
+  }, [scoped]);
   useEffect(load, [load]);
 
   const shown = useMemo(() => {

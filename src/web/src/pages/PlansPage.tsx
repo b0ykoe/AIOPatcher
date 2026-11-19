@@ -6,6 +6,7 @@ import {
   IconServer2, IconSettings, IconShieldCheck, IconTemplate, IconUsersGroup,
 } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
+import { useSiteScope } from "../siteScope";
 import { api, describeRequester, describeWindow, formatRelative, formatWindowStart, isActiveRun, type HostSummary, type Runbook, type RunSummary } from "../api";
 import { useCan } from "../App";
 import { AssignPlanModal } from "../components/plans/AssignPlanModal";
@@ -32,13 +33,14 @@ export function PlansPage() {
   const [templateOpen, setTemplateOpen] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
   const [quickOpen, setQuickOpen] = useState(false);
+  const { scoped } = useSiteScope();
 
   const load = useCallback(async () => {
-    const [p, r, h] = await Promise.all([api.get<Runbook[]>("/api/runbooks"), api.get<RunSummary[]>("/api/runbook-runs?limit=15"), api.get<HostSummary[]>("/api/hosts")]);
+    const [p, r, h] = await Promise.all([api.get<Runbook[]>(scoped("/api/runbooks")), api.get<RunSummary[]>(scoped("/api/runbook-runs?limit=15")), api.get<HostSummary[]>(scoped("/api/hosts"))]);
     setPlans(p);
     setRuns(r);
     setHosts(h);
-  }, []);
+  }, [scoped]);
 
   useEffect(() => {
     void load();

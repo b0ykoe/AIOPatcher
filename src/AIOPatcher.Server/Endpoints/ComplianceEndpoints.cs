@@ -215,14 +215,14 @@ public static class ComplianceEndpoints
             });
     }
 
-    private static async Task<IResult> List(AppDbContext db, FeatureFlags features, CancellationToken ct)
+    private static async Task<IResult> List(Guid? siteId, AppDbContext db, FeatureFlags features, CancellationToken ct)
     {
         if (Disabled(features, Feature.ComplianceChecks) is { } off)
         {
             return off;
         }
 
-        var hosts = await db.Hosts.AsNoTracking().Include(h => h.Site).Where(h => !h.IsRevoked).OrderBy(h => h.Name).ToListAsync(ct);
+        var hosts = await db.Hosts.AsNoTracking().Include(h => h.Site).Where(h => !h.IsRevoked && (siteId == null || h.SiteId == siteId)).OrderBy(h => h.Name).ToListAsync(ct);
         var rows = await db.HostCompliance.AsNoTracking().ToDictionaryAsync(r => r.HostId, ct);
         var refs = await VersionRefsAsync(db, hosts, ct);
         var checks = await BaselineChecksAsync(db, hosts, rows, ct);

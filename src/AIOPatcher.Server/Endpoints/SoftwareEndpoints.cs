@@ -36,9 +36,14 @@ public static class SoftwareEndpoints
     }
 
     /// <summary>Alle Programme über alle Hosts: wie verbreitet, welche Versionen, wo veraltet.</summary>
-    private static async Task<List<SoftwareSummaryDto>> Summary(bool? onlyUpdates, string? source, AppDbContext db, CancellationToken ct)
+    public static async Task<List<SoftwareSummaryDto>> Summary(bool? onlyUpdates, string? source, Guid? siteId, AppDbContext db, CancellationToken ct)
     {
         var query = db.InstalledApps.AsQueryable();
+        if (siteId is not null)
+        {
+            query = query.Where(a => a.Host!.SiteId == siteId);
+        }
+
         if (!string.IsNullOrEmpty(source))
         {
             query = query.Where(a => a.Source == source);

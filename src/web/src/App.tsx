@@ -71,6 +71,7 @@ import { CveLookupPage, normalizeCveId } from "./pages/CveLookupPage";
 import { RunPage } from "./pages/RunPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { SetupPage } from "./pages/SetupPage";
+import { SitePicker, SiteScopeProvider } from "./siteScope";
 
 type AuthState =
   | { kind: "loading" }
@@ -275,6 +276,7 @@ function Shell({ me, onMeChanged, onLoggedOut }: { me: Me; onMeChanged: (me: Me)
     <MeContext.Provider value={me}>
       <FeaturesProvider>
       <ShellContext.Provider value={{ openAddHost: addHost.open, overview, refreshOverview }}>
+      <SiteScopeProvider>
         <AppShell
           header={{ height: { base: 56, sm: 64 } }}
           navbar={{ width: 250, breakpoint: "sm", collapsed: { mobile: !navOpen } }}
@@ -285,6 +287,8 @@ function Shell({ me, onMeChanged, onLoggedOut }: { me: Me; onMeChanged: (me: Me)
               <Burger opened={navOpen} onClick={nav.toggle} hiddenFrom="sm" size="sm" aria-label={t("nav.navigation")} />
               <Brand />
               <Box style={{ flex: 1 }} />
+              <SitePicker />
+              <SitePicker compact />
               <UnstyledButton
                 onClick={() => { loadHostsForSearch(); spotlight.open(); }}
                 visibleFrom="xs"
@@ -413,6 +417,7 @@ function Shell({ me, onMeChanged, onLoggedOut }: { me: Me; onMeChanged: (me: Me)
           limit={12}
           searchProps={{ leftSection: <IconSearch size={18} />, placeholder: t("nav.searchPlaceholder") }}
         />
+      </SiteScopeProvider>
       </ShellContext.Provider>
       </FeaturesProvider>
     </MeContext.Provider>

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ActionIcon, Alert, Anchor, Button, Card, Group, Loader, Menu, SegmentedControl, SimpleGrid, Stack, Table, Text, Tooltip } from "@mantine/core";
 import { IconAlertTriangle, IconCircleCheck, IconDots, IconDownload, IconPlugConnectedX, IconRadar, IconSettings } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
+import { useSiteScope } from "../siteScope";
 import { Link } from "react-router";
 import { useCan } from "../App";
 import { api, formatRelative, type MonitoringAction, type MonitoringHostRow, type MonitoringOverview, type MonitoringProduct } from "../api";
@@ -21,15 +22,16 @@ export function MonitoringPage() {
   const [error, setError] = useState<string | null>(null);
   const [product, setProduct] = useState<MonitoringProduct>("wazuh");
   const [request, setRequest] = useState<Request | null>(null);
+  const { scoped } = useSiteScope();
 
   const load = useCallback(() => {
-    api.get<MonitoringOverview>("/api/monitoring")
+    api.get<MonitoringOverview>(scoped("/api/monitoring"))
       .then((d) => {
         setData(d);
         setError(null);
       })
       .catch((e) => setError(errorText(e)));
-  }, []);
+  }, [scoped]);
 
   useEffect(() => {
     load();

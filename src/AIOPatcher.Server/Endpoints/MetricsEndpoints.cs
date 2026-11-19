@@ -37,7 +37,11 @@ public static class MetricsEndpoints
         api.MapGet("/hosts/{id:guid}/metrics", ForHost);
     }
 
-    private static async Task<IResult> Overview(AppDbContext db, FeatureFlags features, VirtualizationProviderFactory providers, CancellationToken ct)
+    /// <summary>
+    /// Mit siteId: nur Hosts dieser Site. Proxmox: Cluster der Site ganz, Cluster ohne Site nur mit Gästen, die Hosts der Site sind,
+    /// Cluster anderer Sites gar nicht.
+    /// </summary>
+    private static async Task<IResult> Overview(Guid? siteId, AppDbContext db, FeatureFlags features, VirtualizationProviderFactory providers, CancellationToken ct)
     {
         if (!features.IsOn(Feature.Metrics))
         {
@@ -45,7 +49,8 @@ public static class MetricsEndpoints
         }
 
         var now = DateTime.UtcNow;
-        var hosts = await db.Hosts.Include(h => h.Site).Where(h => !h.IsRevoked).OrderBy(h => h.Name).ToListAsync(ct);
+        var allHosts = await db.Hosts.Include(h => h.Site).Where(h => !h.IsRevoked).OrderBy(h => h.Name).ToListAsync(ct);
+        var hosts = siteId is null ? allHosts : allHosts.Where(h => h.SiteId == siteId).ToList();
         var since = now.AddHours(-24);
         var samples = (await db.MetricSamples.Where(s => s.At >= since).OrderBy(s => s.At).ToListAsync(ct))
             .GroupBy(s => s.HostId)
@@ -61,16 +66,26 @@ public static class MetricsEndpoints
         }).ToList();
 
         // Proxmox: live (kurz zwischengespeichert), auch Gäste ohne Agent
-        var byExternal = hosts.Where(h => h.IntegrationId is not null && h.ExternalId is not null)
+        var byExternal = allHosts.Where(h => h.IntegrationId is not null && h.ExternalId is not null)
             .ToDictionary(h => (h.IntegrationId!.Value, h.ExternalId!), h => h);
         var proxmox = new List<ProxmoxUtilizationDto>();
-        foreach (var integration in await db.Integrations.Where(i => i.Type == IntegrationType.Proxmox && i.Enabled).OrderBy(i => i.Name).ToListAsync(ct))
+        foreach (var integration in await db.Integrations
+                     .Where(i => i.Type == IntegrationType.Proxmox && i.Enabled && (siteId == null || i.SiteId == null || i.SiteId == siteId))
+                     .OrderBy(i => i.Name).ToListAsync(ct))
         {
             var (at, resources, error) = await ResourcesAsync(integration, providers, now, ct);
+            var items = (resources ?? []).Select(r => (Resource: r, Host: r.ExternalId is { } ext && byExternal.TryGetValue((integration.Id, ext), out var host) ? host : null));
+            if (siteId is not null && integration.SiteId is null)
+            {
+                items = items.Where(x => x.Host?.SiteId == siteId).ToList();
+                if (!items.Any())
+                {
+                    continue;
+                }
+            }
+
             proxmox.Add(new ProxmoxUtilizationDto(integration.Id, integration.Name, at, error,
-                (resources ?? []).Select(r => r.ExternalId is { } ext && byExternal.TryGetValue((integration.Id, ext), out var host)
-                    ? new ProxmoxResourceDto(r, host.Id, host.Name)
-                    : new ProxmoxResourceDto(r, null, null)).ToList()));
+                items.Select(x => new ProxmoxResourceDto(x.Resource, x.Host?.Id, x.Host?.Name)).ToList()));
         }
 
         return Results.Ok(new UtilizationDto(true, hostDtos, proxmox));

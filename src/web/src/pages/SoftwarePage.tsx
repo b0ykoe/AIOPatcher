@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Anchor, Badge, Card, Group, Loader, SegmentedControl, Switch, Table, Text, TextInput } from "@mantine/core";
 import { IconExternalLink, IconSearch } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
+import { useSiteScope } from "../siteScope";
 import { api, type SoftwareSummary } from "../api";
 import { PageHeader } from "../components/ui";
 
@@ -11,15 +12,16 @@ export function SoftwarePage() {
   const [items, setItems] = useState<SoftwareSummary[] | null>(null);
   const [source, setSource] = useState("windows");
   const [onlyUpdates, setOnlyUpdates] = useState(false);
+  const { scoped } = useSiteScope();
   const [query, setQuery] = useState("");
 
   useEffect(() => {
     setItems(null);
     const sources = source === "windows" ? ["registry", "winget"] : source === "linux" ? ["dpkg", "snap"] : [""];
-    void Promise.all(sources.map((s) => api.get<SoftwareSummary[]>(`/api/software?onlyUpdates=${onlyUpdates}${s ? `&source=${s}` : ""}`)))
+    void Promise.all(sources.map((s) => api.get<SoftwareSummary[]>(scoped(`/api/software?onlyUpdates=${onlyUpdates}${s ? `&source=${s}` : ""}`))))
       .then((lists) => setItems(lists.flat().sort((a, b) => b.outdated - a.outdated || b.hosts - a.hosts || a.name.localeCompare(b.name))))
       .catch(() => setItems([]));
-  }, [source, onlyUpdates]);
+  }, [source, onlyUpdates, scoped]);
 
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();

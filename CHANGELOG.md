@@ -14,6 +14,12 @@ Written for users, not as a list of commits.
   `./update.sh --force` in the mailcow folder with a live log and then checks that all mailcow containers run again.
   Recipes are small JSON files in the repository, so the community can add more apps (see the README section
   "Container update recipes").
+- **Site picker in the header:** with more than one site, choose a site at the top and every page shows only its
+  data: overview, hosts, utilization, security, compliance, patch plans, rules, jobs, software, monitoring, backups
+  and reports. **All sites** stays the default. The choice is kept in the browser and in the address (`?site=`), so
+  links you share open the same view. On phones it is the building icon next to the theme switch. The separate site
+  fields on Hosts and Reports are gone; IPAM uses the chosen site. The list endpoints of the API accept the same
+  optional `siteId` parameter.
 
 ### Improved
 - **Setup uses the release image:** `setup.sh` now pulls the prebuilt image from GitHub (ghcr.io) instead of building

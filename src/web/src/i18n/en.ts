@@ -1357,6 +1357,13 @@ const en: Translation = {
     fingerprintHint: "Only for a self-signed site certificate: SHA-256 of the certificate. Empty = normal certificate validation. Used when downloading agent packages.",
     clearSecret: "Remove password",
   },
+  siteScope: {
+    title: "Show site",
+    all: "All sites",
+    choose: "Choose site",
+    hint: "Applies to every page. Settings and detail pages stay unfiltered.",
+    pickForIpam: "Site for IPAM",
+  },
   hubs: {
     securityDescription: "Open vulnerabilities of all hosts, CVE search and compliance in one place.",
     vulnerabilities: "Vulnerabilities",

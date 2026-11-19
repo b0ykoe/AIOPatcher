@@ -6,8 +6,9 @@ import {
   IconRefresh, IconServer, IconShieldExclamation, IconUsersGroup, IconWand,
 } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
-import { api, describeJob, formatDateTime, formatRelative, formatWindowStart, type BulkJobResult, type HostSummary, type Job, type Runbook } from "../api";
+import { api, describeJob, formatDateTime, formatRelative, formatWindowStart, type BulkJobResult, type HostSummary, type Job, type Overview, type Runbook } from "../api";
 import { useCan, useShell, useSimple } from "../App";
+import { useSiteScope } from "../siteScope";
 import { useFeatures } from "../features";
 import { levelColor, levelOf } from "../components/metrics/charts";
 import { AssignPlanModal } from "../components/plans/AssignPlanModal";
@@ -37,7 +38,9 @@ export function OverviewPage() {
   const can = useCan();
   const simple = useSimple();
   const { isOn } = useFeatures();
-  const { overview: o, openAddHost, refreshOverview } = useShell();
+  const { overview: all, openAddHost, refreshOverview } = useShell();
+  const { siteId, scoped } = useSiteScope();
+  const [siteOverview, setSiteOverview] = useState<Overview | null>(null);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [hosts, setHosts] = useState<HostSummary[]>([]);
   const [plans, setPlans] = useState<Runbook[]>([]);
@@ -46,18 +49,23 @@ export function OverviewPage() {
 
   const load = useCallback(() => {
     refreshOverview();
-    void api.get<Job[]>("/api/jobs?limit=6").then(setJobs).catch(() => {});
-    void api.get<HostSummary[]>("/api/hosts").then(setHosts).catch(() => {});
-    void api.get<Runbook[]>("/api/runbooks").then(setPlans).catch(() => {});
-  }, [refreshOverview]);
+    if (siteId) void api.get<Overview>(scoped("/api/overview")).then(setSiteOverview).catch(() => {});
+    void api.get<Job[]>(scoped("/api/jobs?limit=6")).then(setJobs).catch(() => {});
+    void api.get<HostSummary[]>(scoped("/api/hosts")).then(setHosts).catch(() => {});
+    void api.get<Runbook[]>(scoped("/api/runbooks")).then(setPlans).catch(() => {});
+  }, [refreshOverview, siteId, scoped]);
 
   useEffect(() => {
+    setSiteOverview(null);
     load();
     const timer = setInterval(load, 15000);
     return () => clearInterval(timer);
   }, [load]);
 
-  if (o && o.hosts === 0) {
+  // Kennzahlen der gewählten Site; der Willkommens-Bildschirm richtet sich nach allen Sites.
+  const o = siteId ? siteOverview : all;
+
+  if (all && all.hosts === 0) {
     return (
       <Card p="xl" maw={760} mx="auto" mt="xl">
         <Stack align="center" gap="sm">

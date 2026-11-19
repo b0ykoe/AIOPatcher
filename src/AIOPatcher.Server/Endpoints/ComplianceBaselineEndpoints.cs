@@ -39,10 +39,21 @@ public static class ComplianceBaselineEndpoints
 
     // --- Lesen ----------------------------------------------------------------------------------------
 
-    private static async Task<IResult> ListAsync(AppDbContext db, CancellationToken ct)
+    /// <summary>
+    /// Mit siteId: nur Vorgaben mit Bezug zur Site (Mitglied dort, für die Site gedacht oder noch ohne Mitglieder), Mitglieder
+    /// auf die Site begrenzt.
+    /// </summary>
+    private static async Task<IResult> ListAsync(Guid? siteId, AppDbContext db, CancellationToken ct)
     {
         var baselines = await db.ComplianceBaselines.AsNoTracking().Include(b => b.Hosts).OrderBy(b => b.CreatedAt).ThenBy(b => b.Name).ToListAsync(ct);
         var members = await MembersAsync(db, baselines, ct);
+        if (siteId is not null)
+        {
+            baselines = baselines.Where(b => b.MemberSiteId == siteId || !members.Any(m => m.BaselineId == b.Id)
+                || members.Any(m => m.BaselineId == b.Id && m.SiteId == siteId)).ToList();
+            members = members.Where(m => m.SiteId == siteId).ToList();
+        }
+
         return Results.Ok(baselines.Select(b => ToDto(b, members.Where(m => m.BaselineId == b.Id).Select(m => m.Member).ToList())).ToList());
     }
 
@@ -51,7 +62,7 @@ public static class ComplianceBaselineEndpoints
             b.IncludeOthers, b.CreatedAt, b.UpdatedAt, members);
 
     /// <summary>Wer gehört zu welcher Vorgabe, mit Zahl der Abweichungen (aus dem letzten Bericht).</summary>
-    private static async Task<List<(Guid BaselineId, BaselineMemberDto Member)>> MembersAsync(AppDbContext db, IReadOnlyList<ComplianceBaseline> baselines, CancellationToken ct)
+    private static async Task<List<(Guid BaselineId, BaselineMemberDto Member, Guid SiteId)>> MembersAsync(AppDbContext db, IReadOnlyList<ComplianceBaseline> baselines, CancellationToken ct)
     {
         var hosts = await db.Hosts.AsNoTracking().Include(h => h.Site).Where(h => !h.IsRevoked).OrderBy(h => h.Name).ToListAsync(ct);
         var membership = ComplianceBaselines.Resolve(baselines, hosts.Select(h => new ComplianceBaselines.HostInfo(h.Id, h.SiteId, h.Tags)).ToList());
@@ -65,7 +76,7 @@ public static class ComplianceBaselineEndpoints
             var results = ComplianceBaselines.Evaluate(rules[m.BaselineId], h.OsFamily, report, h.FirewallVersionId, firewall);
             return (m.BaselineId, new BaselineMemberDto(h.Id, h.Name, h.Site!.Name, h.OsFamily, m.Via,
                 results.Count(r => r.State == RuleState.Violation), results.Count(r => r.State == RuleState.Unknown),
-                results.Count(r => r.State == RuleState.Violation && r.Fixable)));
+                results.Count(r => r.State == RuleState.Violation && r.Fixable)), h.SiteId);
         }).ToList();
     }
 
