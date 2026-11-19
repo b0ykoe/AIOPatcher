@@ -270,6 +270,7 @@ app.MapVulnerabilityEndpoints();
 app.MapCveLookupEndpoints();
 app.MapFeatureEndpoints();
 app.MapPublicAccessEndpoints();
+app.MapGettingStartedEndpoints();
 app.MapScanSettingsEndpoints();
 app.MapChangelogEndpoints();
 app.MapAiEndpoints();

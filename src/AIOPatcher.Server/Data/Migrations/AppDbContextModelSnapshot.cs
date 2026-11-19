@@ -2545,6 +2545,9 @@ namespace AIOPatcher.Server.Data.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("SkippedSteps")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("SsoSubject")
                         .HasMaxLength(600)
                         .HasColumnType("TEXT");

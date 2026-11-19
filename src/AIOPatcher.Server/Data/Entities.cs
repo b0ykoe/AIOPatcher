@@ -368,6 +368,9 @@ public sealed class UserAccount
 
     public UiMode UiMode { get; set; } = UiMode.Simple;
 
+    /// <summary>"Erste Schritte": übersprungene Schritte, kommagetrennt (z. B. "sso,monitoring").</summary>
+    public string? SkippedSteps { get; set; }
+
     /// <summary>Ändert sich bei Passwort-, Rollen- und Statuswechsel: alte Sitzungen werden dadurch ungültig.</summary>
     public string SecurityStamp { get; set; } = Guid.NewGuid().ToString("N");
 
