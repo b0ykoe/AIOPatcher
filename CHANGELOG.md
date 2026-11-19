@@ -8,6 +8,8 @@ Written for users, not as a list of commits.
 
 ## [Unreleased]
 
+## [0.14.3] - 2026-11-19
+
 ### Added
 - **Check for a new version right away:** Settings → General has a **Check now** button next to the version. It asks
   GitHub immediately (at most once a minute) and shows when it last checked; a new version appears as a badge and in
