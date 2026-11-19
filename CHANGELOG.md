@@ -8,6 +8,8 @@ Written for users, not as a list of commits.
 
 ## [Unreleased]
 
+## [0.12.1] - 2026-11-19
+
 ### Added
 - **Proxmox VE backup jobs** under **Inventory → Backups**: every backup job from Datacenter → Backup with schedule,
   target, which guests it covers and the next run. Turn on **Check backup jobs** under **Settings → Features &
