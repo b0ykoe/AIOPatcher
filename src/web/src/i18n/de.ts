@@ -1715,7 +1715,7 @@ const de = {
     name_ContainerChecks: "Container-Prüfung",
     desc_ContainerChecks: "Image-Tags laufender Container bei ihrer Registry auf neuere Versionen prüfen.",
     name_ReleaseCheck: "Versionsprüfung",
-    desc_ReleaseCheck: "Bei GitHub nach neuen AIOPatcher-Versionen schauen (nur Hinweis).",
+    desc_ReleaseCheck: "Alle 15 Minuten bei GitHub nach neuen AIOPatcher-Versionen schauen (nur Hinweis).",
     disabledHint: "Einstellungen → Funktionen & Sicherheit",
     emergencyBanner: "Notaus aktiv: Auto-Patch und Patch-Pläne sind angehalten.",
   },

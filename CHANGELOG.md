@@ -8,6 +8,10 @@ Written for users, not as a list of commits.
 
 ## [Unreleased]
 
+### Improved
+- **New versions show up faster:** AIOPatcher now checks GitHub for a new release every 15 minutes instead of once a
+  day, so the update notice (and **Update now**) appears shortly after a release.
+
 ## [0.14.0] - 2026-11-19
 
 ### Added

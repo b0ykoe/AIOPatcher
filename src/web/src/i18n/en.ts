@@ -1716,7 +1716,7 @@ const en: Translation = {
     name_ContainerChecks: "Container checks",
     desc_ContainerChecks: "Check image tags of running containers against their registry for newer versions.",
     name_ReleaseCheck: "Version check",
-    desc_ReleaseCheck: "Look for new AIOPatcher versions on GitHub (notice only).",
+    desc_ReleaseCheck: "Look for new AIOPatcher versions on GitHub every 15 minutes (notice only).",
     disabledHint: "Settings → Features & security",
     emergencyBanner: "Emergency stop active: auto-patch and patch plans are halted.",
   },

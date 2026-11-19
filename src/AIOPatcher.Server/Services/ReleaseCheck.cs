@@ -5,12 +5,15 @@ using AIOPatcher.Server.Options;
 namespace AIOPatcher.Server.Services;
 
 /// <summary>
-/// Prüft einmal täglich, ob es eine neuere AIOPatcher-Version gibt (GitHub-Releases des konfigurierten Repositorys).
-/// Aktualisiert wird nie automatisch: Das Dashboard zeigt nur den Hinweis mit den zwei Befehlen.
+/// Prüft alle 15 Minuten, ob es eine neuere AIOPatcher-Version gibt (GitHub-Releases des konfigurierten Repositorys;
+/// 4 Abfragen pro Stunde, weit unter dem Limit von 60 ohne Anmeldung). Aktualisiert wird nie automatisch: Das
+/// Dashboard zeigt den Hinweis mit Befehl bzw. dem Knopf "Jetzt aktualisieren".
 /// </summary>
 public sealed class ReleaseCheck(IHttpClientFactory httpFactory, AIOPatcherOptions options, ILogger<ReleaseCheck> logger, FeatureFlags features) : BackgroundService
 {
     public sealed record LatestRelease(string Version, string Url, DateTime? PublishedAt);
+
+    public static readonly TimeSpan Interval = TimeSpan.FromMinutes(15);
 
     public LatestRelease? Latest { get; private set; }
 
@@ -24,7 +27,7 @@ public sealed class ReleaseCheck(IHttpClientFactory httpFactory, AIOPatcherOptio
         }
 
         await Task.Delay(TimeSpan.FromMinutes(2), stoppingToken);
-        using var timer = new PeriodicTimer(TimeSpan.FromHours(24));
+        using var timer = new PeriodicTimer(Interval);
         do
         {
             if (!features.IsOn(Feature.ReleaseCheck))
