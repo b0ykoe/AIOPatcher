@@ -8,6 +8,8 @@ Written for users, not as a list of commits.
 
 ## [Unreleased]
 
+## [0.14.5] - 2026-11-19
+
 ### Improved
 - **Add the rest to a group:** next to **All other hosts** in the plan editor, **Add the rest** puts every host that is
   not in a plan yet into the group's selection, so you see them in the list and can remove single ones, without turning
