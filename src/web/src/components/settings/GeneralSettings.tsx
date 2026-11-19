@@ -46,7 +46,10 @@ export function GeneralSettings() {
         <CardTitle>{t("settings.generalWizard")}</CardTitle>
         <Stack gap="xs" align="flex-start">
           <Text size="sm" c="dimmed">{t("settings.generalWizardText")}</Text>
-          <Button size="compact-xs" variant="light" leftSection={<IconWand size={14} />} onClick={openSetupWizard}>{t("settings.generalWizardStart")}</Button>
+          <Group gap="xs">
+            <Button size="compact-xs" variant="light" leftSection={<IconWand size={14} />} onClick={openSetupWizard}>{t("settings.generalWizardStart")}</Button>
+            <Button size="compact-xs" variant="subtle" component={Link} to="/getting-started">{t("gettingStarted.title")}</Button>
+          </Group>
         </Stack>
       </Card>
 

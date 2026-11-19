@@ -1,5 +1,5 @@
 import { EmergencyBanner, FeaturesProvider } from "./features";
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { Navigate, NavLink as RouterLink, Route, Routes, useLocation, useNavigate, useParams } from "react-router";
 import {
   ActionIcon,
@@ -13,7 +13,6 @@ import {
   Loader,
   Menu,
   NavLink,
-  Progress,
   SegmentedControl,
   Stack,
   Text,
@@ -27,7 +26,6 @@ import { Spotlight, spotlight, type SpotlightActionData } from "@mantine/spotlig
 import {
   IconCalendarTime,
   IconCircleCheck,
-  IconCircleDashed,
   IconLanguage,
   IconLayoutDashboard,
   IconLogout,
@@ -52,7 +50,7 @@ import {
 import { useTranslation } from "react-i18next";
 import { api, ApiError, type HostSummary, type Me, type Overview, type ServerInfo, type SetupStatus, type UiMode, type UserRole } from "./api";
 import { AddHostModal } from "./components/AddHostModal";
-import { openSetupWizard, SetupWizard } from "./components/SetupWizard";
+import { SetupWizard } from "./components/SetupWizard";
 import { errorText } from "./components/ui";
 import { currentLanguage, setLanguage } from "./i18n";
 import { AccountPage } from "./pages/AccountPage";
@@ -73,6 +71,8 @@ import { SettingsPage } from "./pages/SettingsPage";
 import { SetupPage } from "./pages/SetupPage";
 import { SharedSitePage } from "./pages/SharedSitePage";
 import { SitePicker, SiteScopeProvider } from "./siteScope";
+import { GettingStartedNav } from "./gettingStarted";
+import { GettingStartedPage } from "./pages/GettingStartedPage";
 
 type AuthState =
   | { kind: "loading" }
@@ -256,6 +256,7 @@ function Shell({ me, onMeChanged, onLoggedOut }: { me: Me; onMeChanged: (me: Me)
   const actions: SpotlightActionData[] = [
     ...navItems.map((n) => ({ id: `nav-${n.to}`, label: n.label, description: t("nav.openPage"), group: t("nav.pages"), leftSection: <n.icon size={18} />, onClick: () => navigate(n.to) })),
     { id: "nav-account", label: t("nav.account"), description: t("nav.openPage"), group: t("nav.pages"), leftSection: <IconUserCog size={18} />, onClick: () => navigate("/account") },
+    { id: "nav-getting-started", label: t("gettingStarted.title"), description: t("nav.openPage"), group: t("nav.pages"), leftSection: <IconWand size={18} />, onClick: () => navigate("/getting-started") },
     ...(canOperate
       ? [{ id: "add-host", label: t("nav.addHost"), description: t("nav.addHostHint"), group: t("nav.actions"), leftSection: <IconPlus size={18} />, onClick: addHost.open }]
       : []),
@@ -367,7 +368,7 @@ function Shell({ me, onMeChanged, onLoggedOut }: { me: Me; onMeChanged: (me: Me)
                 />
               ))}
               <Box style={{ flex: 1 }} />
-              {canOperate && <GettingStarted overview={overview} onAddHost={addHost.open} />}
+              {canOperate && <GettingStartedNav />}
               <VersionInfo />
             </Stack>
           </AppShell.Navbar>
@@ -390,6 +391,7 @@ function Shell({ me, onMeChanged, onLoggedOut }: { me: Me; onMeChanged: (me: Me)
               <Route path="/reports" element={<ReportsPage />} />
               <Route path="/developer" element={<ApiPage />} />
               <Route path="/account" element={<AccountPage onMeChanged={onMeChanged} />} />
+              <Route path="/getting-started" element={<GettingStartedPage />} />
               {isAdmin && <Route path="/settings/:tab?" element={<SettingsPage />} />}
               {/* frühere Adressen */}
               <Route path="/cves" element={<Navigate to="/security?tab=cves" replace />} />
@@ -507,49 +509,6 @@ function VersionInfo() {
 }
 
 /** Geführte Einrichtung: bleibt sichtbar, bis die drei Grundschritte erledigt sind. */
-function GettingStarted({ overview, onAddHost }: { overview: Overview | null; onAddHost: () => void }) {
-  const { t } = useTranslation();
-  const navigate = useNavigate();
-  if (!overview) return null;
-
-  const steps: { label: string; done: boolean; action?: ReactNode }[] = [
-    { label: t("nav.stepSite"), done: overview.sites > 0 },
-    {
-      label: t("nav.stepHost"),
-      done: overview.hosts > 0,
-      action: <Button size="compact-xs" variant="light" onClick={onAddHost}>{t("nav.go")}</Button>,
-    },
-    {
-      label: t("nav.stepAutoPatch"),
-      done: overview.autoPatchHosts > 0,
-      action: <Button size="compact-xs" variant="light" onClick={() => navigate("/auto-patch")}>{t("nav.go")}</Button>,
-    },
-  ];
-  const done = steps.filter((s) => s.done).length;
-  if (done === steps.length) return null;
-
-  return (
-    <Box className="glass" p="sm" style={{ borderRadius: 12, border: "1px solid var(--mantine-color-default-border)" }}>
-      <Text size="sm" fw={700} mb={6}>{t("nav.gettingStarted")}</Text>
-      <Progress value={(done / steps.length) * 100} size="sm" radius="xl" color="violet" mb="sm" />
-      <Stack gap={6}>
-        {steps.map((s) => (
-          <Group key={s.label} gap={8} wrap="nowrap" justify="space-between">
-            <Group gap={6} wrap="nowrap">
-              {s.done ? <IconCircleCheck size={16} color="var(--mantine-color-teal-4)" /> : <IconCircleDashed size={16} opacity={0.6} />}
-              <Text size="xs" c={s.done ? "dimmed" : undefined} td={s.done ? "line-through" : undefined}>
-                {s.label}
-              </Text>
-            </Group>
-            {!s.done && s.action}
-          </Group>
-        ))}
-      </Stack>
-      <Button size="compact-xs" variant="subtle" fullWidth mt="xs" leftSection={<IconWand size={14} />} onClick={openSetupWizard}>{t("wizard.gettingStarted")}</Button>
-    </Box>
-  );
-}
-
 /** Frühere Ablauf-Adresse /runbooks/:id → Plan-Editor. */
 function RunbookRedirect() {
   const { id } = useParams();

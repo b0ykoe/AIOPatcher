@@ -9,6 +9,11 @@ Written for users, not as a list of commits.
 ## [Unreleased]
 
 ### Added
+- **Getting started:** a new page that guides you through the basics (site, first host, patch plan, notifications)
+  and shows what else AIOPatcher can do under **Discover more**: public access, passkeys, compliance templates,
+  integrations, monitoring clients, backup checks, updating AIOPatcher by click and SSO, each with its status and one
+  button. Steps you don't need can be hidden with **Not needed** (remembered per user). The checklist in the sidebar
+  now shows the progress and links to the page.
 - **Update recipes for apps with their own update script:** when the agent finds mailcow: dockerized, the containers
   tab shows **Update via mailcow update.sh** instead of updating single containers. The agent runs
   `./update.sh --force` in the mailcow folder with a live log and then checks that all mailcow containers run again.

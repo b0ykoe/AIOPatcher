@@ -78,6 +78,7 @@ export function OverviewPage() {
               <Button size="md" variant="default" leftSection={<IconPlus size={18} />} onClick={openAddHost}>{t("overview.addFirstHost")}</Button>
             </Group>
           )}
+          <Anchor component={Link} to="/getting-started" size="sm">{t("gettingStarted.overviewLink")}</Anchor>
         </Stack>
       </Card>
     );

@@ -103,6 +103,11 @@ Open the dashboard, enter the **setup token**, set up your account and authentic
 **Settings → Checks**: everything should be green. Behind a reverse proxy, "Reverse proxy / client IP" must show your own
 IP, not that of the proxy.
 
+**Getting started** (left sidebar, or search with Ctrl+K) then guides you through the basics: first host, patch
+plan, notifications. Below, under *Discover more*, it shows what else AIOPatcher can do (public access, passkeys,
+compliance templates, Proxmox/PBS, monitoring clients, update by click …), each with one button to set it up. Hide what
+you don't need with *Not needed*.
+
 ### 4. Add hosts
 
 - **Hosts in your network:** *Add host* shows one install command per system. The hosts need to reach port 8443 of the
