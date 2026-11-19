@@ -49,6 +49,22 @@ public enum ChannelType
     Telegram,
 }
 
+/// <summary>Aufmachung der Nachrichten eines Kanals.</summary>
+public enum NotificationStyle
+{
+    /// <summary>Titel, Text, Link (wie bisher).</summary>
+    Standard,
+
+    /// <summary>Nur Titel und Link.</summary>
+    Short,
+
+    /// <summary>Dazu Host, Site, Ereignis und Uhrzeit.</summary>
+    Detailed,
+
+    /// <summary>Eigene Formatierung des Dienstes (Telegram-HTML mit Knopf, Discord-Embed, Slack-Blocks, HTML-Mail, ntfy-Markdown).</summary>
+    Rich,
+}
+
 public sealed class NotificationChannel
 {
     public Guid Id { get; set; } = Guid.NewGuid();
@@ -67,6 +83,8 @@ public sealed class NotificationChannel
 
     /// <summary>Konfiguration als JSON, per Data Protection verschlüsselt (enthält Tokens/Passwörter).</summary>
     public required string ProtectedConfig { get; set; }
+
+    public NotificationStyle Style { get; set; } = NotificationStyle.Standard;
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? LastSentAt { get; set; }

@@ -11,8 +11,12 @@ public static class NotificationEndpoints
     /// <summary>Platzhalter für gespeicherte Geheimnisse: kommt er zurück, bleibt der alte Wert.</summary>
     public const string SecretMask = "••••••••";
 
-    public sealed record ChannelDto(Guid Id, string Name, ChannelType Type, bool Enabled, string[] Events, Guid? SiteId, ChannelConfig Config, DateTime? LastSentAt, string? LastError, Guid? RemoteSiteId);
-    public sealed record ChannelRequest(string Name, ChannelType Type, bool Enabled, string[] Events, Guid? SiteId, ChannelConfig Config, Guid? RemoteSiteId = null);
+    public sealed record ChannelDto(Guid Id, string Name, ChannelType Type, bool Enabled, string[] Events, Guid? SiteId, ChannelConfig Config, DateTime? LastSentAt, string? LastError, Guid? RemoteSiteId,
+        NotificationStyle Style = NotificationStyle.Standard);
+
+    /// <param name="Style">null = unverändert (bzw. Standard beim Anlegen).</param>
+    public sealed record ChannelRequest(string Name, ChannelType Type, bool Enabled, string[] Events, Guid? SiteId, ChannelConfig Config, Guid? RemoteSiteId = null,
+        NotificationStyle? Style = null);
 
     public static readonly NotificationEvents[] AllEvents = Enum.GetValues<NotificationEvents>().Where(e => e != NotificationEvents.None).ToArray();
 
@@ -50,6 +54,7 @@ public static class NotificationEndpoints
             SiteId = request.RemoteSiteId is null ? request.SiteId : null,
             RemoteSiteId = request.RemoteSiteId,
             ProtectedConfig = senders.Protect(request.Config),
+            Style = request.Style ?? NotificationStyle.Standard,
         };
         db.NotificationChannels.Add(channel);
         audit.Add("notification.channel.created", $"{channel.Name} ({channel.Type})");
@@ -95,6 +100,7 @@ public static class NotificationEndpoints
         channel.SiteId = request.RemoteSiteId is null ? request.SiteId : null;
         channel.RemoteSiteId = request.RemoteSiteId;
         channel.ProtectedConfig = senders.Protect(merged);
+        channel.Style = request.Style ?? channel.Style;
         audit.Add("notification.channel.updated", $"{channel.Name} ({channel.Type})");
         await db.SaveChangesAsync(ct);
         return Results.Ok(ToDto(channel, senders));
@@ -115,7 +121,7 @@ public static class NotificationEndpoints
     }
 
     /// <summary>Testnachricht direkt senden (nicht über die Warteschlange), damit der Fehler sofort sichtbar ist.</summary>
-    private static async Task<IResult> Test(Guid id, AppDbContext db, NotificationSenders senders, CancellationToken ct)
+    private static async Task<IResult> Test(Guid id, AppDbContext db, NotificationSenders senders, ServerClock clock, CancellationToken ct)
     {
         var channel = await db.NotificationChannels.FindAsync([id], ct);
         if (channel is null)
@@ -126,8 +132,10 @@ public static class NotificationEndpoints
         var error = await senders.SendAsync(channel, new Notification(
             NotificationEvents.None,
             L.T("Testnachricht", "Test message"),
-            L.T("Dieser Kanal ist richtig eingerichtet.", "This channel is set up correctly."),
-            NotificationSeverity.Info), ct);
+            L.T("Dieser Kanal ist richtig eingerichtet. So sehen Nachrichten in diesem Stil aus.", "This channel is set up correctly. This is how messages look in this style."),
+            NotificationSeverity.Info), ct,
+            // Beispieldetails, damit "Ausführlich" und "Schick" zeigen, wie echte Nachrichten aussehen
+            new NotificationDetails("web01", "Homelab", NotificationFormat.EventLabel(NotificationEvents.None), TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, clock.Zone)));
 
         channel.LastError = error;
         if (error is null)
@@ -187,6 +195,6 @@ public static class NotificationEndpoints
         }
 
         var events = AllEvents.Where(e => (c.Events & e) != 0).Select(e => e.ToString()).ToArray();
-        return new ChannelDto(c.Id, c.Name, c.Type, c.Enabled, events, c.SiteId, config, c.LastSentAt, c.LastError, c.RemoteSiteId);
+        return new ChannelDto(c.Id, c.Name, c.Type, c.Enabled, events, c.SiteId, config, c.LastSentAt, c.LastError, c.RemoteSiteId, c.Style);
     }
 }

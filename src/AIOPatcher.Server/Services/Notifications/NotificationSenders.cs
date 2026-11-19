@@ -74,8 +74,10 @@ public sealed class NotificationSenders(
     };
 
     /// <summary>Sendet und gibt bei Fehler eine kurze Beschreibung zurück (nie eine Exception).</summary>
-    public async Task<string?> SendAsync(NotificationChannel channel, Notification n, CancellationToken ct)
+    /// <param name="details">Host, Site, Ereignis, Zeit für "Ausführlich" und "Schick" (null = ohne Details).</param>
+    public async Task<string?> SendAsync(NotificationChannel channel, Notification n, CancellationToken ct, NotificationDetails? details = null)
     {
+        var style = channel.Style;
         try
         {
             var config = Unprotect(channel.ProtectedConfig);
@@ -86,26 +88,32 @@ public sealed class NotificationSenders(
             switch (channel.Type)
             {
                 case ChannelType.Ntfy:
-                    await SendNtfyAsync(config, n, link, timeout.Token);
+                    await SendNtfyAsync(config, style, n, details, link, timeout.Token);
                     break;
                 case ChannelType.Email:
-                    await SendEmailAsync(config, n, link, timeout.Token);
+                    await SendEmailAsync(config, style, n, details, link, timeout.Token);
                     break;
                 case ChannelType.Webhook:
-                    await SendWebhookAsync(config, n, link, timeout.Token);
+                    await SendWebhookAsync(config, n, details, link, timeout.Token);
                     break;
                 case ChannelType.Discord:
-                    await PostJsonAsync(config.Url!, new JsonObject { ["content"] = $"**{Emoji(n.Severity)} {n.Title}**\n{n.Message}\n{link}" }, null, timeout.Token);
+                    await PostJsonAsync(config.Url!, NotificationFormat.Discord(style, n, details, link), null, timeout.Token);
                     break;
                 case ChannelType.Slack:
-                    await PostJsonAsync(config.Url!, new JsonObject { ["text"] = $"*{Emoji(n.Severity)} {n.Title}*\n{n.Message}\n<{link}|AIOPatcher>" }, null, timeout.Token);
+                    await PostJsonAsync(config.Url!, NotificationFormat.Slack(style, n, details, link), null, timeout.Token);
                     break;
                 case ChannelType.Telegram:
-                    await PostJsonAsync(
-                        $"https://api.telegram.org/bot{config.Token}/sendMessage",
-                        new JsonObject { ["chat_id"] = config.ChatId, ["text"] = $"{Emoji(n.Severity)} {n.Title}\n{n.Message}\n{link}", ["disable_web_page_preview"] = true },
-                        null,
-                        timeout.Token);
+                    var telegram = $"https://api.telegram.org/bot{config.Token}/sendMessage";
+                    try
+                    {
+                        await PostJsonAsync(telegram, NotificationFormat.Telegram(style, n, details, config.ChatId!, link, withButton: true), null, timeout.Token);
+                    }
+                    catch (HttpRequestException ex) when (style == NotificationStyle.Rich && ex.StatusCode == HttpStatusCode.BadRequest)
+                    {
+                        // Telegram lehnt Knöpfe mit internen Adressen (IP, Port) ab: dann Link im Text statt Knopf
+                        await PostJsonAsync(telegram, NotificationFormat.Telegram(style, n, details, config.ChatId!, link, withButton: false), null, timeout.Token);
+                    }
+
                     break;
             }
 
@@ -122,11 +130,21 @@ public sealed class NotificationSenders(
         }
     }
 
-    private async Task SendNtfyAsync(ChannelConfig c, Notification n, string link, CancellationToken ct)
+    private async Task SendNtfyAsync(ChannelConfig c, NotificationStyle style, Notification n, NotificationDetails? d, string link, CancellationToken ct)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Post, c.Url) { Content = new StringContent(n.Message, Encoding.UTF8, "text/plain") };
-        // Header sind ASCII-only: Titel per RFC 2047 kodieren, das versteht ntfy.
-        request.Headers.TryAddWithoutValidation("Title", $"=?UTF-8?B?{Convert.ToBase64String(Encoding.UTF8.GetBytes(n.Title))}?=");
+        using var request = new HttpRequestMessage(HttpMethod.Post, c.Url) { Content = new StringContent(NotificationFormat.NtfyBody(style, n, d), Encoding.UTF8, "text/plain") };
+        // Header sind ASCII-only: Titel per RFC 2047 kodieren, das versteht ntfy. Kurz: nur der Titel als Text.
+        if (style != NotificationStyle.Short)
+        {
+            request.Headers.TryAddWithoutValidation("Title", $"=?UTF-8?B?{Convert.ToBase64String(Encoding.UTF8.GetBytes(n.Title))}?=");
+        }
+
+        if (style == NotificationStyle.Rich)
+        {
+            request.Headers.TryAddWithoutValidation("Markdown", "yes");
+            request.Headers.TryAddWithoutValidation("Actions", $"view, Open, {link}");
+        }
+
         request.Headers.TryAddWithoutValidation("Priority", n.Severity switch { NotificationSeverity.Critical => "high", NotificationSeverity.Warning => "default", _ => "low" });
         request.Headers.TryAddWithoutValidation("Tags", n.Severity switch { NotificationSeverity.Critical => "rotating_light", NotificationSeverity.Warning => "warning", NotificationSeverity.Success => "white_check_mark", _ => "information_source" });
         request.Headers.TryAddWithoutValidation("Click", link);
@@ -139,16 +157,21 @@ public sealed class NotificationSenders(
         response.EnsureSuccessStatusCode();
     }
 
-    private static async Task SendEmailAsync(ChannelConfig c, Notification n, string link, CancellationToken ct)
+    private static async Task SendEmailAsync(ChannelConfig c, NotificationStyle style, Notification n, NotificationDetails? d, string link, CancellationToken ct)
     {
         using var message = new MailMessage
         {
             From = new MailAddress(c.From!),
             Subject = $"[AIOPatcher] {n.Title}",
-            Body = $"{n.Message}\n\n{link}\n",
+            Body = NotificationFormat.MailText(style, n, d, link),
             BodyEncoding = Encoding.UTF8,
             SubjectEncoding = Encoding.UTF8,
         };
+        if (style == NotificationStyle.Rich)
+        {
+            // Text bleibt als Alternative für Programme ohne HTML
+            message.AlternateViews.Add(AlternateView.CreateAlternateViewFromString(NotificationFormat.MailHtml(n, d, link), Encoding.UTF8, "text/html"));
+        }
         foreach (var to in SplitAddresses(c.To))
         {
             message.To.Add(to);
@@ -170,8 +193,9 @@ public sealed class NotificationSenders(
         await smtp.SendMailAsync(message, ct);
     }
 
-    private async Task SendWebhookAsync(ChannelConfig c, Notification n, string link, CancellationToken ct)
+    private async Task SendWebhookAsync(ChannelConfig c, Notification n, NotificationDetails? d, string link, CancellationToken ct)
     {
+        // Webhook: immer alle Felder, unabhängig vom Stil
         var body = new JsonObject
         {
             ["event"] = n.Event.ToString(),
@@ -180,6 +204,9 @@ public sealed class NotificationSenders(
             ["message"] = n.Message,
             ["siteId"] = n.SiteId?.ToString(),
             ["hostId"] = n.HostId?.ToString(),
+            ["site"] = d?.Site,
+            ["host"] = d?.Host,
+            ["eventLabel"] = d?.Event,
             ["url"] = link,
             ["timestamp"] = n.CreatedAt.ToString("O"),
         };
@@ -200,14 +227,6 @@ public sealed class NotificationSenders(
         using var response = await httpFactory.CreateClient(HttpClientName).SendAsync(request, ct);
         response.EnsureSuccessStatusCode();
     }
-
-    private static string Emoji(NotificationSeverity s) => s switch
-    {
-        NotificationSeverity.Critical => "🚨",
-        NotificationSeverity.Warning => "⚠️",
-        NotificationSeverity.Success => "✅",
-        _ => "ℹ️",
-    };
 
     private static bool IsHttpUrl(string? url) =>
         Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme is "https" or "http";

@@ -47,7 +47,8 @@ public sealed class NotificationDispatcher(
     Notifier notifier,
     IServiceScopeFactory scopes,
     NotificationSenders senders,
-    ILogger<NotificationDispatcher> logger) : BackgroundService
+    ILogger<NotificationDispatcher> logger,
+    ServerClock? clock = null) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -64,6 +65,15 @@ public sealed class NotificationDispatcher(
         }
     }
 
+    /// <summary>Host- und Site-Name, Ereignis und Ortszeit für die Stile "Ausführlich" und "Schick".</summary>
+    public static async Task<NotificationDetails> DetailsAsync(AppDbContext db, Notification n, ServerClock? clock, CancellationToken ct)
+    {
+        var host = n.HostId is { } hostId ? await db.Hosts.AsNoTracking().Where(h => h.Id == hostId).Select(h => h.Name).FirstOrDefaultAsync(ct) : null;
+        var site = n.SiteId is { } siteId ? await db.Sites.AsNoTracking().Where(x => x.Id == siteId).Select(x => x.Name).FirstOrDefaultAsync(ct) : null;
+        var local = clock is null ? n.CreatedAt.ToLocalTime() : TimeZoneInfo.ConvertTimeFromUtc(n.CreatedAt, clock.Zone);
+        return new NotificationDetails(host, site, NotificationFormat.EventLabel(n.Event), local);
+    }
+
     private async Task DispatchAsync(Notification notification, CancellationToken ct)
     {
         using var scope = scopes.CreateScope();
@@ -78,9 +88,11 @@ public sealed class NotificationDispatcher(
             .Where(channelFilter)
             .ToListAsync(ct);
 
-        foreach (var channel in channels.Where(c => (c.Events & notification.Event) != 0))
+        var targets = channels.Where(c => (c.Events & notification.Event) != 0).ToList();
+        var details = targets.Count == 0 ? null : await DetailsAsync(db, notification, clock, ct);
+        foreach (var channel in targets)
         {
-            var error = await senders.SendAsync(channel, notification, ct);
+            var error = await senders.SendAsync(channel, notification, ct, details);
             if (error is null)
             {
                 channel.LastSentAt = DateTime.UtcNow;

@@ -1468,6 +1468,11 @@ namespace AIOPatcher.Server.Data.Migrations
                     b.Property<Guid?>("SiteId")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("Style")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Type")
                         .IsRequired()
                         .HasMaxLength(32)
