@@ -8,6 +8,8 @@ Written for users, not as a list of commits.
 
 ## [Unreleased]
 
+## [0.14.6] - 2026-11-19
+
 ### Fixed
 - **Installations made with the setup script never looked for new versions:** the GitHub repository for the version
   check was missing in the generated configuration, so neither the update notice nor **Check now** ever found a new
