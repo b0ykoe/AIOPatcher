@@ -44,6 +44,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<AiSettingsRecord> AiSettings => Set<AiSettingsRecord>();
     public DbSet<HostUpdateSummary> HostUpdateSummaries => Set<HostUpdateSummary>();
     public DbSet<AiUsageDay> AiUsage => Set<AiUsageDay>();
+    public DbSet<ImagePackageSet> ImagePackageSets => Set<ImagePackageSet>();
+    public DbSet<ImageVulnerability> ImageVulnerabilities => Set<ImageVulnerability>();
     public DbSet<AiRequestRecord> AiRequests => Set<AiRequestRecord>();
     public DbSet<FirewallProfile> FirewallProfiles => Set<FirewallProfile>();
     public DbSet<ComplianceBaseline> ComplianceBaselines => Set<ComplianceBaseline>();
@@ -251,6 +253,18 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
         {
             e.ToTable("AiSettings");
             e.Property(x => x.Id).ValueGeneratedNever();
+        });
+
+        b.Entity<ImagePackageSet>(e =>
+        {
+            e.ToTable("ImagePackageSets");
+            e.HasKey(x => x.ImageId);
+        });
+
+        b.Entity<ImageVulnerability>(e =>
+        {
+            e.ToTable("ImageVulnerabilities");
+            e.HasIndex(x => x.ImageId);
         });
 
         b.Entity<AiRequestRecord>(e =>

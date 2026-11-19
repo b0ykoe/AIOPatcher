@@ -280,30 +280,82 @@ public sealed class ContainerUpdateService(
         return (string?)json?["token"] ?? (string?)json?["access_token"] ?? throw new InvalidOperationException("Registry returned no token (private image?)");
     }
 
-    /// <summary>Vom Check-in: Container eines Hosts ersetzen.</summary>
-    public static async Task ReplaceContainersAsync(AppDbContext db, ManagedHost host, IReadOnlyList<ContainerReport> reports, DateTime now, CancellationToken ct)
+    /// <summary>
+    /// Vom Agent: Container eines Hosts ersetzen. Ist ein vorher laufender Container jetzt gestoppt (oder sein Healthcheck
+    /// "unhealthy"), gibt es eine Meldung. Selbst gebaute Compose-Dienste werden über ihr Basis-Image geprüft; Images
+    /// ohne Registry-Digest gar nicht (es gibt nichts, womit man sie vergleichen könnte).
+    /// </summary>
+    public static async Task ReplaceContainersAsync(AppDbContext db, ManagedHost host, IReadOnlyList<ContainerReport> reports, DateTime now, CancellationToken ct,
+        Notifier? notifier = null)
     {
-        db.Containers.RemoveRange(await db.Containers.Where(c => c.HostId == host.Id).ToListAsync(ct));
+        var previous = await db.Containers.Where(c => c.HostId == host.Id).ToListAsync(ct);
+        var before = previous.GroupBy(c => c.Name).ToDictionary(g => g.Key, g => g.First());
+        db.Containers.RemoveRange(previous);
         foreach (var report in reports.Where(r => r is not null && !string.IsNullOrWhiteSpace(r.Name)).Take(200))
         {
-            var reference = ImageReference.Parse(report.Image);
-            db.Containers.Add(new ContainerInfo
+            var baseImage = report.Build?.BaseImage;
+            var local = report.RepoDigests is { Count: 0 };
+            var reference = baseImage is not null ? ImageReference.Parse(baseImage) : local ? null : ImageReference.Parse(report.Image);
+            var digests = baseImage is not null ? report.Build!.BaseRepoDigests : report.RepoDigests;
+            var container = new ContainerInfo
             {
                 HostId = host.Id,
                 Name = Cut(report.Name, 200),
                 Image = Cut(report.Image, 300),
                 Reference = reference?.Normalized is { } n ? Cut(n, 300) : null,
                 ImageId = report.ImageId is null ? null : Cut(report.ImageId, 100),
-                LocalDigest = reference?.LocalDigest(report.RepoDigests) is { } d ? Cut(d, 400) : null,
+                LocalDigest = reference?.LocalDigest(digests) is { } d ? Cut(d, 400) : null,
                 State = report.State is null ? null : Cut(report.State, 32),
                 SeenAt = now,
                 ComposeProject = report.Compose?.Project is { } p ? Cut(p, 200) : null,
                 ComposeService = report.Compose?.Service is { } sv ? Cut(sv, 200) : null,
                 ComposeFiles = report.Compose is { ConfigFiles.Count: > 0 } c ? Cut(string.Join(',', c.ConfigFiles), 1000) : null,
                 ComposeFilesFound = report.Compose?.FilesFound == true,
-            });
+                ContainerId = report.Id is null ? null : Cut(report.Id, 100),
+                ExitCode = report.ExitCode,
+                StartedAt = report.StartedAt,
+                FinishedAt = report.FinishedAt,
+                Health = report.Health is null ? null : Cut(report.Health, 20),
+                RestartPolicy = report.RestartPolicy is null ? null : Cut(report.RestartPolicy, 30),
+                LocalImage = local,
+                BaseImage = baseImage is null ? null : Cut(baseImage, 300),
+            };
+            db.Containers.Add(container);
+
+            if (notifier is not null && before.GetValueOrDefault(container.Name) is { } old && StopReason(old, container) is { } reason)
+            {
+                notifier.Publish(new Notification(NotificationEvents.ContainerStopped,
+                    L.T($"{host.Name}: Container {container.Name} {(container.Health == "unhealthy" && container.State == "running" ? "ungesund" : "gestoppt")}",
+                        $"{host.Name}: container {container.Name} {(container.Health == "unhealthy" && container.State == "running" ? "unhealthy" : "stopped")}"),
+                    reason, NotificationSeverity.Warning, host.SiteId, host.Id, $"/hosts/{host.Id}?tab=containers"));
+            }
         }
 
         static string Cut(string value, int max) => value.Length > max ? value[..max] : value;
+    }
+
+    /// <summary>
+    /// Warum ein Wechsel gemeldet wird: lief und ist jetzt beendet (exited/dead), oder Healthcheck neu "unhealthy".
+    /// Nicht gemeldet: sauber beendet (Exit 0) ohne Neustart-Regel, die ihn am Laufen halten soll (z. B. Einmal-Jobs).
+    /// </summary>
+    public static string? StopReason(ContainerInfo before, ContainerInfo now)
+    {
+        if (before.State == "running" && now.State is "exited" or "dead")
+        {
+            var keepsRunning = now.RestartPolicy is "always" or "unless-stopped";
+            if (now.ExitCode == 0 && !keepsRunning)
+            {
+                return null;
+            }
+
+            return L.T($"Status {now.State}, Exit-Code {now.ExitCode?.ToString() ?? "?"}", $"State {now.State}, exit code {now.ExitCode?.ToString() ?? "?"}")
+                   + (now.RestartPolicy is { Length: > 0 } policy ? L.T($", Neustart-Regel {policy}", $", restart policy {policy}") : "")
+                   + (now.FinishedAt is { } at ? L.T($", beendet {at:u}", $", finished {at:u}") : "") + ".";
+        }
+
+        return before.Health != "unhealthy" && now.Health == "unhealthy" && now.State == "running"
+            ? L.T("Der Healthcheck meldet \"unhealthy\"; der Container läuft, antwortet aber nicht wie erwartet.",
+                "The health check reports \"unhealthy\"; the container is running but not responding as expected.")
+            : null;
     }
 }

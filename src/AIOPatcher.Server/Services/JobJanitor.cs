@@ -71,6 +71,18 @@ public sealed class JobJanitor(IServiceScopeFactory scopes, AIOPatcherOptions op
             .Where(c => c.FetchedAt < changelogsBefore && !db.PendingUpdates.Any(u => u.Name == c.Name && u.AvailableVersion == c.Version))
             .ExecuteDeleteAsync(ct);
 
+        // Paketlisten und Lücken von Images, die seit 30 Tagen kein Container mehr nutzt
+        var imagesBefore = now - TimeSpan.FromDays(30);
+        var unused = await db.ImagePackageSets
+            .Where(s => s.CollectedAt < imagesBefore && !db.Containers.Any(c => c.ImageId == s.ImageId))
+            .Select(s => s.ImageId)
+            .ToListAsync(ct);
+        if (unused.Count > 0)
+        {
+            await db.ImageVulnerabilities.Where(v => unused.Contains(v.ImageId)).ExecuteDeleteAsync(ct);
+            await db.ImagePackageSets.Where(s => unused.Contains(s.ImageId)).ExecuteDeleteAsync(ct);
+        }
+
         // Protokoll der KI-Anfragen: 90 Tage (die Tagessummen bleiben)
         var aiBefore = now - Ai.UpdateSummaries.KeepRequests;
         await db.AiRequests.Where(r => r.At < aiBefore).ExecuteDeleteAsync(ct);

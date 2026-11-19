@@ -25,6 +25,9 @@ public enum NotificationEvents
 
     /// <summary>Nach einem Neustart laufen Dienste oder Container nicht mehr, die vorher liefen.</summary>
     RebootCheckFailed = 2048,
+
+    /// <summary>Ein laufender Container ist gestoppt oder sein Healthcheck meldet "unhealthy".</summary>
+    ContainerStopped = 4096,
 }
 
 public enum ChannelType

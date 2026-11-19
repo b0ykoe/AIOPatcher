@@ -8,6 +8,26 @@ Written for users, not as a list of commits.
 
 ## [Unreleased]
 
+### Added
+- **Container status:** The Containers tab of a host now also lists stopped containers and shows whether each one is
+  running, stopped (with exit code and since when), restarting or unhealthy.
+- **Notification "Container stopped or unhealthy":** sent when a running container stops or its health check turns
+  unhealthy. One-off containers that exit cleanly without a restart policy are not reported. Choose it for your
+  channels under **Settings → Notifications**.
+- **Vulnerabilities in container images:** The agent reads the package list of each image (Debian, Ubuntu and Alpine
+  based) and the server matches it with OSV like the packages of a host. The new **CVEs** column shows relevant
+  vulnerabilities (actively exploited or EPSS of 5 % or more); a click lists them. New actively exploited ones are
+  reported with the *Actively exploited vulnerability (KEV)* notification. Nothing is run inside the containers.
+- **Self-built images:** For Compose services with `build:`, AIOPatcher reads the Dockerfile and checks its base image
+  against the registry (*New base image*); **Rebuild** builds the image on the current base image and recreates the
+  service.
+
+### Improved
+- Images that come from no registry are shown as *built locally* instead of failing the registry check.
+
+### Upgrade notes
+- Agents need this version for container status, image vulnerabilities and self-built images; they update themselves.
+
 ## [0.9.2] - 2026-11-19
 
 ### Added

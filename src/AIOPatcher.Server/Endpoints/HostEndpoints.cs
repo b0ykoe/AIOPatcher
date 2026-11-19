@@ -82,8 +82,19 @@ public static class HostEndpoints
         string? Cves, bool IsKev, double? MaxEpss);
 
     /// <param name="UpdateBlocker">Warum "Aktualisieren" nicht geht: "notCompose", "portainer", "noFile", "agent" (Agent zu alt); null = geht.</param>
+    /// <param name="LocalImage">Image aus keiner Registry (selbst gebaut); ohne <paramref name="BaseImage"/> nicht prüfbar.</param>
+    /// <param name="BaseImage">Selbst gebaut per Compose: Basis-Image; UpdateAvailable bezieht sich dann darauf (Update = neu bauen).</param>
     public sealed record ContainerDto(string Name, string Image, string? State, bool UpdateAvailable, DateTime? CheckedAt, string? CheckError, bool Pinned, DateTime? SeenAt = null,
-        string? Compose = null, string? UpdateBlocker = null);
+        string? Compose = null, string? UpdateBlocker = null, int? ExitCode = null, DateTime? StartedAt = null, DateTime? FinishedAt = null, string? Health = null,
+        string? RestartPolicy = null, bool LocalImage = false, string? BaseImage = null, ContainerVulnsDto? Vulns = null);
+
+    /// <param name="State">"ok" (abgeglichen), "pending" (Paketliste oder Abgleich steht aus), "unsupported" (Image ohne
+    /// prüfbare Paketdatenbank, Error sagt warum), "agent" (Agent zu alt), "off" (CVE-Abgleich ausgeschaltet).</param>
+    public sealed record ContainerVulnsDto(string State, int Count, int Kev, double? MaxEpss, string? Os, int Packages, DateTime? ScannedAt, string? Error);
+
+    public sealed record ContainerVulnDto(string Cve, string Package, string? InstalledVersion, bool IsKev, string? KevName, double? Epss, double? EpssPercentile);
+
+    public sealed record ContainerVulnListDto(string Name, string Image, string? Os, int Packages, DateTime? ScannedAt, IReadOnlyList<ContainerVulnDto> Items);
     public sealed record AddressDto(string Address, int? PrefixLength, string? InterfaceName, string? SubnetName);
 
     public sealed record HostDetailDto(
@@ -186,6 +197,7 @@ public static class HostEndpoints
         op.MapPost("/hosts/agent-update/now", UpdateAllAgentsNow);
         op.MapDelete("/hosts/{id:guid}/reboot-check", DismissRebootCheck);
         op.MapPost("/hosts/{id:guid}/containers/recheck", RecheckContainers);
+        api.MapGet("/hosts/{id:guid}/containers/{name}/vulnerabilities", ContainerVulnerabilities);
         op.MapPost("/hosts/{id:guid}/containers/{name}/update", UpdateContainer);
         op.MapPut("/hosts/{id:guid}/modules/{module}", ToggleModule);
         op.MapDelete("/hosts/{id:guid}", DeleteHost).RequireAuthorization(UserAccounts.AdminPolicy);
@@ -357,7 +369,7 @@ public static class HostEndpoints
         // Uptime ab Systemstart weiterzählen statt den Wert der letzten Meldung zu zeigen
         var uptime = host.BootedAt is { } booted ? DateTime.UtcNow - booted : host.Uptime;
         return Results.Ok(new HostDetailDto(summary, host.KernelVersion, uptime, host.EnrolledAt, host.CertificateExpiresAt, updates, addresses,
-            host.IntegrationId, host.Integration?.Name, host.ExternalId, await ContainersAsync(db, id, ct), agentUpdate,
+            host.IntegrationId, host.Integration?.Name, host.ExternalId, await ContainersAsync(db, id, ct, features), agentUpdate,
             host.ProtocolVersion, ModulesOf(host), BrokenSourcesOf(host), features.IsOn(Feature.AptSourceFixes),
             features.IsOn(Feature.RebootCheck) ? RebootCheck.Result(host) : null,
             host.UpdateScanHours, host.ImageCheckHours, lastScanAt));
@@ -610,21 +622,92 @@ public static class HostEndpoints
         return Results.NoContent();
     }
 
-    private static async Task<List<ContainerDto>> ContainersAsync(AppDbContext db, Guid hostId, CancellationToken ct)
+    private static async Task<List<ContainerDto>> ContainersAsync(AppDbContext db, Guid hostId, CancellationToken ct, FeatureFlags? features = null)
     {
         var containers = await db.Containers.Where(c => c.HostId == hostId).OrderBy(c => c.Name).ToListAsync(ct);
         // Ältere Agents melden keine Compose-Herkunft und können nicht aktualisieren
         var host = await db.Hosts.AsNoTracking().FirstOrDefaultAsync(h => h.Id == hostId, ct);
         var agentCan = host is not null && ModuleJson.Supports(host, AgentModules.Docker, ModuleActions.AppUpdate);
+        var agentReadsPackages = host is not null && ModuleJson.Supports(host, AgentModules.Docker, ModuleActions.Packages);
         var references = containers.Select(c => c.Reference).OfType<string>().Distinct().ToList();
         var checks = await db.ImageChecks.Where(i => references.Contains(i.Reference)).ToDictionaryAsync(i => i.Reference, ct);
+
+        // Lücken je Image (relevante: KEV oder EPSS ab 5 %)
+        var imageIds = containers.Select(c => c.ImageId).OfType<string>().Distinct().ToList();
+        var sets = await db.ImagePackageSets.AsNoTracking().Where(s => imageIds.Contains(s.ImageId))
+            .Select(s => new { s.ImageId, s.OsId, s.OsVersion, s.Ecosystem, s.PackageCount, s.ScannedAt, s.Error })
+            .ToDictionaryAsync(s => s.ImageId, ct);
+        var vulns = (await db.ImageVulnerabilities.AsNoTracking().Where(v => imageIds.Contains(v.ImageId))
+                .GroupJoin(db.CveInfos, v => v.CveId, c => c.Id, (v, c) => new { v.ImageId, v.CveId, Info = c })
+                .SelectMany(x => x.Info.DefaultIfEmpty(), (x, c) => new { x.ImageId, x.CveId, IsKev = c != null && c.IsKev, Epss = c == null ? null : c.Epss })
+                .ToListAsync(ct))
+            .GroupBy(v => v.ImageId)
+            .ToDictionary(g => g.Key, g => g.DistinctBy(v => v.CveId).ToList());
+        var cveOn = features?.IsOn(Feature.CveLookup) ?? true;
+
+        ContainerVulnsDto Vulns(ContainerInfo c)
+        {
+            if (!cveOn)
+            {
+                return new ContainerVulnsDto("off", 0, 0, null, null, 0, null, null);
+            }
+
+            if (c.ImageId is null || !sets.TryGetValue(c.ImageId, out var set))
+            {
+                return new ContainerVulnsDto(agentReadsPackages ? "pending" : "agent", 0, 0, null, null, 0, null, null);
+            }
+
+            var os = set.OsId is null ? null : $"{set.OsId} {set.OsVersion}".Trim();
+            if (set.Ecosystem is null || set.PackageCount == 0)
+            {
+                return new ContainerVulnsDto("unsupported", 0, 0, null, os, set.PackageCount, null,
+                    set.Error ?? L.T($"Für {os ?? "dieses Image"} gibt es keinen CVE-Abgleich (unterstützt: Debian, Ubuntu, Alpine).",
+                        $"No CVE matching for {os ?? "this image"} (supported: Debian, Ubuntu, Alpine)."));
+            }
+
+            if (set.ScannedAt is null)
+            {
+                return new ContainerVulnsDto("pending", 0, 0, null, os, set.PackageCount, null, null);
+            }
+
+            var list = vulns.GetValueOrDefault(c.ImageId) ?? [];
+            return new ContainerVulnsDto("ok", list.Count, list.Count(v => v.IsKev), list.Max(v => v.Epss), os, set.PackageCount, set.ScannedAt, null);
+        }
+
         return containers.Select(c =>
         {
             var check = c.Reference is null ? null : checks.GetValueOrDefault(c.Reference);
             var update = check?.RemoteDigest is { } remote && c.LocalDigest is not null && !c.HasDigest(remote);
-            return new ContainerDto(c.Name, c.Image, c.State, update, check?.CheckedAt, check?.Error, c.Reference is null, c.SeenAt,
-                c.ComposeProject is null ? null : $"{c.ComposeProject}/{c.ComposeService}", agentCan ? c.UpdateBlocker : "agent");
+            return new ContainerDto(c.Name, c.Image, c.State, update, check?.CheckedAt, check?.Error, c.Reference is null && !c.LocalImage, c.SeenAt,
+                c.ComposeProject is null ? null : $"{c.ComposeProject}/{c.ComposeService}", agentCan ? c.UpdateBlocker : "agent",
+                c.ExitCode, c.StartedAt, c.FinishedAt, c.Health, c.RestartPolicy, c.LocalImage, c.BaseImage, Vulns(c));
         }).ToList();
+    }
+
+    /// <summary>Relevante Lücken im Image eines Containers (KEV oder EPSS ab 5 %), schlimmste zuerst.</summary>
+    private static async Task<IResult> ContainerVulnerabilities(Guid id, string name, AppDbContext db, CveService cves, CancellationToken ct)
+    {
+        var container = await db.Containers.AsNoTracking().FirstOrDefaultAsync(c => c.HostId == id && c.Name == name, ct);
+        if (container is null)
+        {
+            return Results.NotFound();
+        }
+
+        var set = container.ImageId is null ? null : await db.ImagePackageSets.AsNoTracking().FirstOrDefaultAsync(s => s.ImageId == container.ImageId, ct);
+        var rows = container.ImageId is null ? [] : await db.ImageVulnerabilities.AsNoTracking().Where(v => v.ImageId == container.ImageId).ToListAsync(ct);
+        var ids = rows.Select(r => r.CveId).Distinct().ToList();
+        var infos = await db.CveInfos.AsNoTracking().Where(c => ids.Contains(c.Id)).ToDictionaryAsync(c => c.Id, ct);
+        var items = rows
+            .Select(r =>
+            {
+                var info = infos.GetValueOrDefault(r.CveId);
+                var epss = info?.Epss is { } e ? (e, info.EpssPercentile) : cves.EpssOf(r.CveId) is { } x ? ((double)x.Epss, (double?)x.Percentile) : ((double?)null, (double?)null);
+                return new ContainerVulnDto(r.CveId, r.Package, r.InstalledVersion, info?.IsKev == true, info?.KevName, epss.Item1, epss.Item2);
+            })
+            .OrderByDescending(v => v.IsKev).ThenByDescending(v => v.Epss ?? 0).ThenBy(v => v.Cve)
+            .ToList();
+        return Results.Ok(new ContainerVulnListDto(container.Name, container.Image, set?.OsId is null ? null : $"{set.OsId} {set.OsVersion}".Trim(),
+            set?.PackageCount ?? 0, set?.ScannedAt, items));
     }
 
     /// <summary>

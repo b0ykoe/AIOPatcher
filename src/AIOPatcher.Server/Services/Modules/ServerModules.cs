@@ -242,22 +242,107 @@ public sealed class DockerServerModule : ServerModule
     /// <summary>Container ändern sich oft (Update, neu erstellt): alle 30 Minuten, nach einem Scan und auf Wunsch sofort.</summary>
     public static readonly TimeSpan Interval = TimeSpan.FromMinutes(30);
 
+    /// <summary>Images, deren Paketliste der Agent beim nächsten Abruf lesen soll (je Host; nach einem Neustart neu ermittelt).</summary>
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, List<ImagePackagesTarget>> PendingPackages = new();
+
+    /// <summary>Paketliste mit Fehler (z. B. Container gerade weg) erst nach dieser Zeit erneut anfordern.</summary>
+    public static readonly TimeSpan RetryPackagesAfter = TimeSpan.FromDays(1);
+
     public override PlannedTask? Due(ManagedHost host, ModuleContext context, string? polledVersion)
     {
         var last = context.LastRequested(Id, ModuleActions.Inventory);
         var asked = host.ContainersRequestedAt > last || context.LastRequested(AgentModules.Updates, ModuleActions.Scan) > last
                     || context.LastRequested(Id, ModuleActions.AppUpdate) > last; // nach "Container aktualisieren" gleich neu melden
-        return context.Older(Id, ModuleActions.Inventory, Interval) || asked ? new PlannedTask(ModuleActions.Inventory) : null;
+        if (context.Older(Id, ModuleActions.Inventory, Interval) || asked)
+        {
+            return new PlannedTask(ModuleActions.Inventory);
+        }
+
+        return ModuleJson.Supports(host, Id, ModuleActions.Packages) && PendingPackages.TryRemove(host.Id, out var images) && images.Count > 0
+            ? new PlannedTask(ModuleActions.Packages, PullJsonContext.ToElement(new ImagePackagesRequest(images), PullJsonContext.Default.ImagePackagesRequest))
+            : null;
     }
 
     public override async Task<JsonElement?> HandleAsync(ModuleContext context, ManagedHost host, AgentTaskRecord task, TaskResultRequest result, CancellationToken ct)
     {
+        if (task.Action == ModuleActions.Packages)
+        {
+            if (PullJsonContext.FromElement(result.Payload, PullJsonContext.Default.ImagePackagesResult) is { } packages)
+            {
+                await StorePackagesAsync(context.Db, packages.Images, context.Now, ct);
+            }
+
+            return null;
+        }
+
         if (PullJsonContext.FromElement(result.Payload, PullJsonContext.Default.ContainerList) is { } list)
         {
-            await ContainerUpdateService.ReplaceContainersAsync(context.Db, host, list.Containers, context.Now, ct);
+            await ContainerUpdateService.ReplaceContainersAsync(context.Db, host, list.Containers, context.Now, ct, context.Notifier);
+            await context.Db.SaveChangesAsync(ct);
+            if (context.Features.IsOn(Feature.CveLookup) && ModuleJson.Supports(host, Id, ModuleActions.Packages))
+            {
+                await QueueMissingPackagesAsync(context.Db, host.Id, context.Now, ct);
+            }
         }
 
         return null;
+    }
+
+    /// <summary>Images dieses Hosts ohne Paketliste vormerken (je Image ein Container, laufend oder gestoppt).</summary>
+    public static async Task<int> QueueMissingPackagesAsync(AppDbContext db, Guid hostId, DateTime now, CancellationToken ct)
+    {
+        var containers = await db.Containers.AsNoTracking()
+            .Where(c => c.HostId == hostId && c.ImageId != null && c.ContainerId != null)
+            .Select(c => new { ImageId = c.ImageId!, ContainerId = c.ContainerId!, c.State })
+            .ToListAsync(ct);
+        var imageIds = containers.Select(c => c.ImageId).Distinct().ToList();
+        var retryBefore = now - RetryPackagesAfter;
+        var known = (await db.ImagePackageSets.AsNoTracking()
+                .Where(s => imageIds.Contains(s.ImageId) && (s.Error == null || s.CollectedAt > retryBefore))
+                .Select(s => s.ImageId)
+                .ToListAsync(ct))
+            .ToHashSet();
+        var targets = containers
+            .Where(c => !known.Contains(c.ImageId))
+            .GroupBy(c => c.ImageId)
+            .Select(g => g.OrderBy(c => c.State == "running" ? 0 : 1).First())
+            .Take(20)
+            .Select(c => new ImagePackagesTarget(c.ContainerId, c.ImageId))
+            .ToList();
+        if (targets.Count > 0)
+        {
+            PendingPackages[hostId] = targets;
+        }
+
+        return targets.Count;
+    }
+
+    /// <summary>Paketlisten speichern (je Image-ID, für alle Hosts); der CVE-Abgleich folgt im nächsten Lauf des CVE-Dienstes.</summary>
+    public static async Task StorePackagesAsync(AppDbContext db, IEnumerable<ImagePackages> images, DateTime now, CancellationToken ct)
+    {
+        foreach (var image in images.Where(i => !string.IsNullOrWhiteSpace(i.ImageId) && i.ImageId.Length <= 100).Take(20))
+        {
+            var set = await db.ImagePackageSets.FindAsync([image.ImageId], ct);
+            if (set is null)
+            {
+                db.ImagePackageSets.Add(set = new ImagePackageSet { ImageId = image.ImageId });
+            }
+
+            var packages = image.Packages.Take(5000).ToList();
+            set.OsId = Cut(image.OsId, 40);
+            set.OsVersion = Cut(image.OsVersion, 40);
+            set.Format = Cut(image.Format, 10);
+            set.Ecosystem = CveMapping.EcosystemForImage(image.OsId, image.OsVersion);
+            set.Packages = JsonSerializer.Serialize(packages, PullJsonContext.Default.IReadOnlyListImagePackage);
+            set.PackageCount = packages.Count;
+            set.Error = Cut(image.Error, 300);
+            set.CollectedAt = now;
+            set.ScannedAt = null; // neu abgleichen
+        }
+
+        await db.SaveChangesAsync(ct);
+
+        static string? Cut(string? value, int max) => value is null ? null : value.Length > max ? value[..max] : value;
     }
 }
 

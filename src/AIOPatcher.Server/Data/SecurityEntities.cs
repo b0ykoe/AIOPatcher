@@ -56,6 +56,31 @@ public sealed class ContainerInfo
     public string? State { get; set; }
     public DateTime SeenAt { get; set; }
 
+    /// <summary>Volle Container-ID (für die Paketliste per docker cp); ältere Agents melden keine.</summary>
+    [System.ComponentModel.DataAnnotations.MaxLength(100)]
+    public string? ContainerId { get; set; }
+
+    public int? ExitCode { get; set; }
+    public DateTime? StartedAt { get; set; }
+    public DateTime? FinishedAt { get; set; }
+
+    /// <summary>Healthcheck: "healthy", "unhealthy", "starting"; null ohne Healthcheck.</summary>
+    [System.ComponentModel.DataAnnotations.MaxLength(20)]
+    public string? Health { get; set; }
+
+    [System.ComponentModel.DataAnnotations.MaxLength(30)]
+    public string? RestartPolicy { get; set; }
+
+    /// <summary>Image stammt aus keiner Registry (selbst gebaut, keine RepoDigests): nicht gegen eine Registry prüfbar.</summary>
+    public bool LocalImage { get; set; }
+
+    /// <summary>
+    /// Selbst gebaut per Compose: Basis-Image der letzten Dockerfile-Stufe, z. B. "debian:12". Dann zeigen
+    /// <see cref="Reference"/> und <see cref="LocalDigest"/> auf dieses Basis-Image (Update = neu bauen).
+    /// </summary>
+    [System.ComponentModel.DataAnnotations.MaxLength(300)]
+    public string? BaseImage { get; set; }
+
     /// <summary>Compose-Projekt und -Dienst (null = nicht per Compose gestartet).</summary>
     [System.ComponentModel.DataAnnotations.MaxLength(200)]
     public string? ComposeProject { get; set; }
@@ -151,4 +176,65 @@ public sealed class ImageCheck
 
     /// <summary>Für diesen Remote-Digest wurde schon benachrichtigt.</summary>
     public string? NotifiedDigest { get; set; }
+}
+
+/// <summary>
+/// Paketliste eines Images (je Image-ID einmal, für alle Hosts), gelesen aus einem seiner Container. Der CVE-Abgleich
+/// läuft wie bei Hosts über OSV (<see cref="Ecosystem"/>).
+/// </summary>
+public sealed class ImagePackageSet
+{
+    [System.ComponentModel.DataAnnotations.MaxLength(100)]
+    public required string ImageId { get; set; }
+
+    [System.ComponentModel.DataAnnotations.MaxLength(40)]
+    public string? OsId { get; set; }
+
+    [System.ComponentModel.DataAnnotations.MaxLength(40)]
+    public string? OsVersion { get; set; }
+
+    /// <summary>"dpkg" oder "apk"; null ohne Paketdatenbank.</summary>
+    [System.ComponentModel.DataAnnotations.MaxLength(10)]
+    public string? Format { get; set; }
+
+    /// <summary>OSV-Ökosystem, z. B. "Debian:12", "Alpine:v3.20"; null = nicht prüfbar.</summary>
+    [System.ComponentModel.DataAnnotations.MaxLength(60)]
+    public string? Ecosystem { get; set; }
+
+    /// <summary>Pakete als JSON (Name, Version, Quelle, Quellversion).</summary>
+    public string Packages { get; set; } = "[]";
+
+    public int PackageCount { get; set; }
+
+    [System.ComponentModel.DataAnnotations.MaxLength(300)]
+    public string? Error { get; set; }
+
+    public DateTime CollectedAt { get; set; }
+
+    /// <summary>Letzter Abgleich mit OSV; null = noch nie.</summary>
+    public DateTime? ScannedAt { get; set; }
+
+    /// <summary>KEV-CVEs, die für dieses Image schon gemeldet wurden.</summary>
+    public string? NotifiedKevCves { get; set; }
+}
+
+/// <summary>Relevante Lücke (KEV oder EPSS ab 5 %) in einem Paket eines Images.</summary>
+public sealed class ImageVulnerability
+{
+    public long Id { get; set; }
+
+    [System.ComponentModel.DataAnnotations.MaxLength(100)]
+    public required string ImageId { get; set; }
+
+    [System.ComponentModel.DataAnnotations.MaxLength(30)]
+    public required string CveId { get; set; }
+
+    /// <summary>Quellpaket, z. B. "openssl".</summary>
+    [System.ComponentModel.DataAnnotations.MaxLength(200)]
+    public required string Package { get; set; }
+
+    [System.ComponentModel.DataAnnotations.MaxLength(200)]
+    public string? InstalledVersion { get; set; }
+
+    public DateTime FoundAt { get; set; }
 }

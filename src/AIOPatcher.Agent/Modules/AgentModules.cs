@@ -112,12 +112,15 @@ public sealed class SoftwareModule(IPlatformInventory inventory, JobExecutor exe
     }
 }
 
-/// <summary>docker.inventory: laufende Container; docker.appupdate: einen Compose-Container aktualisieren.</summary>
+/// <summary>
+/// docker.inventory: alle Container mit Status; docker.packages: Paketlisten von Images (für den CVE-Abgleich);
+/// docker.appupdate: einen Compose-Container aktualisieren.
+/// </summary>
 public sealed class DockerModule : IAgentModule
 {
     public string Id => AgentModules.Docker;
     public bool Available => OperatingSystem.IsLinux() && (File.Exists("/usr/bin/docker") || File.Exists("/usr/local/bin/docker"));
-    public IReadOnlyList<string> Actions { get; } = [ModuleActions.Inventory, ModuleActions.AppUpdate];
+    public IReadOnlyList<string> Actions { get; } = [ModuleActions.Inventory, ModuleActions.AppUpdate, ModuleActions.Packages];
 
     /// <summary>Container aktualisieren gilt wie Programm-Updates: allowAppUpdates und allowPatch All.</summary>
     public static string? PolicyRejects(AgentPolicy policy) =>
@@ -139,6 +142,18 @@ public sealed class DockerModule : IAgentModule
             return name is null
                 ? TaskOutcome.Rejected("No container given.")
                 : Json.From(await DockerUpdater.UpdateAsync(name, context.Log, ct));
+        }
+
+        if (task.Action == ModuleActions.Packages)
+        {
+            var request = PullJsonContext.FromElement(task.Payload, PullJsonContext.Default.ImagePackagesRequest);
+            if (request is null || request.Images.Count == 0)
+            {
+                return TaskOutcome.Rejected("No images given.");
+            }
+
+            var images = await DockerImagePackages.CollectAsync(request.Images, ct);
+            return Json.Ok($"{images.Count} images, {images.Sum(i => i.Packages.Count)} packages", new ImagePackagesResult(images), PullJsonContext.Default.ImagePackagesResult);
         }
 
         var containers = await DockerInventory.CollectAsync(ct);

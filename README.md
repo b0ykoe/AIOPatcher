@@ -159,6 +159,18 @@ tested against real systems, but against mocked APIs and unit tests):
   *Scan intervals* below); *Check again* in
   the Containers tab queries both right away. A container is up to date when one of the local digests of its image
   (also pulled via other tags) matches the digest of the tag in the registry.
+  - **Status:** running, stopped (with exit code), restarting or unhealthy, also for stopped containers. A notification
+    (*Container stopped or unhealthy*) is sent when a running container stops or its health check turns unhealthy;
+    a clean exit (code 0) without a restart policy (one-off jobs) is not reported.
+  - **Vulnerabilities:** the agent reads the package list of each image from one of its containers (`docker cp` of
+    `/etc/os-release` and the dpkg/apk database into a temporary folder; nothing runs inside the container). The server
+    matches it with OSV like the packages of a host and shows relevant vulnerabilities (KEV or EPSS of 5 % or more) per
+    container. Supported: Debian, Ubuntu and Alpine based images; language packages (npm, pip, Go, Java) are not covered.
+    New KEV findings are reported like on hosts.
+  - **Self-built images** (Compose with `build:`): the agent reads `docker compose config` and the `FROM` lines of the
+    Dockerfile; the server checks the base image of the last stage against the registry (*New base image*), and *Rebuild*
+    runs `docker compose build --pull` and recreates the service. Images without a registry and without Compose build
+    information are shown as *built locally* and not checked.
 - **Notifications**: ntfy, email, Discord, Slack, Telegram, webhook (HMAC-signed)
 - **Reports**: compliance per site and period, CSV and print/PDF
 - **IPAM light**: subnets, usage, next free address, conflicts; addresses from agents, OPNsense ARP and manual entries
@@ -439,7 +451,7 @@ Every function is a **module** with fixed actions. The agent rejects any other t
 | `system` | `describe`: OS, IPs, reboot required, modules, result of the last self-update |
 | `updates` | `scan`, `install`, `reboot` (apt or Windows Update), `change` (own automatic updates on/off), `changelog` (release notes of pending apt updates, read-only) |
 | `software` | `inventory`, `appupdate` (winget) |
-| `docker` | `inventory`, `appupdate` (move a Compose container to a new image) |
+| `docker` | `inventory` (all containers with status), `packages` (package list of an image for the CVE check), `appupdate` (move a Compose container to a new image or rebuild it) |
 | `services` | `list`: running autostart services and containers (before/after reboot comparison) |
 | `metrics` | `sample`: CPU, RAM, disks, container utilization |
 | `firewall`, `remoteaccess` | `status`, `change` |

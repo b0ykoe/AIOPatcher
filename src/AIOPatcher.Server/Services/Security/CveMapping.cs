@@ -63,6 +63,27 @@ public static partial class CveMapping
             : null;
     }
 
+    /// <summary>
+    /// OSV-Ökosystem eines Container-Images aus /etc/os-release: debian 12 → "Debian:12", ubuntu 22.04 →
+    /// "Ubuntu:22.04:LTS", alpine 3.20.3 → "Alpine:v3.20". Andere Distributionen: null (nicht prüfbar).
+    /// </summary>
+    public static string? EcosystemForImage(string? osId, string? osVersion)
+    {
+        var version = osVersion?.Trim() ?? "";
+        switch (osId?.Trim().ToLowerInvariant())
+        {
+            case "debian":
+                return int.TryParse(version.Split('.')[0], out var major) ? $"Debian:{major}" : null;
+            case "ubuntu":
+                return version.Length > 0 ? OsvEcosystem($"Ubuntu:{version}") : null;
+            case "alpine":
+                var parts = version.Split('.');
+                return parts.Length >= 2 && int.TryParse(parts[0], out _) && int.TryParse(parts[1], out _) ? $"Alpine:v{parts[0]}.{parts[1]}" : null;
+            default:
+                return null;
+        }
+    }
+
     /// <summary>"CVE-2024-3094" → 2024 * 10^8 + 3094 (kompakter Schlüssel für die EPSS-Tabelle).</summary>
     public static long? CveKey(string cve)
     {

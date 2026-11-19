@@ -322,6 +322,10 @@ namespace AIOPatcher.Server.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("BaseImage")
+                        .HasMaxLength(300)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("ComposeFiles")
                         .HasMaxLength(1000)
                         .HasColumnType("TEXT");
@@ -335,6 +339,20 @@ namespace AIOPatcher.Server.Data.Migrations
 
                     b.Property<string>("ComposeService")
                         .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ContainerId")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("ExitCode")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime?>("FinishedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Health")
+                        .HasMaxLength(20)
                         .HasColumnType("TEXT");
 
                     b.Property<Guid>("HostId")
@@ -353,6 +371,9 @@ namespace AIOPatcher.Server.Data.Migrations
                         .HasMaxLength(400)
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("LocalImage")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -362,7 +383,14 @@ namespace AIOPatcher.Server.Data.Migrations
                         .HasMaxLength(300)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("RestartPolicy")
+                        .HasMaxLength(30)
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTime>("SeenAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("StartedAt")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("State")
@@ -683,6 +711,88 @@ namespace AIOPatcher.Server.Data.Migrations
                     b.HasKey("Reference");
 
                     b.ToTable("ImageChecks");
+                });
+
+            modelBuilder.Entity("AIOPatcher.Server.Data.ImagePackageSet", b =>
+                {
+                    b.Property<string>("ImageId")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CollectedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Ecosystem")
+                        .HasMaxLength(60)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Error")
+                        .HasMaxLength(300)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Format")
+                        .HasMaxLength(10)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("NotifiedKevCves")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OsId")
+                        .HasMaxLength(40)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OsVersion")
+                        .HasMaxLength(40)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("PackageCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Packages")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("ScannedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("ImageId");
+
+                    b.ToTable("ImagePackageSets", (string)null);
+                });
+
+            modelBuilder.Entity("AIOPatcher.Server.Data.ImageVulnerability", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("CveId")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("FoundAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ImageId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("InstalledVersion")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Package")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ImageId");
+
+                    b.ToTable("ImageVulnerabilities", (string)null);
                 });
 
             modelBuilder.Entity("AIOPatcher.Server.Data.InstalledApp", b =>

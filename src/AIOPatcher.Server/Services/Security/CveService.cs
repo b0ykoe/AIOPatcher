@@ -93,7 +93,12 @@ public sealed class CveService(
         if (now - _installedScannedAt > TimeSpan.FromHours(12))
         {
             await ScanInstalledAsync(db, now, ct);
+            await ScanImagesAsync(db, onlyNew: false, now, ct);
             _installedScannedAt = now;
+        }
+        else
+        {
+            await ScanImagesAsync(db, onlyNew: true, now, ct); // gerade eingelesene Images gleich abgleichen
         }
         await ApplyScoresAsync(db, notifier, ct);
     }
@@ -506,7 +511,39 @@ public sealed class CveService(
             return aliasBudget;
         }
 
-        var keys = packages.ToDictionary(p => $"osvinst|{ecosystem}|{p.Package}|{p.Version}", p => p);
+        (var keys, var cached, aliasBudget) = await LookupInstalledAsync(db, ecosystem, packages, kev, aliasBudget, refresh, now, ct);
+
+        var fixable = (await db.PendingUpdates.Where(u => u.HostId == host.Id && u.Cves != null && u.Cves != "").Select(u => u.Cves).ToListAsync(ct))
+            .SelectMany(CveMapping.Split)
+            .ToHashSet();
+
+        await db.HostVulnerabilities.Where(v => v.HostId == host.Id).ExecuteDeleteAsync(ct);
+        foreach (var (key, package) in keys)
+        {
+            if (!cached.TryGetValue(key, out var lookup))
+            {
+                continue;
+            }
+
+            foreach (var cve in CveMapping.Split(lookup.Cves).Where(c => !fixable.Contains(c)))
+            {
+                db.HostVulnerabilities.Add(new HostVulnerability { HostId = host.Id, CveId = cve, Package = package.Package, InstalledVersion = package.Version, FoundAt = now });
+            }
+        }
+
+        await db.SaveChangesAsync(ct);
+        return aliasBudget;
+    }
+
+    /// <summary>
+    /// Installierte (Quell-)Pakete eines Ökosystems bei OSV nachschlagen; gecacht in VulnLookups (gemeinsam für Hosts und
+    /// Images), aufbewahrt werden nur relevante CVEs (KEV oder EPSS ab 5 %).
+    /// </summary>
+    private async Task<(Dictionary<string, (string Package, string Version)> Keys, Dictionary<string, VulnLookup> Cached, int AliasBudget)> LookupInstalledAsync(
+        AppDbContext db, string ecosystem, List<(string Package, string Version)> packages, HashSet<string> kev, int aliasBudget, Func<VulnLookup, bool>? refresh,
+        DateTime now, CancellationToken ct)
+    {
+        var keys = packages.DistinctBy(p => $"{p.Package}|{p.Version}").ToDictionary(p => $"osvinst|{ecosystem}|{p.Package}|{p.Version}", p => p);
         var cached = await db.VulnLookups.Where(l => keys.Keys.Contains(l.Key)).ToDictionaryAsync(l => l.Key, ct);
         var missing = keys.Keys.Where(k => !cached.TryGetValue(k, out var c) || now - c.FetchedAt > TimeSpan.FromDays(1) || refresh?.Invoke(c) == true).ToList();
 
@@ -552,11 +589,50 @@ public sealed class CveService(
             }
         }
 
-        var fixable = (await db.PendingUpdates.Where(u => u.HostId == host.Id && u.Cves != null && u.Cves != "").Select(u => u.Cves).ToListAsync(ct))
-            .SelectMany(CveMapping.Split)
-            .ToHashSet();
+        return (keys, cached, aliasBudget);
+    }
 
-        await db.HostVulnerabilities.Where(v => v.HostId == host.Id).ExecuteDeleteAsync(ct);
+    // --- 6) Lücken in Container-Images ------------------------------------------------------------------
+
+    /// <summary>
+    /// Paketlisten von Container-Images (vom Agent per docker cp gelesen) wie installierte Pakete eines Hosts mit OSV
+    /// abgleichen. onlyNew: nur noch nie abgeglichene (gleich nach dem Einlesen), sonst alle (alle 12 Stunden).
+    /// </summary>
+    public async Task ScanImagesAsync(AppDbContext db, bool onlyNew, DateTime now, CancellationToken ct)
+    {
+        var inUse = await db.Containers.Where(c => c.ImageId != null).Select(c => c.ImageId!).Distinct().ToListAsync(ct);
+        var sets = await db.ImagePackageSets
+            .Where(s => inUse.Contains(s.ImageId) && s.Ecosystem != null && s.PackageCount > 0 && (!onlyNew || s.ScannedAt == null))
+            .ToListAsync(ct);
+        if (sets.Count == 0)
+        {
+            return;
+        }
+
+        var kev = (await db.CveInfos.Where(c => c.IsKev).Select(c => c.Id).ToListAsync(ct)).ToHashSet();
+        var aliasBudget = MaxAliasFetchesPerRun;
+        foreach (var set in sets)
+        {
+            try
+            {
+                aliasBudget = await ScanImageAsync(db, set, kev, aliasBudget, now, ct);
+            }
+            catch (HttpRequestException ex)
+            {
+                logger.LogWarning("OSV unreachable for container images: {Message}", ex.Message);
+                return;
+            }
+        }
+
+        await NotifyImageKevAsync(db, sets, ct);
+    }
+
+    private async Task<int> ScanImageAsync(AppDbContext db, ImagePackageSet set, HashSet<string> kev, int aliasBudget, DateTime now, CancellationToken ct)
+    {
+        var packages = ImageSourcePackages(set);
+        (var keys, var cached, aliasBudget) = await LookupInstalledAsync(db, set.Ecosystem!, packages, kev, aliasBudget, null, now, ct);
+
+        await db.ImageVulnerabilities.Where(v => v.ImageId == set.ImageId).ExecuteDeleteAsync(ct);
         foreach (var (key, package) in keys)
         {
             if (!cached.TryGetValue(key, out var lookup))
@@ -564,14 +640,66 @@ public sealed class CveService(
                 continue;
             }
 
-            foreach (var cve in CveMapping.Split(lookup.Cves).Where(c => !fixable.Contains(c)))
+            foreach (var cve in CveMapping.Split(lookup.Cves))
             {
-                db.HostVulnerabilities.Add(new HostVulnerability { HostId = host.Id, CveId = cve, Package = package.Package, InstalledVersion = package.Version, FoundAt = now });
+                db.ImageVulnerabilities.Add(new ImageVulnerability
+                {
+                    ImageId = set.ImageId,
+                    CveId = cve,
+                    Package = package.Package.Length > 200 ? package.Package[..200] : package.Package,
+                    InstalledVersion = package.Version.Length > 200 ? package.Version[..200] : package.Version,
+                    FoundAt = now,
+                });
             }
         }
 
+        set.ScannedAt = now;
         await db.SaveChangesAsync(ct);
         return aliasBudget;
+    }
+
+    /// <summary>Pakete eines Images als (Quellpaket, Version), wie OSV sie kennt (dpkg: Quellpakete, apk: Ursprungspaket).</summary>
+    public static List<(string Package, string Version)> ImageSourcePackages(ImagePackageSet set)
+    {
+        var packages = System.Text.Json.JsonSerializer.Deserialize(set.Packages, PullJsonContext.Default.IReadOnlyListImagePackage) ?? [];
+        return set.Format == "dpkg"
+            ? SourcePackages(packages.Select(p => (p.Name, p.Source ?? p.Name, p.Version, p.SourceVersion)))
+            : packages.Select(p => (p.Source ?? p.Name, p.Version)).Distinct().ToList();
+    }
+
+    /// <summary>Neue KEV-Treffer in einem Image melden (einmal je CVE und Image), mit den Containern, die es nutzen.</summary>
+    private async Task NotifyImageKevAsync(AppDbContext db, List<ImagePackageSet> sets, CancellationToken ct)
+    {
+        var imageIds = sets.Select(s => s.ImageId).ToList();
+        var kevHits = await db.ImageVulnerabilities
+            .Where(v => imageIds.Contains(v.ImageId))
+            .Join(db.CveInfos.Where(c => c.IsKev), v => v.CveId, c => c.Id, (v, c) => new { v.ImageId, v.CveId, c.KevName })
+            .ToListAsync(ct);
+        foreach (var set in sets)
+        {
+            var current = kevHits.Where(h => h.ImageId == set.ImageId).DistinctBy(h => h.CveId).ToList();
+            var notified = CveMapping.Split(set.NotifiedKevCves).ToHashSet();
+            var fresh = current.Where(h => !notified.Contains(h.CveId)).ToList();
+            if (fresh.Count > 0)
+            {
+                var containers = await db.Containers.Include(c => c.Host).Where(c => c.ImageId == set.ImageId).ToListAsync(ct);
+                var details = string.Join("; ", fresh.Take(5).Select(h => $"{h.CveId} ({h.KevName})")) + (fresh.Count > 5 ? " …" : "");
+                foreach (var site in containers.GroupBy(c => c.Host!.SiteId))
+                {
+                    var first = site.First();
+                    var where = string.Join(", ", site.Select(c => $"{c.Host!.Name}/{c.Name}").Distinct().Take(10));
+                    notifier.Publish(new Notification(NotificationEvents.KevDetected,
+                        L.T($"{where}: aktiv ausgenutzte Lücke im Container-Image", $"{where}: actively exploited vulnerability in container image"),
+                        L.T("Im Image steckt: ", "The image contains: ") + details,
+                        NotificationSeverity.Critical, site.Key, site.Select(c => c.HostId).Distinct().Count() == 1 ? first.HostId : null,
+                        site.Select(c => c.HostId).Distinct().Count() == 1 ? $"/hosts/{first.HostId}?tab=containers" : "/hosts"));
+                }
+            }
+
+            set.NotifiedKevCves = current.Count == 0 ? null : CveMapping.Join(current.Select(h => h.CveId));
+        }
+
+        await db.SaveChangesAsync(ct);
     }
 
     // --- 4) Bewertung übernehmen und neue KEV-Treffer melden ------------------------------------------

@@ -88,7 +88,25 @@ public static class ModuleActions
     public const string Renew = "renew";
     public const string Sample = "sample";
     public const string Changelog = "changelog";
+    public const string Packages = "packages";
 }
+
+/// <summary>docker.packages: Paketliste dieser Images lesen (je Image ein Container; docker cp, nur lesen).</summary>
+public sealed record ImagePackagesRequest(IReadOnlyList<ImagePackagesTarget> Images);
+
+public sealed record ImagePackagesTarget(string ContainerId, string ImageId);
+
+public sealed record ImagePackagesResult(IReadOnlyList<ImagePackages> Images);
+
+/// <param name="OsId">/etc/os-release ID, z. B. "debian", "ubuntu", "alpine".</param>
+/// <param name="OsVersion">/etc/os-release VERSION_ID, z. B. "12", "22.04", "3.20.3".</param>
+/// <param name="Format">"dpkg" oder "apk"; null, wenn keine Paketdatenbank gefunden wurde.</param>
+/// <param name="Error">Warum es keine Liste gibt (z. B. distroless/scratch, Container weg).</param>
+public sealed record ImagePackages(string ImageId, string? OsId, string? OsVersion, string? Format, IReadOnlyList<ImagePackage> Packages, string? Error = null);
+
+/// <param name="Source">Quellpaket (dpkg "Source", apk "o:"), falls abweichend.</param>
+/// <param name="SourceVersion">Version des Quellpakets, falls abweichend (dpkg "Source: name (version)").</param>
+public sealed record ImagePackage(string Name, string Version, string? Source = null, string? SourceVersion = null);
 
 /// <summary>updates.changelog: Changelogs dieser Pakete in der angebotenen Version holen (apt-get changelog).</summary>
 public sealed record ChangelogRequest(IReadOnlyList<ChangelogPackage> Packages);
@@ -211,6 +229,8 @@ public sealed record RenewAnswer(string CertificateSigningRequestPem);
 [JsonSerializable(typeof(ChangelogResult))]
 [JsonSerializable(typeof(SoftwareList))]
 [JsonSerializable(typeof(ContainerList))]
+[JsonSerializable(typeof(ImagePackagesRequest))]
+[JsonSerializable(typeof(ImagePackagesResult))]
 [JsonSerializable(typeof(RunningServices))]
 [JsonSerializable(typeof(HostMetrics))]
 [JsonSerializable(typeof(FirewallStatus))]

@@ -166,6 +166,38 @@ export interface ContainerItem {
   compose: string | null;
   /** warum "Aktualisieren" nicht geht; null = geht */
   updateBlocker: "notCompose" | "portainer" | "noFile" | "agent" | null;
+  exitCode: number | null;
+  startedAt: string | null;
+  finishedAt: string | null;
+  /** Healthcheck: "healthy", "unhealthy", "starting"; null ohne */
+  health: string | null;
+  restartPolicy: string | null;
+  /** Image aus keiner Registry (selbst gebaut) */
+  localImage: boolean;
+  /** selbst gebaut per Compose: Basis-Image; updateAvailable bezieht sich darauf */
+  baseImage: string | null;
+  vulns: ContainerVulns | null;
+}
+
+/** Relevante Lücken im Image eines Containers (KEV oder EPSS ab 5 %). */
+export interface ContainerVulns {
+  state: "ok" | "pending" | "unsupported" | "agent" | "off";
+  count: number;
+  kev: number;
+  maxEpss: number | null;
+  os: string | null;
+  packages: number;
+  scannedAt: string | null;
+  error: string | null;
+}
+
+export interface ContainerVulnList {
+  name: string;
+  image: string;
+  os: string | null;
+  packages: number;
+  scannedAt: string | null;
+  items: { cve: string; package: string; installedVersion: string | null; isKev: boolean; kevName: string | null; epss: number | null; epssPercentile: number | null }[];
 }
 
 export interface AddressItem {
@@ -681,6 +713,7 @@ export const notificationEvents = [
   "CertificateExpiring",
   "AgentUpdateFailed",
   "RebootCheckFailed",
+  "ContainerStopped",
 ] as const;
 export type NotificationEvent = (typeof notificationEvents)[number];
 

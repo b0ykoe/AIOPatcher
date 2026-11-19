@@ -149,10 +149,26 @@ public sealed record InstalledSoftware(
     string? SourceVersion = null);
 
 /// <summary>
-/// Laufender Docker-Container. RepoDigests: "repo@sha256:…" des lokalen Images (leer bei selbst gebauten Images).
-/// Compose: Herkunft, wenn der Container per Docker Compose (oder einem Portainer-Stack) gestartet wurde.
+/// Docker-Container (neuere Agents: auch gestoppte). RepoDigests: "repo@sha256:…" des lokalen Images (leer bei selbst
+/// gebauten Images). Compose: Herkunft, wenn der Container per Docker Compose (oder einem Portainer-Stack) gestartet wurde.
 /// </summary>
-public sealed record ContainerReport(string Name, string Image, string? ImageId, IReadOnlyList<string>? RepoDigests, string? State, ComposeInfo? Compose = null);
+/// <param name="Id">Volle Container-ID (für docker cp der Paketliste).</param>
+/// <param name="ExitCode">Exit-Code des letzten Laufs (bei gestoppten Containern aussagekräftig).</param>
+/// <param name="StartedAt">Letzter Start; null, wenn nie gestartet.</param>
+/// <param name="FinishedAt">Letztes Ende; null, solange er seit dem Start läuft.</param>
+/// <param name="Health">Healthcheck: "healthy", "unhealthy", "starting"; null ohne Healthcheck.</param>
+/// <param name="RestartPolicy">"no", "always", "unless-stopped", "on-failure".</param>
+/// <param name="Build">Selbst gebaut per Compose (build:): Dockerfile und Basis-Image.</param>
+public sealed record ContainerReport(string Name, string Image, string? ImageId, IReadOnlyList<string>? RepoDigests, string? State, ComposeInfo? Compose = null,
+    string? Id = null, int? ExitCode = null, DateTime? StartedAt = null, DateTime? FinishedAt = null, string? Health = null, string? RestartPolicy = null,
+    BuildInfo? Build = null);
+
+/// <summary>
+/// Selbst gebautes Image eines Compose-Dienstes. BaseImage: Basis der letzten Stufe des Dockerfiles (das, worauf der
+/// Container läuft; Stufen-Namen aufgelöst, "scratch" = null). BaseRepoDigests: Digests der lokalen Kopie des
+/// Basis-Images (leer, wenn sie nicht mehr auf dem Host liegt).
+/// </summary>
+public sealed record BuildInfo(string Context, string? Dockerfile, IReadOnlyList<string> BaseImages, string? BaseImage, IReadOnlyList<string>? BaseRepoDigests);
 
 /// <summary>
 /// Compose-Herkunft eines Containers aus seinen Labels (com.docker.compose.*). FilesFound: alle Compose-Dateien liegen

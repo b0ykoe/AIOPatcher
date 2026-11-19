@@ -7,7 +7,8 @@ namespace AIOPatcher.Agent.Platforms.Docker;
 
 /// <summary>
 /// Einen Compose-Container aktualisieren: neues Image ziehen und nur diesen Dienst neu erstellen
-/// ("docker compose pull &lt;dienst&gt;", "up -d --no-deps &lt;dienst&gt;"), danach prüfen, ob er wieder läuft. Volumes,
+/// ("docker compose pull &lt;dienst&gt;", "up -d --no-deps &lt;dienst&gt;"), danach prüfen, ob er wieder läuft. Selbst gebaute
+/// Dienste (build: ohne Image aus einer Registry) werden stattdessen neu gebaut ("build --pull": aktuelles Basis-Image). Volumes,
 /// Netzwerke und Einstellungen bleiben, die Compose-Datei wird nicht verändert. Der Server nennt nur den Containernamen;
 /// Projekt, Dateien und Ordner liest der Agent selbst aus den Labels des Containers.
 /// Nicht unterstützt (mit klarer Meldung): Container ohne Compose (docker run) und Portainer-Stacks, deren Compose-Datei
@@ -98,10 +99,23 @@ public static partial class DockerUpdater
         var workDir = compose.WorkingDir is { } d && Directory.Exists(d) ? d : null;
         log($"[agent] {name}: project {compose.Project}, service {compose.Service}, image {before.Image}");
 
-        log($"$ {string.Join(' ', command)} {string.Join(' ', ProjectArguments(compose))} pull {compose.Service}");
-        if (await ProcessRunner.RunStreamingAsync(command[0], [.. baseArgs, "pull", compose.Service], PullTimeout, log, ct, workDir) != 0)
+        // Selbst gebaut (build:, Image in keiner Registry): neu bauen mit aktuellem Basis-Image statt ziehen
+        var built = await IsLocalBuildAsync(compose, before.ImageId, ct);
+        if (built)
         {
-            return new JobExecutionResult(JobOutcome.Failed, $"Pulling the image for {name} failed (see log). The container was not changed.");
+            log($"$ {string.Join(' ', command)} {string.Join(' ', ProjectArguments(compose))} build --pull {compose.Service}");
+            if (await ProcessRunner.RunStreamingAsync(command[0], [.. baseArgs, "build", "--pull", compose.Service], PullTimeout, log, ct, workDir) != 0)
+            {
+                return new JobExecutionResult(JobOutcome.Failed, $"Building the image for {name} failed (see log). The container was not changed.");
+            }
+        }
+        else
+        {
+            log($"$ {string.Join(' ', command)} {string.Join(' ', ProjectArguments(compose))} pull {compose.Service}");
+            if (await ProcessRunner.RunStreamingAsync(command[0], [.. baseArgs, "pull", compose.Service], PullTimeout, log, ct, workDir) != 0)
+            {
+                return new JobExecutionResult(JobOutcome.Failed, $"Pulling the image for {name} failed (see log). The container was not changed.");
+            }
         }
 
         log($"$ {string.Join(' ', command)} {string.Join(' ', ProjectArguments(compose))} up -d --no-deps {compose.Service}");
@@ -143,10 +157,26 @@ public static partial class DockerUpdater
 
         var changed = after.ImageId != before.ImageId;
         var summary = changed
-            ? $"{name} updated to the current image of {after.Image} and running{(after.Health == "starting" ? " (health check still starting)" : "")}."
-            : $"{name}: image was already current, container is running.";
+            ? built
+                ? $"{name} rebuilt on the current base image and running{(after.Health == "starting" ? " (health check still starting)" : "")}."
+                : $"{name} updated to the current image of {after.Image} and running{(after.Health == "starting" ? " (health check still starting)" : "")}."
+            : built
+                ? $"{name}: rebuild produced the same image, container is running."
+                : $"{name}: image was already current, container is running.";
         log($"[agent] {summary}");
         return new JobExecutionResult(JobOutcome.Succeeded, summary);
+    }
+
+    /// <summary>Dienst hat build: in Compose und das Image stammt aus keiner Registry (keine RepoDigests).</summary>
+    private static async Task<bool> IsLocalBuildAsync(ComposeInfo compose, string? imageId, CancellationToken ct)
+    {
+        if (imageId is null || !(await DockerBuild.ProjectAsync(compose, ct)).ContainsKey(compose.Service))
+        {
+            return false;
+        }
+
+        var digests = await ProcessRunner.RunAsync("docker", ["image", "inspect", "--format", "{{json .RepoDigests}}", imageId], ShortTimeout, ct);
+        return digests.Success && DockerInventory.ParseImageDigests($"x|{digests.StandardOutput.Trim()}").GetValueOrDefault("x") is { Count: 0 };
     }
 
     private sealed record ContainerState(string Image, string? ImageId, string Status, string? Health, ComposeInfo? Compose);

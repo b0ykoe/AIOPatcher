@@ -11,11 +11,13 @@ public static class ProcessRunner
 {
     /// <summary>Startet ein Programm ohne Shell (keine Interpretation von Argumenten), mit Timeout und C-Locale.</summary>
     /// <param name="stdin">Text für die Standardeingabe (z. B. Passwörter: nie auf die Kommandozeile, dort sieht sie jeder per ps).</param>
-    public static async Task<ProcessResult> RunAsync(string fileName, IEnumerable<string> arguments, TimeSpan timeout, CancellationToken ct, string? stdin = null)
+    /// <param name="workingDirectory">Arbeitsverzeichnis, null = aktuelles.</param>
+    public static async Task<ProcessResult> RunAsync(string fileName, IEnumerable<string> arguments, TimeSpan timeout, CancellationToken ct, string? stdin = null,
+        string? workingDirectory = null)
     {
         var stdout = new System.Text.StringBuilder();
         var stderr = new System.Text.StringBuilder();
-        var exitCode = await RunCoreAsync(fileName, arguments, timeout, line => stdout.AppendLine(line), line => stderr.AppendLine(line), ct, stdin);
+        var exitCode = await RunCoreAsync(fileName, arguments, timeout, line => stdout.AppendLine(line), line => stderr.AppendLine(line), ct, stdin, workingDirectory);
         return new ProcessResult(exitCode, stdout.ToString(), stderr.ToString());
     }
 
