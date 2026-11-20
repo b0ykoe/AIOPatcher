@@ -8,6 +8,12 @@ Written for users, not as a list of commits.
 
 ## [Unreleased]
 
+### Improved
+- **Shared sites stay selected across all pages:** a site another instance shares with you is now a regular choice in
+  the site picker at the top. Overview, Hosts and Auto-Patch show that site (hosts, updates, jobs, actions) until
+  you switch back with "My sites". Pages the other instance does not share yet (Utilization, Security, Inventory,
+  Reports) say so instead of quietly showing your own hosts.
+
 ## [0.15.2] - 2026-11-20
 
 ### Fixed

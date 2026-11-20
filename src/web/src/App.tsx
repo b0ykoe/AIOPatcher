@@ -69,7 +69,7 @@ import { CveLookupPage, normalizeCveId } from "./pages/CveLookupPage";
 import { RunPage } from "./pages/RunPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { SetupPage } from "./pages/SetupPage";
-import { SharedSitePage } from "./pages/SharedSitePage";
+import { RemoteAware, SharedSiteRedirect } from "./pages/SharedSitePage";
 import { SitePicker, SiteScopeProvider } from "./siteScope";
 import { GettingStartedNav } from "./gettingStarted";
 import { GettingStartedPage } from "./pages/GettingStartedPage";
@@ -376,19 +376,19 @@ function Shell({ me, onMeChanged, onLoggedOut }: { me: Me; onMeChanged: (me: Me)
           <AppShell.Main>
             <EmergencyBanner />
             <Routes>
-              <Route path="/" element={<OverviewPage />} />
-              <Route path="/hosts" element={<HostsPage />} />
+              <Route path="/" element={<RemoteAware view="overview" title={t("nav.overview")}><OverviewPage /></RemoteAware>} />
+              <Route path="/hosts" element={<RemoteAware view="hosts" title={t("nav.hosts")}><HostsPage /></RemoteAware>} />
               <Route path="/hosts/:id" element={<HostDetailPage />} />
-              <Route path="/shared/:id" element={<SharedSitePage />} />
+              <Route path="/shared/:id" element={<SharedSiteRedirect />} />
               <Route path="/jobs/:id" element={<JobPage />} />
               <Route path="/runs/:id" element={<RunPage />} />
-              <Route path="/utilization" element={<UtilizationPage />} />
-              <Route path="/security" element={<SecurityHub />} />
+              <Route path="/utilization" element={<RemoteAware title={t("nav.utilization")}><UtilizationPage /></RemoteAware>} />
+              <Route path="/security" element={<RemoteAware title={t("nav.security")}><SecurityHub /></RemoteAware>} />
               <Route path="/cves/:id" element={<CveLookupPage />} />
-              <Route path="/auto-patch" element={<AutoPatchHub />} />
+              <Route path="/auto-patch" element={<RemoteAware view="jobs" title={t("nav.autoPatch")}><AutoPatchHub /></RemoteAware>} />
               <Route path="/auto-patch/plans/:id" element={<PlanEditorPage />} />
-              <Route path="/inventory" element={<InventoryHub />} />
-              <Route path="/reports" element={<ReportsPage />} />
+              <Route path="/inventory" element={<RemoteAware title={t("nav.inventory")}><InventoryHub /></RemoteAware>} />
+              <Route path="/reports" element={<RemoteAware title={t("nav.reports")}><ReportsPage /></RemoteAware>} />
               <Route path="/developer" element={<ApiPage />} />
               <Route path="/account" element={<AccountPage onMeChanged={onMeChanged} />} />
               <Route path="/getting-started" element={<GettingStartedPage />} />

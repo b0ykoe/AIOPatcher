@@ -1534,6 +1534,10 @@ const en: Translation = {
     choose: "Choose site",
     hint: "Applies to every page. Settings and detail pages stay unfiltered.",
     pickForIpam: "Site for IPAM",
+    mySites: "My sites",
+    toShared: "Go to {{name}}",
+    notSharedTitle: "{{name}} does not share this page",
+    notSharedText: "For a shared site, {{instance}} provides the overview, the hosts with their updates and the jobs. Utilization, security, inventory and reports stay on the other instance.",
   },
   hubs: {
     securityDescription: "Open vulnerabilities of all hosts, CVE search and compliance in one place.",

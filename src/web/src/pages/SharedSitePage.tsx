@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
-import { useParams } from "react-router";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { Navigate, useNavigate, useParams } from "react-router";
 import { ActionIcon, Alert, Anchor, Badge, Button, Card, Drawer, Group, Loader, Menu, Modal, SimpleGrid, Stack, Table, Text, ThemeIcon, Tooltip } from "@mantine/core";
 import {
   IconAlertTriangle, IconBuildingCommunity, IconDots, IconPlayerPlay, IconRefresh, IconRotateClockwise, IconServer, IconShieldHalfFilled, IconShare, IconWifiOff,
@@ -9,7 +9,8 @@ import { api, describeJob, formatDateTime, formatRelative, type Job, type JobSta
 import { Console } from "../components/Console";
 import { OsIcon } from "../components/OsIcon";
 import { LevelBadge } from "../components/sharing/ShareDialog";
-import { CardTitle, confirmAction, DetailHeader, EmptyState, errorText, JobStatusBadge, notifyError, notifySuccess, StatCard } from "../components/ui";
+import { CardTitle, confirmAction, DetailHeader, EmptyState, errorText, JobStatusBadge, notifyError, notifySuccess, PageHeader, StatCard } from "../components/ui";
+import { sharedSelection, useSiteScope } from "../siteScope";
 import {
   allows, remoteStatusColor, type RemoteHost, type RemoteHostDetail, type RemoteJob, type RemoteJobDetail, type RemoteSiteDetail, type ShareAction,
 } from "../sharing";
@@ -22,13 +23,55 @@ function RemoteJobBadge({ status }: { status: string }) {
 
 const jobLabel = (j: RemoteJob) => describeJob({ type: j.type as Job["type"], scope: j.scope as Job["scope"], allowReboot: j.allowReboot }) ?? j.type;
 
+/** Alte Adresse /shared/:id: wählt die geteilte Site oben aus und zeigt ihre Übersicht. */
+export function SharedSiteRedirect() {
+  const { id = "" } = useParams();
+  return <Navigate to={`/?site=${sharedSelection(id)}`} replace />;
+}
+
+export type SharedView = "overview" | "hosts" | "jobs";
+
+/** Ist oben eine geteilte Site gewählt, zeigt die Seite deren Daten (soweit geteilt), sonst die eigene Seite. */
+export function RemoteAware({ view, title, children }: { view?: SharedView; title: string; children: ReactNode }) {
+  const { remoteId } = useSiteScope();
+  if (!remoteId) return children;
+  return view ? <SharedSitePage id={remoteId} view={view} /> : <NotShared title={title} />;
+}
+
+/** Seiten, die eine geteilte Site (noch) nicht liefert: erklären statt die eigenen Daten zu zeigen. */
+function NotShared({ title }: { title: string }) {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  const { remote, setSiteId } = useSiteScope();
+  const name = remote?.name ?? t("sharing.badgeShared");
+  return (
+    <>
+      <PageHeader title={title} description={remote ? t("sharing.sharedBy", { instance: remote.instanceName }) : undefined} />
+      <Card>
+        <EmptyState
+          icon={<IconShare size={28} />}
+          title={t("siteScope.notSharedTitle", { name })}
+          text={t("siteScope.notSharedText", { instance: remote?.instanceName ?? "" })}
+          action={
+            <Group gap="xs" justify="center">
+              <Button variant="light" onClick={() => navigate("/")}>{t("siteScope.toShared", { name })}</Button>
+              <Button variant="default" onClick={() => setSiteId(null)}>{t("siteScope.mySites")}</Button>
+            </Group>
+          }
+        />
+      </Card>
+    </>
+  );
+}
+
 /**
  * Seite B: geteilte Site einer anderen AIOPatcher-Instanz. Zeigt den letzten Abgleich (alle 5 Minuten), Details und
  * Job-Logs holt sie live. Aktionen gehen an die andere Instanz; was die Freigabe nicht erlaubt, ist ausgegraut.
+ * Erscheint, wenn die Site oben ausgewählt ist: als Übersicht, auf „Hosts“ und auf „Auto-Patch“ (Jobs).
  */
-export function SharedSitePage() {
+export function SharedSitePage({ id, view }: { id: string; view: SharedView }) {
   const { t } = useTranslation();
-  const { id = "" } = useParams();
+  const { setSiteId } = useSiteScope();
   const [detail, setDetail] = useState<RemoteSiteDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -116,21 +159,90 @@ export function SharedSitePage() {
     </Menu>
   );
 
+  const hostsCard = (
+    <Card p={0}>
+      <CardTitle inset icon={<IconServer size={16} />}>{t("nav.hosts")}</CardTitle>
+      {hosts.length === 0 ? (
+        <EmptyState icon={<IconServer size={28} />} title={t("sharing.noHosts")} text={snapshot ? t("sharing.noHostsText") : t("sharing.noSnapshot")} />
+      ) : (
+        <Table.ScrollContainer minWidth={760}>
+          <Table>
+            <Table.Thead>
+              <Table.Tr>
+                <Table.Th>{t("sharing.host")}</Table.Th>
+                <Table.Th>{t("sharing.status")}</Table.Th>
+                <Table.Th ta="right">{t("sharing.updates")}</Table.Th>
+                <Table.Th>{t("sharing.lastSeen")}</Table.Th>
+                <Table.Th w={48} />
+              </Table.Tr>
+            </Table.Thead>
+            <Table.Tbody>
+              {hosts.map((h) => (
+                <Table.Tr key={h.id}>
+                  <Table.Td>
+                    <Group gap={6} wrap="nowrap">
+                      <OsIcon osName={h.osName} osFamily={h.osFamily as OsFamily} />
+                      <div>
+                        <Anchor size="sm" fw={600} onClick={() => setHostId(h.id)}>{h.name}</Anchor>
+                        <Text size="xs" c="dimmed">{[h.osName, h.osVersion].filter(Boolean).join(" ")}</Text>
+                      </div>
+                    </Group>
+                  </Table.Td>
+                  <Table.Td>
+                    <Group gap="xs">
+                      {h.isRevoked ? <Badge size="sm" color="gray">{t("hostStatus.Revoked")}</Badge>
+                        : h.offline ? <Badge size="sm" color="red">{t("hostStatus.Offline")}</Badge>
+                        : <Badge size="sm" color="teal">{t("hostStatus.Online")}</Badge>}
+                      {h.rebootRequired && <Badge size="sm" color="yellow">{t("sharing.rebootRequired")}</Badge>}
+                    </Group>
+                  </Table.Td>
+                  <Table.Td ta="right">
+                    <Group gap="xs" justify="flex-end" wrap="nowrap">
+                      {h.kevUpdates > 0 && <Badge size="sm" color="red" variant="filled">KEV</Badge>}
+                      {h.securityUpdates > 0 && <Badge size="sm" color="pink">{t("sharing.secCount", { count: h.securityUpdates })}</Badge>}
+                      <Text size="sm" style={{ fontVariantNumeric: "tabular-nums" }}>{h.pendingUpdates}</Text>
+                    </Group>
+                  </Table.Td>
+                  <Table.Td><Text size="sm">{formatRelative(h.lastSeenAt)}</Text></Table.Td>
+                  <Table.Td><ActionMenu host={h} /></Table.Td>
+                </Table.Tr>
+              ))}
+            </Table.Tbody>
+          </Table>
+        </Table.ScrollContainer>
+      )}
+    </Card>
+  );
+
+  const jobsCard = (
+    <Card p={0}>
+      <CardTitle inset icon={<IconPlayerPlay size={16} />} description={t("sharing.jobsHint")}>{t("sharing.jobs")}</CardTitle>
+      <RemoteJobTable jobs={snapshot?.jobs ?? []} onOpen={setJobId} />
+    </Card>
+  );
+
+  const pageTitle = view === "hosts" ? t("nav.hosts") : view === "jobs" ? t("nav.autoPatch") : site.name;
+  const sharedBy = t("sharing.sharedBy", { instance: site.instanceName });
+
   return (
     <>
       <DetailHeader
-        back={{ to: "/", label: t("nav.overview") }}
-        icon={<ThemeIcon variant="light" color="violet" size={44} radius="md"><IconBuildingCommunity size={24} /></ThemeIcon>}
-        title={site.name}
+        icon={<ThemeIcon variant="light" color="violet" size={44} radius="md">{view === "overview" ? <IconBuildingCommunity size={24} /> : <IconShare size={24} />}</ThemeIcon>}
+        title={pageTitle}
         status={<Badge color={remoteStatusColor[site.status]}>{t(`sharing.remoteStatus_${site.status}`)}</Badge>}
-        subtitle={t("sharing.sharedBy", { instance: site.instanceName })}
+        subtitle={view === "overview" ? sharedBy : `${site.name} · ${sharedBy}`}
         meta={[
           t("sharing.lastSyncAt", { when: formatRelative(site.lastSuccessAt) }),
           site.expiresAt ? t("sharing.validUntilDate", { date: formatDateTime(site.expiresAt) }) : null,
           site.instanceVersion,
         ].filter(Boolean).join(" · ")}
         extra={<Group gap="xs" mt={6}><Badge size="sm" color="gray" leftSection={<IconShare size={12} />}>{t("sharing.badgeShared")}</Badge><LevelBadge level={site.level} /></Group>}
-        actions={<Button variant="light" leftSection={<IconRefresh size={16} />} loading={refreshing} onClick={() => void refresh()}>{t("sharing.refresh")}</Button>}
+        actions={
+          <>
+            <Button variant="default" onClick={() => setSiteId(null)}>{t("siteScope.mySites")}</Button>
+            <Button variant="light" leftSection={<IconRefresh size={16} />} loading={refreshing} onClick={() => void refresh()}>{t("sharing.refresh")}</Button>
+          </>
+        }
       />
 
       <Stack gap="md">
@@ -143,70 +255,16 @@ export function SharedSitePage() {
         )}
         {!ended && site.status === "Stale" && <Alert color="yellow">{t("sharing.staleHint")}{site.lastError ? ` ${site.lastError}` : ""}</Alert>}
 
-        <SimpleGrid cols={{ base: 2, md: 4 }}>
-          <StatCard label={t("sharing.statHosts")} value={site.hostCount} icon={<IconServer size={20} />} color="violet" />
-          <StatCard label={t("sharing.statSecurity")} value={site.securityUpdates} icon={<IconShieldHalfFilled size={20} />} color="pink" />
-          <StatCard label={t("sharing.statReboot")} value={site.rebootRequired} icon={<IconRotateClockwise size={20} />} color="yellow" />
-          <StatCard label={t("sharing.statOffline")} value={site.offlineHosts} icon={<IconWifiOff size={20} />} color={site.offlineHosts > 0 ? "red" : "teal"} />
-        </SimpleGrid>
-
-        <Card p={0}>
-          <CardTitle inset icon={<IconServer size={16} />}>{t("nav.hosts")}</CardTitle>
-          {hosts.length === 0 ? (
-            <EmptyState icon={<IconServer size={28} />} title={t("sharing.noHosts")} text={snapshot ? t("sharing.noHostsText") : t("sharing.noSnapshot")} />
-          ) : (
-            <Table.ScrollContainer minWidth={760}>
-              <Table>
-                <Table.Thead>
-                  <Table.Tr>
-                    <Table.Th>{t("sharing.host")}</Table.Th>
-                    <Table.Th>{t("sharing.status")}</Table.Th>
-                    <Table.Th ta="right">{t("sharing.updates")}</Table.Th>
-                    <Table.Th>{t("sharing.lastSeen")}</Table.Th>
-                    <Table.Th w={48} />
-                  </Table.Tr>
-                </Table.Thead>
-                <Table.Tbody>
-                  {hosts.map((h) => (
-                    <Table.Tr key={h.id}>
-                      <Table.Td>
-                        <Group gap={6} wrap="nowrap">
-                          <OsIcon osName={h.osName} osFamily={h.osFamily as OsFamily} />
-                          <div>
-                            <Anchor size="sm" fw={600} onClick={() => setHostId(h.id)}>{h.name}</Anchor>
-                            <Text size="xs" c="dimmed">{[h.osName, h.osVersion].filter(Boolean).join(" ")}</Text>
-                          </div>
-                        </Group>
-                      </Table.Td>
-                      <Table.Td>
-                        <Group gap="xs">
-                          {h.isRevoked ? <Badge size="sm" color="gray">{t("hostStatus.Revoked")}</Badge>
-                            : h.offline ? <Badge size="sm" color="red">{t("hostStatus.Offline")}</Badge>
-                            : <Badge size="sm" color="teal">{t("hostStatus.Online")}</Badge>}
-                          {h.rebootRequired && <Badge size="sm" color="yellow">{t("sharing.rebootRequired")}</Badge>}
-                        </Group>
-                      </Table.Td>
-                      <Table.Td ta="right">
-                        <Group gap="xs" justify="flex-end" wrap="nowrap">
-                          {h.kevUpdates > 0 && <Badge size="sm" color="red" variant="filled">KEV</Badge>}
-                          {h.securityUpdates > 0 && <Badge size="sm" color="pink">{t("sharing.secCount", { count: h.securityUpdates })}</Badge>}
-                          <Text size="sm" style={{ fontVariantNumeric: "tabular-nums" }}>{h.pendingUpdates}</Text>
-                        </Group>
-                      </Table.Td>
-                      <Table.Td><Text size="sm">{formatRelative(h.lastSeenAt)}</Text></Table.Td>
-                      <Table.Td><ActionMenu host={h} /></Table.Td>
-                    </Table.Tr>
-                  ))}
-                </Table.Tbody>
-              </Table>
-            </Table.ScrollContainer>
-          )}
-        </Card>
-
-        <Card p={0}>
-          <CardTitle inset icon={<IconPlayerPlay size={16} />} description={t("sharing.jobsHint")}>{t("sharing.jobs")}</CardTitle>
-          <RemoteJobTable jobs={snapshot?.jobs ?? []} onOpen={setJobId} />
-        </Card>
+        {view === "overview" && (
+          <SimpleGrid cols={{ base: 2, md: 4 }}>
+            <StatCard label={t("sharing.statHosts")} value={site.hostCount} icon={<IconServer size={20} />} color="violet" />
+            <StatCard label={t("sharing.statSecurity")} value={site.securityUpdates} icon={<IconShieldHalfFilled size={20} />} color="pink" />
+            <StatCard label={t("sharing.statReboot")} value={site.rebootRequired} icon={<IconRotateClockwise size={20} />} color="yellow" />
+            <StatCard label={t("sharing.statOffline")} value={site.offlineHosts} icon={<IconWifiOff size={20} />} color={site.offlineHosts > 0 ? "red" : "teal"} />
+          </SimpleGrid>
+        )}
+        {view !== "jobs" && hostsCard}
+        {view !== "hosts" && jobsCard}
       </Stack>
 
       <HostDrawer siteId={id} hostId={hostId} onClose={() => setHostId(null)} onOpenJob={setJobId} />

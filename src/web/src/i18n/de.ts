@@ -1533,6 +1533,10 @@ const de = {
     choose: "Site wählen",
     hint: "Gilt für alle Seiten. Einstellungen und Detailseiten bleiben ungefiltert.",
     pickForIpam: "Site für IPAM",
+    mySites: "Meine Sites",
+    toShared: "Zu {{name}}",
+    notSharedTitle: "{{name}} teilt diese Seite nicht",
+    notSharedText: "Von einer geteilten Site liefert {{instance}} die Übersicht, die Hosts mit ihren Updates und die Jobs. Auslastung, Sicherheit, Inventar und Berichte bleiben auf der anderen Instanz.",
   },
   hubs: {
     securityDescription: "Offene Lücken aller Hosts, CVE-Suche und Compliance an einem Ort.",
