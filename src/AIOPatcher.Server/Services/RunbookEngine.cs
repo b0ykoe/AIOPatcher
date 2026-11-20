@@ -374,6 +374,13 @@ public sealed class RunbookEngine(IServiceScopeFactory scopes, ServerClock clock
             }
         }
 
+        // Erst die VMs, dann der Hypervisor (sein Neustart reißt sonst laufende VM-Updates mit)
+        pending = await GuestsBeforeHypervisorsAsync(db, items, pending, hosts, ct);
+        if (pending.Count == 0)
+        {
+            return;
+        }
+
         // Vorbedingungen und Snapshot: Hosts, die noch vorbereitet werden, bekommen in diesem Durchlauf keinen Job.
         if (wave.SnapshotBeforePatch || wave.RequireBackupWithinHours is not null)
         {
@@ -412,6 +419,73 @@ public sealed class RunbookEngine(IServiceScopeFactory scopes, ServerClock clock
             item.StartedAt = now;
             item.Message = null;
         }
+    }
+
+    /// <summary>Proxmox-Host (Hypervisor) laut Betriebssystem.</summary>
+    public static bool IsHypervisor(ManagedHost host) => (host.OsName ?? "").Contains("proxmox", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Proxmox-Knoten einer zugeordneten VM bzw. eines Containers ("pve1/qemu/101" → "pve1"), sonst null.</summary>
+    public static string? GuestNode(ManagedHost host) =>
+        host.Integration?.Type == IntegrationType.Proxmox && host.ExternalId?.Split('/')[0] is { Length: > 0 } node ? node : null;
+
+    /// <summary>Läuft die VM auf diesem Hypervisor? Proxmox nennt Knoten nach dem kurzen Hostnamen ("pve1.lan" → "pve1").</summary>
+    public static bool RunsOn(ManagedHost guest, ManagedHost hypervisor) =>
+        GuestNode(guest) is { } node && (Short(hypervisor.Name) == node.ToLowerInvariant() || Short(hypervisor.Hostname) == node.ToLowerInvariant());
+
+    private static string Short(string? name) => (name ?? "").Split('.')[0].ToLowerInvariant();
+
+    /// <summary>
+    /// Reihenfolge VMs vor Hypervisor. Ein Hypervisor startet erst, wenn alle anderen Hosts seiner Gruppe fertig sind
+    /// (ohne Zuordnung wissen wir nicht, welche VMs auf ihm laufen, also zuletzt) und keine seiner zugeordneten VMs gerade
+    /// einen Job hat (auch aus einem anderen Plan). Eine zugeordnete VM wartet, solange ihr Hypervisor einen Job hat.
+    /// </summary>
+    public static async Task<List<RunbookRunItem>> GuestsBeforeHypervisorsAsync(AppDbContext db, List<RunbookRunItem> items, List<RunbookRunItem> pending,
+        Dictionary<Guid, ManagedHost> hosts, CancellationToken ct)
+    {
+        var candidates = pending.Where(i => hosts[i.HostId!.Value] is var h && (IsHypervisor(h) || GuestNode(h) != null)).ToList();
+        if (candidates.Count == 0)
+        {
+            return pending;
+        }
+
+        var busyIds = await db.Jobs.Where(j => j.Status == JobStatus.Queued || j.Status == JobStatus.Running)
+            .Where(j => j.Type == JobType.Patch || j.Type == JobType.Reboot || j.Type == JobType.AppUpdate)
+            .Select(j => j.HostId).Distinct().ToListAsync(ct);
+        var busy = busyIds.Count == 0 ? [] : await db.Hosts.Include(h => h.Integration).Where(h => busyIds.Contains(h.Id)).ToListAsync(ct);
+
+        var ready = new List<RunbookRunItem>();
+        foreach (var item in pending)
+        {
+            var host = hosts[item.HostId!.Value];
+            if (IsHypervisor(host))
+            {
+                var othersOpen = items.Count(i => i != item && i.HostId is { } id && hosts.TryGetValue(id, out var other) && !IsHypervisor(other)
+                                                  && i.Status is RunItemStatus.Pending or RunItemStatus.Preparing or RunItemStatus.Running or RunItemStatus.Verifying);
+                if (othersOpen > 0)
+                {
+                    item.Message = L.T($"Wartet: Erst die übrigen Hosts der Gruppe ({othersOpen}), der Hypervisor kommt zuletzt.",
+                        $"Waiting: the other hosts of the group first ({othersOpen}), the hypervisor goes last.");
+                    continue;
+                }
+
+                var guestsBusy = busy.Count(g => g.Id != host.Id && RunsOn(g, host));
+                if (guestsBusy > 0)
+                {
+                    item.Message = L.T($"Wartet: {guestsBusy} VM(s) auf diesem Hypervisor werden gerade gepatcht.",
+                        $"Waiting: {guestsBusy} VM(s) on this hypervisor are being patched.");
+                    continue;
+                }
+            }
+            else if (busy.Any(h => h.Id != host.Id && IsHypervisor(h) && RunsOn(host, h)))
+            {
+                item.Message = L.T("Wartet: Der Hypervisor dieser VM wird gerade gepatcht.", "Waiting: this VM's hypervisor is being patched.");
+                continue;
+            }
+
+            ready.Add(item);
+        }
+
+        return ready;
     }
 
     /// <summary>

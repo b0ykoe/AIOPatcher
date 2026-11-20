@@ -778,7 +778,7 @@ const de = {
   },
   hypervisors: {
     title: "Hypervisoren",
-    hint: "Anstehende Updates der Proxmox-Hosts. Sie werden regelmäßig gescannt; ein Plan mit Freigabe installiert erst, wenn du zustimmst.",
+    hint: "Anstehende Updates der Proxmox-Hosts. Sie werden regelmäßig gescannt; ein Plan mit Freigabe installiert erst, wenn du zustimmst. Hypervisoren kommen in jeder Gruppe zuletzt dran und warten, bis ihre VMs fertig gepatcht sind.",
     useTemplate: "Plan mit Freigabe anlegen",
     updates_one: "{{count}} Update · {{security}} Sec",
     updates_other: "{{count}} Updates · {{security}} Sec",

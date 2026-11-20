@@ -15,6 +15,9 @@ Written for users, not as a list of commits.
   Telegram, Discord, Slack, email or ntfy will show it, made by the same code that sends real messages.
 
 ### Improved
+- **VMs first, then the hypervisor:** in a patch plan, Proxmox hosts go last in their group, after all other hosts are
+  done. A Proxmox host also waits while one of its mapped VMs is being patched, even by another plan, and a mapped VM
+  waits while its Proxmox host is being patched. The waiting reason is shown on the run.
 - **Windows reboots are now immediate and forced:** after a patch job the agent restarts Windows at once, no matter who
   is logged on or which programs are open (unsaved documents are closed without asking). If the reboot still does not
   happen within 3 minutes, for example because someone aborted it, the agent forces it again, at most twice, before it

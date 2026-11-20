@@ -779,7 +779,7 @@ const en: Translation = {
   },
   hypervisors: {
     title: "Hypervisors",
-    hint: "Pending updates of the Proxmox hosts. They are scanned regularly; a plan with approval only installs once you agree.",
+    hint: "Pending updates of the Proxmox hosts. They are scanned regularly; a plan with approval only installs once you agree. Hypervisors go last in every group and wait until their VMs are patched.",
     useTemplate: "Create plan with approval",
     updates_one: "{{count}} update · {{security}} sec",
     updates_other: "{{count}} updates · {{security}} sec",
