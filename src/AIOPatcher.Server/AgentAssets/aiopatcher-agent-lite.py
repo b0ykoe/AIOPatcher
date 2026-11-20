@@ -43,7 +43,10 @@ MODULES = [
 ]
 NONINTERACTIVE = ["-y", "-o", "DPkg::Lock::Timeout=600", "-o", "Dpkg::Options::=--force-confdef", "-o", "Dpkg::Options::=--force-confold"]
 INST_LINE = re.compile(r"^Inst\s+(?P<name>\S+)\s+(?:\[(?P<current>[^\]]+)\]\s+)?\((?P<new>\S+)\s+(?P<origin>[^\[\)]*?)\s*(?:\[[^\]]*\])?\)")
-REBOOT_GRACE = 600
+REBOOT_GRACE = 900
+# Reboot did not happen within this time (aborted, blocked): force it now, at most FORCE_ATTEMPTS times
+FORCE_AFTER = 180
+FORCE_ATTEMPTS = 2
 
 
 def log(message):
@@ -1689,14 +1692,33 @@ def boot_time():
     return time.time() - uptime_seconds()
 
 
+def force_reboot():
+    """Reboot immediately and ignore inhibitors of logged-in sessions; without systemd: shutdown -r now."""
+    try:
+        code, _, _ = run(["systemctl", "reboot", "-i"], timeout=30)
+    except OSError:
+        code = 1
+    if code != 0:
+        run(["shutdown", "-r", "now", "AIOPatcher: forced reboot after patch job"], timeout=30)
+
+
 def deliver_pending(server, state_dir):
     pending = read_json(pending_path(state_dir))
     if not pending:
         return None
     requested = pending.get("rebootRequestedEpoch", 0)
     if pending.get("awaitReboot", True):
+        attempts = pending.get("forceAttempts", 0)
+        since = pending.get("lastForcedEpoch") or requested
         if boot_time() > requested - 5:
             outcome, summary, rebooted = pending["outcome"], pending["summary"] + " Rebooted.", True
+        elif attempts < FORCE_ATTEMPTS and time.time() - since >= FORCE_AFTER:
+            pending["forceAttempts"] = attempts + 1
+            pending["lastForcedEpoch"] = time.time()
+            write_file(pending_path(state_dir), json.dumps(pending))
+            log("Reboot did not happen, forcing it now (attempt {0}).".format(attempts + 1))
+            force_reboot()
+            return pending["jobId"]
         elif time.time() - requested < REBOOT_GRACE:
             return pending["jobId"]
         else:

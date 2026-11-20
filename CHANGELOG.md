@@ -8,6 +8,12 @@ Written for users, not as a list of commits.
 
 ## [Unreleased]
 
+### Fixed
+- **Lite agent on Linux forces a reboot that did not happen:** as announced in 0.15.1, if the reboot after a patch job
+  does not happen within 3 minutes, the lite agent on Ubuntu 16.04/Debian 9 now forces it (`systemctl reboot -i`, or
+  `shutdown -r now` without systemd), at most twice, before it reports the job as failed. In 0.15.1 only the full agents
+  and the Windows lite agent did this.
+
 ## [0.15.1] - 2026-11-20
 
 ### Added
