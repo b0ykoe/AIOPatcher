@@ -8,6 +8,8 @@ Written for users, not as a list of commits.
 
 ## [Unreleased]
 
+## [0.15.1] - 2026-11-20
+
 ### Added
 - **Update the agent on selected hosts:** select hosts in the host list and choose **Update agent**. Outdated agents get
   the new version right away on their next check-in, without waiting for the interval, also after a failed attempt.
