@@ -8,6 +8,8 @@ Written for users, not as a list of commits.
 
 ## [Unreleased]
 
+## [0.16.1] - 2026-11-20
+
 ### Improved
 - **A shared site now looks like your own:** if the other instance shares "All pages read-only", every page shows
   that site exactly as it appears there: the full host page with all tabs (updates, metrics, software, containers,
