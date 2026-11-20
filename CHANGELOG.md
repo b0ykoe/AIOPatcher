@@ -8,6 +8,8 @@ Written for users, not as a list of commits.
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-11-20
+
 ### Added
 - **Portainer integration: update Docker stacks from the dashboard:** add Portainer under Settings → Integrations with
   an access token (sent as X-API-Key; the token is stored encrypted, a self-signed certificate can be pinned). The new
