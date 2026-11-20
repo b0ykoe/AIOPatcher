@@ -1605,6 +1605,8 @@ const en: Translation = {
     notSharedTitle: "{{name}} does not share this page",
     notSharedText: "For a shared site, {{instance}} provides the overview, the hosts with their updates and the jobs. Utilization, open vulnerabilities and software appear here once {{instance}} allows \"More pages\" in the share. Everything else stays on the other instance.",
     remoteData: "Data from {{name}} ({{instance}}), read-only.",
+    notInShared: "This host does not belong to {{name}}",
+    notInSharedText: "A shared site is selected at the top. Switch back to your sites to see your own hosts.",
   },
   hubs: {
     securityDescription: "Open vulnerabilities of all hosts, CVE search and compliance in one place.",
@@ -2571,7 +2573,7 @@ const en: Translation = {
     dataBase: "Always shared: hosts, OS, pending update counts, reboot status and jobs. Never: users, certificates, settings, other sites.",
     data_UpdateDetails: "Update list with package names, versions and CVEs",
     data_JobLogs: "Job logs",
-    data_Pages: "More pages, read-only: utilization, open vulnerabilities, installed software",
+    data_Pages: "All pages read-only, as in your own dashboard: host details, utilization, vulnerabilities, software, compliance, monitoring, backups, stacks, reports (patch plans stay private)",
     dataShort_UpdateDetails: "Updates",
     dataShort_JobLogs: "Logs",
     dataShort_Pages: "Pages",

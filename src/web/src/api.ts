@@ -12,8 +12,28 @@ export class ApiError extends Error {
   }
 }
 
+// Geteilte Site oben gewählt (Site-Sharing, „Weitere Seiten“): dieselben API-Adressen holt das Dashboard dann von der
+// anderen Instanz (/api/remote-sites/{id}/mirror/api/…). Muss zur Liste in FederationProtocol.MatchMirror passen.
+let mirrorBase: string | null = null;
+const mirrorPatterns = [
+  /^\/api\/(overview|hosts|jobs|utilization|vulnerabilities|software|monitoring|backups|compliance|compliance\/baselines|patch-freezes|package-holds|stacks|reports\/patch)$/,
+  /^\/api\/hosts\/[0-9a-fA-F-]{36}(\/(software|metrics|monitoring|compliance|updates\/summary|updates\/changelog|containers\/[^/]+\/vulnerabilities))?$/,
+  /^\/api\/jobs\/[0-9a-fA-F-]{36}(\/updates)?$/,
+];
+
+/** Von der Site-Auswahl gesetzt: Basis der gespiegelten API oder null (eigene Daten). */
+export function setMirrorBase(base: string | null) {
+  mirrorBase = base;
+}
+
+/** API-Pfad auf die gespiegelte API der geteilten Site umlenken, wenn sie gewählt ist und die Adresse geteilt wird. */
+export function mirrored(path: string): string {
+  if (!mirrorBase || path.startsWith("/api/remote-sites/")) return path;
+  return mirrorPatterns.some((p) => p.test(path.split("?")[0])) ? mirrorBase + path : path;
+}
+
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const response = await fetch(path, {
+  const response = await fetch(method === "GET" ? mirrored(path) : path, {
     method,
     credentials: "same-origin",
     // Der Server liefert Fehlermeldungen in dieser Sprache.

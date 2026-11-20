@@ -38,10 +38,12 @@ export type SharedView = "overview" | "hosts" | "jobs";
  */
 export function RemoteAware({ view, pages, title, children }: { view?: SharedView; pages?: ReactNode; title: string; children: ReactNode }) {
   const { t } = useTranslation();
-  const { remoteId, remote } = useSiteScope();
+  const { remoteId, remote, mirror } = useSiteScope();
   if (!remoteId) return children;
-  if (view) return <SharedSitePage id={remoteId} view={view} />;
   if (!remote) return <Loader size="sm" />;
+  // Alle Seiten geteilt: die normale Seite, Daten von der anderen Instanz, nur lesend
+  if (mirror) return <MirrorView>{children}</MirrorView>;
+  if (view) return <SharedSitePage id={remoteId} view={view} />;
   if (!pages || !remote.data.includes("Pages")) return <NotShared title={title} />;
   return (
     <RemoteReadOnly.Provider value>
@@ -53,9 +55,96 @@ export function RemoteAware({ view, pages, title, children }: { view?: SharedVie
   );
 }
 
+/** Rahmen für Seiten einer geteilten Site mit allen Seiten: Hinweis oben (optional mit Aktionen), Inhalt nur lesend. */
+export function MirrorView({ actions, children }: { actions?: ReactNode; children: ReactNode }) {
+  const { t } = useTranslation();
+  const { remote } = useSiteScope();
+  return (
+    <RemoteReadOnly.Provider value>
+      {remote && (
+        <Alert color="violet" variant="light" icon={<IconShare size={18} />} mb="md" py="xs">
+          <Group justify="space-between" gap="xs" wrap="wrap">
+            <Text size="sm">{t("siteScope.remoteData", { name: remote.name, instance: remote.instanceName })}</Text>
+            {actions}
+          </Group>
+        </Alert>
+      )}
+      {children}
+    </RemoteReadOnly.Provider>
+  );
+}
+
+/** Ist eine geteilte Site mit allen Seiten gewählt, Detailseiten (Job) nur lesend und mit Hinweis zeigen. */
+export function MirrorAware({ children }: { children: ReactNode }) {
+  const { mirror } = useSiteScope();
+  return mirror ? <MirrorView>{children}</MirrorView> : children;
+}
+
+/** Scan, Patchen, Neustart über die Freigabe (je nach Stufe); öffnet danach den Job. */
+function RemoteHostActions({ remoteId, hostId, hostName }: { remoteId: string; hostId: string; hostName: string }) {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  const { remote } = useSiteScope();
+  if (!remote || remote.status === "Ended") return null;
+  const label = (action: ShareAction, scope: "Security" | "All") =>
+    action === "Scan" ? t("sharing.action_Scan")
+      : action === "Patch" ? (scope === "All" ? t("sharing.action_Patch_All") : t("sharing.action_Patch_Security"))
+      : action === "PatchReboot" ? t("sharing.action_PatchReboot")
+      : t("sharing.action_Reboot");
+  const act = (action: ShareAction, scope: "Security" | "All") => {
+    const send = async () => {
+      try {
+        const job = await api.post<RemoteJob>(`/api/remote-sites/${remoteId}/hosts/${hostId}/actions`, { action, scope });
+        notifySuccess(t("sharing.actionStarted", { job: jobLabel(job), host: hostName }), t("sharing.actionStartedHint", { instance: remote.instanceName }));
+        navigate(`/jobs/${job.id}`);
+      } catch (e) {
+        notifyError(e);
+      }
+    };
+    if (action === "Scan") return void send();
+    confirmAction({
+      title: t(`sharing.confirm_${action}`, { host: hostName }),
+      message: t("sharing.confirmText", { instance: remote.instanceName }),
+      confirmLabel: label(action, scope),
+      danger: action !== "Patch",
+      onConfirm: send,
+    });
+  };
+  const denied = t("sharing.notAllowedBy", { instance: remote.instanceName });
+  return (
+    <Menu position="bottom-end">
+      <Menu.Target>
+        <Button size="xs" variant="light" color="violet" rightSection={<IconDots size={14} />}>{t("common.actions")}</Button>
+      </Menu.Target>
+      <Menu.Dropdown>
+        {([
+          ["Scan", "Security", IconRefresh],
+          ["Patch", "Security", IconShieldHalfFilled],
+          ["Patch", "All", IconPlayerPlay],
+          ["PatchReboot", "Security", IconPlayerPlay],
+          ["Reboot", "Security", IconRotateClockwise],
+        ] as const).map(([action, scope, Icon]) => {
+          const ok = allows(remote.level, action);
+          return (
+            <Tooltip key={`${action}-${scope}`} label={denied} disabled={ok} position="left">
+              <div>
+                <Menu.Item leftSection={<Icon size={14} />} disabled={!ok} color={action === "Reboot" ? "red" : undefined} onClick={() => act(action, scope)}>
+                  {label(action, scope)}
+                </Menu.Item>
+              </div>
+            </Tooltip>
+          );
+        })}
+      </Menu.Dropdown>
+    </Menu>
+  );
+}
+
 /** Host-Links (/hosts/:id) auf Seiten einer geteilten Site: den Host dort öffnen; eigene Hosts bleiben auf ihrer Seite. */
 export function RemoteHostAware({ children }: { children: ReactNode }) {
-  const { remoteId } = useSiteScope();
+  const { t } = useTranslation();
+  const { remoteId, remote, mirror, setSiteId } = useSiteScope();
+  const [hostName, setHostName] = useState("");
   const { id = "" } = useParams();
   const [remoteHost, setRemoteHost] = useState<boolean | null>(null);
 
@@ -63,13 +152,25 @@ export function RemoteHostAware({ children }: { children: ReactNode }) {
     if (!remoteId) return;
     setRemoteHost(null);
     api.get<RemoteSiteDetail>(`/api/remote-sites/${remoteId}`)
-      .then((d) => setRemoteHost(!!d.snapshot?.hosts.some((h) => h.id === id)))
+      .then((d) => {
+        const host = d.snapshot?.hosts.find((h) => h.id === id);
+        setHostName(host?.name ?? "");
+        setRemoteHost(!!host);
+      })
       .catch(() => setRemoteHost(false));
   }, [remoteId, id]);
 
   if (!remoteId) return children;
-  if (remoteHost === null) return <Loader size="sm" />;
-  return remoteHost ? <SharedSitePage id={remoteId} view="hosts" openHost={id} /> : children;
+  if (remoteHost === null || !remote) return <Loader size="sm" />;
+  if (!mirror) return remoteHost ? <SharedSitePage id={remoteId} view="hosts" openHost={id} /> : children;
+  if (remoteHost) return <MirrorView actions={<RemoteHostActions remoteId={remoteId} hostId={id} hostName={hostName} />}>{children}</MirrorView>;
+  // eigener Host (z. B. aus der Suche), während die geteilte Site gewählt ist
+  return (
+    <Card>
+      <EmptyState icon={<IconShare size={28} />} title={t("siteScope.notInShared", { name: remote.name })} text={t("siteScope.notInSharedText")}
+        action={<Button variant="light" onClick={() => setSiteId(null)}>{t("siteScope.mySites")}</Button>} />
+    </Card>
+  );
 }
 
 /** Seiten, die eine geteilte Site (noch) nicht liefert: erklären statt die eigenen Daten zu zeigen. */

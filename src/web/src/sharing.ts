@@ -117,6 +117,8 @@ export interface RemoteSiteItem {
   offlineHosts: number;
   createdAt: string;
   createdBy: string;
+  /** Alle Seiten wie im eigenen Dashboard (gespiegelte API, nur lesend): Freigabe „Weitere Seiten“ und neue Gegenstelle. */
+  mirror: boolean;
 }
 
 export interface RemoteHost {

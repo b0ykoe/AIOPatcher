@@ -370,6 +370,14 @@ public sealed class RemoteSites(AppDbContext db, FederationClient client, Server
     public Task<System.Text.Json.JsonElement> ViewAsync(RemoteSite site, string view, string query, CancellationToken ct) =>
         client.SendAsync<System.Text.Json.JsonElement>(Target(site.Instance!), HttpMethod.Get, FederationProtocol.ViewPath(site.RemoteSiteId, view) + query, null, ct);
 
+    /// <summary>Gespiegelte Dashboard-API der geteilten Site (Pfad mit Query ab /api/...), Antwort unverändert.</summary>
+    public Task<System.Text.Json.JsonElement> MirrorAsync(RemoteSite site, string apiPathAndQuery, CancellationToken ct) =>
+        client.SendAsync<System.Text.Json.JsonElement>(Target(site.Instance!), HttpMethod.Get, FederationProtocol.MirrorPath(site.RemoteSiteId, apiPathAndQuery), null, ct);
+
+    /// <summary>Kann die Gegenstelle die API spiegeln, und erlaubt die Freigabe es?</summary>
+    public static bool CanMirror(RemoteSite site) =>
+        site.Data.HasFlag(ShareData.Pages) && (site.Instance?.Capabilities ?? "").Split(',').Contains("mirror");
+
     public Task<RemoteJobDetail> JobAsync(RemoteSite site, Guid jobId, long afterId, CancellationToken ct) =>
         client.SendAsync<RemoteJobDetail>(Target(site.Instance!), HttpMethod.Get,
             FederationProtocol.JobPath(site.RemoteSiteId, jobId) + (afterId > 0 ? $"?afterId={afterId}" : ""), null, ct);

@@ -8,6 +8,18 @@ Written for users, not as a list of commits.
 
 ## [Unreleased]
 
+### Improved
+- **A shared site now looks like your own:** if the other instance shares "All pages read-only", every page shows
+  that site exactly as it appears there: the full host page with all tabs (updates, metrics, software, containers,
+  compliance, monitoring), Overview, Hosts, Utilization, Security (vulnerabilities, compliance), Auto-Patch (rules,
+  jobs), Inventory (software, monitoring, backups, stacks) and Reports. Everything is read-only; on a host, the
+  "Actions" button offers scan, patch and reboot as far as the share allows. Patch plans, network (IPAM) and the CVE
+  search stay private to the other instance.
+
+### Upgrade notes
+- Both instances need this version. On the sharing instance, tick "All pages read-only" for the share
+  (Settings → Sharing → "Change shared data"); with 0.16.0 on the other side you keep the previous, reduced view.
+
 ## [0.16.0] - 2026-11-20
 
 ### Added

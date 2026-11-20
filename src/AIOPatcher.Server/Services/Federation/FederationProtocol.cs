@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using AIOPatcher.Server.Data;
@@ -17,7 +18,8 @@ namespace AIOPatcher.Server.Services.Federation;
 //   GET  /federation/v1/sites/{siteId}/hosts/{hostId}         Detail (Updates je nach Datenumfang, Jobs)
 //   GET  /federation/v1/sites/{siteId}/jobs/{jobId}           Job mit Log (je nach Datenumfang)
 //   POST /federation/v1/sites/{siteId}/hosts/{hostId}/actions Scan, Patch, Neustart
-//   GET  /federation/v1/sites/{siteId}/views/{view}           weitere Seiten nur lesend (Datenumfang „Pages“)
+//   GET  /federation/v1/sites/{siteId}/views/{view}           drei Seiten nur lesend (0.16.0, Datenumfang „Pages“)
+//   GET  /federation/v1/sites/{siteId}/mirror/api/...         Dashboard-API nur lesend, auf die Site eingeschränkt („Pages“)
 //
 // Signiert wird wie beim öffentlichen Agent-Weg (PublicChannel): Zertifikat, Zeit, Nonce, Signatur über Methode,
 // Pfad und Inhalt; jede Antwort signiert A mit seinem Server-Zertifikat. B pinnt die CA von A aus dem Einladungslink.
@@ -39,12 +41,52 @@ public static class FederationProtocol
     public static string JobPath(Guid siteId, Guid jobId) => $"{BasePath}/sites/{siteId}/jobs/{jobId}";
     public static string ActionPath(Guid siteId, Guid hostId) => $"{BasePath}/sites/{siteId}/hosts/{hostId}/actions";
     public static string ViewPath(Guid siteId, string view) => $"{BasePath}/sites/{siteId}/views/{view}";
+    public static string MirrorPath(Guid siteId, string apiPathAndQuery) => $"{BasePath}/sites/{siteId}/mirror{apiPathAndQuery}";
+
+    /// <summary>Wie eine gespiegelte API-Adresse auf die geteilte Site eingeschränkt wird.</summary>
+    public enum MirrorGuard
+    {
+        /// <summary>Liste: siteId wird fest auf die geteilte Site gesetzt.</summary>
+        Site,
+
+        /// <summary>Host-Detail: der Host muss zur geteilten Site gehören.</summary>
+        Host,
+
+        /// <summary>Job-Detail: der Host des Jobs muss zur geteilten Site gehören.</summary>
+        Job,
+    }
+
+    /// <summary>
+    /// Spiegelbare GET-Adressen der Dashboard-API (Datenumfang „Pages“). Nur, was sich sicher auf eine Site einschränken
+    /// lässt; Patch-Pläne und -Läufe fehlen, weil sie Hosts mehrerer Sites enthalten können.
+    /// </summary>
+    private static readonly (Regex Pattern, MirrorGuard Guard)[] MirrorRules =
+    [
+        (new Regex(@"^/api/(overview|hosts|jobs|utilization|vulnerabilities|software|monitoring|backups|compliance|compliance/baselines|patch-freezes|package-holds|stacks|reports/patch)$", RegexOptions.CultureInvariant), MirrorGuard.Site),
+        (new Regex(@"^/api/hosts/(?<id>[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})(/(software|metrics|monitoring|compliance|updates/summary|updates/changelog|containers/[^/]+/vulnerabilities))?$", RegexOptions.CultureInvariant), MirrorGuard.Host),
+        (new Regex(@"^/api/jobs/(?<id>[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})(/updates)?$", RegexOptions.CultureInvariant), MirrorGuard.Job),
+    ];
+
+    /// <summary>Darf diese API-Adresse (ohne Query) gespiegelt werden, und wie wird sie eingeschränkt? Sonst null.</summary>
+    public static (MirrorGuard Guard, Guid Id)? MatchMirror(string apiPath)
+    {
+        foreach (var (pattern, guard) in MirrorRules)
+        {
+            var match = pattern.Match(apiPath);
+            if (match.Success)
+            {
+                return (guard, match.Groups["id"].Success ? Guid.Parse(match.Groups["id"].Value) : Guid.Empty);
+            }
+        }
+
+        return null;
+    }
 
     /// <summary>Seiten, die mit dem Datenumfang „Pages“ lesbar sind; Antwort im selben Format wie die API des Dashboards.</summary>
     public static readonly string[] Views = ["utilization", "vulnerabilities", "software"];
 
     /// <summary>Was dieser Server als A anbietet.</summary>
-    public static readonly string[] Capabilities = ["snapshot", "hostDetail", "jobs", "actions", "views"];
+    public static readonly string[] Capabilities = ["snapshot", "hostDetail", "jobs", "actions", "views", "mirror"];
 
     /// <summary>Falsche Codes pro Einladung, danach ist sie verbrannt.</summary>
     public const int MaxFailedCodes = 5;

@@ -18,7 +18,7 @@ public static class RemoteSiteEndpoints
         Guid Id, string Name, string RemoteName, string? LocalName, Guid InstanceId, string InstanceName, string BaseUrl, string? InstanceVersion,
         ShareLevel Level, string[] Data, DateTime? ExpiresAt, DateTime? SnapshotAt, DateTime? LastSyncAt, DateTime? LastSuccessAt, string? LastError,
         DateTime? EndedAt, string Status, int HostCount, int PendingUpdates, int SecurityUpdates, int RebootRequired, int OfflineHosts,
-        DateTime CreatedAt, string CreatedBy);
+        DateTime CreatedAt, string CreatedBy, bool Mirror);
 
     public sealed record RemoteSiteDetailDto(RemoteSiteDto Site, SiteSnapshot? Snapshot);
 
@@ -45,6 +45,7 @@ public static class RemoteSiteEndpoints
         group.MapGet("/{id:guid}/jobs/{jobId:guid}", JobDetail);
         group.MapPost("/{id:guid}/hosts/{hostId:guid}/actions", Act);
         group.MapGet("/{id:guid}/views/{view}", View);
+        group.MapGet("/{id:guid}/mirror/{**path}", Mirror);
         admin.MapPost("/preview", Preview);
         admin.MapPost("", Add);
         admin.MapPut("/{id:guid}", Rename);
@@ -66,7 +67,7 @@ public static class RemoteSiteEndpoints
         return new RemoteSiteDto(s.Id, RemoteSites.DisplayName(s), s.Name, s.LocalName, i.InstanceId, i.Name, i.BaseUrl, i.Version,
             s.Level, SharingEndpoints.DataNames(s.Data), s.ExpiresAt, s.SnapshotAt, i.LastSyncAt, i.LastSuccessAt, i.LastError,
             s.EndedAt, RemoteSites.Status(s, now), hosts.Count, hosts.Sum(h => h.PendingUpdates), hosts.Sum(h => h.SecurityUpdates),
-            hosts.Count(h => h.RebootRequired), hosts.Count(h => h.Offline), s.CreatedAt, s.CreatedBy);
+            hosts.Count(h => h.RebootRequired), hosts.Count(h => h.Offline), s.CreatedAt, s.CreatedBy, RemoteSites.CanMirror(s));
     }
 
     private static async Task<RemoteSite?> FindAsync(AppDbContext db, Guid id, CancellationToken ct) =>
@@ -200,6 +201,35 @@ public static class RemoteSiteEndpoints
         try
         {
             return Results.Ok(await remote.ViewAsync(site, view, query.Count == 0 ? "" : "?" + string.Join('&', query), ct));
+        }
+        catch (FederationException ex)
+        {
+            return Problem(ex);
+        }
+    }
+
+    /// <summary>
+    /// Dashboard-API der geteilten Site, nur lesend: das Dashboard ruft dieselben Adressen wie für eigene Hosts auf
+    /// (/api/remote-sites/{id}/mirror/api/hosts …), die andere Instanz antwortet auf die Site eingeschränkt.
+    /// </summary>
+    private static async Task<IResult> Mirror(Guid id, string path, HttpContext http, AppDbContext db, RemoteSites remote, CancellationToken ct)
+    {
+        var api = "/" + path;
+        if (FederationProtocol.MatchMirror(api) is null || await FindAsync(db, id, ct) is not { } site)
+        {
+            return Results.NotFound();
+        }
+
+        if (!RemoteSites.CanMirror(site) || RemoteSites.Status(site, DateTime.UtcNow) == "Ended")
+        {
+            return Results.Problem(L.T("Diese Seite wird nicht geteilt.", "This page is not shared."), statusCode: StatusCodes.Status403Forbidden);
+        }
+
+        var query = QueryString.Create(http.Request.Query.Where(q => !q.Key.Equals("siteId", StringComparison.OrdinalIgnoreCase))
+            .SelectMany(q => q.Value.Select(v => new KeyValuePair<string, string?>(q.Key, v))));
+        try
+        {
+            return Results.Ok(await remote.MirrorAsync(site, api + query, ct));
         }
         catch (FederationException ex)
         {

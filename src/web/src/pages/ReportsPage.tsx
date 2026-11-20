@@ -41,7 +41,7 @@ interface PatchReport {
 /** Patch-Bericht: Konformität je Host, druckbar (Browser → PDF) und als CSV. */
 export function ReportsPage() {
   const { t } = useTranslation();
-  const { siteId } = useSiteScope(); // Site kommt aus der Auswahl oben
+  const { siteId, mirror } = useSiteScope(); // Site kommt aus der Auswahl oben; mirror: geteilte Site (kein CSV)
   const [days, setDays] = useState("30");
   const [sla, setSla] = useState("14");
   const [report, setReport] = useState<PatchReport | null>(null);
@@ -81,9 +81,11 @@ export function ReportsPage() {
               allowDeselect={false}
               w={170}
             />
-            <Button component="a" href={`/api/reports/patch.csv?${query}`} variant="light" leftSection={<IconDownload size={16} />}>
-              CSV
-            </Button>
+            {!mirror && (
+              <Button component="a" href={`/api/reports/patch.csv?${query}`} variant="light" leftSection={<IconDownload size={16} />}>
+                CSV
+              </Button>
+            )}
             <Button variant="light" leftSection={<IconPrinter size={16} />} onClick={() => window.print()}>
               {t("reports.print")}
             </Button>

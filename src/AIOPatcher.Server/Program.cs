@@ -246,6 +246,8 @@ app.Use(async (ctx, next) =>
 app.UseRequestLanguage();
 app.UseDefaultFiles();
 app.UseStaticFiles();
+// Routing erst nach PortIsolation: das Federation-Gate schreibt gespiegelte API-Anfragen vorher auf /api/... um.
+app.UseRouting();
 app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();

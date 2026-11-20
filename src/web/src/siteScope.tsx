@@ -3,7 +3,7 @@ import { useLocation, useSearchParams } from "react-router";
 import { ActionIcon, Badge, Box, Button, Group, Menu, Text } from "@mantine/core";
 import { IconBuildingCommunity, IconCheck, IconChevronDown, IconShare, IconWorld } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
-import { api, type Site } from "./api";
+import { api, setMirrorBase, type Site } from "./api";
 import { remoteStatusColor, type RemoteSiteItem } from "./sharing";
 
 // Globale Site-Auswahl: gilt für alle Seiten, steht in der URL (?site=) und wird im Browser gemerkt.
@@ -63,6 +63,8 @@ interface SiteScopeValue {
   /** Gewählte geteilte Site: die Seiten zeigen dann deren Daten statt der eigenen, soweit die andere Instanz sie teilt. */
   remoteId: string | null;
   remote: RemoteSiteItem | null;
+  /** Geteilte Site mit allen Seiten: die normalen Seiten laufen, nur lesend, mit Daten der anderen Instanz. */
+  mirror: boolean;
   setSiteId: (siteId: string | null) => void;
   setRemoteId: (remoteId: string) => void;
   reloadSites: () => void;
@@ -71,7 +73,7 @@ interface SiteScopeValue {
 }
 
 const SiteScopeContext = createContext<SiteScopeValue>({
-  siteId: null, site: null, sites: null, remoteSites: [], remoteId: null, remote: null,
+  siteId: null, site: null, sites: null, remoteSites: [], remoteId: null, remote: null, mirror: false,
   setSiteId: () => {}, setRemoteId: () => {}, reloadSites: () => {}, scoped: (p) => p,
 });
 
@@ -145,8 +147,17 @@ export function SiteScopeProvider({ children }: { children: ReactNode }) {
     if (remoteLoaded && remoteId && !remoteSites.some((r) => r.id === remoteId)) select(null);
   }, [sites, siteId, remoteLoaded, remoteSites, remoteId, select]);
 
+  const remote = remoteSites.find((r) => r.id === remoteId) ?? null;
+  const mirror = !!remote?.mirror;
+  // Vor dem Rendern der Seiten setzen, damit schon ihre ersten Abfragen an die richtige Instanz gehen.
+  setMirrorBase(mirror ? `/api/remote-sites/${remoteId}/mirror` : null);
+
   // Stabil, solange die Auswahl gleich bleibt: Seiten laden nicht neu, nur weil die Site-Liste neu geladen wurde.
-  const scoped = useCallback((path: string) => (remoteId ? toRemote(path, remoteId) : withSite(path, siteId)), [remoteId, siteId]);
+  // Gespiegelt: jede Site-Liste an die andere Instanz (nicht Geteiltes lehnt sie ab, statt eigene Daten zu zeigen).
+  const scoped = useCallback(
+    (path: string) => (remoteId ? (mirror ? `/api/remote-sites/${remoteId}/mirror${path}` : toRemote(path, remoteId)) : withSite(path, siteId)),
+    [remoteId, siteId, mirror],
+  );
 
   const value = useMemo<SiteScopeValue>(() => ({
     siteId,
@@ -154,12 +165,13 @@ export function SiteScopeProvider({ children }: { children: ReactNode }) {
     sites,
     remoteSites,
     remoteId,
-    remote: remoteSites.find((r) => r.id === remoteId) ?? null,
+    remote,
+    mirror,
     setSiteId,
     setRemoteId,
     reloadSites,
     scoped,
-  }), [siteId, sites, remoteSites, remoteId, setSiteId, setRemoteId, reloadSites, scoped]);
+  }), [siteId, sites, remoteSites, remoteId, remote, mirror, setSiteId, setRemoteId, reloadSites, scoped]);
 
   return <SiteScopeContext.Provider value={value}>{children}</SiteScopeContext.Provider>;
 }

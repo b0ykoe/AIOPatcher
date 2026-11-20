@@ -69,7 +69,7 @@ import { CveLookupPage, normalizeCveId } from "./pages/CveLookupPage";
 import { RunPage } from "./pages/RunPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { SetupPage } from "./pages/SetupPage";
-import { RemoteAware, RemoteHostAware, SharedSiteRedirect } from "./pages/SharedSitePage";
+import { MirrorAware, RemoteAware, RemoteHostAware, SharedSiteRedirect } from "./pages/SharedSitePage";
 import { SecurityPage } from "./pages/SecurityPage";
 import { SoftwarePage } from "./pages/SoftwarePage";
 import { RemoteReadOnly, SitePicker, SiteScopeProvider } from "./siteScope";
@@ -384,7 +384,7 @@ function Shell({ me, onMeChanged, onLoggedOut }: { me: Me; onMeChanged: (me: Me)
               <Route path="/hosts" element={<RemoteAware view="hosts" title={t("nav.hosts")}><HostsPage /></RemoteAware>} />
               <Route path="/hosts/:id" element={<RemoteHostAware><HostDetailPage /></RemoteHostAware>} />
               <Route path="/shared/:id" element={<SharedSiteRedirect />} />
-              <Route path="/jobs/:id" element={<JobPage />} />
+              <Route path="/jobs/:id" element={<MirrorAware><JobPage /></MirrorAware>} />
               <Route path="/runs/:id" element={<RunPage />} />
               <Route path="/utilization" element={<RemoteAware title={t("nav.utilization")} pages={<UtilizationPage />}><UtilizationPage /></RemoteAware>} />
               <Route path="/security" element={<RemoteAware title={t("nav.security")} pages={<SecurityPage />}><SecurityHub /></RemoteAware>} />

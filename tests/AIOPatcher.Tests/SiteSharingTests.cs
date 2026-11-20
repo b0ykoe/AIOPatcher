@@ -7,9 +7,13 @@ using AIOPatcher.Server.Security;
 using AIOPatcher.Server.Services;
 using AIOPatcher.Server.Services.Federation;
 using AIOPatcher.Server.Services.Notifications;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace AIOPatcher.Tests;
@@ -267,6 +271,106 @@ public sealed class SiteSharingTests : IDisposable
 
         var unknown = await AIOPatcher.Server.Endpoints.FederationEndpoints.ViewAsync(with, "users", null, null, _db, features, null!, null!, CancellationToken.None);
         Assert.Equal(StatusCodes.Status404NotFound, Assert.IsAssignableFrom<IStatusCodeHttpResult>(unknown).StatusCode);
+    }
+
+    [Theory]
+    [InlineData("/api/hosts", true)]
+    [InlineData("/api/reports/patch", true)]
+    [InlineData("/api/hosts/0b9e7a7e-2c4c-4c1b-9d0f-7d4b1b1d1a11", true)]
+    [InlineData("/api/hosts/0b9e7a7e-2c4c-4c1b-9d0f-7d4b1b1d1a11/containers/web/vulnerabilities", true)]
+    [InlineData("/api/jobs/0b9e7a7e-2c4c-4c1b-9d0f-7d4b1b1d1a11/updates", true)]
+    [InlineData("/api/runbooks", false)] // Pläne können Hosts anderer Sites enthalten
+    [InlineData("/api/users", false)]
+    [InlineData("/api/settings/ai", false)]
+    [InlineData("/api/hosts/0b9e7a7e-2c4c-4c1b-9d0f-7d4b1b1d1a11/../../users", false)]
+    public void Mirror_OnlyKnownSiteScopedAddresses(string path, bool allowed) =>
+        Assert.Equal(allowed, FederationProtocol.MatchMirror(path) is not null);
+
+    private static DefaultHttpContext MirrorRequest(Guid siteId, string api, string method = "GET")
+    {
+        var ctx = new DefaultHttpContext();
+        ctx.Request.Method = method;
+        var q = api.IndexOf('?');
+        ctx.Request.Path = $"{FederationProtocol.BasePath}/sites/{siteId}/mirror{(q < 0 ? api : api[..q])}";
+        if (q >= 0)
+        {
+            ctx.Request.QueryString = new QueryString(api[q..]);
+        }
+
+        return ctx;
+    }
+
+    [Fact]
+    public async Task Mirror_RewritesToTheApi_LockedToTheSharedSite()
+    {
+        var (peer, _) = await JoinAsync(data: ShareData.Pages);
+        var service = Service();
+
+        // Liste: siteId der Gegenstelle wird ersetzt
+        var list = MirrorRequest(_shared.Id, $"/api/hosts?siteId={_other.Id}&limit=5");
+        Assert.Equal(200, (await FederationGate.PrepareMirrorAsync(list, peer, service, _db, _now)).Status);
+        Assert.Equal("/api/hosts", list.Request.Path.Value);
+        Assert.Equal(_shared.Id.ToString(), list.Request.Query["siteId"].ToString());
+        Assert.Equal("5", list.Request.Query["limit"].ToString());
+        Assert.True(list.User.IsInRole(nameof(UserRole.Viewer)));
+        Assert.False(list.User.IsInRole(nameof(UserRole.Operator)));
+        Assert.Equal("peer:Kollege", list.User.Identity!.Name);
+
+        // Host der eigenen Site ja, Host einer anderen Site nein
+        Assert.Equal(200, (await FederationGate.PrepareMirrorAsync(MirrorRequest(_shared.Id, $"/api/hosts/{_web.Id}/software"), peer, service, _db, _now)).Status);
+        Assert.Equal(404, (await FederationGate.PrepareMirrorAsync(MirrorRequest(_shared.Id, $"/api/hosts/{_secret.Id}"), peer, service, _db, _now)).Status);
+
+        // andere Site, nicht freigegebene Adresse, schreibende Anfrage
+        Assert.Equal(404, (await FederationGate.PrepareMirrorAsync(MirrorRequest(_other.Id, "/api/hosts"), peer, service, _db, _now)).Status);
+        Assert.Equal(404, (await FederationGate.PrepareMirrorAsync(MirrorRequest(_shared.Id, "/api/runbooks"), peer, service, _db, _now)).Status);
+        Assert.Equal(405, (await FederationGate.PrepareMirrorAsync(MirrorRequest(_shared.Id, "/api/hosts", "POST"), peer, service, _db, _now)).Status);
+
+        // ohne Datenumfang „Pages“
+        var (basic, _) = await JoinAsync(data: ShareData.UpdateDetails);
+        Assert.Equal(403, (await FederationGate.PrepareMirrorAsync(MirrorRequest(_shared.Id, "/api/hosts"), basic, service, _db, _now)).Status);
+    }
+
+    [Fact]
+    public async Task Mirror_RewrittenRequestReachesTheEndpoint_AsReadOnlyUser()
+    {
+        var (peer, _) = await JoinAsync(data: ShareData.Pages);
+        var builder = WebApplication.CreateBuilder();
+        builder.WebHost.UseTestServer();
+        // wie im Server: Policy-Schema wählt Cookie oder Token
+        builder.Services.AddAuthentication("selector")
+            .AddCookie()
+            .AddPolicyScheme("selector", null, o => o.ForwardDefaultSelector = _ => Microsoft.AspNetCore.Authentication.Cookies.CookieAuthenticationDefaults.AuthenticationScheme);
+        builder.Services.AddAuthorization(o => o.AddPolicy("operator", p => p.RequireRole(nameof(UserRole.Admin), nameof(UserRole.Operator))));
+        await using var app = builder.Build();
+        var service = Service();
+        app.Use(async (ctx, next) =>
+        {
+            if (FederationGate.IsFederationPath(ctx.Request.Path))
+            {
+                var (status, _) = await FederationGate.PrepareMirrorAsync(ctx, peer, service, _db, _now);
+                if (status != 200)
+                {
+                    ctx.Response.StatusCode = status;
+                    return;
+                }
+            }
+
+            await next();
+        });
+        app.UseRouting(); // wie im Server: nach dem Gate
+        app.UseAuthentication();
+        app.UseAuthorization();
+        app.MapGet("/api/hosts", (Guid? siteId, System.Security.Claims.ClaimsPrincipal user) => $"{siteId}|{user.Identity!.Name}").RequireAuthorization();
+        app.MapGet("/api/backups", () => "secret").RequireAuthorization("operator");
+        await app.StartAsync();
+        var client = app.GetTestClient();
+
+        var body = await client.GetStringAsync($"{FederationProtocol.BasePath}/sites/{_shared.Id}/mirror/api/hosts?siteId={_other.Id}");
+        Assert.Equal($"{_shared.Id}|peer:Kollege", body);
+        var denied = await client.GetAsync($"{FederationProtocol.BasePath}/sites/{_shared.Id}/mirror/api/backups");
+        Assert.NotEqual(System.Net.HttpStatusCode.OK, denied.StatusCode); // Operator-Endpunkt: verweigert (403 bzw. Umleitung)
+        Assert.DoesNotContain("secret", await denied.Content.ReadAsStringAsync());
+        Assert.NotEqual(System.Net.HttpStatusCode.OK, (await client.GetAsync("/api/hosts")).StatusCode); // ohne Gate: nicht angemeldet
     }
 
     [Fact]

@@ -1604,6 +1604,8 @@ const de = {
     notSharedTitle: "{{name}} teilt diese Seite nicht",
     notSharedText: "Von einer geteilten Site liefert {{instance}} die Übersicht, die Hosts mit ihren Updates und die Jobs. Auslastung, offene Lücken und Software erscheinen hier, sobald {{instance}} in der Freigabe „Weitere Seiten“ erlaubt. Alles andere bleibt auf der anderen Instanz.",
     remoteData: "Daten von {{name}} ({{instance}}), nur lesen.",
+    notInShared: "Dieser Host gehört nicht zu {{name}}",
+    notInSharedText: "Oben ist eine geteilte Site ausgewählt. Für deine eigenen Hosts zurück zu deinen Sites wechseln.",
   },
   hubs: {
     securityDescription: "Offene Lücken aller Hosts, CVE-Suche und Compliance an einem Ort.",
@@ -2570,7 +2572,7 @@ const de = {
     dataBase: "Immer geteilt: Hosts, Betriebssystem, Zahl offener Updates, Neustart-Status und Jobs. Nie: Benutzer, Zertifikate, Einstellungen, andere Sites.",
     data_UpdateDetails: "Update-Liste mit Paketnamen, Versionen und CVEs",
     data_JobLogs: "Job-Logs",
-    data_Pages: "Weitere Seiten nur lesen: Auslastung, offene Lücken, installierte Software",
+    data_Pages: "Alle Seiten nur lesen, wie im eigenen Dashboard: Host-Details, Auslastung, Lücken, Software, Compliance, Monitoring, Backups, Stacks, Berichte (Patch-Pläne bleiben privat)",
     dataShort_UpdateDetails: "Updates",
     dataShort_JobLogs: "Logs",
     dataShort_Pages: "Seiten",
