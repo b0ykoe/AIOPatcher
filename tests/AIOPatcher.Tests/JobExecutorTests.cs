@@ -159,6 +159,25 @@ public class JobExecutorTests
     }
 
     [Fact]
+    public void PendingResult_ForcesTheRebootWhenItDidNotHappen_AtMostTwice()
+    {
+        var requested = new DateTime(2026, 11, 13, 12, 0, 0, DateTimeKind.Utc);
+        var oldBoot = requested.AddDays(-3);
+        var pending = new PendingResult(Guid.NewGuid(), JobOutcome.Succeeded, "ok", requested);
+
+        Assert.False(pending.ShouldForceReboot(oldBoot, requested.AddMinutes(2)));            // noch Zeit
+        Assert.True(pending.ShouldForceReboot(oldBoot, requested.AddMinutes(3)));             // abgebrochen/blockiert: erzwingen
+        Assert.False(pending.ShouldForceReboot(requested.AddMinutes(1), requested.AddMinutes(5))); // ist neu gestartet
+
+        var once = pending with { ForceAttempts = 1, LastForcedAtUtc = requested.AddMinutes(6) };
+        Assert.False(once.ShouldForceReboot(oldBoot, requested.AddMinutes(8)));  // 3 Minuten nach dem letzten Versuch
+        Assert.True(once.ShouldForceReboot(oldBoot, requested.AddMinutes(9)));
+
+        var twice = once with { ForceAttempts = 2 };
+        Assert.False(twice.ShouldForceReboot(oldBoot, requested.AddMinutes(14))); // aufgeben, Fehler melden
+    }
+
+    [Fact]
     public void AgentPolicy_MissingFile_UsesDefaults_AndFileOverrides()
     {
         var dir = Path.Combine(Path.GetTempPath(), "aiopatcher-tests", Guid.NewGuid().ToString("N"));

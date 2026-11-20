@@ -14,6 +14,12 @@ Written for users, not as a list of commits.
 - **Preview of notification styles:** the channel dialog shows a sample message in the chosen style, roughly as
   Telegram, Discord, Slack, email or ntfy will show it, made by the same code that sends real messages.
 
+### Improved
+- **Windows reboots are now immediate and forced:** after a patch job the agent restarts Windows at once, no matter who
+  is logged on or which programs are open (unsaved documents are closed without asking). If the reboot still does not
+  happen within 3 minutes, for example because someone aborted it, the agent forces it again, at most twice, before it
+  reports the job as failed. Linux agents force a pending reboot the same way. Applies to the full and the lite agent.
+
 ### Fixed
 - The CI check failed on Linux because of a path in a new test; the release itself was not affected.
 

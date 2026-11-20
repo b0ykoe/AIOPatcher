@@ -13,12 +13,27 @@ public sealed record PendingResult(
     JobOutcome Outcome,
     string Summary,
     DateTime RebootRequestedAtUtc,
-    bool AwaitReboot = true)
+    bool AwaitReboot = true,
+    int ForceAttempts = 0,
+    DateTime? LastForcedAtUtc = null)
 {
     public const string FileName = "pending-result.json";
 
     /// <summary>So lange warten wir nach dem Auslösen auf den tatsächlichen Neustart, bevor wir aufgeben.</summary>
-    public static readonly TimeSpan RebootGracePeriod = TimeSpan.FromMinutes(10);
+    public static readonly TimeSpan RebootGracePeriod = TimeSpan.FromMinutes(15);
+
+    /// <summary>Kam der Neustart so lange nicht, wird er sofort erzwungen (höchstens <see cref="MaxForceAttempts"/>-mal).</summary>
+    public static readonly TimeSpan ForceRebootAfter = TimeSpan.FromMinutes(3);
+
+    public const int MaxForceAttempts = 2;
+
+    /// <summary>
+    /// Neustart erzwingen? Ja, wenn er seit dem Auslösen (bzw. dem letzten Erzwingen) 3 Minuten ausblieb, z. B. weil
+    /// jemand ihn abgebrochen hat oder ein Programm blockierte.
+    /// </summary>
+    public bool ShouldForceReboot(DateTime bootTimeUtc, DateTime nowUtc) =>
+        AwaitReboot && !HasRebooted(bootTimeUtc) && ForceAttempts < MaxForceAttempts
+        && nowUtc - (LastForcedAtUtc ?? RebootRequestedAtUtc) >= ForceRebootAfter;
 
     public static PendingResult? Load(string directory)
     {

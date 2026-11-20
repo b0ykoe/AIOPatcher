@@ -199,6 +199,15 @@ public sealed class PollService(
         {
             request = new TaskResultRequest(pending.Outcome, $"{pending.Summary} Rebooted, back online since {bootTime.ToLocalTime():yyyy-MM-dd HH:mm}.", RebootPerformed: true);
         }
+        else if (pending.ShouldForceReboot(bootTime, DateTime.UtcNow))
+        {
+            // Hart durchgreifen: Neustart blieb aus (abgebrochen, blockiert) → sofort, egal wer angemeldet ist
+            var attempt = pending.ForceAttempts + 1;
+            (pending with { ForceAttempts = attempt, LastForcedAtUtc = DateTime.UtcNow }).Save(state.Directory);
+            logger.LogWarning("Reboot for task {TaskId} did not happen, forcing it now (attempt {Attempt})", pending.JobId, attempt);
+            await patcher.ForceRebootNowAsync(line => logger.LogInformation("{Line}", line), ct);
+            return pending.JobId;
+        }
         else if (DateTime.UtcNow - pending.RebootRequestedAtUtc < PendingResult.RebootGracePeriod)
         {
             return pending.JobId; // Neustart steht noch bevor

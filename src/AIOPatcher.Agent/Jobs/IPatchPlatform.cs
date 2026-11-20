@@ -13,4 +13,7 @@ public interface IPatchPlatform
 
     /// <summary>Löst einen Neustart mit kurzer Verzögerung aus. true = Neustart ist eingeplant.</summary>
     Task<bool> RequestRebootAsync(Action<string> log, CancellationToken ct);
+
+    /// <summary>Neustart sofort erzwingen, wenn der eingeplante nicht stattfand (abgebrochen oder blockiert).</summary>
+    Task<bool> ForceRebootNowAsync(Action<string> log, CancellationToken ct) => RequestRebootAsync(log, ct);
 }

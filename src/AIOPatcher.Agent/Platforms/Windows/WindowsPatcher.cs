@@ -16,12 +16,27 @@ public sealed class WindowsPatcher : IPatchPlatform
 
     public async Task<bool> RequestRebootAsync(Action<string> log, CancellationToken ct)
     {
-        // /f: Programme, die das Herunterfahren blockieren, werden geschlossen. Sonst bricht Windows den Neustart ab,
-        // nachdem es den Agent-Dienst schon beendet hat (der Wächter AgentWatchdog startet ihn dann wieder).
-        log("$ shutdown.exe /r /f /t 60");
+        // Hart und sofort: /f schließt alle Programme ohne Rückfrage (auch ungespeicherte Dokumente), angemeldete Benutzer
+        // werden ignoriert. Ohne Wartezeit kann ihn auch niemand mit "shutdown /a" abbrechen. Ergebnis und Log sind zu
+        // diesem Zeitpunkt schon gespeichert bzw. gesendet. Bleibt der Neustart trotzdem aus, erzwingt PollService ihn erneut.
+        log("$ shutdown.exe /r /f /t 0");
         var exit = await ProcessRunner.RunStreamingAsync(
             Path.Combine(Environment.SystemDirectory, "shutdown.exe"),
-            ["/r", "/f", "/t", "60", "/d", "p:2:17", "/c", "AIOPatcher: reboot after patch job"],
+            ["/r", "/f", "/t", "0", "/d", "p:2:17", "/c", "AIOPatcher: reboot after patch job"],
+            TimeSpan.FromSeconds(30), log, ct);
+        return exit == 0;
+    }
+
+    /// <summary>
+    /// Hart: sofort, ohne Rückfrage. Angemeldete Benutzer und offene Programme (auch ungespeicherte Dokumente) werden
+    /// ignoriert und geschlossen. Ein noch wartender Neustart wird vorher abgebrochen, damit der neue sofort greift.
+    /// </summary>
+    public async Task<bool> ForceRebootNowAsync(Action<string> log, CancellationToken ct)
+    {
+        var shutdown = Path.Combine(Environment.SystemDirectory, "shutdown.exe");
+        await ProcessRunner.RunStreamingAsync(shutdown, ["/a"], TimeSpan.FromSeconds(15), _ => { }, ct);
+        log("$ shutdown.exe /r /f /t 0");
+        var exit = await ProcessRunner.RunStreamingAsync(shutdown, ["/r", "/f", "/t", "0", "/d", "p:2:17", "/c", "AIOPatcher: forced reboot after patch job"],
             TimeSpan.FromSeconds(30), log, ct);
         return exit == 0;
     }

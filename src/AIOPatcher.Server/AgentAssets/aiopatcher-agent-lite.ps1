@@ -1581,8 +1581,9 @@ function Invoke-Task($Task) {
         & $log '[agent] Triggering reboot. The result will be reported after the reboot.'
         Send-Log $id $lines
         Write-Json (Join-Path $StateDir 'pending-result.json') @{ jobId = $id; outcome = $r.outcome; summary = $r.summary; rebootRequestedUtc = (UtcNow); awaitReboot = $true }
-        # /f: close programs that block the shutdown; otherwise Windows may abort the reboot after stopping the agent
-        & shutdown.exe /r /f /t 60 /c 'AIOPatcher: reboot after patch job' | Out-Null
+        # Hard and immediate: /f closes all programs (even unsaved documents), logged-on users are ignored, /t 0 leaves
+        # no time to abort. If the reboot still does not happen, Send-PendingResult forces it again.
+        & shutdown.exe /r /f /t 0 /d p:2:17 /c 'AIOPatcher: reboot after patch job' | Out-Null
         if ($LASTEXITCODE -eq 0) { return $null }
         Remove-Item (Join-Path $StateDir 'pending-result.json') -Force
         $r.outcome = 'Failed'
@@ -1614,8 +1615,22 @@ function Send-PendingResult {
     $boot = $os.ConvertToDateTime($os.LastBootUpTime).ToUniversalTime()
     $body = @{ outcome = $pending.outcome; summary = $pending.summary; rebootPerformed = $false }
     if ($pending.awaitReboot) {
+        $attempts = 0
+        if ($pending.forceAttempts) { $attempts = [int]$pending.forceAttempts }
+        $since = $requested
+        if ($pending.lastForcedUtc) { $since = [DateTime]::Parse($pending.lastForcedUtc).ToUniversalTime() }
         if ($boot -gt $requested.AddSeconds(-5)) { $body.summary += ' Rebooted.'; $body.rebootPerformed = $true }
-        elseif (([DateTime]::UtcNow - $requested).TotalMinutes -lt 10) { return $pending.jobId }
+        elseif ($attempts -lt 2 -and ([DateTime]::UtcNow - $since).TotalMinutes -ge 3) {
+            # Reboot did not happen (aborted or blocked): force it now, no matter who is logged on
+            $pending | Add-Member -NotePropertyName forceAttempts -NotePropertyValue ($attempts + 1) -Force
+            $pending | Add-Member -NotePropertyName lastForcedUtc -NotePropertyValue (UtcNow) -Force
+            Write-Json $file $pending
+            Write-AgentLog "Reboot did not happen, forcing it now (attempt $($attempts + 1))."
+            & shutdown.exe /a 2>$null | Out-Null
+            & shutdown.exe /r /f /t 0 /d p:2:17 /c 'AIOPatcher: forced reboot after patch job' | Out-Null
+            return $pending.jobId
+        }
+        elseif (([DateTime]::UtcNow - $requested).TotalMinutes -lt 15) { return $pending.jobId }
         else { $body.outcome = 'Failed'; $body.summary += ' Reboot was triggered but did not happen.' }
     }
     try { [void](Invoke-Agent 'POST' "/agent/v2/tasks/$($pending.jobId)/result" $body) }

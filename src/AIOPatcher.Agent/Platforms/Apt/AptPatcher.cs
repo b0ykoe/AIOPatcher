@@ -139,6 +139,14 @@ public sealed partial class AptPatcher : IPatchPlatform
         return exit == 0;
     }
 
+    /// <summary>Sofort neu starten, Sperren angemeldeter Sitzungen (Inhibitoren) ignorieren.</summary>
+    public async Task<bool> ForceRebootNowAsync(Action<string> log, CancellationToken ct)
+    {
+        log("$ systemctl reboot -i");
+        var exit = await RunPrivilegedAsync("systemctl", ["reboot", "-i"], TimeSpan.FromSeconds(30), log, ct);
+        return exit == 0;
+    }
+
     private static Task<int> RunPrivilegedAsync(string command, string[] args, TimeSpan timeout, Action<string> onLine, CancellationToken ct) =>
         Environment.IsPrivilegedProcess
             ? ProcessRunner.RunStreamingAsync(command, args, timeout, onLine, ct)
