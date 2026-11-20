@@ -13,6 +13,13 @@ Written for users, not as a list of commits.
   the new version right away on their next check-in, without waiting for the interval, also after a failed attempt.
 - **Preview of notification styles:** the channel dialog shows a sample message in the chosen style, roughly as
   Telegram, Discord, Slack, email or ntfy will show it, made by the same code that sends real messages.
+- **Digest notifications:** under **Delivery** in the channel dialog, choose to collect messages for at most 15 minutes
+  to 4 hours. Collected messages go out as one, once nothing new arrived for 10 minutes (all hosts have reported) or at
+  the latest after the chosen time, grouped by event; the same update on several hosts becomes one line
+  ("python3-jwt: vpn, pivpn, monitor"). Events marked **right away** still arrive immediately; preselected are the
+  important ones such as KEV vulnerabilities, failed jobs, offline hosts and backup problems. The preview shows a sample
+  digest in the chosen style, and webhooks get the single messages under `items`. Existing channels keep sending every
+  message right away.
 
 ### Improved
 - **VMs first, then the hypervisor:** in a patch plan, Proxmox hosts go last in their group, after all other hosts are

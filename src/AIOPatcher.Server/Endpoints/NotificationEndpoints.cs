@@ -12,11 +12,13 @@ public static class NotificationEndpoints
     public const string SecretMask = "••••••••";
 
     public sealed record ChannelDto(Guid Id, string Name, ChannelType Type, bool Enabled, string[] Events, Guid? SiteId, ChannelConfig Config, DateTime? LastSentAt, string? LastError, Guid? RemoteSiteId,
-        NotificationStyle Style = NotificationStyle.Standard);
+        NotificationStyle Style = NotificationStyle.Standard, int DigestMinutes = 0, string[]? InstantEvents = null);
 
     /// <param name="Style">null = unverändert (bzw. Standard beim Anlegen).</param>
+    /// <param name="DigestMinutes">Sammeln (0 = sofort); null = unverändert.</param>
+    /// <param name="InstantEvents">Beim Sammeln trotzdem sofort; null = unverändert (bzw. die wichtigen Ereignisse).</param>
     public sealed record ChannelRequest(string Name, ChannelType Type, bool Enabled, string[] Events, Guid? SiteId, ChannelConfig Config, Guid? RemoteSiteId = null,
-        NotificationStyle? Style = null);
+        NotificationStyle? Style = null, int? DigestMinutes = null, string[]? InstantEvents = null);
 
     public static readonly NotificationEvents[] AllEvents = Enum.GetValues<NotificationEvents>().Where(e => e != NotificationEvents.None).ToArray();
 
@@ -31,14 +33,46 @@ public static class NotificationEndpoints
         group.MapPost("/preview", Preview);
     }
 
-    public sealed record PreviewRequest(ChannelType Type, NotificationStyle Style);
+    /// <param name="Digest">true = Beispiel einer Sammelnachricht.</param>
+    public sealed record PreviewRequest(ChannelType Type, NotificationStyle Style, bool Digest = false);
+
+    /// <summary>Beispiel einer Sammelnachricht: neue Security-Updates auf mehreren Hosts und ein Container-Update.</summary>
+    public static List<PendingNotification> SampleDigest(DateTime now)
+    {
+        const string site = "Homelab";
+        PendingNotification Item(int minutesAgo, NotificationEvents e, string host, string title, string message, string severity) => new()
+        {
+            CreatedAt = now.AddMinutes(-minutesAgo), Event = e, HostName = host, SiteName = site, Title = title, Message = message, Severity = severity,
+            HostId = Guid.NewGuid(), LinkPath = "/hosts",
+        };
+        string Security(string host) => L.T($"{host}: 1 neue Security-Updates", $"{host}: 1 new security updates");
+        return
+        [
+            Item(14, NotificationEvents.NewSecurityUpdates, "vpn", Security("vpn"), "python3-jwt", "Warning"),
+            Item(13, NotificationEvents.NewSecurityUpdates, "pivpn", Security("pivpn"), "python3-jwt", "Warning"),
+            Item(12, NotificationEvents.NewSecurityUpdates, "monitor", Security("monitor"), "python3-jwt", "Warning"),
+            Item(11, NotificationEvents.NewSecurityUpdates, "cloudpanel", L.T("cloudpanel: 2 neue Security-Updates", "cloudpanel: 2 new security updates"), "openssl, libssl3", "Warning"),
+            Item(10, NotificationEvents.ContainerUpdates, "docker", L.T("Neues Image: mariadb:10.11", "New image: mariadb:10.11"),
+                L.T("Betrifft: docker/lc2018-db", "Affects: docker/lc2018-db"), "Info"),
+        ];
+    }
 
     /// <summary>Vorschau im Kanal-Dialog: Beispielnachricht, genau so formatiert, wie sie verschickt würde.</summary>
     public static IResult Preview(PreviewRequest request, ServerClock clock, Options.AIOPatcherOptions options, PublicAccess? access)
     {
-        var n = new Notification(NotificationEvents.JobFailed, L.T("rigidtest: Patch fehlgeschlagen", "rigidtest: Patch failed"),
-            L.T("1 von 2 Updates installiert, 1 fehlgeschlagen", "1 of 2 updates installed, 1 failed"), NotificationSeverity.Critical, LinkPath: "/jobs/preview");
-        var details = new NotificationDetails("rigidtest", "Homelab", NotificationFormat.EventLabel(n.Event), TimeZoneInfo.ConvertTimeFromUtc(n.CreatedAt, clock.Zone));
+        Notification n;
+        NotificationDetails details;
+        if (request.Digest)
+        {
+            (n, details) = NotificationDigest.Build(SampleDigest(DateTime.UtcNow), clock.Zone);
+        }
+        else
+        {
+            n = new Notification(NotificationEvents.JobFailed, L.T("rigidtest: Patch fehlgeschlagen", "rigidtest: Patch failed"),
+                L.T("1 von 2 Updates installiert, 1 fehlgeschlagen", "1 of 2 updates installed, 1 failed"), NotificationSeverity.Critical, LinkPath: "/jobs/preview");
+            details = new NotificationDetails("rigidtest", "Homelab", NotificationFormat.EventLabel(n.Event), TimeZoneInfo.ConvertTimeFromUtc(n.CreatedAt, clock.Zone));
+        }
+
         var link = NotificationTexts.DashboardUrl(options, n.LinkPath, access?.Current.DashboardUrl);
         var style = request.Style;
         System.Text.Json.Nodes.JsonNode payload = request.Type switch
@@ -59,11 +93,7 @@ public static class NotificationEndpoints
                 ["markdown"] = style == NotificationStyle.Rich,
                 ["click"] = link,
             },
-            _ => new System.Text.Json.Nodes.JsonObject
-            {
-                ["event"] = n.Event.ToString(), ["severity"] = n.Severity.ToString(), ["title"] = n.Title, ["message"] = n.Message,
-                ["site"] = details.Site, ["host"] = details.Host, ["eventLabel"] = details.Event, ["url"] = link, ["timestamp"] = n.CreatedAt.ToString("O"),
-            },
+            _ => NotificationFormat.Webhook(n, details, link),
         };
         return Results.Text(payload.ToJsonString(), "application/json");
     }
@@ -93,6 +123,8 @@ public static class NotificationEndpoints
             RemoteSiteId = request.RemoteSiteId,
             ProtectedConfig = senders.Protect(request.Config),
             Style = request.Style ?? NotificationStyle.Standard,
+            DigestMinutes = request.DigestMinutes ?? 0,
+            InstantEvents = request.InstantEvents is null ? NotificationChannel.ImportantEvents : ParseEvents(request.InstantEvents),
         };
         db.NotificationChannels.Add(channel);
         audit.Add("notification.channel.created", $"{channel.Name} ({channel.Type})");
@@ -139,6 +171,8 @@ public static class NotificationEndpoints
         channel.RemoteSiteId = request.RemoteSiteId;
         channel.ProtectedConfig = senders.Protect(merged);
         channel.Style = request.Style ?? channel.Style;
+        channel.DigestMinutes = request.DigestMinutes ?? channel.DigestMinutes;
+        channel.InstantEvents = request.InstantEvents is null ? channel.InstantEvents : ParseEvents(request.InstantEvents);
         audit.Add("notification.channel.updated", $"{channel.Name} ({channel.Type})");
         await db.SaveChangesAsync(ct);
         return Results.Ok(ToDto(channel, senders));
@@ -209,7 +243,12 @@ public static class NotificationEndpoints
             errors["config"] = [configError];
         }
 
-        if ((request.Events ?? []).Any(e => !Enum.TryParse<NotificationEvents>(e, out _)))
+        if (request.DigestMinutes is { } minutes && !NotificationDigest.AllowedMinutes.Contains(minutes))
+        {
+            errors["digestMinutes"] = [L.T("Ungültige Sammelzeit.", "Invalid digest interval.")];
+        }
+
+        if ((request.Events ?? []).Concat(request.InstantEvents ?? []).Any(e => !Enum.TryParse<NotificationEvents>(e, out _)))
         {
             errors["events"] = [L.T("Unbekanntes Ereignis.", "Unknown event.")];
         }
@@ -233,6 +272,7 @@ public static class NotificationEndpoints
         }
 
         var events = AllEvents.Where(e => (c.Events & e) != 0).Select(e => e.ToString()).ToArray();
-        return new ChannelDto(c.Id, c.Name, c.Type, c.Enabled, events, c.SiteId, config, c.LastSentAt, c.LastError, c.RemoteSiteId, c.Style);
+        var instant = AllEvents.Where(e => (c.InstantEvents & e) != 0).Select(e => e.ToString()).ToArray();
+        return new ChannelDto(c.Id, c.Name, c.Type, c.Enabled, events, c.SiteId, config, c.LastSentAt, c.LastError, c.RemoteSiteId, c.Style, c.DigestMinutes, instant);
     }
 }

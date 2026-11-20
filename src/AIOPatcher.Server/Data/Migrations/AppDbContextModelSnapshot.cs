@@ -1439,10 +1439,17 @@ namespace AIOPatcher.Server.Data.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("TEXT");
 
+                    b.Property<int>("DigestMinutes")
+                        .HasColumnType("INTEGER");
+
                     b.Property<bool>("Enabled")
                         .HasColumnType("INTEGER");
 
                     b.Property<int>("Events")
+                        .HasMaxLength(32)
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("InstantEvents")
                         .HasMaxLength(32)
                         .HasColumnType("INTEGER");
 
@@ -1701,6 +1708,62 @@ namespace AIOPatcher.Server.Data.Migrations
                     b.HasIndex("HostId", "Status");
 
                     b.ToTable("Jobs");
+                });
+
+            modelBuilder.Entity("AIOPatcher.Server.Data.PendingNotification", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ChannelId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Event")
+                        .HasMaxLength(32)
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid?>("HostId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("HostName")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("LinkPath")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Message")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Severity")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("SiteId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SiteName")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ChannelId");
+
+                    b.ToTable("PendingNotifications");
                 });
 
             modelBuilder.Entity("AIOPatcher.Server.Data.PendingUpdate", b =>
@@ -2976,6 +3039,17 @@ namespace AIOPatcher.Server.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("Host");
+                });
+
+            modelBuilder.Entity("AIOPatcher.Server.Data.PendingNotification", b =>
+                {
+                    b.HasOne("AIOPatcher.Server.Data.NotificationChannel", "Channel")
+                        .WithMany()
+                        .HasForeignKey("ChannelId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Channel");
                 });
 
             modelBuilder.Entity("AIOPatcher.Server.Data.PendingUpdate", b =>

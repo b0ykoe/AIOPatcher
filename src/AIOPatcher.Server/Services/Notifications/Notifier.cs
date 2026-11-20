@@ -25,6 +25,9 @@ public sealed record Notification(
     Guid? RemoteSiteId = null)
 {
     public DateTime CreatedAt { get; init; } = DateTime.UtcNow;
+
+    /// <summary>Nur bei Sammelnachrichten: die einzelnen Meldungen (für den Webhook).</summary>
+    public IReadOnlyList<Notification>? Items { get; init; }
 }
 
 /// <summary>
@@ -50,7 +53,14 @@ public sealed class NotificationDispatcher(
     ILogger<NotificationDispatcher> logger,
     ServerClock? clock = null) : BackgroundService
 {
+    private static readonly TimeSpan DigestCheck = TimeSpan.FromSeconds(30);
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        await Task.WhenAll(ConsumeAsync(stoppingToken), FlushLoopAsync(stoppingToken));
+    }
+
+    private async Task ConsumeAsync(CancellationToken stoppingToken)
     {
         await foreach (var notification in notifier.Reader.ReadAllAsync(stoppingToken))
         {
@@ -61,6 +71,91 @@ public sealed class NotificationDispatcher(
             catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
             {
                 logger.LogError(ex, "Dispatching notification {Event} failed", notification.Event);
+            }
+        }
+    }
+
+    private async Task FlushLoopAsync(CancellationToken stoppingToken)
+    {
+        using var timer = new PeriodicTimer(DigestCheck);
+        try
+        {
+            while (await timer.WaitForNextTickAsync(stoppingToken))
+            {
+                try
+                {
+                    using var scope = scopes.CreateScope();
+                    await FlushDigestsAsync(scope.ServiceProvider.GetRequiredService<AppDbContext>(), senders, clock?.Zone ?? TimeZoneInfo.Local, DateTime.UtcNow, logger, stoppingToken);
+                }
+                catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
+                {
+                    logger.LogError(ex, "Sending notification digests failed");
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    /// <summary>Fällige Sammlungen senden (je Kanal eine Nachricht) und aus der Warteschlange löschen, auch bei Fehlern.</summary>
+    public static async Task<int> FlushDigestsAsync(AppDbContext db, NotificationSenders? senders, TimeZoneInfo zone, DateTime now, ILogger? logger, CancellationToken ct)
+    {
+        var pending = await db.PendingNotifications.ToListAsync(ct);
+        if (pending.Count == 0)
+        {
+            return 0;
+        }
+
+        var channelIds = pending.Select(p => p.ChannelId).Distinct().ToList();
+        var channels = await db.NotificationChannels.Where(c => channelIds.Contains(c.Id)).ToDictionaryAsync(c => c.Id, ct);
+        var sent = 0;
+        foreach (var group in pending.GroupBy(p => p.ChannelId))
+        {
+            var items = group.ToList();
+            if (!channels.TryGetValue(group.Key, out var channel) || !channel.Enabled || channel.DigestMinutes <= 0)
+            {
+                // Kanal gelöscht, aus oder auf "sofort" umgestellt: Gesammeltes trotzdem noch zustellen (außer bei "aus")
+                if (channel is { Enabled: true } && senders is not null)
+                {
+                    var (single, details) = NotificationDigest.Build(items, zone);
+                    await SendAndRecordAsync(channel, single, details);
+                }
+
+                db.PendingNotifications.RemoveRange(items);
+                continue;
+            }
+
+            if (!NotificationDigest.IsDue(items.Min(i => i.CreatedAt), items.Max(i => i.CreatedAt), channel.DigestMinutes, now))
+            {
+                continue;
+            }
+
+            var (digest, digestDetails) = NotificationDigest.Build(items, zone);
+            if (senders is not null)
+            {
+                await SendAndRecordAsync(channel, digest, digestDetails);
+            }
+
+            db.PendingNotifications.RemoveRange(items);
+            sent++;
+        }
+
+        await db.SaveChangesAsync(ct);
+        return sent;
+
+        async Task SendAndRecordAsync(NotificationChannel channel, Notification n, NotificationDetails details)
+        {
+            var error = await senders!.SendAsync(channel, n, ct, details);
+            if (error is null)
+            {
+                channel.LastSentAt = DateTime.UtcNow;
+                channel.LastError = null;
+            }
+            else
+            {
+                channel.LastError = error.Length > 500 ? error[..500] : error;
+                logger?.LogWarning("Notification channel {Channel} failed: {Error}", channel.Name, error);
             }
         }
     }
@@ -92,6 +187,12 @@ public sealed class NotificationDispatcher(
         var details = targets.Count == 0 ? null : await DetailsAsync(db, notification, clock, ct);
         foreach (var channel in targets)
         {
+            if (NotificationDigest.ShouldCollect(channel, notification.Event))
+            {
+                db.PendingNotifications.Add(NotificationDigest.ToPending(channel.Id, notification, details));
+                continue;
+            }
+
             var error = await senders.SendAsync(channel, notification, ct, details);
             if (error is null)
             {

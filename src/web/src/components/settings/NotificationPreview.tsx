@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Anchor, Badge, Box, Button, Code, Group, Loader, Stack, Text } from "@mantine/core";
+import { Anchor, Badge, Box, Button, Code, Group, Loader, SegmentedControl, Stack, Text } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 import { api, type ChannelType, type NotificationStyle } from "../../api";
 
@@ -25,7 +25,7 @@ function telegramHtml(html: string): ReactNode[] {
 }
 
 function decode(s: string) {
-  return s.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, "&");
+  return s.replace(/&#(\d+);/g, (_, n: string) => String.fromCodePoint(Number(n))).replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, "&");
 }
 
 /** **fett** bzw. *fett* (Slack) und _kursiv_ für die Text-Varianten. */
@@ -49,22 +49,30 @@ function markdownLite(s: string, boldMarker: "**" | "*"): ReactNode[] {
 const bubble = { background: "var(--mantine-color-dark-6)", borderRadius: 10, padding: "8px 12px", whiteSpace: "pre-wrap" as const, wordBreak: "break-word" as const };
 
 /** Vorschau einer Beispielnachricht im gewählten Stil, so wie der Dienst sie ungefähr anzeigt (Daten vom Server). */
-export function NotificationPreview({ type, style }: { type: ChannelType; style: NotificationStyle }) {
+export function NotificationPreview({ type, style, digestAvailable = false }: { type: ChannelType; style: NotificationStyle; digestAvailable?: boolean }) {
   const { t } = useTranslation();
   const [payload, setPayload] = useState<Payload | null>(null);
+  const [which, setWhich] = useState<"single" | "digest">("single");
+  const digest = digestAvailable && which === "digest";
 
   useEffect(() => {
     let alive = true;
     setPayload(null);
-    void api.post<Payload>("/api/notification-channels/preview", { type, style }).then((p) => alive && setPayload(p)).catch(() => {});
+    void api.post<Payload>("/api/notification-channels/preview", { type, style, digest }).then((p) => alive && setPayload(p)).catch(() => {});
     return () => {
       alive = false;
     };
-  }, [type, style]);
+  }, [type, style, digest]);
 
   return (
     <div>
-      <Text size="sm" fw={500} mb={6}>{t("notifications.preview")}</Text>
+      <Group justify="space-between" mb={6} gap="xs">
+        <Text size="sm" fw={500}>{t("notifications.preview")}</Text>
+        {digestAvailable && (
+          <SegmentedControl size="xs" value={which} onChange={(v) => setWhich(v as "single" | "digest")}
+            data={[{ value: "single", label: t("notifications.previewSingle") }, { value: "digest", label: t("notifications.previewDigest") }]} />
+        )}
+      </Group>
       <Box p="sm" style={{ border: "1px solid var(--mantine-color-default-border)", borderRadius: 10 }}>
         {!payload ? <Loader size="sm" /> : <Rendered type={type} p={payload} />}
       </Box>
@@ -91,7 +99,7 @@ function Rendered({ type, p }: { type: ChannelType; p: Payload }) {
       return (
         <Box maw={480} style={{ ...bubble, whiteSpace: "normal", borderLeft: `4px solid #${Number(embed.color).toString(16).padStart(6, "0")}` }}>
           <Anchor href={embed.url} target="_blank" fw={700} size="sm">{embed.title}</Anchor>
-          <Text size="sm" mt={4}>{embed.description}</Text>
+          <Text size="sm" mt={4} style={{ whiteSpace: "pre-wrap" }}>{embed.description}</Text>
           <Group gap="lg" mt={8}>
             {(embed.fields ?? []).map((f: any) => (
               <div key={f.name}><Text size="xs" fw={700}>{f.name}</Text><Text size="xs">{f.value}</Text></div>
@@ -107,7 +115,7 @@ function Rendered({ type, p }: { type: ChannelType; p: Payload }) {
         <Stack gap={6} maw={480}>
           {p.blocks.map((b: any, i: number) =>
             b.type === "header" ? <Text key={i} fw={800}>{b.text.text}</Text>
-              : b.type === "section" ? <Text key={i} size="sm">{b.text.text}</Text>
+              : b.type === "section" ? <Text key={i} size="sm" style={{ whiteSpace: "pre-wrap" }}>{b.text.text}</Text>
                 : b.type === "context" ? <Text key={i} size="xs" c="dimmed">{b.elements[0].text}</Text>
                   : <Group key={i}><Button size="xs" variant="default" component="a" href={b.elements[0].url} target="_blank">{b.elements[0].text.text}</Button></Group>)}
         </Stack>

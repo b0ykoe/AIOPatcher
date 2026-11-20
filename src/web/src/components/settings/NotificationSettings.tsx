@@ -6,6 +6,7 @@ import {
   Button,
   Card,
   Checkbox,
+  Chip,
   Group,
   Loader,
   Modal,
@@ -35,9 +36,12 @@ import {
   IconWebhook,
 } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import {
   api,
   formatRelative,
+  digestOptions,
+  importantEvents,
   notificationEvents,
   type ChannelConfig,
   type ChannelType,
@@ -167,6 +171,9 @@ export function NotificationSettings() {
                 <Switch checked={c.enabled} onChange={() => void toggle(c)} aria-label={t("notifications.enabled")} />
               </Group>
               <Group gap={4} mt="sm">
+                {c.digestMinutes > 0 && (
+                  <Badge size="xs" color="violet" variant="outline">{t("notifications.digestBadge", { time: digestLabel(t, c.digestMinutes) })}</Badge>
+                )}
                 {c.events.map((e) => (
                   <Badge key={e} size="xs">
                     {t(`notificationEvents.${e}`)}
@@ -245,6 +252,8 @@ export function ChannelModal({ channel, sites, remoteSites = [], onClose, onSave
   const [events, setEvents] = useState<string[]>(defaultEvents);
   const [config, setConfig] = useState<ChannelConfig>({});
   const [style, setStyle] = useState<NotificationStyle>("Standard");
+  const [digestMinutes, setDigestMinutes] = useState(0);
+  const [instantEvents, setInstantEvents] = useState<string[]>(importantEvents);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -257,6 +266,8 @@ export function ChannelModal({ channel, sites, remoteSites = [], onClose, onSave
       setEvents(defaultEvents);
       setConfig({ smtpPort: 587, smtpSecurity: "StartTls" });
       setStyle("Standard");
+      setDigestMinutes(0);
+      setInstantEvents(importantEvents);
     } else {
       setName(channel.name);
       setType(channel.type);
@@ -265,6 +276,8 @@ export function ChannelModal({ channel, sites, remoteSites = [], onClose, onSave
       setEvents(channel.events);
       setConfig(channel.config);
       setStyle(channel.style ?? "Standard");
+      setDigestMinutes(channel.digestMinutes ?? 0);
+      setInstantEvents(channel.instantEvents ?? importantEvents);
     }
     setError(null);
   }, [channel, initialType]);
@@ -279,7 +292,8 @@ export function ChannelModal({ channel, sites, remoteSites = [], onClose, onSave
     setBusy(true);
     setError(null);
     const remote = siteId?.startsWith("remote:") ? siteId.slice("remote:".length) : null;
-    const body = { name, type, enabled: channel === "new" ? true : channel?.enabled ?? true, events, siteId: remote ? null : siteId, remoteSiteId: remote, config, style };
+    const body = { name, type, enabled: channel === "new" ? true : channel?.enabled ?? true, events, siteId: remote ? null : siteId, remoteSiteId: remote, config, style,
+      digestMinutes, instantEvents };
     try {
       if (channel === "new") await api.post("/api/notification-channels", body);
       else if (channel) await api.put(`/api/notification-channels/${channel.id}`, body);
@@ -368,7 +382,7 @@ export function ChannelModal({ channel, sites, remoteSites = [], onClose, onSave
           </div>
         )}
 
-        <NotificationPreview type={type} style={style} />
+        <NotificationPreview type={type} style={style} digestAvailable={digestMinutes > 0} />
 
         <Select
           label={t("notifications.site")}
@@ -385,14 +399,32 @@ export function ChannelModal({ channel, sites, remoteSites = [], onClose, onSave
           allowDeselect={false}
         />
 
+        <Select
+          label={t("notifications.delivery")}
+          description={digestMinutes > 0 ? t("notifications.deliveryDigestHint") : t("notifications.deliveryInstantHint")}
+          data={digestOptions.map((m) => ({ value: String(m), label: m === 0 ? t("notifications.deliveryInstant") : t("notifications.deliveryDigest", { time: digestLabel(t, m) }) }))}
+          value={String(digestMinutes)}
+          onChange={(v) => setDigestMinutes(Number(v ?? 0))}
+          allowDeselect={false}
+        />
+
         <div>
-          <Text size="sm" fw={500} mb={6}>
+          <Text size="sm" fw={500} mb={digestMinutes > 0 ? 2 : 6}>
             {t("notifications.events")}
           </Text>
+          {digestMinutes > 0 && <Text size="xs" c="dimmed" mb={6}>{t("notifications.instantHint")}</Text>}
           <Checkbox.Group value={events} onChange={setEvents}>
             <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs">
               {notificationEvents.map((e) => (
-                <Checkbox key={e} value={e} label={t(`notificationEvents.${e}`)} />
+                <Group key={e} gap={6} wrap="nowrap" justify="space-between">
+                  <Checkbox value={e} label={t(`notificationEvents.${e}`)} />
+                  {digestMinutes > 0 && events.includes(e) && (
+                    <Chip size="xs" variant="light" color="red" checked={instantEvents.includes(e)}
+                      onChange={(on) => setInstantEvents((list) => (on ? [...list, e] : list.filter((x) => x !== e)))}>
+                      {t("notifications.instant")}
+                    </Chip>
+                  )}
+                </Group>
               ))}
             </SimpleGrid>
           </Checkbox.Group>
@@ -411,4 +443,9 @@ export function ChannelModal({ channel, sites, remoteSites = [], onClose, onSave
       </Stack>
     </Modal>
   );
+}
+
+/** "15 Min." bzw. "1 Std." für die Sammelzeit. */
+function digestLabel(t: TFunction, minutes: number) {
+  return minutes < 60 ? t("notifications.minutes", { count: minutes }) : t("notifications.hours", { count: minutes / 60 });
 }

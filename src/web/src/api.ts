@@ -801,7 +801,16 @@ export interface NotificationChannel {
   remoteSiteId: string | null;
   /** Aufmachung: Kurz, Standard, Ausführlich, Schick */
   style: NotificationStyle;
+  /** Sammeln: 0 = sofort, sonst höchstens so viele Minuten */
+  digestMinutes: number;
+  /** Beim Sammeln trotzdem sofort */
+  instantEvents: NotificationEvent[];
 }
+
+export const digestOptions = [0, 15, 30, 60, 120, 240] as const;
+/** Vorgabe "sofort trotz Sammeln" (wie NotificationChannel.ImportantEvents auf dem Server) */
+export const importantEvents: NotificationEvent[] = ["JobFailed", "HostOffline", "RunNeedsAttention", "KevDetected", "CertificateExpiring", "AgentUpdateFailed",
+  "RebootCheckFailed", "ContainerStopped", "MonitoringDisconnected", "BackupProblem"];
 
 export type NotificationStyle = "Short" | "Standard" | "Detailed" | "Rich";
 

@@ -193,25 +193,8 @@ public sealed class NotificationSenders(
         await smtp.SendMailAsync(message, ct);
     }
 
-    private async Task SendWebhookAsync(ChannelConfig c, Notification n, NotificationDetails? d, string link, CancellationToken ct)
-    {
-        // Webhook: immer alle Felder, unabhängig vom Stil
-        var body = new JsonObject
-        {
-            ["event"] = n.Event.ToString(),
-            ["severity"] = n.Severity.ToString(),
-            ["title"] = n.Title,
-            ["message"] = n.Message,
-            ["siteId"] = n.SiteId?.ToString(),
-            ["hostId"] = n.HostId?.ToString(),
-            ["site"] = d?.Site,
-            ["host"] = d?.Host,
-            ["eventLabel"] = d?.Event,
-            ["url"] = link,
-            ["timestamp"] = n.CreatedAt.ToString("O"),
-        };
-        await PostJsonAsync(c.Url!, body, c.Secret, ct);
-    }
+    private async Task SendWebhookAsync(ChannelConfig c, Notification n, NotificationDetails? d, string link, CancellationToken ct) =>
+        await PostJsonAsync(c.Url!, NotificationFormat.Webhook(n, d, link), c.Secret, ct);
 
     private async Task PostJsonAsync(string url, JsonObject body, string? hmacSecret, CancellationToken ct)
     {

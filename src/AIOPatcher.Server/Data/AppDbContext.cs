@@ -22,6 +22,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<RunbookRunWave> RunbookRunWaves => Set<RunbookRunWave>();
     public DbSet<RunbookRunItem> RunbookRunItems => Set<RunbookRunItem>();
     public DbSet<NotificationChannel> NotificationChannels => Set<NotificationChannel>();
+    public DbSet<PendingNotification> PendingNotifications => Set<PendingNotification>();
     public DbSet<PatchFreeze> PatchFreezes => Set<PatchFreeze>();
     public DbSet<PackageHold> PackageHolds => Set<PackageHold>();
     public DbSet<Integration> Integrations => Set<Integration>();
@@ -181,9 +182,23 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
         {
             e.Property(x => x.Name).HasMaxLength(100);
             e.Property(x => x.Events).HasConversion<int>();
+            e.Property(x => x.InstantEvents).HasConversion<int>();
             e.Property(x => x.LastError).HasMaxLength(500);
             e.HasOne(x => x.Site).WithMany().HasForeignKey(x => x.SiteId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(x => x.RemoteSite).WithMany().HasForeignKey(x => x.RemoteSiteId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        b.Entity<PendingNotification>(e =>
+        {
+            e.Property(x => x.Event).HasConversion<int>();
+            e.Property(x => x.Severity).HasMaxLength(20);
+            e.Property(x => x.Title).HasMaxLength(500);
+            e.Property(x => x.Message).HasMaxLength(4000);
+            e.Property(x => x.HostName).HasMaxLength(200);
+            e.Property(x => x.SiteName).HasMaxLength(200);
+            e.Property(x => x.LinkPath).HasMaxLength(500);
+            e.HasIndex(x => x.ChannelId);
+            e.HasOne(x => x.Channel).WithMany().HasForeignKey(x => x.ChannelId).OnDelete(DeleteBehavior.Cascade);
         });
 
         b.Entity<PatchFreeze>(e =>

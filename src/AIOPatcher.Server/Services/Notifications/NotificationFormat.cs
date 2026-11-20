@@ -88,12 +88,12 @@ public static class NotificationFormat
         {
             body["text"] = style == NotificationStyle.Short
                 ? $"{Emoji(n.Severity)} {n.Title}\n{link}"
-                : Join($"{Emoji(n.Severity)} {n.Title}", PlainBody(style, n, d), link);
+                : Join($"{Emoji(n.Severity)} {n.Title}", Truncate(PlainBody(style, n, d), 3500), link); // Telegram: höchstens 4096 Zeichen
             return body;
         }
 
         static string H(string s) => WebUtility.HtmlEncode(s);
-        var text = Join($"<b>{Emoji(n.Severity)} {H(n.Title)}</b>", H(n.Message), d is null ? "" : $"<i>{H(DetailLine(d))}</i>");
+        var text = Join($"<b>{Emoji(n.Severity)} {H(n.Title)}</b>", H(Truncate(n.Message, 3500)), d is null ? "" : $"<i>{H(DetailLine(d))}</i>");
         body["parse_mode"] = "HTML";
         if (withButton)
         {
@@ -223,6 +223,42 @@ public static class NotificationFormat
         NotificationStyle.Rich => Join(n.Message, d is null ? "" : $"_{DetailLine(d)}_"),
         _ => n.Message,
     };
+
+    // --- Webhook -----------------------------------------------------------------------------------
+
+    /// <summary>Webhook: immer alle Felder, unabhängig vom Stil. Sammelnachricht: event "Digest" und die Einzelmeldungen unter items.</summary>
+    public static JsonObject Webhook(Notification n, NotificationDetails? d, string link)
+    {
+        var body = new JsonObject
+        {
+            ["event"] = n.Items is null ? n.Event.ToString() : "Digest",
+            ["severity"] = n.Severity.ToString(),
+            ["title"] = n.Title,
+            ["message"] = n.Message,
+            ["siteId"] = n.SiteId?.ToString(),
+            ["hostId"] = n.HostId?.ToString(),
+            ["site"] = d?.Site,
+            ["host"] = d?.Host,
+            ["eventLabel"] = d?.Event,
+            ["url"] = link,
+            ["timestamp"] = n.CreatedAt.ToString("O"),
+        };
+        if (n.Items is { } items)
+        {
+            body["items"] = new JsonArray(items.Select(i => (JsonNode)new JsonObject
+            {
+                ["event"] = i.Event.ToString(),
+                ["severity"] = i.Severity.ToString(),
+                ["title"] = i.Title,
+                ["message"] = i.Message,
+                ["siteId"] = i.SiteId?.ToString(),
+                ["hostId"] = i.HostId?.ToString(),
+                ["timestamp"] = i.CreatedAt.ToString("O"),
+            }).ToArray());
+        }
+
+        return body;
+    }
 
     private static string Join(params string[] parts) => string.Join("\n", parts.Where(p => !string.IsNullOrWhiteSpace(p)));
 
