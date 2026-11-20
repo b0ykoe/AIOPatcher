@@ -9,6 +9,15 @@ Written for users, not as a list of commits.
 ## [Unreleased]
 
 ### Added
+- **Portainer integration: update Docker stacks from the dashboard:** add Portainer under Settings → Integrations with
+  an access token (sent as X-API-Key; the token is stored encrypted, a self-signed certificate can be pinned). The new
+  page Inventory → Stacks lists every stack per environment with its containers and images, and shows a blue badge
+  when the registry has a newer image (checked the same way as host containers). **Update stack** pulls the images
+  again and redeploys the stack through the Portainer API, like "Pull and redeploy" in Portainer: stacks from Git keep
+  their branch and stored credentials, all others keep their stack file and environment variables. Each update runs
+  as a tracked job with a log and is blocked during a patch freeze. Updating needs the Operator role and the switch
+  "Program and container updates"; Kubernetes stacks are shown but cannot be updated. This is the way to update
+  containers of Portainer stacks, whose compose files are not on the host.
 - **Share more pages of a site:** when sharing a site you can now also allow "More pages, read-only: utilization,
   open vulnerabilities, installed software". The other instance then shows these under Utilization, Security and
   Inventory for your site, read-only. For an existing share, use Settings → Sharing → "Change shared data"; the

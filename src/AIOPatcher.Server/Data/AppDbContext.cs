@@ -26,6 +26,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<PatchFreeze> PatchFreezes => Set<PatchFreeze>();
     public DbSet<PackageHold> PackageHolds => Set<PackageHold>();
     public DbSet<Integration> Integrations => Set<Integration>();
+    public DbSet<StackUpdateJob> StackUpdateJobs => Set<StackUpdateJob>();
     public DbSet<CveInfo> CveInfos => Set<CveInfo>();
     public DbSet<VulnLookup> VulnLookups => Set<VulnLookup>();
     public DbSet<ContainerInfo> Containers => Set<ContainerInfo>();
@@ -226,6 +227,16 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             e.Property(x => x.TlsFingerprintSha256).HasMaxLength(64);
             e.Property(x => x.LastError).HasMaxLength(500);
             e.HasOne(x => x.Site).WithMany().HasForeignKey(x => x.SiteId).OnDelete(DeleteBehavior.SetNull);
+        });
+
+        b.Entity<StackUpdateJob>(e =>
+        {
+            e.Property(x => x.StackName).HasMaxLength(200);
+            e.Property(x => x.RequestedBy).HasMaxLength(200);
+            e.Property(x => x.Summary).HasMaxLength(500);
+            e.Property(x => x.Log).HasMaxLength(StackUpdateJob.MaxLog);
+            e.HasIndex(x => new { x.IntegrationId, x.CreatedAt });
+            e.HasOne(x => x.Integration).WithMany().HasForeignKey(x => x.IntegrationId).OnDelete(DeleteBehavior.Cascade);
         });
 
         b.Entity<CveInfo>(e =>

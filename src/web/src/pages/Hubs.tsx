@@ -1,4 +1,4 @@
-import { IconApps, IconBug, IconDatabase, IconRadar, IconCalendarTime, IconListCheck, IconNetwork, IconShieldCheck, IconShieldHalfFilled, IconShieldLock } from "@tabler/icons-react";
+import { IconApps, IconBrandDocker, IconBug, IconDatabase, IconRadar, IconCalendarTime, IconListCheck, IconNetwork, IconShieldCheck, IconShieldHalfFilled, IconShieldLock } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import { useSimple } from "../App";
 import { SectionPage } from "../components/SectionTabs";
@@ -12,6 +12,7 @@ import { PlansPage } from "./PlansPage";
 import { RulesPage } from "./RulesPage";
 import { SecurityPage } from "./SecurityPage";
 import { SoftwarePage } from "./SoftwarePage";
+import { StacksPage } from "./StacksPage";
 
 // Bereiche mit Reitern: fassen verwandte Seiten zusammen, damit die Navigation kurz bleibt.
 
@@ -49,6 +50,7 @@ export function InventoryHub() {
       { value: "network", label: t("hubs.network"), icon: IconNetwork, element: <IpamPage /> },
       { value: "monitoring", label: t("hubs.monitoring"), icon: IconRadar, element: <MonitoringPage /> },
       { value: "backups", label: t("hubs.backups"), icon: IconDatabase, element: <BackupsPage /> },
+      { value: "stacks", label: t("hubs.stacks"), icon: IconBrandDocker, element: <StacksPage /> },
     ]} />
   );
 }

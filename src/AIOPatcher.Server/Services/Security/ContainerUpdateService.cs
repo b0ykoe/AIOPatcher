@@ -142,6 +142,10 @@ public sealed class ContainerUpdateService(
         await CheckAsync(db, references.ToDictionary(r => r, _ => TimeSpan.FromMinutes(1)), now, ct);
     }
 
+    /// <summary>Images, die nicht über einen Agent gemeldet werden (Portainer-Stacks): prüfen, wenn der letzte Abruf älter ist.</summary>
+    public async Task CheckReferencesAsync(AppDbContext db, IEnumerable<string> references, TimeSpan recheckAfter, DateTime now, CancellationToken ct) =>
+        await CheckAsync(db, references.Distinct().ToDictionary(r => r, _ => recheckAfter), now, ct);
+
     public async Task RunOnceAsync(AppDbContext db, DateTime now, CancellationToken ct) =>
         await CheckAsync(db, await DueIntervalsAsync(db, schedule, ct), now, ct);
 

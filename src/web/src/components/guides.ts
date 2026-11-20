@@ -12,7 +12,7 @@ export interface Guide {
   note?: string;
 }
 
-export type GuideTopic = "Proxmox" | "HetznerCloud" | "Opnsense" | "ProxmoxBackup" | "Ntfy" | "Email" | "Discord" | "Slack" | "Telegram" | "Webhook" | "Api";
+export type GuideTopic = "Proxmox" | "HetznerCloud" | "Opnsense" | "ProxmoxBackup" | "Portainer" | "Ntfy" | "Email" | "Discord" | "Slack" | "Telegram" | "Webhook" | "Api";
 
 const de: Record<GuideTopic, Guide> = {
   Proxmox: {
@@ -58,6 +58,16 @@ const de: Record<GuideTopic, Guide> = {
       { text: "„Verbindung testen“: Beim selbstsignierten Zertifikat erscheint der Fingerprint, „Diesem Zertifikat vertrauen“ klicken." },
     ],
     note: "AIOPatcher liest nur: Datastores, Tasks und Backup-Gruppen. Es startet, löscht oder ändert nichts auf dem PBS. Den PBS-Host selbst patcht der normale Agent.",
+  },
+  Portainer: {
+    title: "Portainer anbinden",
+    steps: [
+      { text: "In Portainer oben rechts auf den Benutzer → „My account“ → „Access tokens“ → „Add access token“. Am besten mit einem eigenen Benutzer, der die Stacks verwalten darf (z. B. Administrator oder Rolle „Environment administrator“ in den Umgebungen)." },
+      { text: "Das Token (beginnt mit ptr_) wird nur einmal angezeigt. Hier als Access Token eintragen." },
+      { text: "URL: https://<portainer>:9443. Beim selbstsignierten Zertifikat „Verbindung testen“ und „Diesem Zertifikat vertrauen“ klicken." },
+      { text: "Die Stacks erscheinen unter Inventar → Stacks. „Stack aktualisieren“ zieht die Images neu und rollt den Stack neu aus, wie „Pull and redeploy“ in Portainer." },
+    ],
+    note: "Stacks aus Portainer liegen im Datenvolume von Portainer, nicht im Dateisystem des Hosts; deshalb laufen ihre Updates über die Portainer-API und nicht über den Agent. Updates brauchen den Schalter „Programm- und Container-Updates“.",
   },
   Ntfy: {
     title: "ntfy aufs Smartphone",
@@ -164,6 +174,16 @@ const en: Record<GuideTopic, Guide> = {
       { text: "\"Test connection\": for a self-signed certificate the fingerprint appears; click \"Trust this certificate\"." },
     ],
     note: "AIOPatcher only reads: datastores, tasks and backup groups. It does not start, delete or change anything on the PBS. The normal agent patches the PBS host itself.",
+  },
+  Portainer: {
+    title: "Connect Portainer",
+    steps: [
+      { text: "In Portainer, click the user at the top right → \"My account\" → \"Access tokens\" → \"Add access token\". Ideally use a dedicated user that may manage the stacks (e.g. administrator, or the role \"Environment administrator\" in the environments)." },
+      { text: "The token (starts with ptr_) is shown only once. Enter it here as the access token." },
+      { text: "URL: https://<portainer>:9443. For a self-signed certificate click \"Test connection\" and then \"Trust this certificate\"." },
+      { text: "The stacks appear under Inventory → Stacks. \"Update stack\" pulls the images again and redeploys the stack, like \"Pull and redeploy\" in Portainer." },
+    ],
+    note: "Portainer keeps its stacks in its own data volume, not in the host's file system, so they are updated through the Portainer API rather than the agent. Updates need the \"Program and container updates\" switch.",
   },
   Ntfy: {
     title: "ntfy to your phone",

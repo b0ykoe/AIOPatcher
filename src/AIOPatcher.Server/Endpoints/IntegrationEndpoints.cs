@@ -10,7 +10,11 @@ public static class IntegrationEndpoints
 {
     public sealed record IntegrationDto(
         Guid Id, string Name, IntegrationType Type, Guid? SiteId, string? BaseUrl, string? TlsFingerprintSha256, int KeepSnapshots,
-        bool Enabled, DateTime? LastCheckAt, string? LastError, int MappedHosts, OpnsenseFirmware? Firmware, BackupSummaryDto? Backup = null);
+        bool Enabled, DateTime? LastCheckAt, string? LastError, int MappedHosts, OpnsenseFirmware? Firmware, BackupSummaryDto? Backup = null,
+        PortainerSummaryDto? Portainer = null);
+
+    /// <summary>Portainer: Kurzfassung für die Karte in den Einstellungen.</summary>
+    public sealed record PortainerSummaryDto(string? Version, int Environments, int Stacks, int Outdated, DateTime CheckedAt);
 
     /// <summary>Proxmox Backup Server: Kurzfassung für die Karte in den Einstellungen.</summary>
     public sealed record BackupSummaryDto(string? Version, int Datastores, int FailedTasks, int StaleGroups, int Groups, DateTime CheckedAt);
@@ -98,6 +102,17 @@ public static class IntegrationEndpoints
             status.Groups.Count(g => ProxmoxBackupMonitor.IsStale(g, status.CheckedAt)), status.Groups.Count, status.CheckedAt);
     }
 
+    private static PortainerSummaryDto? PortainerSummary(Integration integration) =>
+        integration.Type == IntegrationType.Portainer && PortainerMonitor.Parse(integration.StatusJson) is { } status
+            ? new PortainerSummaryDto(status.Version, status.Environments.Count, status.Stacks.Count, status.OutdatedStacks?.Count ?? 0, status.CheckedAt)
+            : null;
+
+    private static async Task<string> TestPortainerAsync(PortainerClientFactory factory, Integration integration, CancellationToken ct)
+    {
+        using var client = factory.For(integration);
+        return await client.TestAsync(ct);
+    }
+
     /// <summary>Mit siteId: Backup-Server und Cluster dieser Site und solche ohne Site.</summary>
     private static async Task<BackupOverviewDto> BackupServers(Guid? siteId, AppDbContext db, FeatureFlags features, CancellationToken ct)
     {
@@ -145,7 +160,8 @@ public static class IntegrationEndpoints
             .ToListAsync(ct))
         .Select(x => new IntegrationDto(x.Integration.Id, x.Integration.Name, x.Integration.Type, x.Integration.SiteId, x.Integration.BaseUrl,
             x.Integration.TlsFingerprintSha256, x.Integration.KeepSnapshots, x.Integration.Enabled, x.Integration.LastCheckAt, x.Integration.LastError, x.Mapped,
-            x.Integration.Type == IntegrationType.Opnsense ? OpnsenseMonitor.Parse(x.Integration.StatusJson) : null, Summary(x.Integration)))
+            x.Integration.Type == IntegrationType.Opnsense ? OpnsenseMonitor.Parse(x.Integration.StatusJson) : null, Summary(x.Integration),
+            PortainerSummary(x.Integration)))
         .ToList();
 
     private static async Task<IResult> RefreshOpnsense(Guid id, AppDbContext db, OpnsenseMonitor monitor, CancellationToken ct)
@@ -310,7 +326,7 @@ public static class IntegrationEndpoints
     }
 
     private static async Task<IResult> Test(Guid id, AppDbContext db, VirtualizationProviderFactory providers, OpnsenseClientFactory opnsense,
-        ProxmoxBackupClientFactory pbs, CancellationToken ct)
+        ProxmoxBackupClientFactory pbs, PortainerClientFactory portainer, CancellationToken ct)
     {
         var integration = await db.Integrations.FindAsync([id], ct);
         if (integration is null)
@@ -325,6 +341,7 @@ public static class IntegrationEndpoints
             {
                 IntegrationType.Opnsense => await opnsense.For(integration).TestAsync(ct),
                 IntegrationType.ProxmoxBackup => await pbs.For(integration).TestAsync(ct),
+                IntegrationType.Portainer => await TestPortainerAsync(portainer, integration, ct),
                 _ => await providers.For(integration)!.TestAsync(ct),
             };
             result = new TestResultDto(true, message, null);

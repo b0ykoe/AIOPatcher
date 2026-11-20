@@ -8,6 +8,9 @@ public enum IntegrationType
 
     /// <summary>Proxmox Backup Server (nur lesen: Datastores, Tasks, Backup-Gruppen).</summary>
     ProxmoxBackup,
+
+    /// <summary>Portainer: Docker-Stacks lesen und mit neuen Images neu ausrollen.</summary>
+    Portainer,
 }
 
 /// <summary>Verbindung zu einer externen API: Proxmox VE, Hetzner Cloud, OPNsense oder Proxmox Backup Server.</summary>
@@ -26,7 +29,7 @@ public sealed class Integration
 
     /// <summary>
     /// Zugangsdaten, per Data Protection verschlüsselt. Proxmox: "user@realm!tokenid=uuid".
-    /// Hetzner: API-Token. OPNsense: "key:secret".
+    /// Hetzner: API-Token. OPNsense: "key:secret". Portainer: Access Token (X-API-Key).
     /// </summary>
     public required string ProtectedSecret { get; set; }
 

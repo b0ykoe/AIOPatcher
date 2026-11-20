@@ -19,7 +19,7 @@ import {
   ThemeIcon,
   Tooltip,
 } from "@mantine/core";
-import { IconBrandUbuntu, IconCloud, IconDatabase, IconEdit, IconFlame, IconLink, IconListDetails, IconPlugConnected, IconPlus, IconRefresh, IconServer2, IconTrash } from "@tabler/icons-react";
+import { IconBrandDocker, IconBrandUbuntu, IconCloud, IconDatabase, IconEdit, IconFlame, IconLink, IconListDetails, IconPlugConnected, IconPlus, IconRefresh, IconServer2, IconTrash } from "@tabler/icons-react";
 import { Link, useSearchParams } from "react-router";
 import { useTranslation } from "react-i18next";
 import { api, formatRelative, type Integration, type IntegrationTestResult, type IntegrationType, type Site } from "../../api";
@@ -30,8 +30,8 @@ import { MonitoringTargets } from "../monitoring/MonitoringTargets";
 import { IntegrationMappingModal } from "./IntegrationMappingModal";
 
 
-const types: IntegrationType[] = ["Proxmox", "HetznerCloud", "Opnsense", "ProxmoxBackup"];
-const typeIcon: Record<IntegrationType, typeof IconServer2> = { Proxmox: IconServer2, HetznerCloud: IconCloud, Opnsense: IconFlame, ProxmoxBackup: IconDatabase };
+const types: IntegrationType[] = ["Proxmox", "HetznerCloud", "Opnsense", "ProxmoxBackup", "Portainer"];
+const typeIcon: Record<IntegrationType, typeof IconServer2> = { Proxmox: IconServer2, HetznerCloud: IconCloud, Opnsense: IconFlame, ProxmoxBackup: IconDatabase, Portainer: IconBrandDocker };
 /** Typen, denen Hosts zugeordnet werden (Snapshots, Backups): Proxmox VE und Hetzner Cloud. */
 const mappable = (type: IntegrationType) => type === "Proxmox" || type === "HetznerCloud";
 
@@ -127,6 +127,18 @@ export function IntegrationSettings() {
     setBusy(i.id);
     try {
       await api.post(`/api/integrations/${i.id}/pbs/refresh`);
+    } catch (e) {
+      notifyError(e);
+    } finally {
+      setBusy(null);
+      load();
+    }
+  };
+
+  const refreshPortainer = async (i: Integration) => {
+    setBusy(i.id);
+    try {
+      await api.post(`/api/integrations/${i.id}/portainer/refresh`);
     } catch (e) {
       notifyError(e);
     } finally {
@@ -245,7 +257,26 @@ export function IntegrationSettings() {
                 </Group>
               )}
 
+              {i.type === "Portainer" && i.portainer && (
+                <Group gap={6} mt="sm">
+                  {i.portainer.version && <Badge size="sm" color="gray">Portainer {i.portainer.version}</Badge>}
+                  <Badge size="sm" color="gray">{t("stacks.environments", { count: i.portainer.environments })}</Badge>
+                  <Badge size="sm" color="gray">{t("stacks.stackCount", { count: i.portainer.stacks })}</Badge>
+                  {i.portainer.outdated > 0
+                    ? <Badge size="sm" color="blue">{t("stacks.outdatedCount", { count: i.portainer.outdated })}</Badge>
+                    : <Badge size="sm" color="teal">{t("stacks.allCurrent")}</Badge>}
+                </Group>
+              )}
+
               <Group gap="xs" mt="sm" justify="flex-end">
+                {i.type === "Portainer" && (
+                  <>
+                    <Button size="compact-xs" variant="light" leftSection={<IconRefresh size={14} />} loading={busy === i.id} onClick={() => void refreshPortainer(i)}>
+                      {t("stacks.refresh")}
+                    </Button>
+                    <Button size="compact-xs" variant="light" component={Link} to="/inventory?tab=stacks">{t("stacks.open")}</Button>
+                  </>
+                )}
                 {i.type === "Opnsense" && (
                   <>
                     <Button size="compact-xs" variant="light" loading={busy === i.id} onClick={() => void refreshOpnsense(i)}>
@@ -315,6 +346,9 @@ export function IntegrationSettings() {
           <Text size="sm">
             <b>Proxmox Backup Server:</b> {t("integrations.pbsPerms")}
           </Text>
+          <Text size="sm">
+            <b>Portainer:</b> {t("integrations.portainerPerms")}
+          </Text>
         </Stack>
       </Card>
 
@@ -383,8 +417,9 @@ function IntegrationModal({ integration, sites, onClose, onSaved }: { integratio
     : /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(trimmed)
       ? t(type === "Proxmox" ? "integrations.proxmoxOnlySecret" : "pbs.onlySecret")
       : t(type === "Proxmox" ? "integrations.proxmoxBadFormat" : "pbs.badFormat");
-  const secretLabel = pveLike ? t("integrations.proxmoxToken") : type === "HetznerCloud" ? t("integrations.hetznerToken") : t("integrations.opnsenseKey");
-  const secretHint = type === "Opnsense" ? "key:secret" : undefined;
+  const secretLabel = pveLike ? t("integrations.proxmoxToken") : type === "HetznerCloud" ? t("integrations.hetznerToken")
+    : type === "Portainer" ? t("integrations.portainerToken") : t("integrations.opnsenseKey");
+  const secretHint = type === "Opnsense" ? "key:secret" : type === "Portainer" ? "ptr_…" : undefined;
 
   return (
     <Modal opened={integration !== null} onClose={onClose} size="lg" title={<Text fw={800}>{integration === "new" ? t("integrations.add") : t("integrations.edit")}</Text>}>
@@ -401,7 +436,7 @@ function IntegrationModal({ integration, sites, onClose, onSaved }: { integratio
           />
         </Group>
         {type !== "HetznerCloud" && (
-          <TextInput label={t("integrations.url")} placeholder={type === "Proxmox" ? "https://pve.example:8006" : type === "ProxmoxBackup" ? "https://pbs.example:8007" : "https://fw.example"} value={baseUrl} onChange={(e) => setBaseUrl(e.currentTarget.value)} />
+          <TextInput label={t("integrations.url")} placeholder={type === "Proxmox" ? "https://pve.example:8006" : type === "ProxmoxBackup" ? "https://pbs.example:8007" : type === "Portainer" ? "https://portainer.example:9443" : "https://fw.example"} value={baseUrl} onChange={(e) => setBaseUrl(e.currentTarget.value)} />
         )}
         {type === "Proxmox" && (
           <Alert color="blue" p="sm" title={t("integrations.proxmoxFormatTitle")}>

@@ -849,7 +849,7 @@ export function kbOf(title: string): string | null {
 
 // --- Integrationen -------------------------------------------------------------------------------
 
-export type IntegrationType = "Proxmox" | "HetznerCloud" | "Opnsense" | "ProxmoxBackup";
+export type IntegrationType = "Proxmox" | "HetznerCloud" | "Opnsense" | "ProxmoxBackup" | "Portainer";
 
 export interface Integration {
   id: string;
@@ -866,6 +866,83 @@ export interface Integration {
   firmware: OpnsenseFirmware | null;
   /** Proxmox Backup Server: Kurzfassung des letzten Abrufs */
   backup: BackupSummary | null;
+  /** Portainer: Kurzfassung des letzten Abrufs */
+  portainer: PortainerSummary | null;
+}
+
+export interface PortainerSummary {
+  version: string | null;
+  environments: number;
+  stacks: number;
+  /** Stacks mit neuerem Image in der Registry */
+  outdated: number;
+  checkedAt: string;
+}
+
+/** Inventar → Stacks: Docker-Stacks aus Portainer. */
+export interface StacksOverview {
+  /** Schalter "Programm- und Container-Updates" (gilt auch für Stacks) */
+  updatesEnabled: boolean;
+  imageChecksEnabled: boolean;
+  servers: PortainerServer[];
+}
+
+export interface PortainerEnvironment {
+  id: number;
+  name: string;
+  /** 1 Docker, 2 Agent, 4 Edge Agent, 5–7 Kubernetes */
+  type: number;
+  /** 1 erreichbar, 2 nicht erreichbar */
+  status: number;
+  error: string | null;
+}
+
+export interface PortainerServer {
+  id: string;
+  name: string;
+  siteName: string | null;
+  baseUrl: string | null;
+  enabled: boolean;
+  lastCheckAt: string | null;
+  lastError: string | null;
+  version: string | null;
+  freeze: { id: string; name: string; siteId: string | null; endsAt: string } | null;
+  environments: PortainerEnvironment[];
+  stacks: PortainerStack[];
+  jobs: StackJob[];
+}
+
+export type StackUpdateState = "outdated" | "current" | "unknown";
+
+export interface PortainerStack {
+  id: number;
+  name: string;
+  type: "compose" | "swarm" | "kubernetes";
+  environmentId: number;
+  environmentName: string | null;
+  active: boolean;
+  git: boolean;
+  gitRef: string | null;
+  updatedAt: string | null;
+  updateState: StackUpdateState;
+  outdatedImages: number;
+  containers: { name: string; service: string | null; image: string; state: string | null; imageState: "outdated" | "current" | "local" | "unknown" }[];
+  lastJob: StackJob | null;
+  /** Warum kein Update geht: "kubernetes" oder "offline" */
+  blocker: "kubernetes" | "offline" | null;
+}
+
+export interface StackJob {
+  id: string;
+  stackId: number;
+  stackName: string;
+  status: JobStatus;
+  requestedBy: string;
+  createdAt: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+  summary: string | null;
+  log: string | null;
 }
 
 export interface BackupSummary {

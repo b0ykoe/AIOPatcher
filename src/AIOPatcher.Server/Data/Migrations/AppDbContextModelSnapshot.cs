@@ -2535,6 +2535,60 @@ namespace AIOPatcher.Server.Data.Migrations
                     b.ToTable("SsoSettings", (string)null);
                 });
 
+            modelBuilder.Entity("AIOPatcher.Server.Data.StackUpdateJob", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("EnvironmentId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime?>("FinishedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("IntegrationId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Log")
+                        .HasMaxLength(8000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RequestedBy")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("StackId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("StackName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("StartedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Summary")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IntegrationId", "CreatedAt");
+
+                    b.ToTable("StackUpdateJobs");
+                });
+
             modelBuilder.Entity("AIOPatcher.Server.Data.Subnet", b =>
                 {
                     b.Property<Guid>("Id")
@@ -3172,6 +3226,17 @@ namespace AIOPatcher.Server.Data.Migrations
                     b.Navigation("Peer");
 
                     b.Navigation("Site");
+                });
+
+            modelBuilder.Entity("AIOPatcher.Server.Data.StackUpdateJob", b =>
+                {
+                    b.HasOne("AIOPatcher.Server.Data.Integration", "Integration")
+                        .WithMany()
+                        .HasForeignKey("IntegrationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Integration");
                 });
 
             modelBuilder.Entity("AIOPatcher.Server.Data.Subnet", b =>
