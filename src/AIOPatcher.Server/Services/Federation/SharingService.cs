@@ -155,7 +155,8 @@ public sealed class SharingService(
     }
 
     public static ShareInfo ToInfo(SiteShare share, Site site) =>
-        new(share.Id, share.SiteId, site.Name, share.Level, share.Data, share.ExpiresAt, share.CreatedAt, share.CreatedBy);
+        new(share.Id, share.SiteId, site.Name, share.Level, share.Data & ShareInfo.WireData, share.ExpiresAt, share.CreatedAt, share.CreatedBy,
+            share.Data.HasFlag(ShareData.Pages));
 
     public async Task<FederationResult<RenewResponse>> RenewAsync(FederationPeer peer, RenewRequest request, CancellationToken ct)
     {

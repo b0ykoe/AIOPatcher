@@ -2,6 +2,8 @@ using AIOPatcher.Server.Data;
 using AIOPatcher.Server.Security;
 using AIOPatcher.Server.Services;
 using AIOPatcher.Server.Services.Federation;
+using AIOPatcher.Server.Services.Integrations;
+using AIOPatcher.Server.Services.Security;
 
 namespace AIOPatcher.Server.Endpoints;
 
@@ -23,6 +25,7 @@ public static class FederationEndpoints
         group.MapGet("/sites/{siteId:guid}/hosts/{hostId:guid}", HostDetail);
         group.MapGet("/sites/{siteId:guid}/jobs/{jobId:guid}", JobDetail);
         group.MapPost("/sites/{siteId:guid}/hosts/{hostId:guid}/actions", Act);
+        group.MapGet("/sites/{siteId:guid}/views/{view}", View);
     }
 
     private static IResult Json<T>(T value) => Results.Json(value, FederationProtocol.Json);
@@ -103,6 +106,41 @@ public static class FederationEndpoints
         }
 
         return await sharing.JobDetailAsync(share, jobId, afterId ?? 0, ct) is { } detail ? Json(detail) : Fail(StatusCodes.Status404NotFound, "Job not found.");
+    }
+
+    /// <summary>
+    /// Weitere Seiten nur lesend, wenn die Freigabe den Datenumfang „Pages“ hat. Liefert dieselben Daten wie die API des
+    /// Dashboards, aber fest auf die geteilte Site eingeschränkt.
+    /// </summary>
+    private static async Task<IResult> View(Guid siteId, string view, bool? onlyUpdates, string? source, HttpContext http, SharingService sharing,
+        AppDbContext db, FeatureFlags features, VirtualizationProviderFactory providers, CveService cves, CancellationToken ct)
+    {
+        if (!TryPeer(http, out var peer))
+        {
+            return Results.Unauthorized();
+        }
+
+        return await sharing.FindShareAsync(peer, siteId, DateTime.UtcNow, ct) is { } share
+            ? await ViewAsync(share, view, onlyUpdates, source, db, features, providers, cves, ct)
+            : Fail(StatusCodes.Status404NotFound, "Not shared.");
+    }
+
+    /// <summary>Daten einer weiteren Seite, fest auf die Site der Freigabe eingeschränkt; 403 ohne Datenumfang „Pages“.</summary>
+    public static async Task<IResult> ViewAsync(SiteShare share, string view, bool? onlyUpdates, string? source,
+        AppDbContext db, FeatureFlags features, VirtualizationProviderFactory providers, CveService cves, CancellationToken ct)
+    {
+        if (!share.Data.HasFlag(ShareData.Pages))
+        {
+            return Fail(StatusCodes.Status403Forbidden, "Pages are not shared.");
+        }
+
+        return view switch
+        {
+            "utilization" => await MetricsEndpoints.UtilizationAsync(share.SiteId, db, features, providers, ct),
+            "vulnerabilities" => Results.Json(await VulnerabilityEndpoints.ListAsync(share.SiteId, db, cves, ct), FederationProtocol.Json),
+            "software" => Results.Json(await SoftwareEndpoints.Summary(onlyUpdates, source, share.SiteId, db, ct), FederationProtocol.Json),
+            _ => Fail(StatusCodes.Status404NotFound, "Unknown view."),
+        };
     }
 
     private static async Task<IResult> Act(Guid siteId, Guid hostId, ActionRequest request, HttpContext http, SharingService sharing, CancellationToken ct)

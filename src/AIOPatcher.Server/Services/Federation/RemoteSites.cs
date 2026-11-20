@@ -172,7 +172,7 @@ public sealed class RemoteSites(AppDbContext db, FederationClient client, Server
         site.RemoteSiteId = share.SiteId;
         site.Name = FederationProtocol.CleanName(share.SiteName, 100);
         site.Level = share.Level;
-        site.Data = share.Data;
+        site.Data = share.All;
         site.ExpiresAt = share.ExpiresAt;
     }
 
@@ -365,6 +365,10 @@ public sealed class RemoteSites(AppDbContext db, FederationClient client, Server
 
     public Task<RemoteHostDetail> HostAsync(RemoteSite site, Guid hostId, CancellationToken ct) =>
         client.SendAsync<RemoteHostDetail>(Target(site.Instance!), HttpMethod.Get, FederationProtocol.HostPath(site.RemoteSiteId, hostId), null, ct);
+
+    /// <summary>Weitere Seite (Auslastung, Lücken, Software) im Format der Dashboard-API, unverändert durchgereicht.</summary>
+    public Task<System.Text.Json.JsonElement> ViewAsync(RemoteSite site, string view, string query, CancellationToken ct) =>
+        client.SendAsync<System.Text.Json.JsonElement>(Target(site.Instance!), HttpMethod.Get, FederationProtocol.ViewPath(site.RemoteSiteId, view) + query, null, ct);
 
     public Task<RemoteJobDetail> JobAsync(RemoteSite site, Guid jobId, long afterId, CancellationToken ct) =>
         client.SendAsync<RemoteJobDetail>(Target(site.Instance!), HttpMethod.Get,

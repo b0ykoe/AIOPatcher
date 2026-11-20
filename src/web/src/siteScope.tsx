@@ -13,6 +13,19 @@ const storageKey = "aiop.site";
 const param = "site";
 const sharedPrefix = "shared:";
 
+/** Seiten einer geteilten Site lesen: Aktionen ausblenden (useCan meldet keine Rechte). */
+export const RemoteReadOnly = createContext(false);
+
+/** API-Pfade, die eine geteilte Site mit dem Datenumfang „Pages“ liefert, und ihr Name im Protokoll. */
+const remoteViews: Record<string, string> = { "/api/utilization": "utilization", "/api/vulnerabilities": "vulnerabilities", "/api/software": "software" };
+
+/** API-Pfad auf die geteilte Site umlenken (nur die geteilten Seiten, alles andere bleibt). */
+export function toRemote(path: string, remoteId: string): string {
+  const [base, query] = path.split("?");
+  const view = remoteViews[base];
+  return view ? `/api/remote-sites/${remoteId}/views/${view}${query ? `?${query}` : ""}` : path;
+}
+
 /** Auswahl-Wert einer geteilten Site (für Links wie /?site=shared:…). */
 export const sharedSelection = (remoteId: string) => `${sharedPrefix}${remoteId}`;
 
@@ -53,7 +66,7 @@ interface SiteScopeValue {
   setSiteId: (siteId: string | null) => void;
   setRemoteId: (remoteId: string) => void;
   reloadSites: () => void;
-  /** API-Pfad mit siteId der aktuellen Auswahl; ändert sich mit der Auswahl (taugt als Effekt-Abhängigkeit). */
+  /** API-Pfad mit siteId der aktuellen Auswahl bzw. auf die geteilte Site umgelenkt; ändert sich mit der Auswahl. */
   scoped: (path: string) => string;
 }
 
@@ -132,6 +145,9 @@ export function SiteScopeProvider({ children }: { children: ReactNode }) {
     if (remoteLoaded && remoteId && !remoteSites.some((r) => r.id === remoteId)) select(null);
   }, [sites, siteId, remoteLoaded, remoteSites, remoteId, select]);
 
+  // Stabil, solange die Auswahl gleich bleibt: Seiten laden nicht neu, nur weil die Site-Liste neu geladen wurde.
+  const scoped = useCallback((path: string) => (remoteId ? toRemote(path, remoteId) : withSite(path, siteId)), [remoteId, siteId]);
+
   const value = useMemo<SiteScopeValue>(() => ({
     siteId,
     site: sites?.find((s) => s.id === siteId) ?? null,
@@ -142,8 +158,8 @@ export function SiteScopeProvider({ children }: { children: ReactNode }) {
     setSiteId,
     setRemoteId,
     reloadSites,
-    scoped: (path: string) => withSite(path, siteId),
-  }), [siteId, sites, remoteSites, remoteId, setSiteId, setRemoteId, reloadSites]);
+    scoped,
+  }), [siteId, sites, remoteSites, remoteId, setSiteId, setRemoteId, reloadSites, scoped]);
 
   return <SiteScopeContext.Provider value={value}>{children}</SiteScopeContext.Provider>;
 }

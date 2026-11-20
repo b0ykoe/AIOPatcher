@@ -45,6 +45,12 @@ public enum ShareData
 
     /// <summary>Log-Zeilen der Jobs.</summary>
     JobLogs = 2,
+
+    /// <summary>
+    /// Weitere Seiten nur lesend: Auslastung, offene Lücken, installierte Software. Geht im Protokoll als eigenes Feld
+    /// (ShareInfo.Pages), nicht in Data, damit ältere Gegenstellen den unbekannten Wert nicht ablehnen.
+    /// </summary>
+    Pages = 4,
 }
 
 /// <summary>

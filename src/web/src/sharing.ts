@@ -4,8 +4,10 @@ import type { JobStatus } from "./api";
 
 export type ShareLevel = "View" | "Scan" | "Patch" | "Reboot";
 export const shareLevels: ShareLevel[] = ["View", "Scan", "Patch", "Reboot"];
-export type ShareDataFlag = "UpdateDetails" | "JobLogs";
-export const shareDataFlags: ShareDataFlag[] = ["UpdateDetails", "JobLogs"];
+export type ShareDataFlag = "UpdateDetails" | "JobLogs" | "Pages";
+export const shareDataFlags: ShareDataFlag[] = ["UpdateDetails", "JobLogs", "Pages"];
+/** Vorauswahl beim Teilen: weitere Seiten muss man ausdrücklich dazunehmen. */
+export const defaultShareData: ShareDataFlag[] = ["UpdateDetails", "JobLogs"];
 export type ShareAction = "Scan" | "Patch" | "PatchReboot" | "Reboot";
 
 /** Darf die Stufe diese Aktion? (Stufen sind aufsteigend, wie auf dem Server.) */

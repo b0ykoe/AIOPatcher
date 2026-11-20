@@ -34,7 +34,7 @@ public static class MetricsEndpoints
     public static void MapMetricsEndpoints(this IEndpointRouteBuilder app)
     {
         var api = app.MapGroup("/api").RequireAuthorization();
-        api.MapGet("/utilization", Overview);
+        api.MapGet("/utilization", UtilizationAsync);
         api.MapGet("/hosts/{id:guid}/metrics", ForHost);
     }
 
@@ -42,7 +42,7 @@ public static class MetricsEndpoints
     /// Mit siteId: nur Hosts dieser Site. Proxmox: Cluster der Site ganz, Cluster ohne Site nur mit Gästen, die Hosts der Site sind,
     /// Cluster anderer Sites gar nicht.
     /// </summary>
-    private static async Task<IResult> Overview(Guid? siteId, AppDbContext db, FeatureFlags features, VirtualizationProviderFactory providers, CancellationToken ct)
+    public static async Task<IResult> UtilizationAsync(Guid? siteId, AppDbContext db, FeatureFlags features, VirtualizationProviderFactory providers, CancellationToken ct)
     {
         if (!features.IsOn(Feature.Metrics))
         {

@@ -8,11 +8,20 @@ Written for users, not as a list of commits.
 
 ## [Unreleased]
 
+### Added
+- **Share more pages of a site:** when sharing a site you can now also allow "More pages, read-only: utilization,
+  open vulnerabilities, installed software". The other instance then shows these under Utilization, Security and
+  Inventory for your site, read-only. For an existing share, use Settings → Sharing → "Change shared data"; the
+  other instance picks it up within 5 minutes. Rights cannot be changed this way.
+
 ### Improved
 - **Shared sites stay selected across all pages:** a site another instance shares with you is now a regular choice in
   the site picker at the top. Overview, Hosts and Auto-Patch show that site (hosts, updates, jobs, actions) until
-  you switch back with "My sites". Pages the other instance does not share yet (Utilization, Security, Inventory,
-  Reports) say so instead of quietly showing your own hosts.
+  you switch back with "My sites". Utilization, Security and Inventory show it too if the other instance shares
+  "More pages"; otherwise, and on Reports, the page says so instead of quietly showing your own hosts.
+
+### Upgrade notes
+- "More pages" needs this version on both instances: the one that shares the site and the one that views it.
 
 ## [0.15.2] - 2026-11-20
 

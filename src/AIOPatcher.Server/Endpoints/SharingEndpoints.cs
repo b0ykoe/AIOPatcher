@@ -29,6 +29,8 @@ public static class SharingEndpoints
 
     public sealed record IdentityRequest(string Name);
 
+    public sealed record ShareDataRequest(string[]? Data);
+
     public sealed record CreateInviteRequest(Guid SiteId, ShareLevel Level, string[]? Data, int? InviteDays, int? ShareDays);
 
     public sealed record InviteCreatedDto(InviteDto Invite, string Link, string Code);
@@ -44,6 +46,7 @@ public static class SharingEndpoints
         group.MapPost("/invites", CreateInvite);
         group.MapDelete("/invites/{id:guid}", RevokeInvite);
         group.MapPost("/shares/{id:guid}/end", EndShare);
+        group.MapPut("/shares/{id:guid}/data", ChangeData);
         group.MapPost("/peers/{id:guid}/revoke", RevokePeer);
     }
 
@@ -176,6 +179,34 @@ public static class SharingEndpoints
             share.EndedAt = DateTime.UtcNow;
             share.EndedBy = $"admin:{user.Identity!.Name}";
             audit.Add("federation.share.ended", $"{share.Site?.Name} for {share.Peer?.Name}", siteId: share.SiteId);
+            await db.SaveChangesAsync(ct);
+        }
+
+        return Results.NoContent();
+    }
+
+    /// <summary>
+    /// Datenumfang einer laufenden Freigabe ändern (Rechte und Laufzeit bleiben). Die andere Instanz übernimmt ihn beim
+    /// nächsten Abgleich, spätestens nach 5 Minuten.
+    /// </summary>
+    private static async Task<IResult> ChangeData(Guid id, ShareDataRequest request, AppDbContext db, AuditLog audit, CancellationToken ct)
+    {
+        var share = await db.SiteShares.Include(s => s.Site).Include(s => s.Peer).SingleOrDefaultAsync(s => s.Id == id, ct);
+        if (share is null)
+        {
+            return Results.NotFound();
+        }
+
+        if (ShareStatus(share, DateTime.UtcNow) != "Active")
+        {
+            return Results.Conflict(new { error = L.T("Die Freigabe ist beendet.", "The share has ended.") });
+        }
+
+        var data = ParseData(request.Data);
+        if (data != share.Data)
+        {
+            audit.Add("federation.share.data", $"{share.Site?.Name} for {share.Peer?.Name}: {string.Join(", ", DataNames(data))}", siteId: share.SiteId);
+            share.Data = data;
             await db.SaveChangesAsync(ct);
         }
 

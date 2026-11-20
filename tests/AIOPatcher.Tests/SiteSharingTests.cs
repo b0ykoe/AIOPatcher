@@ -225,6 +225,51 @@ public sealed class SiteSharingTests : IDisposable
     }
 
     [Fact]
+    public async Task Pages_TravelAsOwnField_SoOlderPeersKeepParsingData()
+    {
+        var (_, share) = await JoinAsync(data: ShareData.UpdateDetails | ShareData.Pages);
+        var info = SharingService.ToInfo(share, _shared);
+        Assert.Equal(ShareData.UpdateDetails, info.Data);
+        Assert.True(info.Pages);
+
+        var json = System.Text.Json.JsonSerializer.Serialize(info, FederationProtocol.Json);
+        using (var doc = System.Text.Json.JsonDocument.Parse(json))
+        {
+            Assert.Equal("UpdateDetails", doc.RootElement.GetProperty("data").GetString());
+            Assert.False(doc.RootElement.TryGetProperty("all", out _));
+        }
+
+        var back = System.Text.Json.JsonSerializer.Deserialize<ShareInfo>(json, FederationProtocol.Json)!;
+        Assert.Equal(ShareData.UpdateDetails | ShareData.Pages, back.All);
+
+        // Antwort einer älteren Instanz ohne das Feld
+        var old = System.Text.Json.JsonSerializer.Deserialize<ShareInfo>(json.Replace(",\"pages\":true", "", StringComparison.Ordinal), FederationProtocol.Json)!;
+        Assert.Equal(ShareData.UpdateDetails, old.All);
+    }
+
+    [Fact]
+    public async Task Views_NeedPagesScope_AndShowOnlyTheSharedSite()
+    {
+        _db.InstalledApps.AddRange(
+            new InstalledApp { Host = _web, Name = "nginx", Source = "dpkg", Version = "1.24" },
+            new InstalledApp { Host = _secret, Name = "plex", Source = "dpkg", Version = "1.40" });
+        await _db.SaveChangesAsync();
+        var features = new FeatureFlags(new AIOPatcherOptions());
+
+        var (_, without) = await JoinAsync(data: ShareData.UpdateDetails);
+        var denied = await AIOPatcher.Server.Endpoints.FederationEndpoints.ViewAsync(without, "software", null, null, _db, features, null!, null!, CancellationToken.None);
+        Assert.Equal(StatusCodes.Status403Forbidden, Assert.IsAssignableFrom<IStatusCodeHttpResult>(denied).StatusCode);
+
+        var (_, with) = await JoinAsync(data: ShareData.Pages);
+        var result = await AIOPatcher.Server.Endpoints.FederationEndpoints.ViewAsync(with, "software", null, null, _db, features, null!, null!, CancellationToken.None);
+        var apps = Assert.IsAssignableFrom<IValueHttpResult>(result).Value as IEnumerable<AIOPatcher.Server.Endpoints.SoftwareEndpoints.SoftwareSummaryDto>;
+        Assert.Equal("nginx", Assert.Single(apps!).Name);
+
+        var unknown = await AIOPatcher.Server.Endpoints.FederationEndpoints.ViewAsync(with, "users", null, null, _db, features, null!, null!, CancellationToken.None);
+        Assert.Equal(StatusCodes.Status404NotFound, Assert.IsAssignableFrom<IStatusCodeHttpResult>(unknown).StatusCode);
+    }
+
+    [Fact]
     public async Task Actions_FollowLevel_FeatureSwitches_AndAreAudited()
     {
         var (peer, share) = await JoinAsync(ShareLevel.Patch);

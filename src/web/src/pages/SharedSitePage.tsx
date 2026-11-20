@@ -10,7 +10,7 @@ import { Console } from "../components/Console";
 import { OsIcon } from "../components/OsIcon";
 import { LevelBadge } from "../components/sharing/ShareDialog";
 import { CardTitle, confirmAction, DetailHeader, EmptyState, errorText, JobStatusBadge, notifyError, notifySuccess, PageHeader, StatCard } from "../components/ui";
-import { sharedSelection, useSiteScope } from "../siteScope";
+import { RemoteReadOnly, sharedSelection, useSiteScope } from "../siteScope";
 import {
   allows, remoteStatusColor, type RemoteHost, type RemoteHostDetail, type RemoteJob, type RemoteJobDetail, type RemoteSiteDetail, type ShareAction,
 } from "../sharing";
@@ -31,11 +31,45 @@ export function SharedSiteRedirect() {
 
 export type SharedView = "overview" | "hosts" | "jobs";
 
-/** Ist oben eine geteilte Site gewählt, zeigt die Seite deren Daten (soweit geteilt), sonst die eigene Seite. */
-export function RemoteAware({ view, title, children }: { view?: SharedView; title: string; children: ReactNode }) {
-  const { remoteId } = useSiteScope();
+/**
+ * Ist oben eine geteilte Site gewählt, zeigt die Seite deren Daten (soweit geteilt), sonst die eigene Seite.
+ * view: Teil der Grunddaten (Übersicht, Hosts, Jobs). pages: Seite, die die andere Instanz mit „Weitere Seiten“ liefert;
+ * sie läuft nur lesend und holt ihre Daten über die geteilte Site (scoped() lenkt um).
+ */
+export function RemoteAware({ view, pages, title, children }: { view?: SharedView; pages?: ReactNode; title: string; children: ReactNode }) {
+  const { t } = useTranslation();
+  const { remoteId, remote } = useSiteScope();
   if (!remoteId) return children;
-  return view ? <SharedSitePage id={remoteId} view={view} /> : <NotShared title={title} />;
+  if (view) return <SharedSitePage id={remoteId} view={view} />;
+  if (!remote) return <Loader size="sm" />;
+  if (!pages || !remote.data.includes("Pages")) return <NotShared title={title} />;
+  return (
+    <RemoteReadOnly.Provider value>
+      <Alert color="violet" variant="light" icon={<IconShare size={18} />} mb="md" py="xs">
+        <Text size="sm">{t("siteScope.remoteData", { name: remote.name, instance: remote.instanceName })}</Text>
+      </Alert>
+      {pages}
+    </RemoteReadOnly.Provider>
+  );
+}
+
+/** Host-Links (/hosts/:id) auf Seiten einer geteilten Site: den Host dort öffnen; eigene Hosts bleiben auf ihrer Seite. */
+export function RemoteHostAware({ children }: { children: ReactNode }) {
+  const { remoteId } = useSiteScope();
+  const { id = "" } = useParams();
+  const [remoteHost, setRemoteHost] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    if (!remoteId) return;
+    setRemoteHost(null);
+    api.get<RemoteSiteDetail>(`/api/remote-sites/${remoteId}`)
+      .then((d) => setRemoteHost(!!d.snapshot?.hosts.some((h) => h.id === id)))
+      .catch(() => setRemoteHost(false));
+  }, [remoteId, id]);
+
+  if (!remoteId) return children;
+  if (remoteHost === null) return <Loader size="sm" />;
+  return remoteHost ? <SharedSitePage id={remoteId} view="hosts" openHost={id} /> : children;
 }
 
 /** Seiten, die eine geteilte Site (noch) nicht liefert: erklären statt die eigenen Daten zu zeigen. */
@@ -69,13 +103,13 @@ function NotShared({ title }: { title: string }) {
  * Job-Logs holt sie live. Aktionen gehen an die andere Instanz; was die Freigabe nicht erlaubt, ist ausgegraut.
  * Erscheint, wenn die Site oben ausgewählt ist: als Übersicht, auf „Hosts“ und auf „Auto-Patch“ (Jobs).
  */
-export function SharedSitePage({ id, view }: { id: string; view: SharedView }) {
+export function SharedSitePage({ id, view, openHost }: { id: string; view: SharedView; openHost?: string }) {
   const { t } = useTranslation();
   const { setSiteId } = useSiteScope();
   const [detail, setDetail] = useState<RemoteSiteDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [hostId, setHostId] = useState<string | null>(null);
+  const [hostId, setHostId] = useState<string | null>(openHost ?? null);
   const [jobId, setJobId] = useState<string | null>(null);
 
   const load = useCallback(async () => {

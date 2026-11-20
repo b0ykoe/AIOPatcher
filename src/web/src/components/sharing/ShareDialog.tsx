@@ -4,7 +4,7 @@ import { ActionIcon, Alert, Anchor, Badge, Button, Checkbox, Code, Collapse, Cop
 import { IconCheck, IconChevronDown, IconChevronRight, IconCopy, IconInfoCircle } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import { api, formatDateTime, type Site } from "../../api";
-import { shareDataFlags, shareLevels, type InviteCreated, type ShareDataFlag, type ShareLevel, type SharingInfo } from "../../sharing";
+import { defaultShareData, shareDataFlags, shareLevels, type InviteCreated, type ShareDataFlag, type ShareLevel, type SharingInfo } from "../../sharing";
 import { errorText } from "../ui";
 
 function CopyField({ label, value, mono = true, big = false }: { label: string; value: string; mono?: boolean; big?: boolean }) {
@@ -38,7 +38,7 @@ function CopyField({ label, value, mono = true, big = false }: { label: string; 
 export function ShareDialog({ site, sharing, onClose, onCreated }: { site: Site | null; sharing: SharingInfo | null; onClose: () => void; onCreated: () => void }) {
   const { t } = useTranslation();
   const [level, setLevel] = useState<ShareLevel>("Reboot");
-  const [data, setData] = useState<ShareDataFlag[]>([...shareDataFlags]);
+  const [data, setData] = useState<ShareDataFlag[]>([...defaultShareData]);
   const [inviteDays, setInviteDays] = useState("7");
   const [shareDays, setShareDays] = useState("unlimited");
   const [more, setMore] = useState(false);
@@ -49,7 +49,7 @@ export function ShareDialog({ site, sharing, onClose, onCreated }: { site: Site 
   useEffect(() => {
     if (!site) return;
     setLevel("Reboot");
-    setData([...shareDataFlags]);
+    setData([...defaultShareData]);
     setInviteDays("7");
     setShareDays("unlimited");
     setMore(false);

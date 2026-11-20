@@ -69,8 +69,10 @@ import { CveLookupPage, normalizeCveId } from "./pages/CveLookupPage";
 import { RunPage } from "./pages/RunPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { SetupPage } from "./pages/SetupPage";
-import { RemoteAware, SharedSiteRedirect } from "./pages/SharedSitePage";
-import { SitePicker, SiteScopeProvider } from "./siteScope";
+import { RemoteAware, RemoteHostAware, SharedSiteRedirect } from "./pages/SharedSitePage";
+import { SecurityPage } from "./pages/SecurityPage";
+import { SoftwarePage } from "./pages/SoftwarePage";
+import { RemoteReadOnly, SitePicker, SiteScopeProvider } from "./siteScope";
 import { GettingStartedNav } from "./gettingStarted";
 import { GettingStartedPage } from "./pages/GettingStartedPage";
 
@@ -160,6 +162,8 @@ export const useSimple = () => useMe().uiMode === "Simple";
 
 export function useCan() {
   const { role } = useMe();
+  // Seiten einer geteilten Site: nur lesen, Aktionen gingen sonst an die eigenen Hosts
+  if (useContext(RemoteReadOnly)) return { operate: false, admin: false };
   return { operate: role === "Admin" || role === "Operator", admin: role === "Admin" };
 }
 
@@ -378,16 +382,16 @@ function Shell({ me, onMeChanged, onLoggedOut }: { me: Me; onMeChanged: (me: Me)
             <Routes>
               <Route path="/" element={<RemoteAware view="overview" title={t("nav.overview")}><OverviewPage /></RemoteAware>} />
               <Route path="/hosts" element={<RemoteAware view="hosts" title={t("nav.hosts")}><HostsPage /></RemoteAware>} />
-              <Route path="/hosts/:id" element={<HostDetailPage />} />
+              <Route path="/hosts/:id" element={<RemoteHostAware><HostDetailPage /></RemoteHostAware>} />
               <Route path="/shared/:id" element={<SharedSiteRedirect />} />
               <Route path="/jobs/:id" element={<JobPage />} />
               <Route path="/runs/:id" element={<RunPage />} />
-              <Route path="/utilization" element={<RemoteAware title={t("nav.utilization")}><UtilizationPage /></RemoteAware>} />
-              <Route path="/security" element={<RemoteAware title={t("nav.security")}><SecurityHub /></RemoteAware>} />
+              <Route path="/utilization" element={<RemoteAware title={t("nav.utilization")} pages={<UtilizationPage />}><UtilizationPage /></RemoteAware>} />
+              <Route path="/security" element={<RemoteAware title={t("nav.security")} pages={<SecurityPage />}><SecurityHub /></RemoteAware>} />
               <Route path="/cves/:id" element={<CveLookupPage />} />
               <Route path="/auto-patch" element={<RemoteAware view="jobs" title={t("nav.autoPatch")}><AutoPatchHub /></RemoteAware>} />
               <Route path="/auto-patch/plans/:id" element={<PlanEditorPage />} />
-              <Route path="/inventory" element={<RemoteAware title={t("nav.inventory")}><InventoryHub /></RemoteAware>} />
+              <Route path="/inventory" element={<RemoteAware title={t("nav.inventory")} pages={<SoftwarePage />}><InventoryHub /></RemoteAware>} />
               <Route path="/reports" element={<RemoteAware title={t("nav.reports")}><ReportsPage /></RemoteAware>} />
               <Route path="/developer" element={<ApiPage />} />
               <Route path="/account" element={<AccountPage onMeChanged={onMeChanged} />} />

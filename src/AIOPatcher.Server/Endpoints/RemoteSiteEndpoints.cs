@@ -44,6 +44,7 @@ public static class RemoteSiteEndpoints
         group.MapGet("/{id:guid}/hosts/{hostId:guid}", HostDetail);
         group.MapGet("/{id:guid}/jobs/{jobId:guid}", JobDetail);
         group.MapPost("/{id:guid}/hosts/{hostId:guid}/actions", Act);
+        group.MapGet("/{id:guid}/views/{view}", View);
         admin.MapPost("/preview", Preview);
         admin.MapPost("", Add);
         admin.MapPut("/{id:guid}", Rename);
@@ -165,6 +166,40 @@ public static class RemoteSiteEndpoints
         try
         {
             return Results.Ok(await remote.HostAsync(site, hostId, ct));
+        }
+        catch (FederationException ex)
+        {
+            return Problem(ex);
+        }
+    }
+
+    /// <summary>Weitere Seite der geteilten Site (Auslastung, Lücken, Software), nur wenn die Freigabe sie enthält.</summary>
+    private static async Task<IResult> View(Guid id, string view, bool? onlyUpdates, string? source, AppDbContext db, RemoteSites remote, CancellationToken ct)
+    {
+        if (!FederationProtocol.Views.Contains(view) || await FindAsync(db, id, ct) is not { } site)
+        {
+            return Results.NotFound();
+        }
+
+        if (!site.Data.HasFlag(ShareData.Pages) || RemoteSites.Status(site, DateTime.UtcNow) == "Ended")
+        {
+            return Results.Problem(L.T("Diese Seite wird nicht geteilt.", "This page is not shared."), statusCode: StatusCodes.Status403Forbidden);
+        }
+
+        var query = new List<string>();
+        if (onlyUpdates is { } only)
+        {
+            query.Add($"onlyUpdates={(only ? "true" : "false")}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(source))
+        {
+            query.Add($"source={Uri.EscapeDataString(source)}");
+        }
+
+        try
+        {
+            return Results.Ok(await remote.ViewAsync(site, view, query.Count == 0 ? "" : "?" + string.Join('&', query), ct));
         }
         catch (FederationException ex)
         {

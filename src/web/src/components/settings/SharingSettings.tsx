@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router";
-import { ActionIcon, Alert, Anchor, Badge, Button, Card, Group, Loader, Menu, Stack, Table, Text, TextInput, Tooltip } from "@mantine/core";
-import { IconCheck, IconDots, IconPlugConnectedX, IconShare, IconTrash, IconX } from "@tabler/icons-react";
+import { ActionIcon, Alert, Anchor, Badge, Button, Card, Checkbox, Group, Loader, Menu, Modal, Stack, Table, Text, TextInput, Tooltip } from "@mantine/core";
+import { IconCheck, IconDots, IconListCheck, IconPlugConnectedX, IconShare, IconTrash, IconX } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import { api, formatDateTime, formatRelative } from "../../api";
-import { remoteStatusColor, shortFingerprint, type InviteItem, type RemoteSiteItem, type ShareItem, type SharingInfo } from "../../sharing";
+import { remoteStatusColor, shareDataFlags, shortFingerprint, type InviteItem, type ShareDataFlag, type RemoteSiteItem, type ShareItem, type SharingInfo } from "../../sharing";
 import { CardTitle, confirmAction, EmptyState, errorText, notifyError, notifySuccess } from "../ui";
 import { LevelBadge } from "../sharing/ShareDialog";
 
@@ -13,7 +13,7 @@ const shareColor: Record<ShareItem["status"], string> = { Active: "teal", Expire
 
 /**
  * Einstellungen → Sharing: Name dieser Instanz, Voraussetzungen, was ich teile (Freigaben, offene Einladungen) und was
- * mit mir geteilt ist. Freigaben lassen sich nicht ändern, nur beenden; neu teilen über Sites → Teilen.
+ * mit mir geteilt ist. Bei Freigaben lässt sich nur der Datenumfang ändern, sonst beenden; neu teilen über Sites → Teilen.
  */
 export function SharingSettings() {
   const { t } = useTranslation();
@@ -21,6 +21,7 @@ export function SharingSettings() {
   const [remote, setRemote] = useState<RemoteSiteItem[]>([]);
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [dataFor, setDataFor] = useState<ShareItem | null>(null);
 
   const load = useCallback(async () => {
     const [sharing, sites] = await Promise.all([api.get<SharingInfo>("/api/sharing"), api.get<RemoteSiteItem[]>("/api/remote-sites")]);
@@ -78,6 +79,8 @@ export function SharingSettings() {
   const openInvites = info.invites.filter((i) => i.status === "Open" || i.status === "Burned");
   return (
     <Stack gap="md">
+      <ShareDataModal share={dataFor} onClose={() => setDataFor(null)}
+        onSave={(s, data) => run(() => api.put(`/api/sharing/shares/${s.id}/data`, { data }), t("sharing.dataChanged")).then(() => setDataFor(null))} />
       <Text size="sm" c="dimmed">{t("sharing.settingsIntro")}</Text>
 
       <Card>
@@ -135,6 +138,7 @@ export function SharingSettings() {
                         <Menu position="bottom-end">
                           <Menu.Target><ActionIcon variant="subtle" aria-label={t("common.actions")}><IconDots size={16} /></ActionIcon></Menu.Target>
                           <Menu.Dropdown>
+                            <Menu.Item leftSection={<IconListCheck size={14} />} onClick={() => setDataFor(s)}>{t("sharing.changeData")}</Menu.Item>
                             <Menu.Item color="red" leftSection={<IconX size={14} />} onClick={() => endShare(s)}>{t("sharing.end")}</Menu.Item>
                             <Menu.Item color="red" leftSection={<IconPlugConnectedX size={14} />} onClick={() => revokePeer(s)}>{t("sharing.revokePeer")}</Menu.Item>
                           </Menu.Dropdown>
@@ -234,5 +238,34 @@ function Requirement({ ok, label, link }: { ok: boolean; label: string; link: st
       <Text size="sm">{label}</Text>
       {!ok && <Anchor component={Link} to={link} size="sm">{t("sharing.setUp")}</Anchor>}
     </Group>
+  );
+}
+
+/** Datenumfang einer laufenden Freigabe ändern; Rechte und Laufzeit bleiben. */
+function ShareDataModal({ share, onClose, onSave }: { share: ShareItem | null; onClose: () => void; onSave: (share: ShareItem, data: ShareDataFlag[]) => Promise<void> }) {
+  const { t } = useTranslation();
+  const [data, setData] = useState<ShareDataFlag[]>([]);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    if (share) setData(share.data);
+  }, [share]);
+  return (
+    <Modal opened={share !== null} onClose={onClose} title={<Text fw={800}>{t("sharing.changeData")}</Text>}>
+      {share && (
+        <Stack gap="sm">
+          <Text size="sm" c="dimmed">{t("sharing.changeDataHint", { site: share.siteName, instance: share.peerName })}</Text>
+          <Text size="xs" c="dimmed">{t("sharing.dataBase")}</Text>
+          <Checkbox.Group value={data} onChange={(v) => setData(v as ShareDataFlag[])}>
+            <Stack gap={6}>
+              {shareDataFlags.map((f) => <Checkbox key={f} value={f} label={t(`sharing.data_${f}`)} />)}
+            </Stack>
+          </Checkbox.Group>
+          <Group justify="flex-end" mt="sm">
+            <Button variant="default" onClick={onClose}>{t("common.cancel")}</Button>
+            <Button loading={busy} onClick={() => { setBusy(true); void onSave(share, data).finally(() => setBusy(false)); }}>{t("common.save")}</Button>
+          </Group>
+        </Stack>
+      )}
+    </Modal>
   );
 }

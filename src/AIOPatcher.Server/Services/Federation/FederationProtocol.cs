@@ -17,6 +17,7 @@ namespace AIOPatcher.Server.Services.Federation;
 //   GET  /federation/v1/sites/{siteId}/hosts/{hostId}         Detail (Updates je nach Datenumfang, Jobs)
 //   GET  /federation/v1/sites/{siteId}/jobs/{jobId}           Job mit Log (je nach Datenumfang)
 //   POST /federation/v1/sites/{siteId}/hosts/{hostId}/actions Scan, Patch, Neustart
+//   GET  /federation/v1/sites/{siteId}/views/{view}           weitere Seiten nur lesend (Datenumfang „Pages“)
 //
 // Signiert wird wie beim öffentlichen Agent-Weg (PublicChannel): Zertifikat, Zeit, Nonce, Signatur über Methode,
 // Pfad und Inhalt; jede Antwort signiert A mit seinem Server-Zertifikat. B pinnt die CA von A aus dem Einladungslink.
@@ -37,9 +38,13 @@ public static class FederationProtocol
     public static string HostPath(Guid siteId, Guid hostId) => $"{BasePath}/sites/{siteId}/hosts/{hostId}";
     public static string JobPath(Guid siteId, Guid jobId) => $"{BasePath}/sites/{siteId}/jobs/{jobId}";
     public static string ActionPath(Guid siteId, Guid hostId) => $"{BasePath}/sites/{siteId}/hosts/{hostId}/actions";
+    public static string ViewPath(Guid siteId, string view) => $"{BasePath}/sites/{siteId}/views/{view}";
+
+    /// <summary>Seiten, die mit dem Datenumfang „Pages“ lesbar sind; Antwort im selben Format wie die API des Dashboards.</summary>
+    public static readonly string[] Views = ["utilization", "vulnerabilities", "software"];
 
     /// <summary>Was dieser Server als A anbietet.</summary>
-    public static readonly string[] Capabilities = ["snapshot", "hostDetail", "jobs", "actions"];
+    public static readonly string[] Capabilities = ["snapshot", "hostDetail", "jobs", "actions", "views"];
 
     /// <summary>Falsche Codes pro Einladung, danach ist sie verbrannt.</summary>
     public const int MaxFailedCodes = 5;
@@ -151,7 +156,18 @@ public sealed record RenewResponse(string CertificatePem);
 
 public sealed record LeaveRequest(Guid ShareId);
 
-public sealed record ShareInfo(Guid ShareId, Guid SiteId, string SiteName, ShareLevel Level, ShareData Data, DateTime? ExpiresAt, DateTime CreatedAt, string CreatedBy);
+/// <param name="Data">Nur die Werte, die jede v1-Gegenstelle kennt (UpdateDetails, JobLogs).</param>
+/// <param name="Pages">Weitere Seiten lesbar (ShareData.Pages); eigenes Feld, ältere Gegenstellen ignorieren es.</param>
+public sealed record ShareInfo(Guid ShareId, Guid SiteId, string SiteName, ShareLevel Level, ShareData Data, DateTime? ExpiresAt, DateTime CreatedAt, string CreatedBy,
+    bool Pages = false)
+{
+    /// <summary>Werte, die schon in Version 1 bekannt waren und deshalb in Data stehen dürfen.</summary>
+    public const ShareData WireData = ShareData.UpdateDetails | ShareData.JobLogs;
+
+    /// <summary>Vollständiger Datenumfang auf Seite B.</summary>
+    [JsonIgnore]
+    public ShareData All => (Data & WireData) | (Pages ? ShareData.Pages : ShareData.None);
+}
 
 public sealed record SharesResponse(string InstanceName, string Version, string[] Capabilities, IReadOnlyList<ShareInfo> Shares);
 
