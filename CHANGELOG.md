@@ -8,6 +8,8 @@ Written for users, not as a list of commits.
 
 ## [Unreleased]
 
+## [0.15.2] - 2026-11-20
+
 ### Fixed
 - **Lite agent on Linux forces a reboot that did not happen:** as announced in 0.15.1, if the reboot after a patch job
   does not happen within 3 minutes, the lite agent on Ubuntu 16.04/Debian 9 now forces it (`systemctl reboot -i`, or
