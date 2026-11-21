@@ -1726,7 +1726,7 @@ const de = {
     tpl: {
       homelab: { name: "Homelab wöchentlich", text: "Sonntags 3–7 Uhr alle Updates, Neustart erlaubt. Alle Hosts in einer Gruppe, neue kommen automatisch dazu." },
       security: { name: "Security täglich", text: "Jede Nacht 2–4 Uhr nur Sicherheitsupdates, kein Neustart. Für Server, die selten neu starten dürfen." },
-      testFirst: { name: "Test-Host zuerst", text: "Zuerst Hosts mit Tag „test“, dann 1 Stunde Pause, dann der Rest. Bei Fehlern hält der Plan an." },
+      testFirst: { name: "Test-Host zuerst", text: "Zuerst Hosts mit Tag „test“, dann 1 Stunde Pause, dann der Rest. Fehlgeschlagene Hosts werden gemeldet, der Rest wird trotzdem gepatcht." },
       proxmox: { name: "Proxmox sicher", text: "VMs und Container mit Snapshot und Backup-Prüfung zuerst, der Proxmox-Host selbst zuletzt und erst nach Freigabe." },
       hypervisor: { name: "Hypervisor mit Freigabe", text: "Nur die Proxmox-Hosts (werden automatisch gefunden): sonntags prüfen und anzeigen, installiert wird erst nach deiner Freigabe, ohne Neustart." },
     },

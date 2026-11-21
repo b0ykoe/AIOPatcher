@@ -261,6 +261,12 @@ public sealed class RunbookEngine(IServiceScopeFactory scopes, ServerClock clock
         {
             if (windowClosed)
             {
+                if (run.FailurePolicy == RunbookFailurePolicy.ContinueAndReport)
+                {
+                    EndAtWindowClose(run, now);
+                    return;
+                }
+
                 Pause(run, L.T("Wartungsfenster vorbei, offene Hosts nicht gestartet. Fortsetzen oder abbrechen.",
                     "Maintenance window over, pending hosts not started. Continue or cancel."));
             }
@@ -279,18 +285,7 @@ public sealed class RunbookEngine(IServiceScopeFactory scopes, ServerClock clock
         var next = run.Waves.Where(w => w.Order > run.CurrentWave).OrderBy(w => w.Order).FirstOrDefault();
         if (next is null)
         {
-            var failedTotal = run.Items.Count(i => i.Status == RunItemStatus.Failed);
-            var skippedTotal = run.Items.Count(i => i.Status == RunItemStatus.Skipped);
-            run.Status = failedTotal > 0 ? RunStatus.Failed : RunStatus.Succeeded;
-            run.FinishedAt = now;
-            var succeededTotal = run.Items.Count(i => i.Status == RunItemStatus.Succeeded);
-            run.Message = L.T(
-                $"{succeededTotal} erfolgreich" +
-                (failedTotal > 0 ? $", {failedTotal} fehlgeschlagen" : "") +
-                (skippedTotal > 0 ? $", {skippedTotal} übersprungen" : "") + ".",
-                $"{succeededTotal} succeeded" +
-                (failedTotal > 0 ? $", {failedTotal} failed" : "") +
-                (skippedTotal > 0 ? $", {skippedTotal} skipped" : "") + ".");
+            Complete(run, now, 0);
             return;
         }
 
@@ -305,6 +300,10 @@ public sealed class RunbookEngine(IServiceScopeFactory scopes, ServerClock clock
         {
             run.Status = RunStatus.WaitingApproval;
             run.Message = WaitingForApproval(next.Name);
+        }
+        else if (windowClosed && run.FailurePolicy == RunbookFailurePolicy.ContinueAndReport)
+        {
+            EndAtWindowClose(run, now);
         }
         else if (windowClosed)
         {
@@ -348,6 +347,13 @@ public sealed class RunbookEngine(IServiceScopeFactory scopes, ServerClock clock
             var siteIds = pending.Select(i => hosts[i.HostId!.Value].SiteId).Distinct().ToList();
             if (await PatchRules.ActiveFreezeAsync(db, siteIds, now, ct) is { } freeze)
             {
+                if (run.FailurePolicy == RunbookFailurePolicy.ContinueAndReport)
+                {
+                    // nicht anhalten (das blockierte die nächsten Fenster), nur nichts Neues starten; endet mit dem Fenster
+                    run.Message = PatchRules.FreezeNote(freeze);
+                    return;
+                }
+
                 Pause(run, PatchRules.FreezeNote(freeze) + L.T(" Fortsetzen oder abbrechen.", " Continue or cancel."));
                 return;
             }
@@ -616,6 +622,41 @@ public sealed class RunbookEngine(IServiceScopeFactory scopes, ServerClock clock
 
                 break;
         }
+    }
+
+    /// <summary>Lauf abschließen: fehlgeschlagen, wenn ein Host fehlschlug oder nicht gestartet wurde, sonst erfolgreich.</summary>
+    private static void Complete(RunbookRun run, DateTime now, int notStarted)
+    {
+        var failedTotal = run.Items.Count(i => i.Status == RunItemStatus.Failed);
+        var skippedTotal = run.Items.Count(i => i.Status == RunItemStatus.Skipped) - notStarted;
+        var succeededTotal = run.Items.Count(i => i.Status == RunItemStatus.Succeeded);
+        run.Status = failedTotal > 0 || notStarted > 0 ? RunStatus.Failed : RunStatus.Succeeded;
+        run.FinishedAt = now;
+        run.ResumeAt = null;
+        run.Message = L.T(
+            $"{succeededTotal} erfolgreich" +
+            (failedTotal > 0 ? $", {failedTotal} fehlgeschlagen" : "") +
+            (skippedTotal > 0 ? $", {skippedTotal} übersprungen" : "") +
+            (notStarted > 0 ? $", {notStarted} nicht gestartet (Wartungsfenster vorbei, nächstes Fenster holt sie nach)" : "") + ".",
+            $"{succeededTotal} succeeded" +
+            (failedTotal > 0 ? $", {failedTotal} failed" : "") +
+            (skippedTotal > 0 ? $", {skippedTotal} skipped" : "") +
+            (notStarted > 0 ? $", {notStarted} not started (maintenance window over, the next window catches up)" : "") + ".");
+    }
+
+    /// <summary>
+    /// „Weitermachen“ und das Fenster ist vorbei: nicht anhalten (ein angehaltener Lauf blockiert alle weiteren Fenster des
+    /// Plans), sondern offene Hosts als nicht gestartet markieren und abschließen. Das nächste Fenster startet neu.
+    /// </summary>
+    private static void EndAtWindowClose(RunbookRun run, DateTime now)
+    {
+        var open = run.Items.Where(i => i.Status == RunItemStatus.Pending).ToList();
+        foreach (var item in open)
+        {
+            Finish(item, RunItemStatus.Skipped, L.T("Nicht gestartet: Wartungsfenster vorbei.", "Not started: maintenance window over."), now);
+        }
+
+        Complete(run, now, open.Count);
     }
 
     private static void Finish(RunbookRunItem item, RunItemStatus status, string message, DateTime now)

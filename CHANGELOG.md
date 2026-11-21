@@ -8,6 +8,14 @@ Written for users, not as a list of commits.
 
 ## [Unreleased]
 
+### Improved
+- **"Continue" also gets past the end of the maintenance window:** with "Continue, report at the end", a run whose
+  window ends no longer pauses (a paused run blocked every later window of the plan). It ends instead, reports the
+  hosts it could not start, and the next window patches them. A patch freeze during the run no longer pauses it
+  either; it just starts no further hosts.
+- **All plan templates use "Continue, report at the end"**, including "Test host first", "Proxmox safe" and
+  "Hypervisor with approval". Groups that need your approval still wait for it.
+
 ## [0.16.2] - 2026-11-21
 
 ### Added

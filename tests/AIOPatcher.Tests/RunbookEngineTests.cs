@@ -330,6 +330,43 @@ public sealed class RunbookEngineTests : IDisposable
     }
 
     [Fact]
+    public async Task ContinueAndReport_WindowEnd_EndsRunInsteadOfPausing()
+    {
+        _runbook.FailurePolicy = RunbookFailurePolicy.ContinueAndReport;
+        await _db.SaveChangesAsync();
+        var run = await StartAsync(notAfter: _now.AddMinutes(30));
+        await TickAsync();
+        await CompleteAsync(_web1, JobStatus.Failed);
+        await CompleteAsync(_web2);
+        await TickAsync(TimeSpan.FromMinutes(40));
+
+        run = await ReloadAsync(run.Id);
+        Assert.Equal(RunStatus.Failed, run.Status); // beendet, nicht angehalten: blockiert das nächste Fenster nicht
+        Assert.NotNull(run.FinishedAt);
+        Assert.Equal("1 succeeded, 1 failed, 1 not started (maintenance window over, the next window catches up).", run.Message);
+        Assert.Equal(RunItemStatus.Skipped, run.Items.Single(i => i.HostId == _pve.Id).Status);
+        Assert.False(await _db.Jobs.AnyAsync(j => j.HostId == _pve.Id));
+        Assert.False(RunbookEngine.IsActive(run.Status));
+    }
+
+    [Fact]
+    public async Task ContinueAndReport_PendingHostsAtWindowEnd_AreNotStartedAndRunEnds()
+    {
+        _runbook.FailurePolicy = RunbookFailurePolicy.ContinueAndReport;
+        _db.Jobs.Add(new PatchJob { HostId = _web2.Id, Type = JobType.Scan, RequestedBy = "admin:x", Status = JobStatus.Running });
+        await _db.SaveChangesAsync();
+        var run = await StartAsync(notAfter: _now.AddMinutes(30));
+        await TickAsync(); // web01 startet, web02 wartet auf seinen Scan
+        await CompleteAsync(_web1);
+        await TickAsync(TimeSpan.FromMinutes(40)); // Fenster vorbei, web02 hängt noch
+
+        run = await ReloadAsync(run.Id);
+        Assert.Equal(RunStatus.Failed, run.Status);
+        Assert.Contains("2 not started", run.Message);
+        Assert.Equal(RunItemStatus.Skipped, run.Items.Single(i => i.HostId == _web2.Id).Status);
+    }
+
+    [Fact]
     public async Task Cancel_WithdrawsQueuedJobs_AndSkipsPendingHosts()
     {
         var run = await StartAsync();

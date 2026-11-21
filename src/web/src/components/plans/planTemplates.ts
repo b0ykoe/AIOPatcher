@@ -76,7 +76,7 @@ export function fromTemplate(key: TemplateKey, hosts: HostSummary[], othersTaken
       };
     case "testFirst":
       return {
-        ...emptyPlan(), name: t("plans.tpl.testFirst.name"), description: t("plans.tpl.testFirst.text"), failurePolicy: "StopImmediately",
+        ...emptyPlan(), name: t("plans.tpl.testFirst.name"), description: t("plans.tpl.testFirst.text"),
         scheduleDays: SUNDAY, scheduleStart: "02:00", scheduleDurationMinutes: 300,
         groups: [
           emptyGroup(t("plans.groupTest"), { scope: "All", allowReboot: true, memberTags: "test", pauseAfterMinutes: 60 }),
@@ -87,7 +87,7 @@ export function fromTemplate(key: TemplateKey, hosts: HostSummary[], othersTaken
       const nodes = hosts.filter((h) => isProxmoxHost(h) && h.status !== "Revoked").map((h) => h.id);
       const guests = hosts.filter((h) => !isProxmoxHost(h) && h.mapped && h.status !== "Revoked").map((h) => h.id);
       return {
-        ...emptyPlan(), name: t("plans.tpl.proxmox.name"), description: t("plans.tpl.proxmox.text"), failurePolicy: "FinishWaveThenPause",
+        ...emptyPlan(), name: t("plans.tpl.proxmox.name"), description: t("plans.tpl.proxmox.text"),
         scheduleDays: SUNDAY, scheduleStart: "02:00", scheduleDurationMinutes: 360,
         groups: [
           emptyGroup(t("plans.groupGuests"), { scope: "All", allowReboot: true, snapshotBeforePatch: true, requireBackupWithinHours: 48, hostIds: guests }),
@@ -99,7 +99,7 @@ export function fromTemplate(key: TemplateKey, hosts: HostSummary[], othersTaken
       // Nur die Proxmox-Hosts selbst: anzeigen, und installiert wird erst nach deiner Freigabe (auch ausgenommene)
       const nodes = hosts.filter((h) => isProxmoxHost(h) && h.status !== "Revoked").map((h) => h.id);
       return {
-        ...emptyPlan(), name: t("plans.tpl.hypervisor.name"), description: t("plans.tpl.hypervisor.text"), failurePolicy: "StopImmediately",
+        ...emptyPlan(), name: t("plans.tpl.hypervisor.name"), description: t("plans.tpl.hypervisor.text"),
         scheduleDays: SUNDAY, scheduleStart: "04:00", scheduleDurationMinutes: 240,
         groups: [emptyGroup(t("plans.groupHypervisor"), { scope: "All", allowReboot: false, requireApproval: true, hostIds: nodes })],
       };

@@ -1727,7 +1727,7 @@ const en: Translation = {
     tpl: {
       homelab: { name: "Homelab weekly", text: "Sundays 3–7 am all updates, reboot allowed. All hosts in one group, new ones join automatically." },
       security: { name: "Security daily", text: "Every night 2–4 am security updates only, no reboot. For servers that rarely may reboot." },
-      testFirst: { name: "Test host first", text: "Hosts tagged \"test\" first, then a 1 hour pause, then the rest. The plan stops on errors." },
+      testFirst: { name: "Test host first", text: "Hosts tagged \"test\" first, then a 1 hour pause, then the rest. Failed hosts are reported, the rest is patched anyway." },
       hypervisor: { name: "Hypervisor with approval", text: "Only the Proxmox hosts (found automatically): check and show on Sundays, install only after your approval, no reboot." },
       proxmox: { name: "Proxmox safe", text: "VMs and containers with snapshot and backup check first, the Proxmox host itself last and only after approval." },
     },
