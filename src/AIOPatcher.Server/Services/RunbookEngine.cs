@@ -231,7 +231,8 @@ public sealed class RunbookEngine(IServiceScopeFactory scopes, ServerClock clock
             }
         }
 
-        var acknowledged = run.AcknowledgedWave == run.CurrentWave;
+        // Fehler halten den Lauf an, außer sie sind bestätigt (Fortsetzen) oder der Plan macht ohnehin weiter.
+        var acknowledged = run.AcknowledgedWave == run.CurrentWave || run.FailurePolicy == RunbookFailurePolicy.ContinueAndReport;
         var hasFailures = items.Any(i => i.Status == RunItemStatus.Failed) && !acknowledged;
         var stopNow = hasFailures && run.FailurePolicy == RunbookFailurePolicy.StopImmediately;
         var windowClosed = run.NotAfter is { } end && now >= end;

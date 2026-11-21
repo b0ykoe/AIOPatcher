@@ -51,7 +51,7 @@ export function QuickPlanModal({ opened, onClose, onDone, hostIds = [] }: {
     try {
       const draft = {
         ...emptyPlan(), name: name.trim() || autoName.slice(0, 100), scheduleEnabled: true, scheduleDays: Number(days), scheduleStart: start,
-        scheduleDurationMinutes: Number(hours) * 60, failurePolicy: "FinishWaveThenPause" as const,
+        scheduleDurationMinutes: Number(hours) * 60, failurePolicy: "ContinueAndReport" as const,
         groups: [emptyGroup(t("plans.groupAll"), { scope, allowReboot: reboot, hostIds: selected })],
       };
       const plan = await api.post<Runbook>("/api/runbooks", draftToRequest(draft));

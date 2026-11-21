@@ -9,6 +9,12 @@ public enum RunbookFailurePolicy
 
     /// <summary>Sofort keine weiteren Hosts mehr starten, dann anhalten.</summary>
     StopImmediately,
+
+    /// <summary>
+    /// Weitermachen: fehlgeschlagene Hosts bleiben markiert, die nächste Gruppe startet trotzdem; am Ende meldet der Lauf
+    /// „fehlgeschlagen“ mit der Zahl der Fehler. Für Patchdays, die nicht an einem einzelnen Host hängen bleiben sollen.
+    /// </summary>
+    ContinueAndReport,
 }
 
 /// <summary>Ablauf: benannter Plan aus Wellen, optional mit eigenem Wartungsfenster.</summary>

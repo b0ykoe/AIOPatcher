@@ -179,6 +179,29 @@ public sealed class RunbookEngineTests : IDisposable
     }
 
     [Fact]
+    public async Task ContinueAndReport_StartsNextGroupDespiteFailure_AndEndsFailed()
+    {
+        _runbook.FailurePolicy = RunbookFailurePolicy.ContinueAndReport;
+        await _db.SaveChangesAsync();
+        var run = await StartAsync();
+        await TickAsync();
+        await CompleteAsync(_web1, JobStatus.Failed);
+        await CompleteAsync(_web2);
+        await TickAsync(); // Welle 1 fertig, ein Fehler: trotzdem weiter
+        await TickAsync();
+
+        Assert.NotEqual(RunStatus.Paused, (await _db.RunbookRuns.AsNoTracking().SingleAsync(r => r.Id == run.Id)).Status);
+        Assert.True(await _db.Jobs.AnyAsync(j => j.HostId == _pve.Id && j.Type == JobType.Patch));
+
+        await CompleteAsync(_pve);
+        await TickAsync();
+
+        run = await ReloadAsync(run.Id);
+        Assert.Equal(RunStatus.Failed, run.Status);
+        Assert.Equal("2 succeeded, 1 failed.", run.Message);
+    }
+
+    [Fact]
     public async Task StopImmediately_DoesNotStartWaitingHosts()
     {
         _runbook.FailurePolicy = RunbookFailurePolicy.StopImmediately;

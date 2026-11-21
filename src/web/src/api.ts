@@ -653,7 +653,8 @@ export interface BulkAutoPatchResult {
 
 // --- Abläufe -------------------------------------------------------------------------------------
 
-export type FailurePolicy = "FinishWaveThenPause" | "StopImmediately";
+export type FailurePolicy = "ContinueAndReport" | "FinishWaveThenPause" | "StopImmediately";
+export const failurePolicies: FailurePolicy[] = ["ContinueAndReport", "FinishWaveThenPause", "StopImmediately"];
 export type RunStatus = "Running" | "WaitingApproval" | "Paused" | "Succeeded" | "Failed" | "Cancelled";
 export type RunItemStatus = "Pending" | "Preparing" | "Running" | "Verifying" | "Succeeded" | "Failed" | "Skipped";
 

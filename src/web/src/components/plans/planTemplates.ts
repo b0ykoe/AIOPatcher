@@ -45,7 +45,7 @@ export function emptyGroup(name: string, overrides: Partial<GroupDraft> = {}): G
 
 export function emptyPlan(): PlanDraft {
   return {
-    name: "", description: "", failurePolicy: "FinishWaveThenPause", scheduleEnabled: true, scheduleDays: SUNDAY, scheduleStart: "03:00",
+    name: "", description: "", failurePolicy: "ContinueAndReport", scheduleEnabled: true, scheduleDays: SUNDAY, scheduleStart: "03:00",
     scheduleDurationMinutes: 240, groups: [emptyGroup(t("plans.groupAll"), { includeOthers: true })],
   };
 }

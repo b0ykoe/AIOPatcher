@@ -8,7 +8,7 @@ import { TimeInput } from "@mantine/dates";
 import { IconAlertTriangle, IconArrowDown, IconArrowUp, IconPlus, IconTrash, IconUsersGroup } from "@tabler/icons-react";
 import { hostLabel } from "../hostOptions";
 import { useTranslation } from "react-i18next";
-import { api, splitTags, weekdays, type HostSummary, type PatchScope, type Runbook, type ServerInfo, type Site } from "../api";
+import { api, failurePolicies, splitTags, weekdays, type FailurePolicy, type HostSummary, type PatchScope, type Runbook, type ServerInfo, type Site } from "../api";
 import { useCan } from "../App";
 import { draftToRequest, emptyGroup, emptyPlan, fromTemplate, type GroupDraft, type PlanDraft, type TemplateKey } from "../components/plans/planTemplates";
 import { CardTitle, confirmAction, DetailHeader, errorText, notifyError, notifySuccess } from "../components/ui";
@@ -177,8 +177,9 @@ export function PlanEditorPage() {
               <Stack gap="md">
                 <TextInput label={t("sitesPage.name")} placeholder={t("plans.namePlaceholder")} value={draft.name} onChange={(e) => set({ name: e.currentTarget.value })} required />
                 <Textarea label={t("sitesPage.descriptionField")} autosize minRows={1} value={draft.description} onChange={(e) => set({ description: e.currentTarget.value })} />
-                <Switch label={t("plans.stopOnError")} description={t("plans.stopOnErrorHint")}
-                  checked={draft.failurePolicy === "StopImmediately"} onChange={(e) => set({ failurePolicy: e.currentTarget.checked ? "StopImmediately" : "FinishWaveThenPause" })} />
+                <Select label={t("plans.onFailure")} description={t(`plans.policyHint_${draft.failurePolicy}`)} allowDeselect={false}
+                  data={failurePolicies.map((p) => ({ value: p, label: t(`plans.policy_${p}`) }))}
+                  value={draft.failurePolicy} onChange={(v) => v && set({ failurePolicy: v as FailurePolicy })} />
               </Stack>
             </Card>
 

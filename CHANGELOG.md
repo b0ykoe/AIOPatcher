@@ -8,6 +8,16 @@ Written for users, not as a list of commits.
 
 ## [Unreleased]
 
+### Added
+- **Patch plans keep going when a host fails:** new setting "When a host fails" → "Continue, report at the end". A
+  failed host stays marked, the remaining groups still run, and at the end the run reports "failed" with the number
+  of failures (with the usual notification). The other choices, "Finish the group, then pause" and "Stop
+  immediately", work as before. New plans use "Continue" by default.
+
+### Upgrade notes
+- Existing plans keep their setting. To let a plan continue past failed hosts, open it and choose "Continue, report at
+  the end" under "When a host fails".
+
 ## [0.16.1] - 2026-11-20
 
 ### Improved
