@@ -8,6 +8,8 @@ Written for users, not as a list of commits.
 
 ## [Unreleased]
 
+## [0.16.2] - 2026-11-21
+
 ### Added
 - **Patch plans keep going when a host fails:** new setting "When a host fails" → "Continue, report at the end". A
   failed host stays marked, the remaining groups still run, and at the end the run reports "failed" with the number
