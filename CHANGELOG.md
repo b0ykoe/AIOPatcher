@@ -8,6 +8,8 @@ Written for users, not as a list of commits.
 
 ## [Unreleased]
 
+## [0.16.3] - 2026-11-21
+
 ### Improved
 - **"Continue" also gets past the end of the maintenance window:** with "Continue, report at the end", a run whose
   window ends no longer pauses (a paused run blocked every later window of the plan). It ends instead, reports the
