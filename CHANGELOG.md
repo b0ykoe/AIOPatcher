@@ -13,6 +13,10 @@ Written for users, not as a list of commits.
   have "Not needed" too. A skipped step counts as done, so the Getting started box in the sidebar goes away for good
   once the rest is set up. "Show again" brings a step back.
 
+### Fixed
+- **"Sync now" for the local CVE database** no longer shows "Unexpected end of JSON input"; the sync starts as
+  intended. Error messages that only showed a status code (e.g. "Error 409") now show the actual reason.
+
 ## [0.16.3] - 2026-11-21
 
 ### Improved

@@ -48,15 +48,18 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
       const problem = await response.json();
       fieldErrors = problem.errors ?? {};
       const firstFieldError = Object.values(fieldErrors)[0]?.[0];
-      message = firstFieldError ?? problem.detail ?? problem.title ?? message;
+      // ProblemDetails (detail/title) oder einfache Antworten wie { error: "…" }
+      message = firstFieldError ?? problem.detail ?? problem.error ?? problem.title ?? message;
     } catch {
       if (response.status === 429) message = t("common.tooManyRequests");
     }
     throw new ApiError(response.status, message, fieldErrors);
   }
 
+  // 204 und leere Antworten (z. B. 202 Accepted ohne Inhalt) haben keinen JSON-Body
   if (response.status === 204) return undefined as T;
-  return (await response.json()) as T;
+  const text = await response.text();
+  return (text ? JSON.parse(text) : undefined) as T;
 }
 
 export const api = {
