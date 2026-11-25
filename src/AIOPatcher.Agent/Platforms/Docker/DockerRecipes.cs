@@ -76,8 +76,8 @@ public static class DockerRecipes
             return new JobExecutionResult(JobOutcome.Rejected, $"This agent does not know the update recipe \"{request.Recipe}\" (agent too old?).");
         }
 
-        var inspect = await ProcessRunner.RunAsync("docker", ["inspect", "--format", DockerInventory.DetailedFormat, request.Container], ShortTimeout, ct);
-        if (!inspect.Success || DockerInventory.ParseDetailed(inspect.StandardOutput, File.Exists) is not [{ Compose: { } compose }])
+        var inspected = await DockerInventory.InspectAsync([request.Container], ShortTimeout, ct);
+        if (inspected is not [{ Compose: { } compose }])
         {
             return new JobExecutionResult(JobOutcome.Failed, $"Container {request.Container} not found or not started with Docker Compose.");
         }
@@ -239,8 +239,7 @@ public static class DockerRecipes
             return [];
         }
 
-        var inspect = await ProcessRunner.RunAsync("docker", ["inspect", "--format", DockerInventory.DetailedFormat, .. ids], ShortTimeout, ct);
-        return DockerInventory.ParseDetailed(inspect.StandardOutput, File.Exists);
+        return await DockerInventory.InspectAsync(ids, ShortTimeout, ct);
     }
 
     private static string Combine(string dir, string relative) =>

@@ -100,7 +100,11 @@ public sealed class ContainerTests
     [Fact]
     public void DockerInventory_ParsesInspectOutput()
     {
-        var containers = DockerInventory.ParseContainers("/web|nginx:1.27|sha256:img1|running\n/db|postgres:16|sha256:img2|running\nbroken line\n");
+        var containers = DockerInventory.ParseInspect("""
+            [{"Name":"/web","Image":"sha256:img1","State":{"Status":"running"},"Config":{"Image":"nginx:1.27"}},
+             {"Name":"/db","Image":"sha256:img2","State":{"Status":"running"},"Config":{"Image":"postgres:16"}},
+             {"Name":"/broken"}]
+            """);
         Assert.Equal(["web", "db"], containers.Select(c => c.Name));
         Assert.Equal("nginx:1.27", containers[0].Image);
 

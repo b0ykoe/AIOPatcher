@@ -12,6 +12,16 @@ Written for users, not as a list of commits.
 - **Tidier stack rows on the Containers tab:** the number of containers now sits next to the compose file under the
   stack name instead of in the Image column, and "Update all" sits at the right edge above the Update buttons.
 
+### Fixed
+- **Containers missing on the Containers tab:** containers without a health check could be left out entirely
+  (on some hosts most of them), depending on the Docker version. The agent now reads all containers, running and
+  stopped, with or without compose, health check or registry image. Updating a single container and app update
+  scripts were affected the same way and are fixed too.
+
+### Upgrade notes
+- The fix is in the agent; agents update themselves shortly after the server update, and the full list appears with
+  their next container report.
+
 ## [0.16.4] - 2026-11-25
 
 ### Added

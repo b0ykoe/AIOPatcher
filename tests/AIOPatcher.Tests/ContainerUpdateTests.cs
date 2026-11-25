@@ -15,18 +15,22 @@ public sealed class ContainerUpdateTests
     [Fact]
     public void Inventory_ReadsComposeLabels_EvenWithPipesInLabels()
     {
-        var output = $"/shortener_shlink_1|shlinkio/shlink:stable|sha256:abc|running|{ComposeLabels}\n" +
-                     "/jellyfin|jellyfin/jellyfin:latest|sha256:def|running|null\n" +
-                     "/old|nginx:1.27|sha256:123|running\n";
-        var containers = DockerInventory.ParseContainers(output, path => path.StartsWith("/opt/shortener/", StringComparison.Ordinal));
+        var output = $$$"""
+            [
+              {"Name":"/shortener_shlink_1","Image":"sha256:abc","State":{"Status":"running"},"Config":{"Image":"shlinkio/shlink:stable","Labels":{{{ComposeLabels}}}}},
+              {"Name":"/jellyfin","Image":"sha256:def","State":{"Status":"running"},"Config":{"Image":"jellyfin/jellyfin:latest","Labels":null}},
+              {"Name":"/goskiraorg_database_1","Image":"sha256:91a5024e053f","State":{"Status":"running"},"Config":{"Image":"91a5024e053f"}}
+            ]
+            """;
+        var containers = DockerInventory.ParseInspect(output, path => path.StartsWith("/opt/shortener/", StringComparison.Ordinal));
 
         var shlink = containers[0].Compose!;
         Assert.Equal(("shortener", "shlink", "/opt/shortener"), (shlink.Project, shlink.Service, shlink.WorkingDir));
         Assert.Equal(["/opt/shortener/docker-compose.yml", "/opt/shortener/override.yml"], shlink.ConfigFiles); // relativ → im Projektordner
         Assert.True(shlink.FilesFound);
         Assert.Null(containers[1].Compose); // docker run
-        Assert.Null(containers[2].Compose); // altes Format ohne Labels
-        Assert.Equal("running", containers[2].State);
+        Assert.Null(containers[2].Compose); // ohne Labels
+        Assert.Equal(("91a5024e053f", "running"), (containers[2].Image, containers[2].State)); // nur Image-ID: trotzdem dabei
     }
 
     [Fact]

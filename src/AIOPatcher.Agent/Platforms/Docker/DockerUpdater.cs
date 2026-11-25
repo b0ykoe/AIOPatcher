@@ -381,16 +381,8 @@ public static partial class DockerUpdater
 
     private static async Task<ContainerState?> InspectAsync(string name, CancellationToken ct)
     {
-        var result = await ProcessRunner.RunAsync("docker",
-            ["inspect", "--format", "{{.Name}}|{{.Config.Image}}|{{.Image}}|{{.State.Status}}|{{json .Config.Labels}}", name], ShortTimeout, ct);
-        var health = await ProcessRunner.RunAsync("docker",
-            ["inspect", "--format", "{{if .State.Health}}{{.State.Health.Status}}{{end}}", name], ShortTimeout, ct);
-        if (!result.Success || DockerInventory.ParseContainers(result.StandardOutput, File.Exists) is not [var c])
-        {
-            return null;
-        }
-
-        var h = health.StandardOutput.Trim();
-        return new ContainerState(c.Image, c.ImageId, c.State ?? "", h.Length == 0 ? null : h, c.Compose);
+        return await DockerInventory.InspectAsync([name], ShortTimeout, ct) is [var c]
+            ? new ContainerState(c.Image, c.ImageId, c.State ?? "", c.Health, c.Compose)
+            : null;
     }
 }

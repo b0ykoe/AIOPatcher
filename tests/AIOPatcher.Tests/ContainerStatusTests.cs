@@ -40,11 +40,21 @@ public sealed class ContainerStatusTests : IDisposable
     [Fact]
     public void Inventory_ReadsStateExitCodeHealthAndRestartPolicy()
     {
-        var output =
-            "/web|nginx:1.27|sha256:img1|running|aaa111|0|2026-11-19T07:00:00.123456789Z|0001-01-01T00:00:00Z|healthy|unless-stopped|{\"a\":\"b|c\"}\n" +
-            "/worker|app:latest|sha256:img2|exited|bbb222|137|2026-11-18T07:00:00Z|2026-11-19T08:30:15.5Z||always|null\n" +
-            "broken\n";
-        var containers = DockerInventory.ParseDetailed(output);
+        // wie "docker inspect" ohne --format; worker ohne Healthcheck hat gar kein "Health" (daran scheiterte das Go-Template)
+        var output = """
+            [
+              {"Id":"aaa111","Name":"/web","Image":"sha256:img1",
+               "State":{"Status":"running","ExitCode":0,"StartedAt":"2026-11-19T07:00:00.123456789Z","FinishedAt":"0001-01-01T00:00:00Z","Health":{"Status":"healthy","FailingStreak":0}},
+               "HostConfig":{"RestartPolicy":{"Name":"unless-stopped","MaximumRetryCount":0}},
+               "Config":{"Image":"nginx:1.27","Labels":{"a":"b|c"}}},
+              {"Id":"bbb222","Name":"/worker","Image":"sha256:img2",
+               "State":{"Status":"exited","ExitCode":137,"StartedAt":"2026-11-18T07:00:00Z","FinishedAt":"2026-11-19T08:30:15.5Z"},
+               "HostConfig":{"RestartPolicy":{"Name":"always"}},
+               "Config":{"Image":"app:latest","Labels":null}},
+              {"Id":"ccc333","Name":"/broken","State":{}}
+            ]
+            """;
+        var containers = DockerInventory.ParseInspect(output);
 
         Assert.Equal(2, containers.Count);
         var web = containers[0];
@@ -55,6 +65,11 @@ public sealed class ContainerStatusTests : IDisposable
         var worker = containers[1];
         Assert.Equal(("exited", 137, (string?)null), (worker.State, worker.ExitCode, worker.Health));
         Assert.Equal(new DateTime(2026, 11, 19, 8, 30, 15, 500, DateTimeKind.Utc), worker.FinishedAt);
+        Assert.Equal("always", worker.RestartPolicy);
+        Assert.Null(worker.Compose);
+
+        Assert.Empty(DockerInventory.ParseInspect("Error: No such object: x"));
+        Assert.Empty(DockerInventory.ParseInspect("[]"));
     }
 
     [Fact]

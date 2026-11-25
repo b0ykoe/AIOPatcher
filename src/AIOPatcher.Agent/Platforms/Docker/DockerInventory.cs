@@ -15,10 +15,21 @@ public static class DockerInventory
     private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(30);
     private const int MaxContainers = 200;
 
-    /// <summary>docker inspect: Labels zuletzt, sie dürfen selbst "|" enthalten.</summary>
-    public const string DetailedFormat =
-        "{{.Name}}|{{.Config.Image}}|{{.Image}}|{{.State.Status}}|{{.Id}}|{{.State.ExitCode}}|{{.State.StartedAt}}|{{.State.FinishedAt}}|" +
-        "{{if .State.Health}}{{.State.Health.Status}}{{end}}|{{.HostConfig.RestartPolicy.Name}}|{{json .Config.Labels}}";
+    /// <summary>
+    /// "docker inspect" als JSON lesen, ohne --format: Ein Go-Template bricht je Container ab, wenn ein Feld fehlt (z. B.
+    /// "map has no entry for key Health" bei Containern ohne Healthcheck), und der Container fehlte dann ganz in der Liste.
+    /// Einzelne nicht (mehr) vorhandene IDs: docker meldet einen Fehler, gibt die übrigen aber trotzdem als JSON aus.
+    /// </summary>
+    public static async Task<List<ContainerReport>> InspectAsync(IReadOnlyCollection<string> ids, TimeSpan timeout, CancellationToken ct)
+    {
+        if (ids.Count == 0)
+        {
+            return [];
+        }
+
+        var inspect = await ProcessRunner.RunAsync("docker", ["inspect", .. ids], timeout, ct);
+        return ParseInspect(inspect.StandardOutput, File.Exists);
+    }
 
     /// <summary>null = kein Docker installiert oder nicht erreichbar.</summary>
     public static async Task<IReadOnlyList<ContainerReport>?> CollectAsync(CancellationToken ct)
@@ -42,8 +53,7 @@ public static class DockerInventory
                 return [];
             }
 
-            var inspect = await ProcessRunner.RunAsync("docker", ["inspect", "--format", DetailedFormat, .. ids], Timeout, ct);
-            var containers = ParseDetailed(inspect.StandardOutput, File.Exists);
+            var containers = await InspectAsync(ids, Timeout, ct);
 
             var imageIds = containers.Select(c => c.ImageId).OfType<string>().Distinct().ToArray();
             var images = imageIds.Length == 0
@@ -120,30 +130,71 @@ public static class DockerInventory
     }
 
     /// <summary>
-    /// Zeilen im <see cref="DetailedFormat"/>: "/name|image|sha256:img|exited|id|137|2026-…Z|2026-…Z|unhealthy|always|{Labels}".
+    /// Ausgabe von "docker inspect" (JSON-Array, ein Objekt je Container). Fehlende Felder (State.Health ohne Healthcheck,
+    /// Labels null) sind einfach leer; Einträge ohne Name oder Image werden übersprungen, kaputte Ausgabe ergibt eine leere Liste.
     /// </summary>
-    public static List<ContainerReport> ParseDetailed(string output, Func<string, bool>? fileExists = null)
+    public static List<ContainerReport> ParseInspect(string json, Func<string, bool>? fileExists = null)
     {
         var result = new List<ContainerReport>();
-        foreach (var line in output.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        JsonDocument doc;
+        try
         {
-            var parts = line.Split('|', 11);
-            if (parts.Length < 10 || parts[1].Length == 0)
+            doc = JsonDocument.Parse(json);
+        }
+        catch (JsonException)
+        {
+            return result;
+        }
+
+        using (doc)
+        {
+            if (doc.RootElement.ValueKind != JsonValueKind.Array)
             {
-                continue;
+                return result;
             }
 
-            var compose = parts.Length == 11 ? ComposeFromLabels(ParseLabels(parts[10]), fileExists ?? (_ => false)) : null;
-            result.Add(new ContainerReport(parts[0].TrimStart('/'), parts[1], parts[2].Length > 0 ? parts[2] : null, null, parts[3], compose,
-                Id: parts[4].Length > 0 ? parts[4] : null,
-                ExitCode: int.TryParse(parts[5], NumberStyles.Integer, CultureInfo.InvariantCulture, out var exit) ? exit : null,
-                StartedAt: DockerTime(parts[6]),
-                FinishedAt: DockerTime(parts[7]),
-                Health: parts[8].Length > 0 ? parts[8] : null,
-                RestartPolicy: parts[9].Length > 0 ? parts[9] : null));
+            foreach (var c in doc.RootElement.EnumerateArray())
+            {
+                var name = Str(c, "Name")?.TrimStart('/');
+                var config = Obj(c, "Config");
+                var image = config is { } cfg ? Str(cfg, "Image") : null;
+                if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(image))
+                {
+                    continue;
+                }
+
+                var state = Obj(c, "State");
+                var health = state is { } s && Obj(s, "Health") is { } h ? Str(h, "Status") : null;
+                var restart = Obj(c, "HostConfig") is { } host && Obj(host, "RestartPolicy") is { } policy ? Str(policy, "Name") : null;
+                var labels = new Dictionary<string, string>();
+                if (config is { } withLabels && Obj(withLabels, "Labels") is { } l)
+                {
+                    foreach (var p in l.EnumerateObject().Where(p => p.Value.ValueKind == JsonValueKind.String))
+                    {
+                        labels[p.Name] = p.Value.GetString()!;
+                    }
+                }
+
+                result.Add(new ContainerReport(name, image, NullIfEmpty(Str(c, "Image")), null, state is { } st ? NullIfEmpty(Str(st, "Status")) : null,
+                    ComposeFromLabels(labels, fileExists ?? (_ => false)),
+                    Id: NullIfEmpty(Str(c, "Id")),
+                    ExitCode: state is { } se && se.TryGetProperty("ExitCode", out var exit) && exit.ValueKind == JsonValueKind.Number && exit.TryGetInt32(out var code) ? code : null,
+                    StartedAt: state is { } s1 && Str(s1, "StartedAt") is { } started ? DockerTime(started) : null,
+                    FinishedAt: state is { } s2 && Str(s2, "FinishedAt") is { } finished ? DockerTime(finished) : null,
+                    Health: NullIfEmpty(health),
+                    RestartPolicy: NullIfEmpty(restart)));
+            }
         }
 
         return result;
+
+        static JsonElement? Obj(JsonElement e, string key) =>
+            e.ValueKind == JsonValueKind.Object && e.TryGetProperty(key, out var v) && v.ValueKind == JsonValueKind.Object ? v : null;
+
+        static string? Str(JsonElement e, string key) =>
+            e.ValueKind == JsonValueKind.Object && e.TryGetProperty(key, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
+
+        static string? NullIfEmpty(string? value) => string.IsNullOrEmpty(value) ? null : value;
     }
 
     /// <summary>"2026-11-19T07:00:00.123456789Z" → UTC; "0001-01-01T00:00:00Z" (nie) → null.</summary>
@@ -160,51 +211,6 @@ public static class DockerInventory
             ? value[..(dot + 8)] + value[end..]
             : value;
         return DateTimeOffset.TryParse(trimmed, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var at) ? at.UtcDateTime : null;
-    }
-
-    /// <summary>Zeilen "/name|nginx:1.27|sha256:abc|running|{Labels als JSON}" (Labels dürfen selbst "|" enthalten).</summary>
-    public static List<ContainerReport> ParseContainers(string output, Func<string, bool>? fileExists = null)
-    {
-        var result = new List<ContainerReport>();
-        foreach (var line in output.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-        {
-            var parts = line.Split('|', 5);
-            if (parts.Length < 4 || parts[1].Length == 0)
-            {
-                continue;
-            }
-
-            var compose = parts.Length == 5 ? ComposeFromLabels(ParseLabels(parts[4]), fileExists ?? (_ => false)) : null;
-            result.Add(new ContainerReport(parts[0].TrimStart('/'), parts[1], parts[2].Length > 0 ? parts[2] : null, null, parts[3], compose));
-        }
-
-        return result;
-    }
-
-    /// <summary>{"com.docker.compose.project":"web", …} → Wörterbuch; "null" oder Unsinn → leer.</summary>
-    public static Dictionary<string, string> ParseLabels(string json)
-    {
-        var labels = new Dictionary<string, string>();
-        try
-        {
-            using var doc = JsonDocument.Parse(json);
-            if (doc.RootElement.ValueKind == JsonValueKind.Object)
-            {
-                foreach (var p in doc.RootElement.EnumerateObject())
-                {
-                    if (p.Value.ValueKind == JsonValueKind.String)
-                    {
-                        labels[p.Name] = p.Value.GetString()!;
-                    }
-                }
-            }
-        }
-        catch (JsonException)
-        {
-            // kaputte Ausgabe: wie ohne Labels
-        }
-
-        return labels;
     }
 
     /// <summary>Compose-Herkunft aus den Labels; null, wenn der Container nicht per Compose gestartet wurde.</summary>
