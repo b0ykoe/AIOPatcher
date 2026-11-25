@@ -905,12 +905,22 @@ export interface PortainerSummary {
   checkedAt: string;
 }
 
-/** Inventar → Stacks: Docker-Stacks aus Portainer. */
+/** Inventar → Stacks: Docker-Host mit Agent und seinen Containern (gruppiert wie im Containers-Reiter). */
+export interface DockerHostStacks {
+  id: string;
+  name: string;
+  siteName: string | null;
+  containers: ContainerItem[];
+}
+
+/** Inventar → Stacks: Docker-Stacks aus Portainer und von Docker-Hosts mit Agent. */
 export interface StacksOverview {
   /** Schalter "Programm- und Container-Updates" (gilt auch für Stacks) */
   updatesEnabled: boolean;
   imageChecksEnabled: boolean;
   servers: PortainerServer[];
+  /** Docker-Hosts mit Agent (Container aus der Inventur); fehlt bei älteren Servern */
+  hosts?: DockerHostStacks[];
 }
 
 export interface PortainerEnvironment {

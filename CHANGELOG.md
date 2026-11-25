@@ -8,6 +8,16 @@ Written for users, not as a list of commits.
 
 ## [Unreleased]
 
+### Added
+- **Inventory → Stacks shows your Docker hosts too:** besides Portainer, the page now lists the stacks of every Docker
+  host with an agent, grouped like the Containers tab (a container without compose is a stack of its own). Each host
+  has a heading that links to its Containers tab, and each stack shows its status, new images, "Update stack" and a
+  link to the host. The key figures and "Only outdated" include these stacks; the site filter applies.
+
+### Improved
+- "No Portainer connected" now only shows when there are neither Docker hosts nor Portainer. Otherwise a short note
+  at the bottom says you can connect Portainer.
+
 ## [0.16.7] - 2026-11-25
 
 ### Improved

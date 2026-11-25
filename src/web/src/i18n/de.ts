@@ -115,6 +115,9 @@ const de = {
     service: "Dienst: {{service}}",
     sortBy: "Sortieren",
     sortOption: "Nach {{column}}",
+    openOnHost: "Im Containers-Reiter des Hosts öffnen",
+    stackCount_one: "{{count}} Stack",
+    stackCount_other: "{{count}} Stacks",
     rebuild: "Neu bauen",
     rebuildTitle: "{{name}} neu bauen?",
     rebuildText: "Der Agent baut das Image mit dem aktuellen Basis-Image ({{image}}) neu (compose build --pull) und erstellt nur diesen Dienst neu (Compose {{compose}}). Volumes und Einstellungen bleiben, der Container ist dabei kurz nicht erreichbar. Danach prüft der Agent, ob er wieder läuft.",
@@ -1450,6 +1453,7 @@ const de = {
     showLog: "Protokoll",
     logTitle: "Protokoll: {{name}}",
     footer: "Portainer wird alle 30 Minuten abgefragt; die Images prüft AIOPatcher wie bei Host-Containern bei der Registry.",
+    portainerHint: "Stacks der Docker-Hosts kommen vom Agent. Du nutzt Portainer? Verbinde es, dann erscheinen auch seine Stacks hier.",
     manage: "Integrationen verwalten",
   },
   pbs: {

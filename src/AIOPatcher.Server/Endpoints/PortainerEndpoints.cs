@@ -6,11 +6,18 @@ using Microsoft.EntityFrameworkCore;
 
 namespace AIOPatcher.Server.Endpoints;
 
-/// <summary>Inventar → Stacks: Docker-Stacks aus Portainer lesen und per "Pull and redeploy" aktualisieren.</summary>
+/// <summary>
+/// Inventar → Stacks: Docker-Stacks aus Portainer lesen und per "Pull and redeploy" aktualisieren, dazu die Container der
+/// Docker-Hosts mit Agent (Stacks = Compose-Projekte, aktualisiert über den Agent wie im Containers-Reiter).
+/// </summary>
 public static class PortainerEndpoints
 {
     /// <param name="UpdatesEnabled">Schalter "Programm- und Container-Updates" (gilt auch für Stacks).</param>
-    public sealed record StacksOverviewDto(bool UpdatesEnabled, bool ImageChecksEnabled, IReadOnlyList<PortainerServerDto> Servers);
+    /// <param name="Hosts">Docker-Hosts mit Agent (Container aus der Inventur), gruppiert wird im Web wie im Containers-Reiter.</param>
+    public sealed record StacksOverviewDto(bool UpdatesEnabled, bool ImageChecksEnabled, IReadOnlyList<PortainerServerDto> Servers,
+        IReadOnlyList<DockerHostDto>? Hosts = null);
+
+    public sealed record DockerHostDto(Guid Id, string Name, string? SiteName, IReadOnlyList<HostEndpoints.ContainerDto> Containers);
 
     public sealed record PortainerServerDto(Guid Id, string Name, string? SiteName, string? BaseUrl, bool Enabled, DateTime? LastCheckAt, string? LastError,
         string? Version, HostEndpoints.FreezeInfoDto? Freeze, IReadOnlyList<PortainerEnvironment> Environments, IReadOnlyList<StackDto> Stacks,
@@ -38,7 +45,7 @@ public static class PortainerEndpoints
     private static StackJobDto Dto(StackUpdateJob j) =>
         new(j.Id, j.StackId, j.StackName, j.Status, j.RequestedBy, j.CreatedAt, j.StartedAt, j.FinishedAt, j.Summary, j.Log);
 
-    /// <summary>Mit siteId: Portainer-Instanzen dieser Site und solche ohne Site.</summary>
+    /// <summary>Mit siteId: Portainer-Instanzen dieser Site und solche ohne Site; Docker-Hosts nur dieser Site.</summary>
     private static async Task<StacksOverviewDto> Overview(Guid? siteId, AppDbContext db, FeatureFlags features, CancellationToken ct)
     {
         var now = DateTime.UtcNow;
@@ -69,7 +76,17 @@ public static class PortainerEndpoints
                 history.Select(Dto).ToList());
         }).ToList();
 
-        return new StacksOverviewDto(features.IsOn(Feature.AppUpdates), features.IsOn(Feature.ContainerChecks), servers);
+        // Docker-Hosts mit gemeldeten Containern (wie die Host-Liste: nicht widerrufen, Site-Filter)
+        var dockerHosts = await db.Hosts.AsNoTracking().Include(h => h.Site)
+            .Where(h => !h.IsRevoked && (siteId == null || h.SiteId == siteId) && db.Containers.Any(c => c.HostId == h.Id))
+            .OrderBy(h => h.Name).ToListAsync(ct);
+        var hosts = new List<DockerHostDto>();
+        foreach (var h in dockerHosts)
+        {
+            hosts.Add(new DockerHostDto(h.Id, h.Name, h.Site?.Name, await HostEndpoints.ContainersAsync(db, h.Id, ct, features)));
+        }
+
+        return new StacksOverviewDto(features.IsOn(Feature.AppUpdates), features.IsOn(Feature.ContainerChecks), servers, hosts);
     }
 
     /// <summary>Stack-Zeilen: veraltete zuerst, dann nach Name.</summary>

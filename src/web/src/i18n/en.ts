@@ -116,6 +116,9 @@ const en: Translation = {
     service: "Service: {{service}}",
     sortBy: "Sort",
     sortOption: "By {{column}}",
+    openOnHost: "Open in the host's Containers tab",
+    stackCount_one: "{{count}} stack",
+    stackCount_other: "{{count}} stacks",
     rebuild: "Rebuild",
     rebuildTitle: "Rebuild {{name}}?",
     rebuildText: "The agent rebuilds the image on the current base image ({{image}}) (compose build --pull) and recreates only this service (compose {{compose}}). Volumes and settings stay; the container is briefly unavailable. Afterwards the agent checks that it runs again.",
@@ -1451,6 +1454,7 @@ const en: Translation = {
     showLog: "Log",
     logTitle: "Log: {{name}}",
     footer: "Portainer is checked every 30 minutes; AIOPatcher checks the images against the registry just like host containers.",
+    portainerHint: "Stacks of Docker hosts come from the agent. Using Portainer? Connect it to see its stacks here too.",
     manage: "Manage integrations",
   },
   pbs: {

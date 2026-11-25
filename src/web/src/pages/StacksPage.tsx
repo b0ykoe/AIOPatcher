@@ -8,10 +8,14 @@ import { api, formatDateTime, formatRelative, isActiveJob, type PortainerServer,
 import { FeatureOffHint } from "../features";
 import { useSiteScope } from "../siteScope";
 import { CardTitle, confirmAction, EmptyState, errorText, JobStatusBadge, notifyError, notifySuccess, StatCard } from "../components/ui";
+import { ContainerTable, containerStacks } from "../components/ContainerTable";
 
 const stateColor = { outdated: "blue", current: "teal", unknown: "gray" } as const;
 
-/** Inventar → Stacks: Docker-Stacks aus Portainer mit Hinweis auf neue Images und "Stack aktualisieren". */
+/**
+ * Inventar → Stacks: Stacks der Docker-Hosts mit Agent (wie im Containers-Reiter, je Host) und aus Portainer, jeweils mit
+ * Hinweis auf neue Images und "Stack aktualisieren". Leerzustand nur, wenn es weder Docker-Hosts noch Portainer gibt.
+ */
 export function StacksPage() {
   const { t } = useTranslation();
   const can = useCan();
@@ -39,12 +43,15 @@ export function StacksPage() {
     return () => clearInterval(timer);
   }, [load, running]);
 
+  // Portainer-Stacks und Stacks der Docker-Hosts (Compose-Projekt bzw. einzelner Container ohne Compose) zusammen
+  const hosts = data?.hosts ?? [];
   const totals = useMemo(() => {
     const stacks = (data?.servers ?? []).flatMap((s) => s.stacks);
+    const agentStacks = (data?.hosts ?? []).flatMap((h) => containerStacks(h.containers));
     return {
-      stacks: stacks.length,
-      outdated: stacks.filter((s) => s.updateState === "outdated").length,
-      containers: stacks.reduce((n, s) => n + s.containers.length, 0),
+      stacks: stacks.length + agentStacks.length,
+      outdated: stacks.filter((s) => s.updateState === "outdated").length + agentStacks.filter((s) => s.items.some((c) => c.updateAvailable)).length,
+      containers: stacks.reduce((n, s) => n + s.containers.length, 0) + agentStacks.reduce((n, s) => n + s.items.length, 0),
       failed: (data?.servers ?? []).reduce((n, s) => n + s.stacks.filter((x) => x.lastJob?.status === "Failed").length, 0),
     };
   }, [data]);
@@ -84,7 +91,7 @@ export function StacksPage() {
 
   if (error) return <Alert color="red">{error}</Alert>;
   if (!data) return <Loader size="sm" />;
-  if (data.servers.length === 0) {
+  if (data.servers.length === 0 && hosts.length === 0) {
     return (
       <Card>
         <EmptyState icon={<IconBrandDocker size={28} />} title={t("stacks.emptyTitle")} text={t("stacks.emptyText")}
@@ -110,6 +117,15 @@ export function StacksPage() {
         <SegmentedControl size="xs" value={filter} onChange={(v) => setFilter(v as "outdated" | "all")}
           data={[{ value: "outdated", label: t("stacks.onlyOutdated") }, { value: "all", label: t("stacks.all", { count: totals.stacks }) }]} />
       </Group>
+
+      {/* Docker-Hosts mit Agent: dieselben Stack-Karten wie im Containers-Reiter, je Host mit Überschrift und Link */}
+      {hosts.filter((h) => filter === "all" || h.containers.some((c) => c.updateAvailable)).map((h) => (
+        <ContainerTable key={h.id} containers={h.containers} hostId={h.id} host={{ name: h.name, siteName: h.siteName }}
+          onlyOutdated={filter === "outdated"} onRechecked={load} />
+      ))}
+      {filter === "outdated" && data.servers.length === 0 && totals.outdated === 0 && (
+        <Card><Text size="sm" c="dimmed">{t("stacks.noneOutdated")}</Text></Card>
+      )}
 
       {data.servers.map((server) => {
         const stacks = server.stacks.filter((s) => filter === "all" || s.updateState === "outdated");
@@ -216,7 +232,8 @@ export function StacksPage() {
 
       {can.admin && (
         <Text size="xs" c="dimmed">
-          {t("stacks.footer")} <Anchor component={Link} to="/settings/integrations" size="xs">{t("stacks.manage")}</Anchor>
+          {data.servers.length > 0 ? t("stacks.footer") : t("stacks.portainerHint")}{" "}
+          <Anchor component={Link} to="/settings/integrations" size="xs">{data.servers.length > 0 ? t("stacks.manage") : t("stacks.addPortainer")}</Anchor>
         </Text>
       )}
 

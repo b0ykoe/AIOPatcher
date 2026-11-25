@@ -904,7 +904,7 @@ public static class HostEndpoints
         return Results.NoContent();
     }
 
-    private static async Task<List<ContainerDto>> ContainersAsync(AppDbContext db, Guid hostId, CancellationToken ct, FeatureFlags? features = null)
+    public static async Task<List<ContainerDto>> ContainersAsync(AppDbContext db, Guid hostId, CancellationToken ct, FeatureFlags? features = null)
     {
         var containers = await db.Containers.Where(c => c.HostId == hostId).OrderBy(c => c.Name).ToListAsync(ct);
         // Ältere Agents melden keine Compose-Herkunft und können nicht aktualisieren

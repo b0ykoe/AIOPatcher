@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router";
-import { Alert, Anchor, Badge, Box, Button, Card, Code, Group, Loader, Modal, Select, Stack, Table, Text, Tooltip, UnstyledButton } from "@mantine/core";
-import { IconAlertTriangle, IconArrowsSort, IconBox, IconDownload, IconHammer, IconInfoCircle, IconRefresh, IconScript, IconStack2 } from "@tabler/icons-react";
+import { ActionIcon, Alert, Anchor, Badge, Box, Button, Card, Code, Group, Loader, Modal, Select, Stack, Table, Text, Tooltip, UnstyledButton } from "@mantine/core";
+import { IconAlertTriangle, IconArrowRight, IconArrowsSort, IconBox, IconDownload, IconHammer, IconInfoCircle, IconRefresh, IconScript, IconServer, IconStack2 } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import { api, formatRelative, type ContainerItem, type ContainerRecipe, type ContainerVulnList } from "../api";
 import { useCan } from "../App";
@@ -208,11 +208,23 @@ const wasRunning = (c: ContainerItem) => ["running", "restarting", "paused"].inc
 const updatable = (c: ContainerItem) => c.updateAvailable && !c.updateBlocker && !c.recipe;
 
 /** Ein Stack: Compose-Projekt, oder ein einzelner Container ohne Compose (eigene Einheit mit einem Container). */
-interface ContainerStack {
+export interface ContainerStack {
   key: string;
   project: string | null;
   title: string;
   items: ContainerItem[];
+}
+
+/** Je Compose-Projekt ein Stack, ein Container ohne Compose ist ein Stack für sich; Reihenfolge nach dem ersten Container. */
+export function containerStacks(containers: ContainerItem[]): ContainerStack[] {
+  return containers.reduce<ContainerStack[]>((acc, c) => {
+    const project = projectOf(c);
+    const key = project ? `compose:${project}` : `single:${c.name}`;
+    const stack = acc.find((s) => s.key === key);
+    if (stack) stack.items.push(c);
+    else acc.push({ key, project, title: project ?? c.name, items: [c] });
+    return acc;
+  }, []);
 }
 
 /**
@@ -220,8 +232,10 @@ interface ContainerStack {
  * darunter die Container. Am Desktop eine Tabelle mit festen Spaltenbreiten (in allen Karten gleich, die Spalten fluchten),
  * am Telefon eine Liste.
  */
-function StackCard({ stack, showCves, canUpdate, loading, onUpdate, children, mobile }: {
+function StackCard({ stack, showCves, canUpdate, loading, onUpdate, children, mobile, link }: {
   stack: ContainerStack; showCves: boolean; canUpdate: boolean; loading: boolean; onUpdate: () => void; children: ReactNode; mobile: ReactNode;
+  /** Link auf den Containers-Reiter des Hosts (nur außerhalb der Host-Seite) */
+  link: string | null;
 }) {
   const { t } = useTranslation();
   const { project, items } = stack;
@@ -251,13 +265,20 @@ function StackCard({ stack, showCves, canUpdate, loading, onUpdate, children, mo
     <Card p={0}>
       <CardTitle inset icon={<Icon size={18} style={{ flexShrink: 0 }} opacity={0.7} />} badge={<Badge size="sm" color={color} style={{ flexShrink: 0 }}>{label}</Badge>}
         description={description}
-        actions={(fresh > 0 || (canUpdate && project && todo > 0)) && (
+        actions={(fresh > 0 || (canUpdate && project && todo > 0) || link) && (
           <>
             {fresh > 0 && <Badge size="sm" color="blue" visibleFrom="sm">{t("containers.stackNew", { count: fresh })}</Badge>}
             {canUpdate && project && todo > 0 && (
               <Button size="compact-xs" variant="light" leftSection={<IconDownload size={12} />} loading={loading} onClick={onUpdate}>
                 {t("containers.updateStack")}
               </Button>
+            )}
+            {link && (
+              <Tooltip label={t("containers.openOnHost")}>
+                <ActionIcon component={Link} to={link} variant="light" size="sm" aria-label={t("containers.openOnHost")}>
+                  <IconArrowRight size={14} />
+                </ActionIcon>
+              </Tooltip>
             )}
           </>
         )}>
@@ -295,7 +316,13 @@ const sortLabels = {
  * neuere Images in der Registry bzw. neues Basis-Image bei selbst gebauten, relevante Lücken im Image. Sortierung oben
  * (Standard: Auffälliges zuerst), die Stacks folgen ihrem ersten Container. Bringt seine Karten selbst mit.
  */
-export function ContainerTable({ containers, hostId, onRechecked }: { containers: ContainerItem[]; hostId?: string; onRechecked?: () => void }) {
+export function ContainerTable({ containers, hostId, onRechecked, host, onlyOutdated = false }: {
+  containers: ContainerItem[]; hostId?: string; onRechecked?: () => void;
+  /** Inventar → Stacks: Host als Überschrift (Link auf seinen Containers-Reiter), je Stack ein Link dorthin. */
+  host?: { name: string; siteName: string | null };
+  /** nur Stacks mit neuem Image */
+  onlyOutdated?: boolean;
+}) {
   const can = useCan();
   const { isOn } = useFeatures();
   const canUpdate = !!hostId && can.operate && isOn("AppUpdates");
@@ -427,14 +454,8 @@ export function ContainerTable({ containers, hostId, onRechecked }: { containers
   const sorted = [...containers].sort((a, b) =>
     compare[sort](a, b) || (sort === "state" ? registryRank(a) - registryRank(b) : 0) || a.name.localeCompare(b.name));
   // Je Compose-Projekt ein Stack, ein Container ohne Compose ist ein Stack für sich; Reihenfolge nach dem ersten Container
-  const stacks = sorted.reduce<ContainerStack[]>((acc, c) => {
-    const project = projectOf(c);
-    const key = project ? `compose:${project}` : `single:${c.name}`;
-    const stack = acc.find((s) => s.key === key);
-    if (stack) stack.items.push(c);
-    else acc.push({ key, project, title: project ?? c.name, items: [c] });
-    return acc;
-  }, []);
+  const stacks = containerStacks(sorted).filter((s) => !onlyOutdated || s.items.some((c) => c.updateAvailable));
+  const hostLink = hostId ? `/hosts/${hostId}?tab=containers` : null;
 
   /** Letzte Spalte: Update-Knopf, sonst warum nicht (Update-Skript, kein Compose, Datei fehlt …). */
   const action = (c: ContainerItem) => c.updateAvailable && (c.recipe ? (
@@ -475,6 +496,11 @@ export function ContainerTable({ containers, hostId, onRechecked }: { containers
     <Stack gap="sm">
       {hostId && (
         <Card>
+          {host && hostLink && (
+            <CardTitle icon={<IconServer size={18} />} description={[host.siteName, t("containers.stackCount", { count: containerStacks(containers).length })].filter(Boolean).join(" · ")}>
+              <Anchor component={Link} to={hostLink} inherit c="inherit">{host.name}</Anchor>
+            </CardTitle>
+          )}
           <Group justify="space-between" gap="xs" wrap="wrap">
             <Text size="xs" c="dimmed">
               {tGlobal("security.freshness", { seen: formatRelative(seen), checked: formatRelative(checked) })}
@@ -517,7 +543,7 @@ export function ContainerTable({ containers, hostId, onRechecked }: { containers
         </Card>
       )}
       {stacks.map((stack) => (
-        <StackCard key={stack.key} stack={stack} showCves={showCves} canUpdate={canUpdate}
+        <StackCard key={stack.key} stack={stack} showCves={showCves} canUpdate={canUpdate} link={host ? hostLink : null}
           loading={updating === `${STACK}${stack.project}`} onUpdate={() => updateMany(stack.project)}
           mobile={stack.items.map((c) => (
             <Group key={c.name} className="mobile-row" justify="space-between" align="flex-start" wrap="nowrap" gap="sm" style={{ cursor: "default" }}>
