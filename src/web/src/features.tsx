@@ -28,7 +28,8 @@ export type Feature =
   | "Metrics"
   | "MonitoringClients"
   | "BackupJobChecks"
-  | "SiteSharing";
+  | "SiteSharing"
+  | "ContainerManagement";
 
 export interface FeatureState {
   feature: Feature;

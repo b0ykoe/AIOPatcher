@@ -9,7 +9,7 @@ import { openSetupWizard } from "./components/SetupWizard";
 /** "Erste Schritte" (GET /api/getting-started): Grundlagen und "Mehr entdecken", Status vom Server. */
 export type StepKey =
   | "site" | "host" | "plan" | "notifications"
-  | "publicAccess" | "passkey" | "compliance" | "integrations" | "monitoring" | "backups" | "serverUpdate" | "sso";
+  | "publicAccess" | "passkey" | "compliance" | "integrations" | "monitoring" | "backups" | "serverUpdate" | "sso" | "containerManagement";
 
 export interface GettingStartedStep {
   key: StepKey;

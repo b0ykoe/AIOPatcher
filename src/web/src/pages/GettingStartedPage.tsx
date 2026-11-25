@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { Anchor, Badge, Button, Card, Code, Collapse, Group, Loader, SimpleGrid, Stack, Text, ThemeIcon, useMatches } from "@mantine/core";
 import {
-  IconActivityHeartbeat, IconBell, IconBuilding, IconChevronDown, IconChevronUp, IconCircleCheck, IconCircleDashed, IconCircleMinus, IconDatabase,
+  IconActivityHeartbeat, IconBell, IconBrandDocker, IconBuilding, IconChevronDown, IconChevronUp, IconCircleCheck, IconCircleDashed, IconCircleMinus, IconDatabase,
   IconFingerprint, IconKey, IconListCheck, IconPlugConnected, IconRefresh, IconServer, IconShieldCheck, IconWand, IconWorld,
 } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
@@ -26,6 +26,7 @@ const ICONS: Record<StepKey, ReactNode> = {
   backups: <IconDatabase size={18} />,
   serverUpdate: <IconRefresh size={18} />,
   sso: <IconKey size={18} />,
+  containerManagement: <IconBrandDocker size={18} />,
 };
 
 /** Schritte, die erst ein Schalter unter Einstellungen → Funktionen & Sicherheit freigibt. */
@@ -82,6 +83,7 @@ export function GettingStartedPage() {
       case "backups": return { label: t("gettingStarted.go"), run: go("/inventory?tab=backups") };
       case "serverUpdate": return can.operate ? { label: t("gettingStarted.steps.serverUpdate.action"), run: openAddHost } : null;
       case "sso": return { label: t("gettingStarted.go"), run: go("/settings/sso") };
+      case "containerManagement": return { label: t("gettingStarted.steps.containerManagement.action"), run: go("/help/container-management") };
     }
   };
 

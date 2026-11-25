@@ -135,6 +135,10 @@ export interface AgentPolicyReport {
   allowMonitoringChanges: boolean | null;
   allowServerUpdate: boolean | null;
   allowUpdateRecipes: boolean | null;
+  allowContainerManagement?: boolean | null;
+  allowComposeEdit?: boolean | null;
+  /** Basisordner für bearbeitbare Compose-Dateien und neue Stacks */
+  composeRoot?: string | null;
   disabledModules: string[] | null;
 }
 
@@ -242,6 +246,48 @@ export interface ContainerItem {
   composeFiles?: string | null;
 }
 
+/** Zeile aus "docker system df" (Bytes). */
+export interface DockerDiskUsage {
+  type: string;
+  size: number;
+  reclaimable: number;
+  count: number;
+}
+
+/** Mini-Docker-Manager eines Hosts: null bei allowed/composeEdit = vom Agent nicht gemeldet. */
+export interface ContainerManagement {
+  agentSupports: boolean;
+  allowed: boolean | null;
+  composeEdit: boolean | null;
+  composeRoot: string | null;
+  disk: DockerDiskUsage[] | null;
+}
+
+/** Auftrag an docker.manage (siehe ContainerOps im Server). */
+export interface ContainerManageRequest {
+  op: "start" | "stop" | "restart" | "remove" | "down" | "prune" | "read" | "write" | "create";
+  containers?: string[];
+  project?: string;
+  volumes?: boolean;
+  content?: string;
+  expectedSha256?: string;
+  up?: boolean;
+}
+
+export interface ComposeFile {
+  project: string;
+  path: string;
+  content: string;
+  sha256: string;
+}
+
+/** Lese-Job einer Compose-Datei: den Inhalt liefert der Server genau einmal. */
+export interface ComposeRead {
+  status: JobStatus;
+  summary: string | null;
+  file: ComposeFile | null;
+}
+
 /** Relevante Lücken im Image eines Containers (KEV oder EPSS ab 5 %). */
 export interface ContainerVulns {
   state: "ok" | "pending" | "unsupported" | "agent" | "off";
@@ -283,6 +329,8 @@ export interface HostDetail {
   externalId: string | null;
   /** Zuordnung von Hand gesetzt oder gelöst (Auto-map fasst sie nicht an). */
   mappingManual?: boolean;
+  /** Mini-Docker-Manager: was Agent und lokale Policy erlauben, dazu "docker system df" */
+  containerManagement?: ContainerManagement | null;
   containers: ContainerItem[];
   agentUpdate: AgentUpdateInfo | null;
   /** 1 = alter Check-in (Push), 2 = Pull-Agent, 0 = noch nie gemeldet. */
@@ -491,7 +539,7 @@ export interface EnrollmentToken {
   expiresAt: string;
 }
 
-export type JobType = "Scan" | "Patch" | "Reboot" | "AppUpdate" | "SystemChange" | "ContainerUpdate" | "ServerUpdate";
+export type JobType = "Scan" | "Patch" | "Reboot" | "AppUpdate" | "SystemChange" | "ContainerUpdate" | "ServerUpdate" | "ContainerManage";
 export type PatchScope = "Security" | "All";
 export type JobStatus = "Queued" | "Running" | "Succeeded" | "Failed" | "Rejected" | "Cancelled";
 
@@ -538,6 +586,8 @@ export function describeJob(job: Pick<Job, "type" | "scope" | "allowReboot">): s
       return t("jobType.systemChange");
     case "ContainerUpdate":
       return t("jobType.containerUpdate");
+    case "ContainerManage":
+      return t("jobType.containerManage");
     case "ServerUpdate":
       return t("jobType.serverUpdate");
     case "Patch":
@@ -911,6 +961,7 @@ export interface DockerHostStacks {
   name: string;
   siteName: string | null;
   containers: ContainerItem[];
+  containerManagement?: ContainerManagement | null;
 }
 
 /** Inventar → Stacks: Docker-Stacks aus Portainer und von Docker-Hosts mit Agent. */

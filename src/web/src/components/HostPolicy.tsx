@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 import type { AgentPolicyReport, OsFamily } from "../api";
 import { CardTitle } from "./ui";
 
-type BoolKey = Exclude<keyof AgentPolicyReport, "allowPatch" | "disabledModules">;
+type BoolKey = Exclude<keyof AgentPolicyReport, "allowPatch" | "disabledModules" | "composeRoot">;
 
 /** Standardwerte der policy.json: Abweichungen davon zeigt die Liste. */
 const DEFAULTS: Record<BoolKey, boolean> = {
@@ -18,11 +18,13 @@ const DEFAULTS: Record<BoolKey, boolean> = {
   allowMonitoringChanges: false,
   allowServerUpdate: false,
   allowUpdateRecipes: false,
+  allowContainerManagement: false,
+  allowComposeEdit: false,
 };
 
 const ORDER: BoolKey[] = [
   "allowReboot", "allowSystemChanges", "allowMonitoringChanges", "allowAutoUpdateChanges", "allowAppUpdates",
-  "allowUpdateRecipes", "allowSourceFixes", "allowSelfUpdate", "trustServerUpdates", "allowServerUpdate",
+  "allowUpdateRecipes", "allowContainerManagement", "allowComposeEdit", "allowSourceFixes", "allowSelfUpdate", "trustServerUpdates", "allowServerUpdate",
 ];
 
 /**

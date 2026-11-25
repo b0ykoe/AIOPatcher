@@ -120,7 +120,7 @@ export function StacksPage() {
 
       {/* Docker-Hosts mit Agent: dieselben Stack-Karten wie im Containers-Reiter, je Host mit Überschrift und Link */}
       {hosts.filter((h) => filter === "all" || h.containers.some((c) => c.updateAvailable)).map((h) => (
-        <ContainerTable key={h.id} containers={h.containers} hostId={h.id} host={{ name: h.name, siteName: h.siteName }}
+        <ContainerTable key={h.id} containers={h.containers} hostId={h.id} host={{ name: h.name, siteName: h.siteName }} management={h.containerManagement}
           onlyOutdated={filter === "outdated"} onRechecked={load} />
       ))}
       {filter === "outdated" && data.servers.length === 0 && totals.outdated === 0 && (

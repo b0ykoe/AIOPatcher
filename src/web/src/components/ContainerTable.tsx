@@ -3,11 +3,12 @@ import { Link, useNavigate } from "react-router";
 import { ActionIcon, Alert, Anchor, Badge, Box, Button, Card, Code, Group, Loader, Modal, Select, Stack, Table, Text, Tooltip, UnstyledButton } from "@mantine/core";
 import { IconAlertTriangle, IconArrowRight, IconArrowsSort, IconBox, IconDownload, IconHammer, IconInfoCircle, IconRefresh, IconScript, IconServer, IconStack2 } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
-import { api, formatRelative, type ContainerItem, type ContainerRecipe, type ContainerVulnList } from "../api";
+import { api, formatRelative, type ContainerItem, type ContainerManagement, type ContainerRecipe, type ContainerVulnList } from "../api";
 import { useCan } from "../App";
 import { FeatureOffHint, useFeatures } from "../features";
 import { t as tGlobal } from "../i18n";
 import { CardTitle, confirmAction, errorText, notifyError, notifySuccess } from "./ui";
+import { useContainerManager } from "./ContainerManager";
 
 type SortKey = "name" | "image" | "state" | "registry" | "cves";
 
@@ -232,8 +233,12 @@ export function containerStacks(containers: ContainerItem[]): ContainerStack[] {
  * darunter die Container. Am Desktop eine Tabelle mit festen Spaltenbreiten (in allen Karten gleich, die Spalten fluchten),
  * am Telefon eine Liste.
  */
-function StackCard({ stack, showCves, canUpdate, loading, onUpdate, children, mobile, link }: {
+function StackCard({ stack, showCves, canUpdate, loading, onUpdate, children, mobile, link, menu, actionColumn }: {
   stack: ContainerStack; showCves: boolean; canUpdate: boolean; loading: boolean; onUpdate: () => void; children: ReactNode; mobile: ReactNode;
+  /** Mini-Docker-Manager: Menü des Stacks (null = aus) */
+  menu: ReactNode;
+  /** letzte Spalte (Update-Knopf, Menü) vorhanden */
+  actionColumn: boolean;
   /** Link auf den Containers-Reiter des Hosts (nur außerhalb der Host-Seite) */
   link: string | null;
 }) {
@@ -265,7 +270,7 @@ function StackCard({ stack, showCves, canUpdate, loading, onUpdate, children, mo
     <Card p={0}>
       <CardTitle inset icon={<Icon size={18} style={{ flexShrink: 0 }} opacity={0.7} />} badge={<Badge size="sm" color={color} style={{ flexShrink: 0 }}>{label}</Badge>}
         description={description}
-        actions={(fresh > 0 || (canUpdate && project && todo > 0) || link) && (
+        actions={(fresh > 0 || (canUpdate && project && todo > 0) || link || menu) && (
           <>
             {fresh > 0 && <Badge size="sm" color="blue" visibleFrom="sm">{t("containers.stackNew", { count: fresh })}</Badge>}
             {canUpdate && project && todo > 0 && (
@@ -280,6 +285,7 @@ function StackCard({ stack, showCves, canUpdate, loading, onUpdate, children, mo
                 </ActionIcon>
               </Tooltip>
             )}
+            {menu}
           </>
         )}>
         {stack.title}
@@ -293,7 +299,7 @@ function StackCard({ stack, showCves, canUpdate, loading, onUpdate, children, mo
               <col style={{ width: 160 }} />
               <col style={{ width: 130 }} />
               {showCves && <col style={{ width: 110 }} />}
-              {canUpdate && <col style={{ width: 130 }} />}
+              {actionColumn && <col style={{ width: 160 }} />}
             </colgroup>
             <Table.Tbody>{children}</Table.Tbody>
           </Table>
@@ -316,16 +322,20 @@ const sortLabels = {
  * neuere Images in der Registry bzw. neues Basis-Image bei selbst gebauten, relevante Lücken im Image. Sortierung oben
  * (Standard: Auffälliges zuerst), die Stacks folgen ihrem ersten Container. Bringt seine Karten selbst mit.
  */
-export function ContainerTable({ containers, hostId, onRechecked, host, onlyOutdated = false }: {
+export function ContainerTable({ containers, hostId, onRechecked, host, onlyOutdated = false, management }: {
   containers: ContainerItem[]; hostId?: string; onRechecked?: () => void;
   /** Inventar → Stacks: Host als Überschrift (Link auf seinen Containers-Reiter), je Stack ein Link dorthin. */
   host?: { name: string; siteName: string | null };
   /** nur Stacks mit neuem Image */
   onlyOutdated?: boolean;
+  /** Mini-Docker-Manager: was Agent und lokale Policy des Hosts erlauben */
+  management?: ContainerManagement | null;
 }) {
   const can = useCan();
   const { isOn } = useFeatures();
   const canUpdate = !!hostId && can.operate && isOn("AppUpdates");
+  const manager = useContainerManager(hostId, management);
+  const actionColumn = canUpdate || manager.active;
   const showCves = containers.some((c) => c.vulns && c.vulns.state !== "off");
   const [busy, setBusy] = useState(false);
   const [vulnsOf, setVulnsOf] = useState<string | null>(null);
@@ -512,6 +522,7 @@ export function ContainerTable({ containers, hostId, onRechecked, host, onlyOutd
                 data={(Object.keys(sortLabels) as (keyof typeof sortLabels)[]).filter((k) => k !== "cves" || showCves)
                   .map((k) => ({ value: k, label: t("containers.sortOption", { column: t(sortLabels[k]) }) }))} />
               {can.operate && <Button size="compact-xs" variant="light" leftSection={<IconRefresh size={12} />} loading={busy} onClick={() => void recheck()}>{tGlobal("security.recheck")}</Button>}
+              {manager.toolbar}
               {canUpdate && updatableCount > 0 && (
                 <Button size="compact-xs" variant="light" leftSection={<IconDownload size={12} />} loading={updating === ALL} onClick={() => updateMany(null)}>
                   {t("containers.updateAll", { count: updatableCount })}
@@ -520,6 +531,7 @@ export function ContainerTable({ containers, hostId, onRechecked, host, onlyOutd
             </Group>
           </Group>
           {can.operate && !isOn("AppUpdates") && containers.some((c) => c.updateAvailable && !c.updateBlocker) && <Box mt="sm"><FeatureOffHint feature="AppUpdates" /></Box>}
+          {manager.hint}
           {recipeProjects.map(({ recipe, project, first, count }) => (
             <Alert key={`${recipe.id}|${project}`} mt="sm" color="blue" icon={<IconScript size={16} />}>
               <Group justify="space-between" gap="xs" wrap="wrap">
@@ -544,6 +556,7 @@ export function ContainerTable({ containers, hostId, onRechecked, host, onlyOutd
       )}
       {stacks.map((stack) => (
         <StackCard key={stack.key} stack={stack} showCves={showCves} canUpdate={canUpdate} link={host ? hostLink : null}
+          menu={manager.stackMenu(stack)} actionColumn={actionColumn}
           loading={updating === `${STACK}${stack.project}`} onUpdate={() => updateMany(stack.project)}
           mobile={stack.items.map((c) => (
             <Group key={c.name} className="mobile-row" justify="space-between" align="flex-start" wrap="nowrap" gap="sm" style={{ cursor: "default" }}>
@@ -558,7 +571,7 @@ export function ContainerTable({ containers, hostId, onRechecked, host, onlyOutd
                   {showCves && <VulnCell c={c} onOpen={() => setVulnsOf(c.name)} />}
                 </Group>
               </Stack>
-              {canUpdate && <Box style={{ flexShrink: 0 }}>{action(c)}</Box>}
+              {actionColumn && <Group gap={6} wrap="nowrap" style={{ flexShrink: 0 }}>{canUpdate && action(c)}{manager.containerMenu(c)}</Group>}
             </Group>
           ))}>
           {stack.items.map((c) => (
@@ -568,12 +581,17 @@ export function ContainerTable({ containers, hostId, onRechecked, host, onlyOutd
               <Table.Td><StateCell c={c} /></Table.Td>
               <Table.Td><RegistryCell c={c} /></Table.Td>
               {showCves && <Table.Td><VulnCell c={c} onOpen={() => setVulnsOf(c.name)} /></Table.Td>}
-              {canUpdate && <Table.Td style={{ whiteSpace: "nowrap" }}>{action(c)}</Table.Td>}
+              {actionColumn && (
+                <Table.Td>
+                  <Group gap={6} wrap="nowrap" justify="space-between">{canUpdate && action(c) || <span />}{manager.containerMenu(c)}</Group>
+                </Table.Td>
+              )}
             </Table.Tr>
           ))}
         </StackCard>
       ))}
       {hostId && <ContainerVulnModal hostId={hostId} name={vulnsOf} onClose={() => setVulnsOf(null)} />}
+      {manager.dialogs}
     </Stack>
   );
 }

@@ -482,7 +482,7 @@ export function HostDetailPage() {
         </Tabs.Panel>
 
         <Tabs.Panel value="software"><Card p={0}><SoftwareTab hostId={h.id} windows={h.osFamily === "Windows"} busy={!!activeJob} /></Card></Tabs.Panel>
-        <Tabs.Panel value="containers"><ContainerTable containers={host.containers} hostId={h.id} onRechecked={() => void load()} /></Tabs.Panel>
+        <Tabs.Panel value="containers"><ContainerTable containers={host.containers} hostId={h.id} onRechecked={() => void load()} management={host.containerManagement} /></Tabs.Panel>
         <Tabs.Panel value="metrics">{isOn("Metrics") && <HostMetricsPanel hostId={h.id} />}</Tabs.Panel>
         <Tabs.Panel value="compliance"><ComplianceTab hostId={h.id} os={h.osFamily} /></Tabs.Panel>
 

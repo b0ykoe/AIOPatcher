@@ -78,6 +78,7 @@ import { SoftwarePage } from "./pages/SoftwarePage";
 import { RemoteReadOnly, SitePicker, SiteScopeProvider } from "./siteScope";
 import { GettingStartedNav } from "./gettingStarted";
 import { GettingStartedPage } from "./pages/GettingStartedPage";
+import { ContainerManagementHelp } from "./pages/ContainerManagementHelp";
 
 type AuthState =
   | { kind: "loading" }
@@ -399,6 +400,7 @@ function Shell({ me, onMeChanged, onLoggedOut }: { me: Me; onMeChanged: (me: Me)
               <Route path="/developer" element={<ApiPage />} />
               <Route path="/account" element={<AccountPage onMeChanged={onMeChanged} />} />
               <Route path="/getting-started" element={<GettingStartedPage />} />
+              <Route path="/help/container-management" element={<ContainerManagementHelp />} />
               {isAdmin && <Route path="/settings/:tab?" element={<SettingsPage />} />}
               {/* frühere Adressen */}
               <Route path="/cves" element={<Navigate to="/security?tab=cves" replace />} />

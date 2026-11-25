@@ -13,10 +13,23 @@ Written for users, not as a list of commits.
   host with an agent, grouped like the Containers tab (a container without compose is a stack of its own). Each host
   has a heading that links to its Containers tab, and each stack shows its status, new images, "Update stack" and a
   link to the host. The key figures and "Only outdated" include these stacks; the site filter applies.
+- **Manage containers (mini Docker manager), off by default and highly insecure:** admins can start, stop, restart
+  and delete containers, take stacks down (compose down), reclaim space (unused images and build cache), edit a
+  stack's compose file and create new stacks, right from the Containers tab and Inventory → Stacks. Every action asks
+  for confirmation, runs as a job with a live log and is written to the audit log. Volumes are only deleted if you tick
+  the extra box. Compose edits show a diff first; the agent checks the file with "compose config", keeps a backup and
+  writes nothing if the check fails. A guide explains the risks: Getting started → Discover more → Manage containers.
 
 ### Improved
 - "No Portainer connected" now only shows when there are neither Docker hosts nor Portainer. Otherwise a short note
   at the bottom says you can connect Portainer.
+
+### Upgrade notes
+- Container management needs three things: the new agent (it updates itself), the feature switch under Settings →
+  Features & security → "Manage containers (mini Docker manager)", and on each host, as root,
+  `sudo aiopatcher-agent policy set allowContainerManagement true`. Editing compose files and creating stacks also need
+  `sudo aiopatcher-agent policy set allowComposeEdit true`; files are editable below `/opt/stacks` unless you set
+  another folder with `policy set composeRoot <folder>`. The dashboard cannot change these host settings.
 
 ## [0.16.7] - 2026-11-25
 
