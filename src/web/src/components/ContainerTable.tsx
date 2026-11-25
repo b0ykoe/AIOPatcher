@@ -1,13 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router";
-import { Alert, Anchor, Badge, Box, Button, Code, Group, Loader, Modal, Stack, Table, Text, Tooltip, UnstyledButton } from "@mantine/core";
-import { IconAlertTriangle, IconBox, IconChevronDown, IconChevronUp, IconDownload, IconHammer, IconInfoCircle, IconRefresh, IconScript, IconSelector, IconStack2 } from "@tabler/icons-react";
+import { Alert, Anchor, Badge, Box, Button, Card, Code, Group, Loader, Modal, Select, Stack, Table, Text, Tooltip, UnstyledButton } from "@mantine/core";
+import { IconAlertTriangle, IconArrowsSort, IconBox, IconDownload, IconHammer, IconInfoCircle, IconRefresh, IconScript, IconStack2 } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import { api, formatRelative, type ContainerItem, type ContainerRecipe, type ContainerVulnList } from "../api";
 import { useCan } from "../App";
 import { FeatureOffHint, useFeatures } from "../features";
 import { t as tGlobal } from "../i18n";
-import { confirmAction, errorText, notifyError, notifySuccess } from "./ui";
+import { CardTitle, confirmAction, errorText, notifyError, notifySuccess } from "./ui";
 
 type SortKey = "name" | "image" | "state" | "registry" | "cves";
 
@@ -197,8 +197,8 @@ function ContainerVulnModal({ hostId, name, onClose }: { hostId: string; name: s
 
 const ALL = "__all";
 const STACK = "__stack:";
-/** Container eingerückt unter ihrer Stack-Zeile (Icon + Abstand). */
-const STACK_INDENT = 34;
+/** Container-Namen beginnen unter dem Stack-Namen (Kartenrand + Icon + Abstand). */
+const STACK_INDENT = 40;
 
 const projectOf = (c: ContainerItem) => c.compose?.split("/")[0] ?? null;
 const serviceOf = (c: ContainerItem) => c.compose?.split("/").slice(1).join("/") || null;
@@ -207,11 +207,24 @@ const wasRunning = (c: ContainerItem) => ["running", "restarting", "paused"].inc
 /** Geht bei "Alle aktualisieren" mit: neues Image, per Compose aktualisierbar, kein eigenes Update-Skript. */
 const updatable = (c: ContainerItem) => c.updateAvailable && !c.updateBlocker && !c.recipe;
 
-/** Kopfzeile eines Compose-Stacks (wie Portainer): Name, Compose-Datei, Anzahl, wie viele laufen, neue Images, "Stack aktualisieren". */
-function StackRow({ project, items, showCves, canUpdate, loading, onUpdate }: {
-  project: string | null; items: ContainerItem[]; showCves: boolean; canUpdate: boolean; loading: boolean; onUpdate: () => void;
+/** Ein Stack: Compose-Projekt, oder ein einzelner Container ohne Compose (eigene Einheit mit einem Container). */
+interface ContainerStack {
+  key: string;
+  project: string | null;
+  title: string;
+  items: ContainerItem[];
+}
+
+/**
+ * Karte eines Stacks (wie Portainer): Kopf mit Name, Status, Anzahl und Compose-Datei, neuen Images und "Stack aktualisieren",
+ * darunter die Container. Am Desktop eine Tabelle mit festen Spaltenbreiten (in allen Karten gleich, die Spalten fluchten),
+ * am Telefon eine Liste.
+ */
+function StackCard({ stack, showCves, canUpdate, loading, onUpdate, children, mobile }: {
+  stack: ContainerStack; showCves: boolean; canUpdate: boolean; loading: boolean; onUpdate: () => void; children: ReactNode; mobile: ReactNode;
 }) {
   const { t } = useTranslation();
+  const { project, items } = stack;
   const running = items.filter((c) => (c.state ?? "").toLowerCase() === "running").length;
   const crashed = items.some((c) => ["exited", "dead"].includes((c.state ?? "").toLowerCase()) && c.exitCode !== 0);
   const [color, label] = running === items.length ? ["teal", t("containers.state_running")]
@@ -221,49 +234,66 @@ function StackRow({ project, items, showCves, canUpdate, loading, onUpdate }: {
   const todo = items.filter(updatable).length;
   const files = items.find((c) => c.composeFiles)?.composeFiles?.split(",") ?? [];
   const Icon = project ? IconStack2 : IconBox;
+  const description = (
+    <>
+      {t("containers.stackContainers", { count: items.length })}
+      {" · "}
+      {project ? (
+        files.length > 0 ? (
+          <Tooltip label={files.join("\n")} disabled={files.length < 2} style={{ whiteSpace: "pre" }}>
+            <Text span inherit ff="monospace" style={{ wordBreak: "break-all" }}>{files[0]}{files.length > 1 ? ` +${files.length - 1}` : ""}</Text>
+          </Tooltip>
+        ) : "Compose"
+      ) : t("containers.standaloneHint")}
+    </>
+  );
   return (
-    <Table.Tr bg="var(--mantine-color-default-hover)">
-      <Table.Td>
-        <Group gap={8} wrap="nowrap" align="flex-start">
-          <Icon size={18} style={{ flexShrink: 0, marginTop: 1 }} opacity={0.7} />
-          <div style={{ minWidth: 0 }}>
-            <Text size="sm" fw={700}>{project ?? t("containers.standalone")}</Text>
-            {/* eine Zeile Metadaten: Anzahl · Compose-Datei (ohne Compose: woher sie kommen) */}
-            <Text size="xs" c="dimmed">
-              {t("containers.stackContainers", { count: items.length })}
-              {" · "}
-              {project ? (
-                files.length > 0 ? (
-                  <Tooltip label={files.join("\n")} disabled={files.length < 2} style={{ whiteSpace: "pre" }}>
-                    <Text span inherit ff="monospace">{files[0]}{files.length > 1 ? ` +${files.length - 1}` : ""}</Text>
-                  </Tooltip>
-                ) : "Compose"
-              ) : t("containers.standaloneHint")}
-            </Text>
-          </div>
-        </Group>
-      </Table.Td>
-      <Table.Td />
-      <Table.Td>{project && <Badge size="sm" color={color}>{label}</Badge>}</Table.Td>
-      <Table.Td>{fresh > 0 && <Badge size="sm" color="blue">{t("containers.stackNew", { count: fresh })}</Badge>}</Table.Td>
-      {showCves && <Table.Td />}
-      {canUpdate && (
-        <Table.Td style={{ whiteSpace: "nowrap" }}>
-          {project && todo > 0 && (
-            <Button size="compact-xs" variant="light" leftSection={<IconDownload size={12} />} loading={loading} onClick={onUpdate}>
-              {t("containers.updateStack")}
-            </Button>
-          )}
-        </Table.Td>
-      )}
-    </Table.Tr>
+    <Card p={0}>
+      <CardTitle inset icon={<Icon size={18} style={{ flexShrink: 0 }} opacity={0.7} />} badge={<Badge size="sm" color={color} style={{ flexShrink: 0 }}>{label}</Badge>}
+        description={description}
+        actions={(fresh > 0 || (canUpdate && project && todo > 0)) && (
+          <>
+            {fresh > 0 && <Badge size="sm" color="blue" visibleFrom="sm">{t("containers.stackNew", { count: fresh })}</Badge>}
+            {canUpdate && project && todo > 0 && (
+              <Button size="compact-xs" variant="light" leftSection={<IconDownload size={12} />} loading={loading} onClick={onUpdate}>
+                {t("containers.updateStack")}
+              </Button>
+            )}
+          </>
+        )}>
+        {stack.title}
+      </CardTitle>
+      <Box style={{ borderTop: "1px solid var(--mantine-color-default-border)" }}>
+        <Table.ScrollContainer minWidth={720} visibleFrom="sm">
+          <Table layout="fixed">
+            <colgroup>
+              <col />
+              <col />
+              <col style={{ width: 160 }} />
+              <col style={{ width: 130 }} />
+              {showCves && <col style={{ width: 110 }} />}
+              {canUpdate && <col style={{ width: 130 }} />}
+            </colgroup>
+            <Table.Tbody>{children}</Table.Tbody>
+          </Table>
+        </Table.ScrollContainer>
+        <Box hiddenFrom="sm">{mobile}</Box>
+      </Box>
+    </Card>
   );
 }
 
+const sortLabels = {
+  state: "jobs.colStatus",
+  name: "sitesPage.name",
+  registry: "security.registry",
+  cves: "containers.cves",
+} as const satisfies Record<Exclude<SortKey, "image">, string>;
+
 /**
- * Container eines Hosts, nach Compose-Stack gruppiert: Status (auch gestoppte), neuere Images in der Registry bzw. neues Basis-Image bei selbst
- * gebauten, relevante Lücken im Image. Spalten sortierbar, Standard: Auffälliges zuerst.
- * Gehört in eine Karte mit p={0} (Kopfzeile und Tabelle bringen ihren Innenabstand selbst mit).
+ * Container eines Hosts, je Stack eine Karte (Compose-Projekt oder einzelner Container ohne Compose): Status (auch gestoppte),
+ * neuere Images in der Registry bzw. neues Basis-Image bei selbst gebauten, relevante Lücken im Image. Sortierung oben
+ * (Standard: Auffälliges zuerst), die Stacks folgen ihrem ersten Container. Bringt seine Karten selbst mit.
  */
 export function ContainerTable({ containers, hostId, onRechecked }: { containers: ContainerItem[]; hostId?: string; onRechecked?: () => void }) {
   const can = useCan();
@@ -393,137 +423,131 @@ export function ContainerTable({ containers, hostId, onRechecked }: { containers
   const skipReason = (c: ContainerItem) => (c.recipe ? t("containers.blockerShort.recipe") : t(`containers.blockerShort.${c.updateBlocker ?? "agent"}`));
   const updatableCount = containers.filter(updatable).length;
 
-  const [sort, setSort] = useState<{ key: SortKey; desc: boolean }>({ key: "state", desc: false });
-
-  const sorted = [...containers].sort((a, b) => {
-    const result = compare[sort.key](a, b) || (sort.key === "state" ? registryRank(a) - registryRank(b) : 0);
-    return (sort.desc ? -result : result) || a.name.localeCompare(b.name);
-  });
-  // Wie Portainer: je Compose-Projekt eine Stack-Zeile, Reihenfolge nach dem ersten Container in der Sortierung; ohne Compose zuletzt
-  const stacks = sorted.reduce<{ project: string | null; items: ContainerItem[] }[]>((acc, c) => {
+  const [sort, setSort] = useState<Exclude<SortKey, "image">>("state");
+  const sorted = [...containers].sort((a, b) =>
+    compare[sort](a, b) || (sort === "state" ? registryRank(a) - registryRank(b) : 0) || a.name.localeCompare(b.name));
+  // Je Compose-Projekt ein Stack, ein Container ohne Compose ist ein Stack für sich; Reihenfolge nach dem ersten Container
+  const stacks = sorted.reduce<ContainerStack[]>((acc, c) => {
     const project = projectOf(c);
-    const stack = acc.find((s) => s.project === project);
+    const key = project ? `compose:${project}` : `single:${c.name}`;
+    const stack = acc.find((s) => s.key === key);
     if (stack) stack.items.push(c);
-    else acc.push({ project, items: [c] });
+    else acc.push({ key, project, title: project ?? c.name, items: [c] });
     return acc;
-  }, []).sort((a, b) => (a.project === null ? 1 : 0) - (b.project === null ? 1 : 0));
+  }, []);
 
-  const header = (key: SortKey, label: string) => {
-    const active = sort.key === key;
-    const Icon = active ? (sort.desc ? IconChevronDown : IconChevronUp) : IconSelector;
-    return (
-      <Table.Th aria-sort={active ? (sort.desc ? "descending" : "ascending") : undefined}>
-        <UnstyledButton onClick={() => setSort({ key, desc: active ? !sort.desc : false })}>
-          <Group gap={4} wrap="nowrap">
-            <Text size="sm" fw={600}>{label}</Text>
-            <Icon size={14} opacity={active ? 1 : 0.5} />
-          </Group>
-        </UnstyledButton>
-      </Table.Th>
-    );
-  };
+  /** Letzte Spalte: Update-Knopf, sonst warum nicht (Update-Skript, kein Compose, Datei fehlt …). */
+  const action = (c: ContainerItem) => c.updateAvailable && (c.recipe ? (
+    <Tooltip label={t("containers.recipeRowHint", { app: c.recipe.app, name: c.recipe.name })} multiline w={300}>
+      <Group gap={4} wrap="nowrap" c="dimmed" style={{ cursor: "help" }}>
+        <IconScript size={14} />
+        <Text size="xs">{t("containers.recipeRow", { name: c.recipe.name })}</Text>
+      </Group>
+    </Tooltip>
+  ) : c.updateBlocker ? (
+    <Tooltip label={t(`containers.blocker.${c.updateBlocker}`)} multiline w={300}>
+      <Group gap={4} wrap="nowrap" c="dimmed" style={{ cursor: "help" }}>
+        <IconInfoCircle size={14} />
+        <Text size="xs">{t(`containers.blockerShort.${c.updateBlocker}`)}</Text>
+      </Group>
+    </Tooltip>
+  ) : (
+    <Button size="compact-xs" variant="light" leftSection={c.baseImage ? <IconHammer size={12} /> : <IconDownload size={12} />}
+      loading={updating === c.name} onClick={() => update(c)}>
+      {c.baseImage ? t("containers.rebuild") : t("containers.update")}
+    </Button>
+  ));
+
+  const nameBlock = (c: ContainerItem) => (
+    <>
+      <Text size="sm" fw={600} style={{ overflowWrap: "anywhere" }}>{c.name}</Text>
+      {serviceOf(c) && serviceOf(c) !== c.name && <Text size="xs" c="dimmed">{t("containers.service", { service: serviceOf(c) })}</Text>}
+    </>
+  );
+  const imageBlock = (c: ContainerItem) => (
+    <>
+      <Text size="xs" ff="monospace" style={{ overflowWrap: "anywhere" }}>{c.image}</Text>
+      {c.baseImage && <Text size="xs" c="dimmed" style={{ overflowWrap: "anywhere" }}>{t("containers.base", { image: c.baseImage })}</Text>}
+    </>
+  );
 
   return (
-    <>
-    {hostId && (
-      <Group justify="space-between" gap="xs" px="md" py="sm" wrap="wrap">
-        <Text size="xs" c="dimmed">
-          {tGlobal("security.freshness", { seen: formatRelative(seen), checked: formatRelative(checked) })}
-        </Text>
-        {/* Karten-Aktionen (Styleguide 9: compact-xs light); "Alle aktualisieren" rechts außen über der Spalte mit den Update-Knöpfen */}
-        <Group gap="xs">
-          {can.operate && <Button size="compact-xs" variant="light" leftSection={<IconRefresh size={12} />} loading={busy} onClick={() => void recheck()}>{tGlobal("security.recheck")}</Button>}
-          {canUpdate && updatableCount > 0 && (
-            <Button size="compact-xs" variant="light" leftSection={<IconDownload size={12} />} loading={updating === ALL} onClick={() => updateMany(null)}>
-              {t("containers.updateAll", { count: updatableCount })}
-            </Button>
-          )}
-        </Group>
-      </Group>
-    )}
-    {hostId && can.operate && !isOn("AppUpdates") && containers.some((c) => c.updateAvailable && !c.updateBlocker) && <Box px="md" pb="sm"><FeatureOffHint feature="AppUpdates" /></Box>}
-    {hostId && recipeProjects.map(({ recipe, project, first, count }) => (
-      <Box key={`${recipe.id}|${project}`} px="md" pb="sm">
-        <Alert color="blue" icon={<IconScript size={16} />}>
+    <Stack gap="sm">
+      {hostId && (
+        <Card>
           <Group justify="space-between" gap="xs" wrap="wrap">
-            <Stack gap={4} style={{ flex: "1 1 320px" }}>
-              <Text size="sm">{t("containers.recipeDetected", { app: recipe.app, project, count })}</Text>
-              {!recipe.allowed && (
-                <Text size="xs" c="dimmed">
-                  {t("containers.recipeNotAllowed")} <Code>sudo aiopatcher-agent policy set allowUpdateRecipes true</Code>
-                </Text>
+            <Text size="xs" c="dimmed">
+              {tGlobal("security.freshness", { seen: formatRelative(seen), checked: formatRelative(checked) })}
+            </Text>
+            {/* Karten-Aktionen (Styleguide 9: compact-xs light); "Alle aktualisieren" rechts außen */}
+            <Group gap="xs" wrap="wrap">
+              <Select size="xs" w={170} aria-label={t("containers.sortBy")} leftSection={<IconArrowsSort size={14} />} allowDeselect={false}
+                value={sort} onChange={(v) => v && setSort(v as typeof sort)}
+                data={(Object.keys(sortLabels) as (keyof typeof sortLabels)[]).filter((k) => k !== "cves" || showCves)
+                  .map((k) => ({ value: k, label: t("containers.sortOption", { column: t(sortLabels[k]) }) }))} />
+              {can.operate && <Button size="compact-xs" variant="light" leftSection={<IconRefresh size={12} />} loading={busy} onClick={() => void recheck()}>{tGlobal("security.recheck")}</Button>}
+              {canUpdate && updatableCount > 0 && (
+                <Button size="compact-xs" variant="light" leftSection={<IconDownload size={12} />} loading={updating === ALL} onClick={() => updateMany(null)}>
+                  {t("containers.updateAll", { count: updatableCount })}
+                </Button>
               )}
-            </Stack>
-            {canUpdate && recipe.allowed && (
-              <Button size="compact-xs" variant="light" leftSection={<IconScript size={12} />}
-                loading={updating === first.name} onClick={() => updateViaRecipe(recipe, project, first)}>
-                {t("containers.recipeUpdate", { name: recipe.name })}
-              </Button>
-            )}
+            </Group>
           </Group>
-        </Alert>
-      </Box>
-    ))}
-    <Table.ScrollContainer minWidth={760}>
-      <Table>
-        <Table.Thead>
-          <Table.Tr>
-            {header("name", t("sitesPage.name"))}
-            {header("image", t("security.image"))}
-            {header("state", t("jobs.colStatus"))}
-            {header("registry", t("security.registry"))}
-            {showCves && header("cves", t("containers.cves"))}
-            {canUpdate && <Table.Th w={1} />}
-          </Table.Tr>
-        </Table.Thead>
-        <Table.Tbody>
-          {stacks.map((stack) => [
-            <StackRow key={`stack:${stack.project ?? ""}`} project={stack.project} items={stack.items} showCves={showCves} canUpdate={canUpdate}
-              loading={updating === `${STACK}${stack.project}`} onUpdate={() => updateMany(stack.project)} />,
-            ...stack.items.map((c) => (
+          {can.operate && !isOn("AppUpdates") && containers.some((c) => c.updateAvailable && !c.updateBlocker) && <Box mt="sm"><FeatureOffHint feature="AppUpdates" /></Box>}
+          {recipeProjects.map(({ recipe, project, first, count }) => (
+            <Alert key={`${recipe.id}|${project}`} mt="sm" color="blue" icon={<IconScript size={16} />}>
+              <Group justify="space-between" gap="xs" wrap="wrap">
+                <Stack gap={4} style={{ flex: "1 1 260px" }}>
+                  <Text size="sm">{t("containers.recipeDetected", { app: recipe.app, project, count })}</Text>
+                  {!recipe.allowed && (
+                    <Text size="xs" c="dimmed">
+                      {t("containers.recipeNotAllowed")} <Code>sudo aiopatcher-agent policy set allowUpdateRecipes true</Code>
+                    </Text>
+                  )}
+                </Stack>
+                {canUpdate && recipe.allowed && (
+                  <Button size="compact-xs" variant="light" leftSection={<IconScript size={12} />}
+                    loading={updating === first.name} onClick={() => updateViaRecipe(recipe, project, first)}>
+                    {t("containers.recipeUpdate", { name: recipe.name })}
+                  </Button>
+                )}
+              </Group>
+            </Alert>
+          ))}
+        </Card>
+      )}
+      {stacks.map((stack) => (
+        <StackCard key={stack.key} stack={stack} showCves={showCves} canUpdate={canUpdate}
+          loading={updating === `${STACK}${stack.project}`} onUpdate={() => updateMany(stack.project)}
+          mobile={stack.items.map((c) => (
+            <Group key={c.name} className="mobile-row" justify="space-between" align="flex-start" wrap="nowrap" gap="sm" style={{ cursor: "default" }}>
+              <Stack gap={6} style={{ minWidth: 0, flex: 1 }}>
+                <div>
+                  {nameBlock(c)}
+                  {imageBlock(c)}
+                </div>
+                <Group gap="xs" align="flex-start" wrap="wrap">
+                  <StateCell c={c} />
+                  <RegistryCell c={c} />
+                  {showCves && <VulnCell c={c} onOpen={() => setVulnsOf(c.name)} />}
+                </Group>
+              </Stack>
+              {canUpdate && <Box style={{ flexShrink: 0 }}>{action(c)}</Box>}
+            </Group>
+          ))}>
+          {stack.items.map((c) => (
             <Table.Tr key={c.name}>
-              <Table.Td pl={STACK_INDENT}>
-                <Text size="sm" fw={600}>{c.name}</Text>
-                {serviceOf(c) && serviceOf(c) !== c.name && <Text size="xs" c="dimmed">{t("containers.service", { service: serviceOf(c) })}</Text>}
-              </Table.Td>
-              <Table.Td>
-                <Text size="xs" ff="monospace">{c.image}</Text>
-                {c.baseImage && <Text size="xs" c="dimmed">{t("containers.base", { image: c.baseImage })}</Text>}
-              </Table.Td>
+              <Table.Td pl={STACK_INDENT}>{nameBlock(c)}</Table.Td>
+              <Table.Td>{imageBlock(c)}</Table.Td>
               <Table.Td><StateCell c={c} /></Table.Td>
               <Table.Td><RegistryCell c={c} /></Table.Td>
               {showCves && <Table.Td><VulnCell c={c} onOpen={() => setVulnsOf(c.name)} /></Table.Td>}
-              {canUpdate && (
-                <Table.Td style={{ whiteSpace: "nowrap" }}>
-                  {c.updateAvailable && (c.recipe ? (
-                    <Tooltip label={t("containers.recipeRowHint", { app: c.recipe.app, name: c.recipe.name })} multiline w={300}>
-                      <Group gap={4} wrap="nowrap" c="dimmed" style={{ cursor: "help" }}>
-                        <IconScript size={14} />
-                        <Text size="xs">{t("containers.recipeRow", { name: c.recipe.name })}</Text>
-                      </Group>
-                    </Tooltip>
-                  ) : c.updateBlocker ? (
-                    <Tooltip label={t(`containers.blocker.${c.updateBlocker}`)} multiline w={300}>
-                      <Group gap={4} wrap="nowrap" c="dimmed" style={{ cursor: "help" }}>
-                        <IconInfoCircle size={14} />
-                        <Text size="xs">{t(`containers.blockerShort.${c.updateBlocker}`)}</Text>
-                      </Group>
-                    </Tooltip>
-                  ) : (
-                    <Button size="compact-xs" variant="light" leftSection={c.baseImage ? <IconHammer size={12} /> : <IconDownload size={12} />}
-                      loading={updating === c.name} onClick={() => update(c)}>
-                      {c.baseImage ? t("containers.rebuild") : t("containers.update")}
-                    </Button>
-                  ))}
-                </Table.Td>
-              )}
+              {canUpdate && <Table.Td style={{ whiteSpace: "nowrap" }}>{action(c)}</Table.Td>}
             </Table.Tr>
-            )),
-          ])}
-        </Table.Tbody>
-      </Table>
-    </Table.ScrollContainer>
-    {hostId && <ContainerVulnModal hostId={hostId} name={vulnsOf} onClose={() => setVulnsOf(null)} />}
-    </>
+          ))}
+        </StackCard>
+      ))}
+      {hostId && <ContainerVulnModal hostId={hostId} name={vulnsOf} onClose={() => setVulnsOf(null)} />}
+    </Stack>
   );
 }
