@@ -8,6 +8,8 @@ Written for users, not as a list of commits.
 
 ## [Unreleased]
 
+## [0.17.2] - 2026-11-25
+
 ### Improved
 - **"Reclaim space" shows what it deletes, and you pick:** the dialog now checks the host first and lists every unused
   image (name and tag, size, when it was built; biggest first), the build cache (entries and size) and every unused
