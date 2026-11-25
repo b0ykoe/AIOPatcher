@@ -8,7 +8,8 @@ import { useCan } from "../../App";
 import { MirrorStatusLine } from "../../pages/CveLookupPage";
 import { openSetupWizard } from "../SetupWizard";
 import { ScanSettingsCard, TimingsCard } from "../ScanIntervals";
-import { CardTitle, notifyError, notifySuccess } from "../ui";
+import { CardTitle } from "../ui";
+import { checkForUpdate, ServerUpdateButton, ServerUpdateManual, ServerUpdateRunning } from "../UpdateBanner";
 
 /** Einstellungen → Allgemein: Version, Zeitzone, CVE-Datenbank, Assistent, API. */
 export function GeneralSettings() {
@@ -18,22 +19,13 @@ export function GeneralSettings() {
   const [checking, setChecking] = useState(false);
   const [checked, setChecked] = useState<{ at: string; latest: string | null } | null>(null);
 
-  /** Sofort bei GitHub nachsehen; die Meldung nennt, welche Version GitHub als neueste meldet. */
   const checkNow = async () => {
     setChecking(true);
-    try {
-      const r = await api.post<{ checkedNow: boolean; checkedAt: string | null; error: string | null; latestVersion: string | null; updateAvailable: boolean }>("/api/server/check-update");
-      if (r.checkedAt) setChecked({ at: r.checkedAt, latest: r.latestVersion });
-      setInfo(await api.get<ServerInfo>("/api/server-info"));
-      if (r.error) notifyError(new Error(r.error), t("settings.checkFailed"));
-      else if (r.updateAvailable && r.latestVersion) notifySuccess(t("settings.updateAvailable", { version: r.latestVersion }), t("settings.updateAvailableHint"));
-      else if (r.latestVersion) notifySuccess(t("settings.upToDate"), t("settings.latestRelease", { version: r.latestVersion }));
-      else notifyError(new Error(t("settings.noRelease")), t("settings.checkFailed"));
-    } catch (e) {
-      notifyError(e);
-    } finally {
-      setChecking(false);
-    }
+    const r = await checkForUpdate();
+    setChecking(false);
+    if (!r) return;
+    if (r.result.checkedAt) setChecked({ at: r.result.checkedAt, latest: r.result.latestVersion });
+    setInfo(r.info);
   };
 
   useEffect(() => {
@@ -60,6 +52,17 @@ export function GeneralSettings() {
             {t("settings.lastChecked", { when: formatRelative(checked.at) })}
             {checked.latest ? ` · ${t("settings.latestRelease", { version: checked.latest })}` : ""}
           </Text>
+        )}
+        {can.admin && info?.updateAvailable && (
+          <Stack gap={4} mt="sm" align="flex-start">
+            {info.runningUpdateJob ? <ServerUpdateRunning jobId={info.runningUpdateJob} />
+              : (info.updateHosts ?? []).length > 0 ? (
+                <>
+                  <ServerUpdateButton info={info} size="compact-sm" />
+                  <Text size="xs" c="dimmed">{t("update.buttonHint")}</Text>
+                </>
+              ) : <ServerUpdateManual />}
+          </Stack>
         )}
         <Text fw={700} mt="md" mb={4}>{t("settings.generalTimeZone")}</Text>
         <Text ff="monospace">{info?.timeZone ?? "…"}</Text>

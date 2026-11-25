@@ -866,7 +866,6 @@ const de = {
     generalApiOpen: "API-Seite öffnen",
     upToDate: "aktuell",
     updateAvailable: "Update {{version}} verfügbar",
-    updateAvailableHint: "Der Hinweis mit „Jetzt aktualisieren“ steht auf der Übersicht.",
     checkNow: "Jetzt prüfen",
     checkFailed: "Versionsprüfung fehlgeschlagen",
     latestRelease: "Neueste Version bei GitHub: v{{version}}",

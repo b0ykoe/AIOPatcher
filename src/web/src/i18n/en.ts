@@ -867,7 +867,6 @@ const en: Translation = {
     generalApiOpen: "Open API page",
     upToDate: "up to date",
     updateAvailable: "Update {{version}} available",
-    updateAvailableHint: "The notice with \"Update now\" is on the overview.",
     checkNow: "Check now",
     checkFailed: "Version check failed",
     latestRelease: "Latest version on GitHub: v{{version}}",

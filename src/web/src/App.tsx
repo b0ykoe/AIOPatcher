@@ -1,8 +1,10 @@
 import { EmergencyBanner, FeaturesProvider } from "./features";
+import { checkForUpdate, ServerUpdateButton } from "./components/UpdateBanner";
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
-import { Navigate, NavLink as RouterLink, Route, Routes, useLocation, useNavigate, useParams } from "react-router";
+import { Link, Navigate, NavLink as RouterLink, Route, Routes, useLocation, useNavigate, useParams } from "react-router";
 import {
   ActionIcon,
+  Anchor,
   AppShell,
   Box,
   Burger,
@@ -31,6 +33,7 @@ import {
   IconLogout,
   IconMoon,
   IconPlus,
+  IconRefresh,
   IconShieldHalfFilled,
   IconApps,
   IconReportAnalytics,
@@ -459,10 +462,15 @@ function ColorSchemeToggle() {
   );
 }
 
-/** Unten in der Navigation: laufende Version, bei neuer Version ein Hinweis mit Link zu den Release-Notes. */
+/**
+ * Unten in der Navigation: laufende Version und (für Admins) "Jetzt prüfen" als Icon. Bei neuer Version ein Hinweis
+ * mit Link zu den Release-Notes und "Jetzt aktualisieren", wenn ein Server-Host das Update ausführen kann.
+ */
 function VersionInfo() {
   const { t } = useTranslation();
+  const can = useCan();
   const [info, setInfo] = useState<ServerInfo | null>(null);
+  const [checking, setChecking] = useState(false);
 
   useEffect(() => {
     const load = () => void api.get<ServerInfo>("/api/server-info").then(setInfo).catch(() => {});
@@ -473,6 +481,21 @@ function VersionInfo() {
 
   if (!info) return null;
 
+  const checkNow = async () => {
+    setChecking(true);
+    const r = await checkForUpdate();
+    setChecking(false);
+    if (r) setInfo(r.info);
+  };
+
+  const refresh = can.admin && (
+    <Tooltip label={t("settings.checkNow")} position="right">
+      <ActionIcon variant="subtle" color="gray" size="sm" loading={checking} onClick={() => void checkNow()} aria-label={t("settings.checkNow")}>
+        <IconRefresh size={14} />
+      </ActionIcon>
+    </Tooltip>
+  );
+
   const version = (
     <Text size="xs" c="dimmed" ff="monospace">
       AIOPatcher v{info.version}
@@ -481,34 +504,36 @@ function VersionInfo() {
 
   if (!info.updateAvailable || !info.latestVersion) {
     return (
-      <Group gap={6} px={6} py={4} wrap="nowrap">
+      <Group gap={6} px={6} py={2} wrap="nowrap">
         <IconCircleCheck size={14} color="var(--mantine-color-teal-5)" opacity={info.latestVersion ? 1 : 0} aria-hidden />
         <Tooltip label={info.latestVersion ? t("update.upToDate") : t("update.unknown")} position="right">
           {version}
         </Tooltip>
+        <div style={{ flex: 1 }} />
+        {refresh}
       </Group>
     );
   }
 
   return (
-    <UnstyledButton
-      component="a"
-      href={info.releaseUrl ?? undefined}
-      target="_blank"
-      rel="noreferrer"
-      px={8}
-      py={6}
-      style={{ borderRadius: 10, background: "var(--mantine-color-violet-light)" }}
-      aria-label={t("update.sidebar", { version: info.latestVersion })}
-    >
-      <Group gap={8} wrap="nowrap">
-        <IconSparkles size={16} color="var(--mantine-color-violet-4)" />
-        <Stack gap={0}>
-          <Text size="xs" fw={700} c="violet.3">{t("update.sidebar", { version: info.latestVersion })}</Text>
-          {version}
-        </Stack>
+    <Stack gap={6} px={8} py={6} style={{ borderRadius: 10, background: "var(--mantine-color-violet-light)" }}>
+      <Group gap={8} wrap="nowrap" justify="space-between">
+        <UnstyledButton component="a" href={info.releaseUrl ?? undefined} target="_blank" rel="noreferrer" style={{ minWidth: 0 }}
+          aria-label={t("update.sidebar", { version: info.latestVersion })}>
+          <Group gap={8} wrap="nowrap">
+            <IconSparkles size={16} color="var(--mantine-color-violet-4)" style={{ flexShrink: 0 }} />
+            <Stack gap={0} style={{ minWidth: 0 }}>
+              <Text size="xs" fw={700} c="violet.3">{t("update.sidebar", { version: info.latestVersion })}</Text>
+              {version}
+            </Stack>
+          </Group>
+        </UnstyledButton>
+        {refresh}
       </Group>
-    </UnstyledButton>
+      {can.admin && (info.runningUpdateJob
+        ? <Anchor component={Link} to={`/jobs/${info.runningUpdateJob}`} size="xs">{t("update.running")}</Anchor>
+        : <ServerUpdateButton info={info} size="compact-xs" fullWidth />)}
+    </Stack>
   );
 }
 

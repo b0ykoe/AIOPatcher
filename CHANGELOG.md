@@ -8,6 +8,12 @@ Written for users, not as a list of commits.
 
 ## [Unreleased]
 
+### Improved
+- **Update AIOPatcher from more places:** "Update now" is now also in the sidebar (under the version) and in
+  Settings → General next to the version, not only on the overview. Without a server host that can run the update,
+  Settings shows the command instead.
+- **Check for a new version from the sidebar:** a refresh icon next to the version asks GitHub right away (admins).
+
 ## [0.16.5] - 2026-11-25
 
 ### Improved
