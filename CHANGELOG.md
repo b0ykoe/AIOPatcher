@@ -8,6 +8,8 @@ Written for users, not as a list of commits.
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-11-25
+
 ### Added
 - **Inventory → Stacks shows your Docker hosts too:** besides Portainer, the page now lists the stacks of every Docker
   host with an agent, grouped like the Containers tab (a container without compose is a stack of its own). Each host
