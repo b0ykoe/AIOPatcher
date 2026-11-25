@@ -8,6 +8,8 @@ Written for users, not as a list of commits.
 
 ## [Unreleased]
 
+## [0.16.7] - 2026-11-25
+
 ### Improved
 - **Each stack is its own card on the Containers tab:** every compose project, and every container started without
   compose, now gets a card with its name, status, number of containers, compose file, new images and "Update stack",
