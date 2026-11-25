@@ -13,6 +13,8 @@ namespace AIOPatcher.Contracts;
 // Zertifikatserneuerung fordert der Server als Auftrag an, der Agent antwortet darauf. Der Abfrage selbst liegt
 // nur die Agent-Version als Header bei (wie ein User-Agent), dazu eine zufällige Kennung des laufenden Prozesses:
 // Ändert sie sich (Neustart von Agent oder Host), fragt der Server sofort neue Systemdaten an (z. B. Uptime).
+// Dazu ein Fingerabdruck der lokalen policy.json: Weicht er vom zuletzt gemeldeten Stand ab (z. B. nach
+// "aiopatcher-agent policy set"), fragt der Server ebenfalls sofort neue Systemdaten samt Policy an.
 
 public static class PullProtocol
 {
@@ -21,6 +23,15 @@ public static class PullProtocol
     public const string PollPath = "/agent/v2/poll";
     public const string VersionHeader = "X-AIOPatcher-Agent-Version";
     public const string InstanceHeader = "X-AIOPatcher-Agent-Instance";
+    public const string PolicyHeader = "X-AIOPatcher-Agent-Policy";
+
+    /// <summary>
+    /// Kurzer Fingerabdruck einer Policy (16 Hex-Zeichen aus SHA-256 des JSON). Agent und Server rechnen ihn gleich,
+    /// der Server aus der gespeicherten Meldung. Nur zum Erkennen von Änderungen, keine Sicherheitsfunktion.
+    /// </summary>
+    public static string PolicyFingerprint(AgentPolicyReport report) =>
+        Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(
+            JsonSerializer.SerializeToUtf8Bytes(report, PullJsonContext.Default.AgentPolicyReport)))[..16];
     public static string TaskLogPath(Guid taskId) => $"/agent/v2/tasks/{taskId}/log";
     public static string TaskResultPath(Guid taskId) => $"/agent/v2/tasks/{taskId}/result";
 }

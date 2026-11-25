@@ -8,6 +8,15 @@ Written for users, not as a list of commits.
 
 ## [Unreleased]
 
+### Fixed
+- **Host settings changed with `aiopatcher-agent policy set` show up right away:** the dashboard used to learn about
+  them only with the next system data (up to 15 minutes), so e.g. "Container management is turned on in AIOPatcher but
+  not allowed on this host" stayed after allowing it. The agent now reports a change within about a minute.
+
+### Upgrade notes
+- Needs the new agent (it updates itself). Until then, restarting the agent on the host has the same effect:
+  `sudo systemctl restart aiopatcher-agent`.
+
 ## [0.17.0] - 2026-11-25
 
 ### Added

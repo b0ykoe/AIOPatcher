@@ -40,9 +40,10 @@ public sealed class PullProtocolTests : IDisposable
         _features.LoadAsync(_db, CancellationToken.None).GetAwaiter().GetResult();
     }
 
-    private async Task<AgentTask?> PollAsync(string? version = "0.1.0")
+    private async Task<AgentTask?> PollAsync(string? version = "0.1.0", string? policy = null)
     {
-        var task = await PullEndpoints.NextTaskAsync(_db, _host, _notifier, _features, _downloads, null, version, DateTime.UtcNow, CancellationToken.None);
+        var task = await PullEndpoints.NextTaskAsync(_db, _host, _notifier, _features, _downloads, null, version, DateTime.UtcNow, CancellationToken.None,
+            polledPolicy: policy);
         await _db.SaveChangesAsync();
         return task;
     }
@@ -100,6 +101,35 @@ public sealed class PullProtocolTests : IDisposable
         last.CreatedAt = DateTime.UtcNow.AddMinutes(-2);
         await _db.SaveChangesAsync();
         Assert.Equal(ModuleActions.Describe, (await PollAsync("0.2.0"))!.Action);
+    }
+
+    [Fact]
+    public async Task PolicyChangedOnHost_TriggersDescribe_ThrottledToOncePerMinute()
+    {
+        var before = new AgentPolicy().ToReport();
+        var after = (new AgentPolicy() with { AllowContainerManagement = true }).ToReport();
+        Assert.NotEqual(PullProtocol.PolicyFingerprint(before), PullProtocol.PolicyFingerprint(after));
+
+        var first = await PollAsync();
+        var description = PullJsonContext.FromElement(Describe(Module(AgentModules.System), Module(AgentModules.Agent)), PullJsonContext.Default.SystemDescription)!
+            with { Policy = before };
+        await AnswerAsync(first!, JobOutcome.Succeeded, PullJsonContext.ToElement(description, PullJsonContext.Default.SystemDescription));
+
+        // Gleicher Stand wie gemeldet (Fingerabdruck übersteht das Speichern) oder älterer Agent ohne Header: nichts
+        Assert.Null(await PollAsync(policy: PullProtocol.PolicyFingerprint(before)));
+        Assert.Null(await PollAsync(policy: null));
+
+        // "policy set" auf dem Host: innerhalb der ersten Minute nach der letzten Beschreibung noch nicht, danach sofort
+        Assert.Null(await PollAsync(policy: PullProtocol.PolicyFingerprint(after)));
+        var last = await _db.AgentTasks.SingleAsync();
+        last.CreatedAt = DateTime.UtcNow.AddMinutes(-2);
+        await _db.SaveChangesAsync();
+        var again = await PollAsync(policy: PullProtocol.PolicyFingerprint(after));
+        Assert.Equal((AgentModules.System, ModuleActions.Describe), (again!.Module, again.Action));
+
+        await AnswerAsync(again, JobOutcome.Succeeded, PullJsonContext.ToElement(description with { Policy = after }, PullJsonContext.Default.SystemDescription));
+        Assert.Contains("\"allowContainerManagement\":true", _host.ReportedPolicy);
+        Assert.Null(await PollAsync(policy: PullProtocol.PolicyFingerprint(after)));
     }
 
     [Fact]

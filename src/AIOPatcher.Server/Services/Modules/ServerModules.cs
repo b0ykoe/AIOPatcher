@@ -32,6 +32,9 @@ public sealed class ModuleContext(
     /// <summary>Changelogs anstehender Updates (null in Tests ohne diesen Teil).</summary>
     public UpdateChangelogs? Changelogs => changelogs;
 
+    /// <summary>Policy-Fingerabdruck aus der Abfrage (Header); null bei älteren Agents.</summary>
+    public string? PolledPolicy { get; init; }
+
     /// <summary>Update-Scan-Intervall des Hosts (Einstellungen bzw. je Host; ohne Schedule der feste Standard).</summary>
     public TimeSpan UpdateScanInterval(ManagedHost host) => schedule?.UpdateScanInterval(host) ?? ServerModule.InventoryInterval;
 
@@ -105,10 +108,21 @@ public sealed class SystemServerModule : ServerModule
         var restarted = host.AgentRestartedAt is { } at && !(context.LastRequested(Id, ModuleActions.Describe) >= at);
         // Update-Automatik umgestellt: Stand gleich neu melden lassen
         var autoUpdatesChanged = context.LastRequested(AgentModules.Updates, ModuleActions.Change) > context.LastRequested(Id, ModuleActions.Describe);
-        return context.Older(Id, ModuleActions.Describe, context.Timing(Timings.System)) || restarted || autoUpdatesChanged || versionChanged && context.Older(Id, ModuleActions.Describe, TimeSpan.FromMinutes(1))
+        // policy.json auf dem Host geändert (policy set): neue Policy gleich melden lassen, nicht erst im 15-Minuten-Takt
+        var policyChanged = PolicyChanged(host, context.PolledPolicy);
+        return context.Older(Id, ModuleActions.Describe, context.Timing(Timings.System)) || restarted || autoUpdatesChanged
+               || (versionChanged || policyChanged) && context.Older(Id, ModuleActions.Describe, TimeSpan.FromMinutes(1))
             ? new PlannedTask(ModuleActions.Describe)
             : null;
     }
+
+    /// <summary>
+    /// Weicht der Fingerabdruck aus der Abfrage von der gespeicherten Policy ab? Ohne Fingerabdruck (älterer Agent) oder
+    /// ohne gespeicherte Policy nie: dann gilt der normale Takt.
+    /// </summary>
+    public static bool PolicyChanged(ManagedHost host, string? polledPolicy) =>
+        polledPolicy is { Length: > 0 } fingerprint && PolicyReport.Parse(host.ReportedPolicy) is { } reported
+        && !string.Equals(PullProtocol.PolicyFingerprint(reported), fingerprint, StringComparison.OrdinalIgnoreCase);
 
     public override async Task<JsonElement?> HandleAsync(ModuleContext context, ManagedHost host, AgentTaskRecord task, TaskResultRequest result, CancellationToken ct)
     {

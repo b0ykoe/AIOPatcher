@@ -60,12 +60,14 @@ public static class PullEndpoints
         AgentEndpoints.MarkSeen(host, notifier, now);
         host.ProtocolVersion = PullProtocol.Version;
         var polledVersion = http.Request.Headers[PullProtocol.VersionHeader].ToString() is { Length: > 0 and <= 32 } v ? v : null;
+        var polledPolicy = http.Request.Headers[PullProtocol.PolicyHeader].ToString() is { Length: > 0 and <= 64 } p ? p : null;
         NoteInstance(host, http.Request.Headers[PullProtocol.InstanceHeader].ToString(), now);
 
         AgentTask? task = null;
         if (running is null)
         {
-            task = await NextTaskAsync(db, host, notifier, features, downloads, ComplianceEndpoints.SecretProtector(protection), polledVersion, now, ct, schedule, changelogs);
+            task = await NextTaskAsync(db, host, notifier, features, downloads, ComplianceEndpoints.SecretProtector(protection), polledVersion, now, ct, schedule, changelogs,
+                polledPolicy);
         }
 
         // Über den Proxy sieht der Proxy (evtl. Cloudflare) den Inhalt: Geheimnisse nur für den Agent verschlüsselt
@@ -120,7 +122,8 @@ public static class PullEndpoints
     /// Offene Aufträge ohne Antwort gelten als verloren (der Agent arbeitet immer nur einen ab).
     /// </summary>
     public static async Task<AgentTask?> NextTaskAsync(AppDbContext db, ManagedHost host, Notifier notifier, FeatureFlags features, AgentDownloads downloads,
-        IDataProtector? secrets, string? polledVersion, DateTime now, CancellationToken ct, ScanSchedule? schedule = null, UpdateChangelogs? changelogs = null)
+        IDataProtector? secrets, string? polledVersion, DateTime now, CancellationToken ct, ScanSchedule? schedule = null, UpdateChangelogs? changelogs = null,
+        string? polledPolicy = null)
     {
         var lost = await db.AgentTasks.Where(t => t.HostId == host.Id && t.Status == JobStatus.Running).ToListAsync(ct);
         foreach (var t in lost)
@@ -163,7 +166,7 @@ public static class PullEndpoints
                 .Select(g => new { g.Key.Module, g.Key.Action, Last = g.Max(t => t.CreatedAt) })
                 .ToListAsync(ct))
             .ToDictionary(x => (x.Module, x.Action), x => x.Last);
-        var context = new ModuleContext(db, notifier, features, downloads, null, now, history, schedule, changelogs);
+        var context = new ModuleContext(db, notifier, features, downloads, null, now, history, schedule, changelogs) { PolledPolicy = polledPolicy };
 
         foreach (var module in ServerModule.All)
         {

@@ -257,10 +257,18 @@ public sealed class ServerClient : IDisposable
     /// <summary>Zufällig je Prozessstart; der Server erkennt daran einen Neustart (keine weiteren Daten).</summary>
     private static readonly string Instance = Guid.NewGuid().ToString("N");
 
-    /// <summary>Auftrag abholen. running: Auftrag, den der Agent noch bearbeitet (z. B. über einen Neustart hinweg).</summary>
-    public async Task<PollResponse> PollAsync(Guid? running, CancellationToken ct)
+    /// <summary>
+    /// Auftrag abholen. running: Auftrag, den der Agent noch bearbeitet (z. B. über einen Neustart hinweg).
+    /// policyFingerprint: Stand der lokalen policy.json, damit der Server Änderungen sofort abfragt.
+    /// </summary>
+    public async Task<PollResponse> PollAsync(Guid? running, string? policyFingerprint, CancellationToken ct)
     {
         var headers = new Dictionary<string, string> { [PullProtocol.VersionHeader] = AgentState.AgentVersion, [PullProtocol.InstanceHeader] = Instance };
+        if (policyFingerprint is not null)
+        {
+            headers[PullProtocol.PolicyHeader] = policyFingerprint;
+        }
+
         using var response = await SendAsync(HttpMethod.Get, running is { } id ? $"{PullProtocol.PollPath}?running={id}" : PullProtocol.PollPath, null, headers, bulk: false, ct);
         await EnsureSuccessAsync(response, ct);
         return await response.Content.ReadFromJsonAsync(PullJsonContext.Default.PollResponse, ct)

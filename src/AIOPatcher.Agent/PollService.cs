@@ -41,7 +41,7 @@ public sealed class PollService(
             try
             {
                 var waitingForReboot = await DeliverPendingResultAsync(client, stoppingToken);
-                var response = await client.PollAsync(waitingForReboot, stoppingToken);
+                var response = await client.PollAsync(waitingForReboot, PolicyFingerprint(), stoppingToken);
                 maintenance.PollSucceeded(response.UpdateKey);
                 LearnPublicUrl(client, response.PublicUrl);
                 interval = TimeSpan.FromSeconds(Math.Max(response.PollIntervalSeconds, (int)MinInterval.TotalSeconds));
@@ -66,6 +66,19 @@ public sealed class PollService(
             }
 
             await Task.Delay(wait, stoppingToken);
+        }
+    }
+
+    /// <summary>Fingerabdruck der aktuellen policy.json; null, wenn sie nicht lesbar ist (dann gilt der normale Takt).</summary>
+    private string? PolicyFingerprint()
+    {
+        try
+        {
+            return PullProtocol.PolicyFingerprint(AgentPolicy.Load(state.Directory).ToReport());
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException or InvalidDataException)
+        {
+            return null;
         }
     }
 
