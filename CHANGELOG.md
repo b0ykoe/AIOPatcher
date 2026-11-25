@@ -8,6 +8,8 @@ Written for users, not as a list of commits.
 
 ## [Unreleased]
 
+## [0.17.1] - 2026-11-25
+
 ### Fixed
 - **Host settings changed with `aiopatcher-agent policy set` show up right away:** the dashboard used to learn about
   them only with the next system data (up to 15 minutes), so e.g. "Container management is turned on in AIOPatcher but
