@@ -296,14 +296,16 @@ public sealed class DockerServerModule : ServerModule
             return null;
         }
 
-        // Mini-Docker-Manager: gelesene Compose-Datei an den Job hängen, das Dashboard holt sie einmal ab
+        // Mini-Docker-Manager: gelesene Compose-Datei bzw. Scan für "Platz freigeben" an den Job hängen, das Dashboard holt sie ab
         if (task.Action == ModuleActions.Manage)
         {
-            if (PullJsonContext.FromElement(result.Payload, PullJsonContext.Default.ComposeFileResult) is { } file && task.JobId is { } jobId
+            if (result.Payload is { ValueKind: JsonValueKind.Object } payload && task.JobId is { } jobId
                 && await context.Db.Jobs.FirstOrDefaultAsync(j => j.Id == jobId && j.HostId == host.Id, ct) is { } job)
             {
-                var json = JsonSerializer.Serialize(file, PullJsonContext.Default.ComposeFileResult);
-                job.Result = json.Length <= 64000 ? json : null;
+                string? json = payload.TryGetProperty("images", out _)
+                    ? PullJsonContext.FromElement(payload, PullJsonContext.Default.PruneScan) is { } scan ? JsonSerializer.Serialize(scan, PullJsonContext.Default.PruneScan) : null
+                    : PullJsonContext.FromElement(payload, PullJsonContext.Default.ComposeFileResult) is { } file ? JsonSerializer.Serialize(file, PullJsonContext.Default.ComposeFileResult) : null;
+                job.Result = json is { Length: <= 64000 } ? json : null;
             }
 
             return null;

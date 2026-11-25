@@ -169,6 +169,75 @@ public sealed class ContainerManagementTests : IDisposable
         Assert.Equal("1.1 GB", DockerManager.FormatSize(1_100_000_000));
     }
 
+    // --- Platz freigeben mit Auswahl: Scan und Löschplan ---------------------------------------------------
+
+    private const string UsedId = "sha256:1111111111111111111111111111111111111111111111111111111111111111";
+    private const string OldId = "sha256:2222222222222222222222222222222222222222222222222222222222222222";
+    private const string NoneId = "sha256:3333333333333333333333333333333333333333333333333333333333333333";
+
+    [Fact]
+    public void Scan_ListsOnlyImagesNoContainerUses()
+    {
+        var output =
+            $$"""{"ID":"{{UsedId}}","Repository":"nginx","Tag":"latest","Size":"187MB","CreatedAt":"2024-01-02 10:00:00 +0100 CET"}""" + "\n" +
+            $$"""{"ID":"{{OldId}}","Repository":"postgres","Tag":"15","Size":"1.2GB","CreatedAt":"2023-05-01 08:00:00 +0000 UTC"}""" + "\n" +
+            $$"""{"ID":"{{OldId}}","Repository":"registry.local/postgres","Tag":"15","Size":"1.2GB","CreatedAt":"2023-05-01 08:00:00 +0000 UTC"}""" + "\n" +
+            $$"""{"ID":"{{NoneId}}","Repository":"<none>","Tag":"<none>","Size":"20MB","CreatedAt":"2024-02-01 08:00:00 +0000 UTC"}""" + "\nkaputt\n";
+        var images = DockerManager.ParseUnusedImages(output, new HashSet<string> { UsedId });
+
+        Assert.Equal([OldId, NoneId], images.Select(i => i.Id)); // genutztes nginx fehlt, größtes zuerst
+        Assert.Equal(["postgres:15", "registry.local/postgres:15"], images[0].References);
+        Assert.Equal(1_200_000_000, images[0].Size);
+        Assert.Empty(images[1].References); // ohne Namen: über die ID
+    }
+
+    [Fact]
+    public void Scan_VolumesWithComposeProjectAndSizes()
+    {
+        var sizes = DockerManager.ParseVolumeSizes("""{"Images":[],"Volumes":[{"Name":"web_db","Links":"0","Size":"785.7MB"}],"BuildCache":[]}""");
+        Assert.Equal(785_700_000, sizes!["web_db"]);
+        Assert.Null(DockerManager.ParseVolumeSizes("Error: unknown flag"));
+
+        var volumes = DockerManager.ParseUnusedVolumes(
+            """{"Driver":"local","Labels":"com.docker.compose.project=web,com.docker.compose.volume=db","Name":"web_db"}""" + "\n" +
+            """{"Driver":"local","Labels":"","Name":"0123abcd"}""" + "\n" +
+            """{"Driver":"local","Labels":"","Name":"-bad"}""" + "\n", sizes);
+        Assert.Equal([new UnusedVolume("web_db", 785_700_000, "web", "local"), new UnusedVolume("0123abcd", null, null, "local")], volumes);
+    }
+
+    [Fact]
+    public void Clean_DeletesOnlyWhatTheFreshScanStillLists()
+    {
+        var scan = new PruneScan(
+            [new UnusedImage(OldId, ["postgres:15", "registry.local/postgres:15"], 1_200_000_000, null), new UnusedImage(NoneId, [], 20_000_000, null)],
+            [new UnusedVolume("web_db", 1, "web", "local")], 0, 0);
+        // UsedId wird inzwischen genutzt (nicht im Scan), old_data gibt es nicht mehr
+        var request = new ContainerManageRequest(ContainerOps.Clean, Images: [OldId, NoneId, UsedId], VolumeNames: ["web_db", "old_data"]);
+
+        var (refs, images, volumes, skipped) = DockerManager.PlanClean(scan, request);
+        Assert.Equal(["postgres:15", "registry.local/postgres:15", NoneId], refs); // Namen entfernen, ohne Namen die ID
+        Assert.Equal(2, images);
+        Assert.Equal(["web_db"], volumes);
+        Assert.Equal([UsedId, "old_data"], skipped);
+
+        // nichts ausgewählt = nichts gelöscht
+        var none = DockerManager.PlanClean(scan, new ContainerManageRequest(ContainerOps.Clean, BuildCache: true));
+        Assert.Empty(none.ImageRefs);
+        Assert.Empty(none.Volumes);
+    }
+
+    [Fact]
+    public void Clean_RequestValidation()
+    {
+        Assert.Contains("Nothing", ContainerOps.Invalid(new ContainerManageRequest(ContainerOps.Clean)));
+        Assert.Null(ContainerOps.Invalid(new ContainerManageRequest(ContainerOps.Clean, BuildCache: true)));
+        Assert.Null(ContainerOps.Invalid(new ContainerManageRequest(ContainerOps.Clean, Images: [OldId], VolumeNames: ["web_db"])));
+        Assert.Contains("image ID", ContainerOps.Invalid(new ContainerManageRequest(ContainerOps.Clean, Images: ["nginx;rm -rf /"])));
+        Assert.Contains("image ID", ContainerOps.Invalid(new ContainerManageRequest(ContainerOps.Clean, Images: ["--force"])));
+        Assert.Contains("volume name", ContainerOps.Invalid(new ContainerManageRequest(ContainerOps.Clean, VolumeNames: ["-f"])));
+        Assert.Null(ContainerOps.Invalid(new ContainerManageRequest(ContainerOps.Scan)));
+    }
+
     // --- Server -------------------------------------------------------------------------------------------
 
     private static ManagedHost Host(AgentPolicyReport? policy, bool manageAction = true) => new()

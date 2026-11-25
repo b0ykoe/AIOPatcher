@@ -279,6 +279,7 @@ public sealed record RenewAnswer(string CertificateSigningRequestPem);
 [JsonSerializable(typeof(RecipeUpdateRequest))]
 [JsonSerializable(typeof(ContainerManageRequest))]
 [JsonSerializable(typeof(ComposeFileResult))]
+[JsonSerializable(typeof(PruneScan))]
 [JsonSerializable(typeof(List<DockerDiskUsage>))]
 [JsonSerializable(typeof(ChangelogRequest))]
 [JsonSerializable(typeof(ChangelogResult))]

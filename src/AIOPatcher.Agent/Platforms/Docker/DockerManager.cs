@@ -54,6 +54,8 @@ public static partial class DockerManager
             ContainerOps.Remove => await RemoveAsync(request.Containers!, request.Volumes, log, ct),
             ContainerOps.Down => await DownAsync(request.Project!, request.Volumes, log, ct),
             ContainerOps.Prune => await PruneAsync(request.Volumes, log, ct),
+            ContainerOps.Scan => await ScanOutcomeAsync(log, ct),
+            ContainerOps.Clean => await CleanAsync(request, log, ct),
             ContainerOps.ReadCompose => await ReadComposeAsync(request.Project!, policy.EffectiveComposeRoot, log, ct),
             ContainerOps.WriteCompose => await WriteComposeAsync(request, policy.EffectiveComposeRoot, log, ct),
             _ => await CreateAsync(request, policy.EffectiveComposeRoot, log, ct),

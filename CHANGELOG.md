@@ -8,6 +8,16 @@ Written for users, not as a list of commits.
 
 ## [Unreleased]
 
+### Improved
+- **"Reclaim space" shows what it deletes, and you pick:** the dialog now checks the host first and lists every unused
+  image (name and tag, size, when it was built; biggest first), the build cache (entries and size) and every unused
+  volume (name, size, and the compose stack it came from). Tick single entries or a whole group; volumes are never
+  ticked by default and come with a clear warning that their data is gone for good. Only what you ticked is deleted:
+  right before deleting, the agent checks again and skips anything that is in use by then.
+
+### Upgrade notes
+- The new "Reclaim space" needs the new agent (it updates itself).
+
 ## [0.17.1] - 2026-11-25
 
 ### Fixed

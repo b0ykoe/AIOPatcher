@@ -20,14 +20,15 @@ public static class ContainerManagementEndpoints
     /// <param name="Disk">"docker system df" der letzten Inventur (für "Platz freigeben").</param>
     public sealed record ManagementDto(bool AgentSupports, bool? Allowed, bool? ComposeEdit, string? ComposeRoot, IReadOnlyList<DockerDiskUsage>? Disk);
 
-    /// <param name="Status">Status des Lese-Jobs; File nur einmal, danach ist er auf dem Server gelöscht.</param>
-    public sealed record ComposeReadDto(JobStatus Status, string? Summary, ComposeFileResult? File);
+    /// <param name="Status">Status des Lese- bzw. Scan-Jobs; File/Scan nur einmal, danach auf dem Server gelöscht.</param>
+    public sealed record ComposeReadDto(JobStatus Status, string? Summary, ComposeFileResult? File, PruneScan? Scan = null);
 
     public static void MapContainerManagementEndpoints(this IEndpointRouteBuilder app)
     {
         var admin = app.MapGroup("/api/hosts/{id:guid}/containers").RequireAuthorization(UserAccounts.AdminPolicy);
         admin.MapPost("/manage", ManageAsync);
         admin.MapGet("/compose/{jobId:guid}", ComposeAsync);
+        admin.MapGet("/result/{jobId:guid}", ComposeAsync);
     }
 
     public static ManagementDto Management(ManagedHost host)
@@ -92,6 +93,9 @@ public static class ContainerManagementEndpoints
             ContainerOps.Remove => L.T($"Löschen: {targets}{volumes}", $"Delete: {targets}{volumes}"),
             ContainerOps.Down => L.T($"Stack entfernen (down): {targets}{volumes}", $"Take stack down: {targets}{volumes}"),
             ContainerOps.Prune => L.T($"Platz freigeben{volumes}", $"Reclaim space{volumes}"),
+            ContainerOps.Scan => L.T("Prüfen, was Platz freigeben löschen würde", "Check what reclaiming space would delete"),
+            ContainerOps.Clean => L.T($"Platz freigeben: {r.Images?.Count ?? 0} Images, {r.VolumeNames?.Count ?? 0} Volumes{(r.BuildCache ? ", Build-Cache" : "")}",
+                $"Reclaim space: {r.Images?.Count ?? 0} images, {r.VolumeNames?.Count ?? 0} volumes{(r.BuildCache ? ", build cache" : "")}"),
             ContainerOps.ReadCompose => L.T($"Compose-Datei lesen: {targets}", $"Read compose file: {targets}"),
             ContainerOps.WriteCompose => L.T($"Compose-Datei speichern: {targets}{(r.Up ? " + up -d" : "")}", $"Save compose file: {targets}{(r.Up ? " + up -d" : "")}"),
             _ => L.T($"Neuer Stack: {targets}{(r.Up ? " + up -d" : "")}", $"New stack: {targets}{(r.Up ? " + up -d" : "")}"),
@@ -146,7 +150,10 @@ public static class ContainerManagementEndpoints
             Type = JobType.ContainerManage,
             Scope = PatchScope.All,
             RequestedBy = $"admin:{user.Identity?.Name}",
-            Packages = AgentEndpoints.Truncate(clean.Containers is { Count: > 0 } names ? string.Join(',', names) : clean.Project ?? "", 4000),
+            // Audit und Job nennen gelöschte Volumes beim Namen (Daten), Images nur als Anzahl
+            Packages = AgentEndpoints.Truncate(clean.Containers is { Count: > 0 } names ? string.Join(',', names)
+                : clean.Op == ContainerOps.Clean ? $"images:{clean.Images?.Count ?? 0};volumes:{string.Join(',', clean.VolumeNames ?? [])}{(clean.BuildCache ? ";buildcache" : "")}"
+                : clean.Project ?? "", 4000),
             Payload = JsonSerializer.Serialize(clean, PullJsonContext.Default.ContainerManageRequest),
             Summary = Describe(clean),
         };
@@ -167,11 +174,21 @@ public static class ContainerManagementEndpoints
         }
 
         ComposeFileResult? file = null;
+        PruneScan? scan = null;
         if (job.Result is { } json)
         {
             try
             {
-                file = JsonSerializer.Deserialize(json, PullJsonContext.Default.ComposeFileResult);
+                // Welche Art Ergebnis, sagt der Auftrag (Scan für "Platz freigeben" oder gelesene Compose-Datei)
+                var op = job.Payload is null ? null : JsonSerializer.Deserialize(job.Payload, PullJsonContext.Default.ContainerManageRequest)?.Op;
+                if (op == ContainerOps.Scan)
+                {
+                    scan = JsonSerializer.Deserialize(json, PullJsonContext.Default.PruneScan);
+                }
+                else
+                {
+                    file = JsonSerializer.Deserialize(json, PullJsonContext.Default.ComposeFileResult);
+                }
             }
             catch (JsonException)
             {
@@ -181,7 +198,7 @@ public static class ContainerManagementEndpoints
             await db.SaveChangesAsync(ct);
         }
 
-        return Results.Ok(new ComposeReadDto(job.Status, job.Summary, file));
+        return Results.Ok(new ComposeReadDto(job.Status, job.Summary, file, scan));
     }
 
     /// <summary>

@@ -265,12 +265,17 @@ export interface ContainerManagement {
 
 /** Auftrag an docker.manage (siehe ContainerOps im Server). */
 export interface ContainerManageRequest {
-  op: "start" | "stop" | "restart" | "remove" | "down" | "prune" | "read" | "write" | "create";
+  op: "start" | "stop" | "restart" | "remove" | "down" | "prune" | "read" | "write" | "create" | "scan" | "clean";
   containers?: string[];
   project?: string;
   volumes?: boolean;
   content?: string;
   expectedSha256?: string;
+  /** clean: Image-IDs aus dem Scan */
+  images?: string[];
+  /** clean: Volume-Namen aus dem Scan (Daten weg) */
+  volumeNames?: string[];
+  buildCache?: boolean;
   up?: boolean;
 }
 
@@ -281,11 +286,39 @@ export interface ComposeFile {
   sha256: string;
 }
 
+/** Ungenutztes Image laut Scan (kein Container nutzt es, auch kein gestoppter). */
+export interface UnusedImage {
+  id: string;
+  /** "repo:tag"; leer bei Images ohne Namen */
+  references: string[];
+  size: number;
+  /** wie Docker es meldet, z. B. "2024-01-02 10:00:00 +0100 CET" */
+  created: string | null;
+}
+
+export interface UnusedVolume {
+  name: string;
+  size: number | null;
+  /** Compose-Projekt laut Label */
+  project: string | null;
+  driver: string | null;
+}
+
+/** Was "Platz freigeben" löschen könnte (je Eintrag auswählbar). */
+export interface PruneScan {
+  images: UnusedImage[];
+  volumes: UnusedVolume[];
+  buildCacheSize: number;
+  buildCacheCount: number;
+  volumeSizesKnown: boolean;
+}
+
 /** Lese-Job einer Compose-Datei: den Inhalt liefert der Server genau einmal. */
 export interface ComposeRead {
   status: JobStatus;
   summary: string | null;
   file: ComposeFile | null;
+  scan?: PruneScan | null;
 }
 
 /** Relevante Lücken im Image eines Containers (KEV oder EPSS ab 5 %). */

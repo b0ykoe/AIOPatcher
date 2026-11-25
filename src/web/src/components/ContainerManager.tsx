@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router";
-import { ActionIcon, Alert, Anchor, Box, Button, Checkbox, Code, Group, Loader, Menu, Modal, Stack, Table, Text, Textarea, TextInput } from "@mantine/core";
+import { ActionIcon, Alert, Anchor, Box, Button, Checkbox, Code, Group, Loader, Menu, Modal, Stack, Text, Textarea, TextInput } from "@mantine/core";
 import {
   IconAlertTriangle, IconDots, IconEraser, IconFileDiff, IconPencil, IconPlayerPlay, IconPlayerStop, IconPlus, IconRotateClockwise, IconTrash,
 } from "@tabler/icons-react";
@@ -10,6 +10,7 @@ import { useCan } from "../App";
 import { useFeatures } from "../features";
 import type { ContainerStack } from "./ContainerTable";
 import { errorText, notifyError, notifySuccess } from "./ui";
+import { PruneDialog } from "./PruneDialog";
 
 /** Seite mit der Anleitung (was es kann, warum es gefährlich ist, wie man es pro Host freischaltet). */
 export const MANAGER_HELP = "/help/container-management";
@@ -132,7 +133,7 @@ export function useContainerManager(hostId: string | undefined, management: Cont
 
   const toolbar: ReactNode = active ? (
     <>
-      <Button size="compact-xs" variant="light" color="orange" leftSection={<IconEraser size={12} />} onClick={() => { setVolumes(false); setPrune(true); }}>
+      <Button size="compact-xs" variant="light" color="orange" leftSection={<IconEraser size={12} />} onClick={() => setPrune(true)}>
         {t("manager.prune")}
       </Button>
       {composeEdit && (
@@ -203,7 +204,6 @@ export function useContainerManager(hostId: string | undefined, management: Cont
   };
 
   const disk = management?.disk ?? [];
-  const reclaim = (type: string) => disk.find((d) => d.type.toLowerCase().startsWith(type))?.reclaimable ?? null;
 
   const dialogs: ReactNode = shown ? (
     <>
@@ -228,31 +228,8 @@ export function useContainerManager(hostId: string | undefined, management: Cont
         )}
       </Modal>
 
-      <Modal opened={prune} onClose={() => setPrune(false)} title={<Text fw={800}>{t("manager.pruneTitle")}</Text>}>
-        <Stack gap="sm">
-          <Text size="sm" c="dimmed">{t("manager.pruneText")}</Text>
-          {disk.length > 0 ? (
-            <Table>
-              <Table.Tbody>
-                {[["images", t("manager.diskImages")], ["build", t("manager.diskBuild")], ["local volumes", t("manager.diskVolumes")]].map(([type, label]) => (
-                  <Table.Tr key={type}>
-                    <Table.Td><Text size="sm">{label}</Text></Table.Td>
-                    <Table.Td ta="right" style={{ fontVariantNumeric: "tabular-nums" }}>
-                      <Text size="sm">{reclaim(type) == null ? "–" : t("manager.reclaimable", { size: formatBytes(reclaim(type)!) })}</Text>
-                    </Table.Td>
-                  </Table.Tr>
-                ))}
-              </Table.Tbody>
-            </Table>
-          ) : <Text size="xs" c="dimmed">{t("manager.diskUnknown")}</Text>}
-          <Checkbox label={t("manager.pruneVolumes")} checked={volumes} onChange={(e) => setVolumes(e.currentTarget.checked)} color="red" />
-          {volumes && <Alert color="red" p="xs"><Text size="sm">{t("manager.volumesWarning")}</Text></Alert>}
-          <Group justify="flex-end" gap="xs">
-            <Button variant="default" onClick={() => setPrune(false)}>{t("common.cancel")}</Button>
-            <Button color="red" loading={busy} onClick={() => void run({ op: "prune", volumes })}>{t("manager.prune")}</Button>
-          </Group>
-        </Stack>
-      </Modal>
+      {/* Platz freigeben: erst scannen, dann nur Ausgewähltes löschen */}
+      {prune && hostId && <PruneDialog hostId={hostId} disk={disk} onClose={() => setPrune(false)} onSubmit={run} busy={busy} />}
 
       {editor && hostId && (
         <ComposeEditor hostId={hostId} mode={editor.mode} project={editor.project} root={root} onClose={() => setEditor(null)} onSubmit={run} busy={busy} />
