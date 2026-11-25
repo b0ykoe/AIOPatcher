@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Box, Button, Group, Progress, Stack, Text } from "@mantine/core";
-import { IconCircleCheck, IconCircleDashed, IconCompass, IconWand } from "@tabler/icons-react";
+import { IconCircleCheck, IconCircleDashed, IconCircleMinus, IconCompass, IconWand } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import { useLocation, useNavigate } from "react-router";
 import { api } from "./api";
@@ -39,7 +39,8 @@ export function useGettingStarted() {
 }
 
 /**
- * Kasten in der Seitenleiste: Fortschritt der Grundlagen mit Link auf "Erste Schritte"; sind sie erledigt, nur noch ein
+ * Kasten in der Seitenleiste: Fortschritt der Grundlagen mit Link auf "Erste Schritte"; sind sie erledigt (oder als
+ * "Nicht nötig" übersprungen), nur noch ein
  * dezenter Hinweis auf offene Karten unter "Mehr entdecken".
  */
 export function GettingStartedNav() {
@@ -50,7 +51,8 @@ export function GettingStartedNav() {
   if (!steps || location.pathname === "/getting-started") return null;
 
   const basics = steps.filter((s) => s.group === "basics");
-  const basicsDone = basics.filter((s) => s.status === "done").length;
+  // "Nicht nötig" zählt wie erledigt, sonst bliebe der Kasten für immer stehen
+  const basicsDone = basics.filter((s) => s.status !== "open").length;
   const discoverOpen = steps.filter((s) => s.group === "discover" && s.status === "open").length;
 
   if (basicsDone === basics.length) {
@@ -72,8 +74,9 @@ export function GettingStartedNav() {
       <Stack gap={6}>
         {basics.map((s) => (
           <Group key={s.key} gap={6} wrap="nowrap">
-            {s.status === "done" ? <IconCircleCheck size={16} color="var(--mantine-color-teal-4)" /> : <IconCircleDashed size={16} opacity={0.6} />}
-            <Text size="xs" c={s.status === "done" ? "dimmed" : undefined} td={s.status === "done" ? "line-through" : undefined}>
+            {s.status === "done" ? <IconCircleCheck size={16} color="var(--mantine-color-teal-4)" />
+              : s.status === "skipped" ? <IconCircleMinus size={16} opacity={0.6} /> : <IconCircleDashed size={16} opacity={0.6} />}
+            <Text size="xs" c={s.status !== "open" ? "dimmed" : undefined} td={s.status !== "open" ? "line-through" : undefined}>
               {t(`gettingStarted.steps.${s.key}.title`)}
             </Text>
           </Group>

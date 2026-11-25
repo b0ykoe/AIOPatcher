@@ -8,6 +8,11 @@ Written for users, not as a list of commits.
 
 ## [Unreleased]
 
+### Improved
+- **Hide basic steps you don't need:** under Getting started, the basics (site, host, patch plan, notifications) now
+  have "Not needed" too. A skipped step counts as done, so the Getting started box in the sidebar goes away for good
+  once the rest is set up. "Show again" brings a step back.
+
 ## [0.16.3] - 2026-11-21
 
 ### Improved

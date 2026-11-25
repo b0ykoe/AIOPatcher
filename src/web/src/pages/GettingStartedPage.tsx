@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { Anchor, Badge, Button, Card, Code, Collapse, Group, Loader, SimpleGrid, Stack, Text, ThemeIcon, useMatches } from "@mantine/core";
 import {
-  IconActivityHeartbeat, IconBell, IconBuilding, IconChevronDown, IconChevronUp, IconCircleCheck, IconCircleDashed, IconDatabase,
+  IconActivityHeartbeat, IconBell, IconBuilding, IconChevronDown, IconChevronUp, IconCircleCheck, IconCircleDashed, IconCircleMinus, IconDatabase,
   IconFingerprint, IconKey, IconListCheck, IconPlugConnected, IconRefresh, IconServer, IconShieldCheck, IconWand, IconWorld,
 } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
@@ -57,7 +57,8 @@ export function GettingStartedPage() {
   const discover = steps.filter((s) => s.group === "discover");
   const visible = discover.filter((s) => s.status !== "skipped");
   const skipped = discover.filter((s) => s.status === "skipped");
-  const basicsDone = basics.filter((s) => s.status === "done").length;
+  // Übersprungene Grundlagen ("Nicht nötig") zählen als erledigt
+  const basicsDone = basics.filter((s) => s.status !== "open").length;
 
   const doSkip = (key: StepKey, value: boolean) => void skip(key, value).catch((e) => notifyError(e));
 
@@ -85,7 +86,9 @@ export function GettingStartedPage() {
   };
 
   const statusBadge = (s: GettingStartedStep) =>
-    s.status === "done" ? <Badge color="teal">{t("gettingStarted.done")}</Badge> : <Badge color="gray">{t("gettingStarted.openStatus")}</Badge>;
+    s.status === "done" ? <Badge color="teal">{t("gettingStarted.done")}</Badge>
+      : s.status === "skipped" ? <Badge color="gray" variant="outline">{t("gettingStarted.skippedStatus")}</Badge>
+      : <Badge color="gray">{t("gettingStarted.openStatus")}</Badge>;
 
   /** Zusatzhinweis unter der Beschreibung (Schalter aus, nur im Profi-Modus sichtbar, Befehl). */
   const extra = (key: StepKey): ReactNode => {
@@ -115,20 +118,28 @@ export function GettingStartedPage() {
         </CardTitle>
         <Stack gap="sm">
           {basics.map((s) => {
-            const a = s.status === "done" ? null : action(s.key);
+            const a = s.status === "open" ? action(s.key) : null;
             return (
               <Group key={s.key} justify="space-between" wrap="nowrap" gap="sm" align="flex-start">
                 <Group gap="sm" wrap="nowrap" align="flex-start" style={{ minWidth: 0 }}>
                   {s.status === "done"
                     ? <IconCircleCheck size={20} color="var(--mantine-color-teal-4)" style={{ flexShrink: 0 }} />
-                    : <IconCircleDashed size={20} opacity={0.6} style={{ flexShrink: 0 }} />}
+                    : s.status === "skipped"
+                      ? <IconCircleMinus size={20} opacity={0.6} style={{ flexShrink: 0 }} />
+                      : <IconCircleDashed size={20} opacity={0.6} style={{ flexShrink: 0 }} />}
                   <div style={{ minWidth: 0 }}>
-                    <Text size="sm" fw={600}>{t(`gettingStarted.steps.${s.key}.title`)}</Text>
+                    <Text size="sm" fw={600} c={s.status === "skipped" ? "dimmed" : undefined}>{t(`gettingStarted.steps.${s.key}.title`)}</Text>
                     <Text size="xs" c="dimmed">{t(`gettingStarted.steps.${s.key}.text`)}</Text>
                   </div>
                 </Group>
                 <Group gap="xs" wrap="nowrap" style={{ flexShrink: 0 }}>
                   {a ? <Button size="compact-xs" variant="light" onClick={a.run}>{a.label}</Button> : statusBadge(s)}
+                  {s.status === "open" && (
+                    <Button size="compact-xs" variant="subtle" color="gray" onClick={() => doSkip(s.key, true)}>{t("gettingStarted.skip")}</Button>
+                  )}
+                  {s.status === "skipped" && (
+                    <Button size="compact-xs" variant="subtle" onClick={() => doSkip(s.key, false)}>{t("gettingStarted.unskip")}</Button>
+                  )}
                 </Group>
               </Group>
             );
