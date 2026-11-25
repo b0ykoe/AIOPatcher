@@ -8,6 +8,10 @@ Written for users, not as a list of commits.
 
 ## [Unreleased]
 
+### Improved
+- **Tidier stack rows on the Containers tab:** the number of containers now sits next to the compose file under the
+  stack name instead of in the Image column, and "Update all" sits at the right edge above the Update buttons.
+
 ## [0.16.4] - 2026-11-25
 
 ### Added

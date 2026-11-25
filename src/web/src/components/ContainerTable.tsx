@@ -228,17 +228,22 @@ function StackRow({ project, items, showCves, canUpdate, loading, onUpdate }: {
           <Icon size={18} style={{ flexShrink: 0, marginTop: 1 }} opacity={0.7} />
           <div style={{ minWidth: 0 }}>
             <Text size="sm" fw={700}>{project ?? t("containers.standalone")}</Text>
-            {project ? (
-              files.length > 0 && (
-                <Tooltip label={files.join("\n")} disabled={files.length < 2} style={{ whiteSpace: "pre" }}>
-                  <Text size="xs" c="dimmed" ff="monospace">{files[0]}{files.length > 1 ? ` +${files.length - 1}` : ""}</Text>
-                </Tooltip>
-              )
-            ) : <Text size="xs" c="dimmed">{t("containers.standaloneHint")}</Text>}
+            {/* eine Zeile Metadaten: Anzahl · Compose-Datei (ohne Compose: woher sie kommen) */}
+            <Text size="xs" c="dimmed">
+              {t("containers.stackContainers", { count: items.length })}
+              {" · "}
+              {project ? (
+                files.length > 0 ? (
+                  <Tooltip label={files.join("\n")} disabled={files.length < 2} style={{ whiteSpace: "pre" }}>
+                    <Text span inherit ff="monospace">{files[0]}{files.length > 1 ? ` +${files.length - 1}` : ""}</Text>
+                  </Tooltip>
+                ) : "Compose"
+              ) : t("containers.standaloneHint")}
+            </Text>
           </div>
         </Group>
       </Table.Td>
-      <Table.Td><Text size="xs" c="dimmed">{t("containers.stackContainers", { count: items.length })}</Text></Table.Td>
+      <Table.Td />
       <Table.Td>{project && <Badge size="sm" color={color}>{label}</Badge>}</Table.Td>
       <Table.Td>{fresh > 0 && <Badge size="sm" color="blue">{t("containers.stackNew", { count: fresh })}</Badge>}</Table.Td>
       {showCves && <Table.Td />}
@@ -425,13 +430,14 @@ export function ContainerTable({ containers, hostId, onRechecked }: { containers
         <Text size="xs" c="dimmed">
           {tGlobal("security.freshness", { seen: formatRelative(seen), checked: formatRelative(checked) })}
         </Text>
+        {/* Karten-Aktionen (Styleguide 9: compact-xs light); "Alle aktualisieren" rechts außen über der Spalte mit den Update-Knöpfen */}
         <Group gap="xs">
+          {can.operate && <Button size="compact-xs" variant="light" leftSection={<IconRefresh size={12} />} loading={busy} onClick={() => void recheck()}>{tGlobal("security.recheck")}</Button>}
           {canUpdate && updatableCount > 0 && (
             <Button size="compact-xs" variant="light" leftSection={<IconDownload size={12} />} loading={updating === ALL} onClick={() => updateMany(null)}>
               {t("containers.updateAll", { count: updatableCount })}
             </Button>
           )}
-          {can.operate && <Button size="compact-xs" variant="light" leftSection={<IconRefresh size={12} />} loading={busy} onClick={() => void recheck()}>{tGlobal("security.recheck")}</Button>}
         </Group>
       </Group>
     )}
