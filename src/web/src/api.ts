@@ -238,6 +238,8 @@ export interface ContainerItem {
   vulns: ContainerVulns | null;
   /** Update-Rezept des Compose-Projekts (z. B. mailcow update.sh): ersetzt "Aktualisieren" */
   recipe?: ContainerRecipe | null;
+  /** Compose-Dateien laut Labels, durch Komma getrennt */
+  composeFiles?: string | null;
 }
 
 /** Relevante Lücken im Image eines Containers (KEV oder EPSS ab 5 %). */

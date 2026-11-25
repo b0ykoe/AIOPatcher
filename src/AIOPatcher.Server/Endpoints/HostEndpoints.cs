@@ -100,9 +100,11 @@ public static class HostEndpoints
     /// <param name="Recipe">Update-Rezept des Compose-Projekts (z. B. mailcow update.sh): ersetzt "Aktualisieren" durch das Skript der App.</param>
     /// <param name="LocalImage">Image aus keiner Registry (selbst gebaut); ohne <paramref name="BaseImage"/> nicht prüfbar.</param>
     /// <param name="BaseImage">Selbst gebaut per Compose: Basis-Image; UpdateAvailable bezieht sich dann darauf (Update = neu bauen).</param>
+    /// <param name="ComposeFiles">Compose-Dateien laut Labels, durch Komma getrennt (für die Stack-Zeile).</param>
     public sealed record ContainerDto(string Name, string Image, string? State, bool UpdateAvailable, DateTime? CheckedAt, string? CheckError, bool Pinned, DateTime? SeenAt = null,
         string? Compose = null, string? UpdateBlocker = null, int? ExitCode = null, DateTime? StartedAt = null, DateTime? FinishedAt = null, string? Health = null,
-        string? RestartPolicy = null, bool LocalImage = false, string? BaseImage = null, ContainerVulnsDto? Vulns = null, ContainerRecipeDto? Recipe = null);
+        string? RestartPolicy = null, bool LocalImage = false, string? BaseImage = null, ContainerVulnsDto? Vulns = null, ContainerRecipeDto? Recipe = null,
+        string? ComposeFiles = null);
 
     /// <param name="Allowed">Lokale Policy des Hosts erlaubt es (allowUpdateRecipes).</param>
     /// <param name="Note">Hinweis für den Bestätigungsdialog in der Sprache der Anfrage.</param>
@@ -240,6 +242,7 @@ public static class HostEndpoints
         op.MapPost("/hosts/{id:guid}/containers/recheck", RecheckContainers);
         api.MapGet("/hosts/{id:guid}/containers/{name}/vulnerabilities", ContainerVulnerabilities);
         op.MapPost("/hosts/{id:guid}/containers/{name}/update", UpdateContainer);
+        op.MapPost("/hosts/{id:guid}/containers/update-all", UpdateAllContainers);
         op.MapPut("/hosts/{id:guid}/modules/{module}", ToggleModule);
         op.MapDelete("/hosts/{id:guid}", DeleteHost).RequireAuthorization(UserAccounts.AdminPolicy);
 
@@ -687,6 +690,119 @@ public static class HostEndpoints
         return Results.Ok(new { job.Id });
     }
 
+    /// <param name="Project">Nur dieses Compose-Projekt ("Stack aktualisieren"); null = alle Container des Hosts.</param>
+    public sealed record ContainerUpdateAllRequest(string? Project = null);
+
+    /// <param name="Skipped">Container mit neuem Image, die nicht dabei sind, mit Grund (Blocker-Schlüssel wie in <see cref="ContainerDto"/> oder "recipe").</param>
+    public sealed record ContainerUpdateAllResult(Guid Id, IReadOnlyList<string> Containers, IReadOnlyList<ContainerSkipDto> Skipped);
+
+    public sealed record ContainerSkipDto(string Name, string Reason);
+
+    /// <summary>
+    /// Welche Container "Alle aktualisieren" bzw. "Stack aktualisieren" mitnimmt: neues Image, per Compose aktualisierbar, kein
+    /// Update-Rezept (das läuft für sich). Gestoppte sind dabei; der Agent legt sie neu an, startet sie aber nicht.
+    /// </summary>
+    public static (List<string> Update, List<ContainerSkipDto> Skipped) UpdateAllSelection(IEnumerable<ContainerDto> containers, string? project)
+    {
+        var update = new List<string>();
+        var skipped = new List<ContainerSkipDto>();
+        foreach (var c in containers.Where(c => c.UpdateAvailable && (project is null || c.Compose?.Split('/')[0] == project)))
+        {
+            if (c.UpdateBlocker is { } blocker)
+            {
+                skipped.Add(new ContainerSkipDto(c.Name, blocker));
+            }
+            else if (c.Recipe is not null)
+            {
+                skipped.Add(new ContainerSkipDto(c.Name, "recipe"));
+            }
+            else
+            {
+                update.Add(c.Name);
+            }
+        }
+
+        return (update, skipped);
+    }
+
+    /// <summary>
+    /// Alle Container mit neuem Image (oder die eines Compose-Projekts) in einem Job aktualisieren; der Agent bündelt je Projekt.
+    /// Ein Job je Host: einzelne Updates würden sich gegenseitig blockieren.
+    /// </summary>
+    private static async Task<IResult> UpdateAllContainers(Guid id, ContainerUpdateAllRequest? request, ClaimsPrincipal user, AppDbContext db, AuditLog audit,
+        FeatureFlags features, CancellationToken ct)
+    {
+        if (!features.IsOn(Feature.AppUpdates))
+        {
+            return Results.Problem(FeatureFlags.DisabledMessage(Feature.AppUpdates), statusCode: StatusCodes.Status403Forbidden);
+        }
+
+        var host = await db.Hosts.FindAsync([id], ct);
+        if (host is null)
+        {
+            return Results.NotFound();
+        }
+
+        if (!ModuleJson.Supports(host, AgentModules.Docker, ModuleActions.AppUpdate))
+        {
+            return Results.Problem(L.T("Der Agent auf diesem Host ist zu alt für Container-Updates; er aktualisiert sich gleich selbst.",
+                "The agent on this host is too old for container updates; it will update itself shortly."), statusCode: StatusCodes.Status409Conflict);
+        }
+
+        var project = string.IsNullOrWhiteSpace(request?.Project) ? null : request.Project.Trim();
+        var (names, skipped) = UpdateAllSelection(await ContainersAsync(db, id, ct, features), project);
+        if (names.Count == 0)
+        {
+            return Results.Problem(skipped.Count > 0
+                    ? L.T("Kein Container lässt sich hier aktualisieren (siehe Hinweise in der Liste).", "None of the containers can be updated from here (see the hints in the list).")
+                    : L.T("Kein Container mit neuem Image.", "No container has a new image."),
+                statusCode: StatusCodes.Status409Conflict);
+        }
+
+        if (names.Count > 1 && !ModuleJson.Supports(host, AgentModules.Docker, ModuleActions.AppUpdateMany))
+        {
+            return Results.Problem(L.T("Der Agent auf diesem Host ist zu alt, um mehrere Container auf einmal zu aktualisieren; er aktualisiert sich gleich selbst.",
+                "The agent on this host is too old to update several containers at once; it will update itself shortly."), statusCode: StatusCodes.Status409Conflict);
+        }
+
+        if (await db.Jobs.AnyAsync(j => j.HostId == id && (j.Status == JobStatus.Queued || j.Status == JobStatus.Running), ct))
+        {
+            return Results.Problem(L.T("Es ist bereits ein Job geplant oder aktiv.", "A job is already queued or running."), statusCode: StatusCodes.Status409Conflict);
+        }
+
+        // Spalte fasst 4000 Zeichen; was nicht passt, bleibt für den nächsten Durchgang
+        var taken = new List<string>();
+        foreach (var name in names.Take(DockerUpdaterLimit))
+        {
+            if (taken.Sum(n => n.Length + 1) + name.Length > 4000)
+            {
+                break;
+            }
+
+            taken.Add(name);
+        }
+
+        var job = new PatchJob
+        {
+            HostId = id,
+            Type = JobType.ContainerUpdate,
+            Scope = PatchScope.All,
+            RequestedBy = $"admin:{user.Identity?.Name}",
+            Packages = string.Join(',', taken),
+            Summary = taken.Count == 1 ? null
+                : project is null ? L.T($"{taken.Count} Container aktualisieren", $"Update {taken.Count} containers")
+                : L.T($"Stack {project} aktualisieren ({taken.Count} Container)", $"Update stack {project} ({taken.Count} containers)"),
+        };
+        db.Jobs.Add(job);
+        audit.Add("job.created", $"ContainerUpdate {(project is null ? "all" : $"stack {project}")}: {string.Join(", ", taken)} for {host.Name}",
+            siteId: host.SiteId, hostId: host.Id);
+        await db.SaveChangesAsync(ct);
+        return Results.Ok(new ContainerUpdateAllResult(job.Id, taken, skipped));
+    }
+
+    /// <summary>So viele Container nimmt der Agent je Auftrag (DockerUpdater.MaxContainers).</summary>
+    private const int DockerUpdaterLimit = 100;
+
     /// <summary>
     /// Update-Rezept für das Compose-Projekt des Containers als Job (docker.recipe). Der Job nennt nur Rezept-Id und
     /// Containername; Ordner und Befehl bestimmt der Agent selbst aus seinem eingebauten Rezept.
@@ -858,7 +974,7 @@ public static class HostEndpoints
             var update = check?.RemoteDigest is { } remote && c.LocalDigest is not null && !c.HasDigest(remote);
             return new ContainerDto(c.Name, c.Image, c.State, update, check?.CheckedAt, check?.Error, c.Reference is null && !c.LocalImage, c.SeenAt,
                 c.ComposeProject is null ? null : $"{c.ComposeProject}/{c.ComposeService}", agentCan ? c.UpdateBlocker : "agent",
-                c.ExitCode, c.StartedAt, c.FinishedAt, c.Health, c.RestartPolicy, c.LocalImage, c.BaseImage, Vulns(c), Recipe(c));
+                c.ExitCode, c.StartedAt, c.FinishedAt, c.Health, c.RestartPolicy, c.LocalImage, c.BaseImage, Vulns(c), Recipe(c), c.ComposeFiles);
         }).ToList();
     }
 

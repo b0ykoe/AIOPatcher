@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { Alert, Anchor, Badge, Box, Button, Code, Group, Loader, Modal, Stack, Table, Text, Tooltip, UnstyledButton } from "@mantine/core";
-import { IconAlertTriangle, IconChevronDown, IconChevronUp, IconDownload, IconHammer, IconInfoCircle, IconRefresh, IconScript, IconSelector } from "@tabler/icons-react";
+import { IconAlertTriangle, IconBox, IconChevronDown, IconChevronUp, IconDownload, IconHammer, IconInfoCircle, IconRefresh, IconScript, IconSelector, IconStack2 } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import { api, formatRelative, type ContainerItem, type ContainerRecipe, type ContainerVulnList } from "../api";
 import { useCan } from "../App";
@@ -195,8 +195,68 @@ function ContainerVulnModal({ hostId, name, onClose }: { hostId: string; name: s
   );
 }
 
+const ALL = "__all";
+const STACK = "__stack:";
+/** Container eingerückt unter ihrer Stack-Zeile (Icon + Abstand). */
+const STACK_INDENT = 34;
+
+const projectOf = (c: ContainerItem) => c.compose?.split("/")[0] ?? null;
+const serviceOf = (c: ContainerItem) => c.compose?.split("/").slice(1).join("/") || null;
+/** Läuft vorher (wird nach dem Update wieder gestartet); gestoppte bekommen das neue Image, bleiben aber aus. */
+const wasRunning = (c: ContainerItem) => ["running", "restarting", "paused"].includes((c.state ?? "").toLowerCase());
+/** Geht bei "Alle aktualisieren" mit: neues Image, per Compose aktualisierbar, kein eigenes Update-Skript. */
+const updatable = (c: ContainerItem) => c.updateAvailable && !c.updateBlocker && !c.recipe;
+
+/** Kopfzeile eines Compose-Stacks (wie Portainer): Name, Compose-Datei, Anzahl, wie viele laufen, neue Images, "Stack aktualisieren". */
+function StackRow({ project, items, showCves, canUpdate, loading, onUpdate }: {
+  project: string | null; items: ContainerItem[]; showCves: boolean; canUpdate: boolean; loading: boolean; onUpdate: () => void;
+}) {
+  const { t } = useTranslation();
+  const running = items.filter((c) => (c.state ?? "").toLowerCase() === "running").length;
+  const crashed = items.some((c) => ["exited", "dead"].includes((c.state ?? "").toLowerCase()) && c.exitCode !== 0);
+  const [color, label] = running === items.length ? ["teal", t("containers.state_running")]
+    : running === 0 ? [crashed ? "red" : "gray", t("containers.stackStopped")]
+    : ["orange", t("containers.stackPartial", { running, count: items.length })];
+  const fresh = items.filter((c) => c.updateAvailable).length;
+  const todo = items.filter(updatable).length;
+  const files = items.find((c) => c.composeFiles)?.composeFiles?.split(",") ?? [];
+  const Icon = project ? IconStack2 : IconBox;
+  return (
+    <Table.Tr bg="var(--mantine-color-default-hover)">
+      <Table.Td>
+        <Group gap={8} wrap="nowrap" align="flex-start">
+          <Icon size={18} style={{ flexShrink: 0, marginTop: 1 }} opacity={0.7} />
+          <div style={{ minWidth: 0 }}>
+            <Text size="sm" fw={700}>{project ?? t("containers.standalone")}</Text>
+            {project ? (
+              files.length > 0 && (
+                <Tooltip label={files.join("\n")} disabled={files.length < 2} style={{ whiteSpace: "pre" }}>
+                  <Text size="xs" c="dimmed" ff="monospace">{files[0]}{files.length > 1 ? ` +${files.length - 1}` : ""}</Text>
+                </Tooltip>
+              )
+            ) : <Text size="xs" c="dimmed">{t("containers.standaloneHint")}</Text>}
+          </div>
+        </Group>
+      </Table.Td>
+      <Table.Td><Text size="xs" c="dimmed">{t("containers.stackContainers", { count: items.length })}</Text></Table.Td>
+      <Table.Td>{project && <Badge size="sm" color={color}>{label}</Badge>}</Table.Td>
+      <Table.Td>{fresh > 0 && <Badge size="sm" color="blue">{t("containers.stackNew", { count: fresh })}</Badge>}</Table.Td>
+      {showCves && <Table.Td />}
+      {canUpdate && (
+        <Table.Td style={{ whiteSpace: "nowrap" }}>
+          {project && todo > 0 && (
+            <Button size="compact-xs" variant="light" leftSection={<IconDownload size={12} />} loading={loading} onClick={onUpdate}>
+              {t("containers.updateStack")}
+            </Button>
+          )}
+        </Table.Td>
+      )}
+    </Table.Tr>
+  );
+}
+
 /**
- * Container eines Hosts: Status (auch gestoppte), neuere Images in der Registry bzw. neues Basis-Image bei selbst
+ * Container eines Hosts, nach Compose-Stack gruppiert: Status (auch gestoppte), neuere Images in der Registry bzw. neues Basis-Image bei selbst
  * gebauten, relevante Lücken im Image. Spalten sortierbar, Standard: Auffälliges zuerst.
  * Gehört in eine Karte mit p={0} (Kopfzeile und Tabelle bringen ihren Innenabstand selbst mit).
  */
@@ -232,9 +292,14 @@ export function ContainerTable({ containers, hostId, onRechecked }: { containers
   const update = (c: ContainerItem) =>
     confirmAction({
       title: c.baseImage ? t("containers.rebuildTitle", { name: c.name }) : t("containers.updateTitle", { name: c.name }),
-      message: c.baseImage
-        ? t("containers.rebuildText", { image: c.baseImage, compose: c.compose ?? "" })
-        : t("containers.updateText", { image: c.image, compose: c.compose ?? "" }),
+      message: (
+        <>
+          {c.baseImage
+            ? t("containers.rebuildText", { image: c.baseImage, compose: c.compose ?? "" })
+            : t("containers.updateText", { image: c.image, compose: c.compose ?? "" })}
+          {!wasRunning(c) && <><br /><br />{t("containers.updateStoppedNote")}</>}
+        </>
+      ),
       confirmLabel: c.baseImage ? t("containers.rebuild") : t("containers.update"),
       onConfirm: async () => {
         setUpdating(c.name);
@@ -285,12 +350,58 @@ export function ContainerTable({ containers, hostId, onRechecked }: { containers
       },
     });
 
+  // Alle (bzw. alle eines Stacks) mit neuem Image in einem Job; der Agent bündelt je Compose-Projekt. Gestoppte bleiben gestoppt.
+  const updateMany = (project: string | null) => {
+    const scope = project === null ? containers : containers.filter((c) => projectOf(c) === project);
+    const todo = scope.filter(updatable);
+    const skipped = scope.filter((c) => c.updateAvailable && !updatable(c));
+    const stopped = todo.filter((c) => !wasRunning(c));
+    const names = (list: ContainerItem[]) => list.map((c) => c.name).join(", ");
+    confirmAction({
+      title: project === null ? t("containers.updateAllTitle", { count: todo.length }) : t("containers.updateStackTitle", { project }),
+      message: (
+        <>
+          {t("containers.updateAllText")}
+          <br /><br />
+          <b>{t("containers.updateAllList")}</b> {names(todo)}
+          {stopped.length > 0 && <><br /><b>{t("containers.updateAllStopped")}</b> {names(stopped)}</>}
+          {skipped.length > 0 && (
+            <><br /><b>{t("containers.updateAllSkipped")}</b> {skipped.map((c) => `${c.name} (${skipReason(c)})`).join(", ")}</>
+          )}
+        </>
+      ),
+      confirmLabel: project === null ? t("containers.updateAll", { count: todo.length }) : t("containers.updateStack"),
+      onConfirm: async () => {
+        setUpdating(project === null ? ALL : `${STACK}${project}`);
+        try {
+          const job = await api.post<{ id: string; containers: string[] }>(`/api/hosts/${hostId}/containers/update-all`, { project });
+          notifySuccess(t("containers.updateAllStarted", { count: job.containers.length }));
+          navigate(`/jobs/${job.id}`); // Live-Log des Jobs
+        } catch (e) {
+          notifyError(e);
+        } finally {
+          setUpdating(null);
+        }
+      },
+    });
+  };
+  const skipReason = (c: ContainerItem) => (c.recipe ? t("containers.blockerShort.recipe") : t(`containers.blockerShort.${c.updateBlocker ?? "agent"}`));
+  const updatableCount = containers.filter(updatable).length;
+
   const [sort, setSort] = useState<{ key: SortKey; desc: boolean }>({ key: "state", desc: false });
 
   const sorted = [...containers].sort((a, b) => {
     const result = compare[sort.key](a, b) || (sort.key === "state" ? registryRank(a) - registryRank(b) : 0);
     return (sort.desc ? -result : result) || a.name.localeCompare(b.name);
   });
+  // Wie Portainer: je Compose-Projekt eine Stack-Zeile, Reihenfolge nach dem ersten Container in der Sortierung; ohne Compose zuletzt
+  const stacks = sorted.reduce<{ project: string | null; items: ContainerItem[] }[]>((acc, c) => {
+    const project = projectOf(c);
+    const stack = acc.find((s) => s.project === project);
+    if (stack) stack.items.push(c);
+    else acc.push({ project, items: [c] });
+    return acc;
+  }, []).sort((a, b) => (a.project === null ? 1 : 0) - (b.project === null ? 1 : 0));
 
   const header = (key: SortKey, label: string) => {
     const active = sort.key === key;
@@ -314,7 +425,14 @@ export function ContainerTable({ containers, hostId, onRechecked }: { containers
         <Text size="xs" c="dimmed">
           {tGlobal("security.freshness", { seen: formatRelative(seen), checked: formatRelative(checked) })}
         </Text>
-        {can.operate && <Button size="compact-xs" variant="light" leftSection={<IconRefresh size={12} />} loading={busy} onClick={() => void recheck()}>{tGlobal("security.recheck")}</Button>}
+        <Group gap="xs">
+          {canUpdate && updatableCount > 0 && (
+            <Button size="compact-xs" variant="light" leftSection={<IconDownload size={12} />} loading={updating === ALL} onClick={() => updateMany(null)}>
+              {t("containers.updateAll", { count: updatableCount })}
+            </Button>
+          )}
+          {can.operate && <Button size="compact-xs" variant="light" leftSection={<IconRefresh size={12} />} loading={busy} onClick={() => void recheck()}>{tGlobal("security.recheck")}</Button>}
+        </Group>
       </Group>
     )}
     {hostId && can.operate && !isOn("AppUpdates") && containers.some((c) => c.updateAvailable && !c.updateBlocker) && <Box px="md" pb="sm"><FeatureOffHint feature="AppUpdates" /></Box>}
@@ -353,11 +471,14 @@ export function ContainerTable({ containers, hostId, onRechecked }: { containers
           </Table.Tr>
         </Table.Thead>
         <Table.Tbody>
-          {sorted.map((c) => (
+          {stacks.map((stack) => [
+            <StackRow key={`stack:${stack.project ?? ""}`} project={stack.project} items={stack.items} showCves={showCves} canUpdate={canUpdate}
+              loading={updating === `${STACK}${stack.project}`} onUpdate={() => updateMany(stack.project)} />,
+            ...stack.items.map((c) => (
             <Table.Tr key={c.name}>
-              <Table.Td>
+              <Table.Td pl={STACK_INDENT}>
                 <Text size="sm" fw={600}>{c.name}</Text>
-                {c.compose && <Text size="xs" c="dimmed">Compose: {c.compose}</Text>}
+                {serviceOf(c) && serviceOf(c) !== c.name && <Text size="xs" c="dimmed">{t("containers.service", { service: serviceOf(c) })}</Text>}
               </Table.Td>
               <Table.Td>
                 <Text size="xs" ff="monospace">{c.image}</Text>
@@ -391,7 +512,8 @@ export function ContainerTable({ containers, hostId, onRechecked }: { containers
                 </Table.Td>
               )}
             </Table.Tr>
-          ))}
+            )),
+          ])}
         </Table.Tbody>
       </Table>
     </Table.ScrollContainer>

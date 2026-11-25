@@ -232,8 +232,10 @@ public static class PullEndpoints
             case JobType.ContainerUpdate when HostEndpoints.RecipeOf(job) is { } recipe:
                 return (AgentModules.Docker, ModuleActions.Recipe, PullJsonContext.ToElement(recipe, PullJsonContext.Default.RecipeUpdateRequest));
             case JobType.ContainerUpdate:
-                return (AgentModules.Docker, ModuleActions.AppUpdate,
-                    PullJsonContext.ToElement(new AppUpdateRequest([job.Packages ?? ""]), PullJsonContext.Default.AppUpdateRequest));
+                // mehrere Container ("Alle aktualisieren", "Stack aktualisieren"): durch Komma getrennt, ein Auftrag
+                var names = (job.Packages ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                return (AgentModules.Docker, names.Length > 1 ? ModuleActions.AppUpdateMany : ModuleActions.AppUpdate,
+                    PullJsonContext.ToElement(new AppUpdateRequest(names.Length == 0 ? [""] : names), PullJsonContext.Default.AppUpdateRequest));
             case JobType.ServerUpdate:
                 return (AgentModules.ServerUpdate, ModuleActions.Update, null);
             case JobType.AppUpdate:

@@ -88,6 +88,9 @@ public static class ModuleActions
     public const string Reboot = "reboot";
     public const string Inventory = "inventory";
     public const string AppUpdate = "appupdate";
+
+    /// <summary>docker.appupdatemany: mehrere Container in einem Auftrag, je Compose-Projekt gebündelt ("Alle aktualisieren").</summary>
+    public const string AppUpdateMany = "appupdatemany";
     public const string Status = "status";
     public const string List = "list";
     public const string Change = "change";

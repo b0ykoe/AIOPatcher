@@ -257,7 +257,8 @@ public sealed class DockerServerModule : ServerModule
     {
         var last = context.LastRequested(Id, ModuleActions.Inventory);
         var asked = host.ContainersRequestedAt > last || context.LastRequested(AgentModules.Updates, ModuleActions.Scan) > last
-                    || context.LastRequested(Id, ModuleActions.AppUpdate) > last; // nach "Container aktualisieren" gleich neu melden
+                    || context.LastRequested(Id, ModuleActions.AppUpdate) > last // nach "Container aktualisieren" gleich neu melden
+                    || context.LastRequested(Id, ModuleActions.AppUpdateMany) > last;
         if (context.Older(Id, ModuleActions.Inventory, context.Timing(Timings.Containers)) || asked)
         {
             return new PlannedTask(ModuleActions.Inventory);

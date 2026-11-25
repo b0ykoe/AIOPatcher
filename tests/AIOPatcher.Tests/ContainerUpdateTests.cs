@@ -64,4 +64,64 @@ public sealed class ContainerUpdateTests
         var container = new ContainerInfo { Name = "x", Image = "nginx", ComposeProject = project, ComposeService = service, ComposeFilesFound = found, ComposeFiles = files };
         Assert.Equal(expected, container.UpdateBlocker);
     }
+
+    [Fact]
+    public void UpdateMany_GroupsByProject_KeepsStoppedStopped_SkipsWithoutComposeFile()
+    {
+        var cloud = new ComposeInfo("cloud", "app", "/srv/cloud", ["/srv/cloud/compose.yml"], true);
+        var kuma = new ComposeInfo("kuma", "uptime-kuma", "/srv/kuma", ["/srv/kuma/compose.yml"], true);
+        var (projects, skipped) = DockerUpdater.Plan(
+        [
+            ("cloud-app-1", cloud, "running", "sha256:a", "nextcloud"),
+            ("uptime-kuma", kuma, "running", "sha256:k", "louislam/uptime-kuma"),
+            ("cloud-db-1", cloud with { Service = "db" }, "exited", "sha256:d", "mariadb"),
+            ("cloud-app-2", cloud, "running", "sha256:a", "nextcloud"), // skaliert: gleicher Dienst
+            ("minecraft", new ComposeInfo("mc", "server", "/srv/mc", ["/srv/mc/compose.yml"], false), "exited", null, "itzg/minecraft-server"),
+            ("standalone", null, "running", null, "nginx"),
+            ("cloud-app-1", cloud, "running", "sha256:a", "nextcloud"), // doppelt genannt
+        ]);
+
+        Assert.Equal(["cloud", "kuma"], projects.Select(p => p.Compose.Project));
+        var c = projects[0];
+        Assert.Equal(["cloud-app-1", "cloud-db-1", "cloud-app-2"], c.Targets.Select(t => t.Name));
+        Assert.Equal(["app"], DockerUpdater.Services(c.Targets.Where(t => t.Running)));
+        Assert.Equal(["db"], DockerUpdater.Services(c.Targets.Where(t => !t.Running))); // gestoppt: up --no-start
+        Assert.Equal(["minecraft", "standalone"], skipped.Select(s => s.Name));
+        Assert.Contains("not found", skipped[0].Reason);
+
+        Assert.True(DockerUpdater.WasRunning("paused"));
+        Assert.False(DockerUpdater.WasRunning("created"));
+    }
+
+    [Fact]
+    public void UpdateMany_Summary()
+    {
+        Assert.Equal("Containers: 3 updated, 1 already current, 1 skipped (minecraft), 1 failed (db).",
+            DockerUpdater.Summarize(3, 1, ["minecraft"], ["db"]));
+        Assert.Equal("Containers: 7 skipped (a, b, c, d, e +2).", DockerUpdater.Summarize(0, 0, ["a", "b", "c", "d", "e", "f", "g"], []));
+    }
+
+    [Fact]
+    public void Server_UpdateAll_SelectsNewImages_PerStack()
+    {
+        var recipe = new AIOPatcher.Server.Endpoints.HostEndpoints.ContainerRecipeDto("mailcow", "update.sh", "mailcow", null, null, true);
+        AIOPatcher.Server.Endpoints.HostEndpoints.ContainerDto C(string name, string? compose, bool update, string? blocker = null,
+            AIOPatcher.Server.Endpoints.HostEndpoints.ContainerRecipeDto? r = null) =>
+            new(name, "img", "running", update, null, null, false, Compose: compose, UpdateBlocker: blocker, Recipe: r);
+        var containers = new[]
+        {
+            C("jellyfin", "jellyfin/jellyfin", true),
+            C("kuma", "kuma/uptime-kuma", true),
+            C("db", "cloud/db", false),
+            C("minecraft", "mc/server", true, "noFile"),
+            C("postfix", "mailcow/postfix", true, r: recipe),
+        };
+
+        var (all, skipped) = AIOPatcher.Server.Endpoints.HostEndpoints.UpdateAllSelection(containers, null);
+        Assert.Equal(["jellyfin", "kuma"], all);
+        Assert.Equal([("minecraft", "noFile"), ("postfix", "recipe")], skipped.Select(s => (s.Name, s.Reason)));
+
+        var (stack, _) = AIOPatcher.Server.Endpoints.HostEndpoints.UpdateAllSelection(containers, "kuma");
+        Assert.Equal(["kuma"], stack);
+    }
 }

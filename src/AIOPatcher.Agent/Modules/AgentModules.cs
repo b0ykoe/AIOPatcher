@@ -115,13 +115,15 @@ public sealed class SoftwareModule(IPlatformInventory inventory, JobExecutor exe
 
 /// <summary>
 /// docker.inventory: alle Container mit Status; docker.packages: Paketlisten von Images (für den CVE-Abgleich);
-/// docker.appupdate: einen Compose-Container aktualisieren; docker.recipe: Update-Rezept der App ausführen (z. B. mailcow update.sh).
+/// docker.appupdate: einen Compose-Container aktualisieren; docker.appupdatemany: mehrere, je Compose-Projekt gebündelt;
+/// docker.recipe: Update-Rezept der App ausführen (z. B. mailcow update.sh).
 /// </summary>
 public sealed class DockerModule : IAgentModule
 {
     public string Id => AgentModules.Docker;
     public bool Available => OperatingSystem.IsLinux() && (File.Exists("/usr/bin/docker") || File.Exists("/usr/local/bin/docker"));
-    public IReadOnlyList<string> Actions { get; } = [ModuleActions.Inventory, ModuleActions.AppUpdate, ModuleActions.Packages, ModuleActions.Recipe];
+    public IReadOnlyList<string> Actions { get; } =
+        [ModuleActions.Inventory, ModuleActions.AppUpdate, ModuleActions.AppUpdateMany, ModuleActions.Packages, ModuleActions.Recipe];
 
     /// <summary>Container aktualisieren gilt wie Programm-Updates: allowAppUpdates und allowPatch All.</summary>
     public static string? PolicyRejects(AgentPolicy policy) =>
@@ -131,7 +133,7 @@ public sealed class DockerModule : IAgentModule
 
     public async Task<TaskOutcome> ExecuteAsync(AgentTask task, TaskContext context, CancellationToken ct)
     {
-        if (task.Action == ModuleActions.AppUpdate)
+        if (task.Action is ModuleActions.AppUpdate or ModuleActions.AppUpdateMany)
         {
             if (PolicyRejects(context.Policy) is { } rejected)
             {
@@ -139,10 +141,15 @@ public sealed class DockerModule : IAgentModule
                 return TaskOutcome.Rejected(rejected);
             }
 
-            var name = PullJsonContext.FromElement(task.Payload, PullJsonContext.Default.AppUpdateRequest)?.Packages.FirstOrDefault();
-            return name is null
+            var names = PullJsonContext.FromElement(task.Payload, PullJsonContext.Default.AppUpdateRequest)?.Packages ?? [];
+            if (task.Action == ModuleActions.AppUpdate)
+            {
+                names = names.Take(1).ToList();
+            }
+
+            return names.Count == 0
                 ? TaskOutcome.Rejected("No container given.")
-                : Json.From(await DockerUpdater.UpdateAsync(name, context.Log, ct));
+                : Json.From(await DockerUpdater.UpdateManyAsync(names, context.Log, ct));
         }
 
         if (task.Action == ModuleActions.Recipe)

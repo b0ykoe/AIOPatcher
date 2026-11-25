@@ -8,7 +8,17 @@ Written for users, not as a list of commits.
 
 ## [Unreleased]
 
+### Added
+- **"Update all" for containers:** the Containers tab of a host now has "Update all (n)", which updates every
+  container with a new image in one job. The agent bundles them per compose project (one pull, one recreate).
+  Containers that can't be updated from here (compose file missing, Portainer stack, no compose, own update script)
+  are skipped and listed in the confirmation dialog.
+- **Containers grouped by compose stack**, like Portainer: each stack gets a row with its compose file, the number of
+  containers, how many run, how many have a new image, and "Update stack". Containers without compose are listed
+  last under "Without compose".
+
 ### Improved
+- **Stopped containers stay stopped when updated:** they get the new image but are no longer started by the update.
 - **Hide basic steps you don't need:** under Getting started, the basics (site, host, patch plan, notifications) now
   have "Not needed" too. A skipped step counts as done, so the Getting started box in the sidebar goes away for good
   once the rest is set up. "Show again" brings a step back.
@@ -16,6 +26,10 @@ Written for users, not as a list of commits.
 ### Fixed
 - **"Sync now" for the local CVE database** no longer shows "Unexpected end of JSON input"; the sync starts as
   intended. Error messages that only showed a status code (e.g. "Error 409") now show the actual reason.
+
+### Upgrade notes
+- "Update all" and "Update stack" with more than one container need the new agent; agents update themselves shortly
+  after the server update.
 
 ## [0.16.3] - 2026-11-21
 
