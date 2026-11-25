@@ -116,14 +116,14 @@ public sealed class SoftwareModule(IPlatformInventory inventory, JobExecutor exe
 /// <summary>
 /// docker.inventory: alle Container mit Status; docker.packages: Paketlisten von Images (für den CVE-Abgleich);
 /// docker.appupdate: einen Compose-Container aktualisieren; docker.appupdatemany: mehrere, je Compose-Projekt gebündelt;
-/// docker.recipe: Update-Rezept der App ausführen (z. B. mailcow update.sh).
+/// docker.recipe: Update-Rezept der App ausführen (z. B. mailcow update.sh); docker.manage: Mini-Docker-Manager (eigene Policy).
 /// </summary>
 public sealed class DockerModule : IAgentModule
 {
     public string Id => AgentModules.Docker;
     public bool Available => OperatingSystem.IsLinux() && (File.Exists("/usr/bin/docker") || File.Exists("/usr/local/bin/docker"));
     public IReadOnlyList<string> Actions { get; } =
-        [ModuleActions.Inventory, ModuleActions.AppUpdate, ModuleActions.AppUpdateMany, ModuleActions.Packages, ModuleActions.Recipe];
+        [ModuleActions.Inventory, ModuleActions.AppUpdate, ModuleActions.AppUpdateMany, ModuleActions.Packages, ModuleActions.Recipe, ModuleActions.Manage];
 
     /// <summary>Container aktualisieren gilt wie Programm-Updates: allowAppUpdates und allowPatch All.</summary>
     public static string? PolicyRejects(AgentPolicy policy) =>
@@ -150,6 +150,14 @@ public sealed class DockerModule : IAgentModule
             return names.Count == 0
                 ? TaskOutcome.Rejected("No container given.")
                 : Json.From(await DockerUpdater.UpdateManyAsync(names, context.Log, ct));
+        }
+
+        // Mini-Docker-Manager: Policy (allowContainerManagement, allowComposeEdit) prüft DockerManager selbst
+        if (task.Action == ModuleActions.Manage)
+        {
+            return PullJsonContext.FromElement(task.Payload, PullJsonContext.Default.ContainerManageRequest) is { } manage
+                ? await DockerManager.RunAsync(manage, context.Policy, context.Log, ct)
+                : TaskOutcome.Rejected("Manage task without parameters.");
         }
 
         if (task.Action == ModuleActions.Recipe)
@@ -180,7 +188,9 @@ public sealed class DockerModule : IAgentModule
         var containers = await DockerInventory.CollectAsync(ct);
         return containers is null
             ? new TaskOutcome(JobOutcome.Failed, "Docker daemon not reachable.")
-            : Json.Ok($"{containers.Count} containers", new ContainerList(DockerRecipes.WithRecipes(containers, DockerRecipes.PolicyRejects(context.Policy) is null, File.Exists)), PullJsonContext.Default.ContainerList);
+            : Json.Ok($"{containers.Count} containers",
+                new ContainerList(DockerRecipes.WithRecipes(containers, DockerRecipes.PolicyRejects(context.Policy) is null, File.Exists), await DockerManager.DiskUsageAsync(ct)),
+                PullJsonContext.Default.ContainerList);
     }
 }
 

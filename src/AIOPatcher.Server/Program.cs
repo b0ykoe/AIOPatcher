@@ -265,6 +265,7 @@ app.MapNotificationEndpoints();
 app.MapPatchRuleEndpoints();
 app.MapIntegrationEndpoints();
 app.MapPortainerEndpoints();
+app.MapContainerManagementEndpoints();
 app.MapMetricsEndpoints();
 app.MapApiTokenEndpoints();
 app.MapReportEndpoints();

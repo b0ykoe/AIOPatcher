@@ -412,6 +412,7 @@ public static class AgentEndpoints
                 JobType.Reboot when !features.IsOn(Feature.Reboots) => Feature.Reboots,
                 JobType.AppUpdate when !features.IsOn(Feature.AppUpdates) => Feature.AppUpdates,
                 JobType.ContainerUpdate when !features.IsOn(Feature.AppUpdates) => Feature.AppUpdates,
+                JobType.ContainerManage when !features.IsOn(Feature.ContainerManagement) => Feature.ContainerManagement,
                 JobType.SystemChange when ComplianceEndpoints.BlockedFeature(candidate, features) is { } needed => needed,
                 _ => null,
             };
@@ -421,6 +422,7 @@ public static class AgentEndpoints
                 candidate.FinishedAt = now;
                 candidate.Summary = FeatureFlags.DisabledMessage(feature);
                 candidate.ProtectedSecret = null;
+                ContainerManagementEndpoints.TakeRequest(candidate); // Compose-Inhalt nicht liegen lassen
                 continue;
             }
 

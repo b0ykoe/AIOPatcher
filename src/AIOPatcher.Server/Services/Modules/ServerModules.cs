@@ -258,7 +258,8 @@ public sealed class DockerServerModule : ServerModule
         var last = context.LastRequested(Id, ModuleActions.Inventory);
         var asked = host.ContainersRequestedAt > last || context.LastRequested(AgentModules.Updates, ModuleActions.Scan) > last
                     || context.LastRequested(Id, ModuleActions.AppUpdate) > last // nach "Container aktualisieren" gleich neu melden
-                    || context.LastRequested(Id, ModuleActions.AppUpdateMany) > last;
+                    || context.LastRequested(Id, ModuleActions.AppUpdateMany) > last
+                    || context.LastRequested(Id, ModuleActions.Manage) > last; // nach Start/Stop/Löschen gleich neu melden
         if (context.Older(Id, ModuleActions.Inventory, context.Timing(Timings.Containers)) || asked)
         {
             return new PlannedTask(ModuleActions.Inventory);
@@ -281,8 +282,27 @@ public sealed class DockerServerModule : ServerModule
             return null;
         }
 
+        // Mini-Docker-Manager: gelesene Compose-Datei an den Job hängen, das Dashboard holt sie einmal ab
+        if (task.Action == ModuleActions.Manage)
+        {
+            if (PullJsonContext.FromElement(result.Payload, PullJsonContext.Default.ComposeFileResult) is { } file && task.JobId is { } jobId
+                && await context.Db.Jobs.FirstOrDefaultAsync(j => j.Id == jobId && j.HostId == host.Id, ct) is { } job)
+            {
+                var json = JsonSerializer.Serialize(file, PullJsonContext.Default.ComposeFileResult);
+                job.Result = json.Length <= 64000 ? json : null;
+            }
+
+            return null;
+        }
+
         if (PullJsonContext.FromElement(result.Payload, PullJsonContext.Default.ContainerList) is { } list)
         {
+            if (list.Disk is { } disk)
+            {
+                var json = JsonSerializer.Serialize(disk.Take(10).ToList(), PullJsonContext.Default.ListDockerDiskUsage);
+                host.DockerDisk = json.Length <= 2000 ? json : null;
+            }
+
             await ContainerUpdateService.ReplaceContainersAsync(context.Db, host, list.Containers, context.Now, ct, context.Notifier);
             await context.Db.SaveChangesAsync(ct);
             if (context.Features.IsOn(Feature.CveLookup) && ModuleJson.Supports(host, Id, ModuleActions.Packages))

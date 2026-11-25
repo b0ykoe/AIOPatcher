@@ -126,6 +126,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             e.HasIndex(x => x.CreatedAt);
             e.Property(x => x.Packages).HasMaxLength(4000);
             e.Property(x => x.Payload).HasMaxLength(64000);
+            e.Property(x => x.Result).HasMaxLength(64000);
             e.Property(x => x.ProtectedSecret).HasMaxLength(2000);
         });
 

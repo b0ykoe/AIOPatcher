@@ -50,6 +50,12 @@ public enum JobType
     /// Rückfall). Läuft als serverupdate.update; braucht policy.json allowServerUpdate.
     /// </summary>
     ServerUpdate,
+
+    /// <summary>
+    /// Mini-Docker-Manager: Container starten/stoppen/löschen, Platz freigeben, Compose bearbeiten (Payload =
+    /// <see cref="ContainerManageRequest"/>). Läuft als docker.manage; braucht policy.json allowContainerManagement.
+    /// </summary>
+    ContainerManage,
 }
 
 [JsonConverter(typeof(JsonStringEnumConverter<PatchScope>))]

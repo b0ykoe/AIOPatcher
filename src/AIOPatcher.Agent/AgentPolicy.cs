@@ -46,13 +46,41 @@ public enum PatchPermission
 /// Rezepte; zusätzlich gelten allowAppUpdates und allowPatch All. Ab Werk aus, weil solche Skripte mehr ändern als ein Image
 /// (Git, Konfiguration, ganzer Stack).
 /// </param>
+/// <param name="AllowContainerManagement">
+/// Mini-Docker-Manager: Container starten, stoppen, neu starten, löschen und Platz freigeben (docker.manage). Ab Werk aus;
+/// nur hier auf dem Host einschaltbar, nie vom Server oder über den Installationsbefehl.
+/// </param>
+/// <param name="AllowComposeEdit">
+/// Zusätzlich Compose-Dateien lesen, bearbeiten und neue Stacks anlegen. Wer das darf, ist root auf dem Host (privileged,
+/// Bind-Mount von /). Ab Werk aus; nur Dateien unter <paramref name="ComposeRoot"/>.
+/// </param>
+/// <param name="ComposeRoot">Basisordner für bearbeitbare Compose-Dateien und neue Stacks; null = <see cref="DefaultComposeRoot"/>.</param>
 public sealed record AgentPolicy(PatchPermission AllowPatch = PatchPermission.All, bool AllowReboot = true, bool AllowSelfUpdate = true, bool AllowAppUpdates = true, bool TrustServerUpdates = true,
     bool AllowSystemChanges = false, IReadOnlyList<string>? DisabledModules = null, bool AllowSourceFixes = true,
-    bool AllowAutoUpdateChanges = true, bool AllowMonitoringChanges = false, bool AllowServerUpdate = false, bool AllowUpdateRecipes = false)
+    bool AllowAutoUpdateChanges = true, bool AllowMonitoringChanges = false, bool AllowServerUpdate = false, bool AllowUpdateRecipes = false,
+    bool AllowContainerManagement = false, bool AllowComposeEdit = false, string? ComposeRoot = null)
 {
     /// <summary>Für die Anzeige im Dashboard (Systemdaten): alle Werte der policy.json.</summary>
     public AIOPatcher.Contracts.AgentPolicyReport ToReport() => new(AllowPatch.ToString(), AllowReboot, AllowSelfUpdate, AllowAppUpdates, TrustServerUpdates,
-        AllowSystemChanges, AllowSourceFixes, AllowAutoUpdateChanges, AllowMonitoringChanges, AllowServerUpdate, AllowUpdateRecipes, DisabledModules ?? []);
+        AllowSystemChanges, AllowSourceFixes, AllowAutoUpdateChanges, AllowMonitoringChanges, AllowServerUpdate, AllowUpdateRecipes,
+        AllowContainerManagement, AllowComposeEdit, EffectiveComposeRoot, DisabledModules ?? []);
+
+    public const string DefaultComposeRoot = "/opt/stacks";
+
+    /// <summary>Basisordner für Compose-Dateien (normalisiert, ohne "/" am Ende).</summary>
+    public string EffectiveComposeRoot => string.IsNullOrWhiteSpace(ComposeRoot) ? DefaultComposeRoot : ComposeRoot;
+
+    /// <summary>"composeRoot": absoluter Ordner, nicht "/" (sonst wäre jede Datei des Systems bearbeitbar).</summary>
+    public static string NormalizeComposeRoot(string value)
+    {
+        if (!value.StartsWith('/') || value.Contains('\0'))
+        {
+            throw new ArgumentException("composeRoot: an absolute path such as /opt/stacks.");
+        }
+
+        var full = Platforms.Docker.DockerManager.Normalize(value).TrimEnd('/');
+        return full.Length == 0 ? throw new ArgumentException("composeRoot must not be \"/\".") : full;
+    }
 
     /// <summary>Modul auf diesem Host gesperrt? (system und agent lassen sich nicht sperren.)</summary>
     public bool IsModuleDisabled(string module) =>
@@ -76,6 +104,9 @@ public sealed record AgentPolicy(PatchPermission AllowPatch = PatchPermission.Al
             "allowmonitoringchanges" => policy with { AllowMonitoringChanges = Bool() },
             "allowserverupdate" => policy with { AllowServerUpdate = Bool() },
             "allowupdaterecipes" => policy with { AllowUpdateRecipes = Bool() },
+            "allowcontainermanagement" => policy with { AllowContainerManagement = Bool() },
+            "allowcomposeedit" => policy with { AllowComposeEdit = Bool() },
+            "composeroot" => policy with { ComposeRoot = NormalizeComposeRoot(value) },
             "disabledmodules" => policy with { DisabledModules = value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) is var list && list.All(m => AIOPatcher.Contracts.AgentModules.All.Contains(m)) ? list : throw new ArgumentException($"disabledModules: comma-separated list of {string.Join(", ", AIOPatcher.Contracts.AgentModules.All)}.") },
             _ => throw new ArgumentException($"Unknown policy key '{key}'."),
         };

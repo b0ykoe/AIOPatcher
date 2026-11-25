@@ -55,6 +55,12 @@ public enum Feature
 
     /// <summary>Site-Sharing: Sites mit anderen AIOPatcher-Instanzen teilen (über die externe Dashboard-Adresse).</summary>
     SiteSharing,
+
+    /// <summary>
+    /// Mini-Docker-Manager: Container starten/stoppen/löschen, Platz freigeben, Compose bearbeiten und Stacks anlegen. Sehr
+    /// riskant (Compose bearbeiten = root auf dem Host); jeder Host muss es zusätzlich lokal freigeben (allowContainerManagement).
+    /// </summary>
+    ContainerManagement,
 }
 
 public enum FeatureRisk
@@ -97,6 +103,7 @@ public sealed class FeatureFlags(AIOPatcherOptions options)
         new(Feature.AutoUpdateControl, true, FeatureRisk.Medium, "hosts"),
         new(Feature.Metrics, true, FeatureRisk.Low, "hosts"),
         new(Feature.MonitoringClients, false, FeatureRisk.High, "hosts"),
+        new(Feature.ContainerManagement, false, FeatureRisk.High, "hosts"),
         new(Feature.SnapshotTests, true, FeatureRisk.Low, "integrations"),
         new(Feature.OpnsenseUpdates, false, FeatureRisk.High, "integrations"),
         new(Feature.BackupJobChecks, false, FeatureRisk.Low, "integrations"),
@@ -222,6 +229,7 @@ public sealed class FeatureFlags(AIOPatcherOptions options)
         Feature.MonitoringClients => german ? "Monitoring-Clients verwalten" : "Manage monitoring clients",
         Feature.BackupJobChecks => german ? "Backup-Jobs prüfen" : "Check backup jobs",
         Feature.SiteSharing => german ? "Sites teilen" : "Share sites",
+        Feature.ContainerManagement => german ? "Container verwalten (Mini-Docker-Manager)" : "Manage containers (mini Docker manager)",
         _ => feature.ToString(),
     };
 }

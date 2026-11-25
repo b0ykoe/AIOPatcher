@@ -1129,6 +1129,10 @@ namespace AIOPatcher.Server.Data.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("DockerDisk")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTime>("EnrolledAt")
                         .HasColumnType("TEXT");
 
@@ -1675,6 +1679,10 @@ namespace AIOPatcher.Server.Data.Migrations
 
                     b.Property<string>("RequestedBy")
                         .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Result")
+                        .HasMaxLength(64000)
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Scope")

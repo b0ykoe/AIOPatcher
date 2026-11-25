@@ -38,6 +38,7 @@ public static class GettingStartedEndpoints
         ("backups", Discover, true),
         ("serverUpdate", Discover, true),
         ("sso", Discover, true),
+        ("containerManagement", Discover, true),
     ];
 
     public static void MapGettingStartedEndpoints(this IEndpointRouteBuilder app)
@@ -86,6 +87,9 @@ public static class GettingStartedEndpoints
                 "backups" => features.IsOn(Feature.BackupJobChecks),
                 "serverUpdate" => await ServerUpdateReadyAsync(db, ct),
                 "sso" => ssoConfigured,
+                // Funktion an und mindestens ein Host erlaubt es in seiner policy.json
+                "containerManagement" => features.IsOn(Feature.ContainerManagement)
+                    && await db.Hosts.AnyAsync(h => !h.IsRevoked && h.ReportedPolicy != null && h.ReportedPolicy.Contains("\"allowContainerManagement\":true"), ct),
                 _ => false,
             };
             steps.Add(new StepDto(key, group, done ? "done" : skipped.Contains(key) ? "skipped" : "open", adminOnly));

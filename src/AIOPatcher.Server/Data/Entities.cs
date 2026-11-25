@@ -121,6 +121,10 @@ public sealed class ManagedHost
     [System.ComponentModel.DataAnnotations.MaxLength(2000)]
     public string? ReportedPolicy { get; set; }
 
+    /// <summary>"docker system df" laut letzter Container-Inventur (JSON-Liste von <see cref="AIOPatcher.Contracts.DockerDiskUsage"/>); null = unbekannt.</summary>
+    [System.ComponentModel.DataAnnotations.MaxLength(2000)]
+    public string? DockerDisk { get; set; }
+
     /// <summary>Im Dashboard abgeschaltete Module (kommagetrennt). Für die gibt es keine Aufträge.</summary>
     public string? DisabledModules { get; set; }
 
@@ -249,6 +253,12 @@ public sealed class PatchJob
 
     /// <summary>Patch: anstehende Updates beim Start des Jobs (JSON, siehe JobUpdateItem) für die Historie mit Patchnotes.</summary>
     public string? UpdatesSnapshot { get; set; }
+
+    /// <summary>
+    /// ContainerManage "read": Inhalt der Compose-Datei (JSON von <see cref="AIOPatcher.Contracts.ComposeFileResult"/>). Wird gelöscht,
+    /// sobald das Dashboard ihn abgeholt hat (kann Passwörter aus der Datei enthalten).
+    /// </summary>
+    public string? Result { get; set; }
 
     /// <summary>SystemChange: <see cref="AIOPatcher.Contracts.SystemChange"/> als JSON, immer ohne Geheimnis.</summary>
     public string? Payload { get; set; }

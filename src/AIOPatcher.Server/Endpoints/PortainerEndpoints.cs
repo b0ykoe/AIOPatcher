@@ -17,7 +17,8 @@ public static class PortainerEndpoints
     public sealed record StacksOverviewDto(bool UpdatesEnabled, bool ImageChecksEnabled, IReadOnlyList<PortainerServerDto> Servers,
         IReadOnlyList<DockerHostDto>? Hosts = null);
 
-    public sealed record DockerHostDto(Guid Id, string Name, string? SiteName, IReadOnlyList<HostEndpoints.ContainerDto> Containers);
+    public sealed record DockerHostDto(Guid Id, string Name, string? SiteName, IReadOnlyList<HostEndpoints.ContainerDto> Containers,
+        ContainerManagementEndpoints.ManagementDto? ContainerManagement = null);
 
     public sealed record PortainerServerDto(Guid Id, string Name, string? SiteName, string? BaseUrl, bool Enabled, DateTime? LastCheckAt, string? LastError,
         string? Version, HostEndpoints.FreezeInfoDto? Freeze, IReadOnlyList<PortainerEnvironment> Environments, IReadOnlyList<StackDto> Stacks,
@@ -83,7 +84,7 @@ public static class PortainerEndpoints
         var hosts = new List<DockerHostDto>();
         foreach (var h in dockerHosts)
         {
-            hosts.Add(new DockerHostDto(h.Id, h.Name, h.Site?.Name, await HostEndpoints.ContainersAsync(db, h.Id, ct, features)));
+            hosts.Add(new DockerHostDto(h.Id, h.Name, h.Site?.Name, await HostEndpoints.ContainersAsync(db, h.Id, ct, features), ContainerManagementEndpoints.Management(h)));
         }
 
         return new StacksOverviewDto(features.IsOn(Feature.AppUpdates), features.IsOn(Feature.ContainerChecks), servers, hosts);

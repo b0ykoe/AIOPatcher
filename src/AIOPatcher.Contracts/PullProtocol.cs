@@ -102,6 +102,9 @@ public static class ModuleActions
 
     /// <summary>docker.recipe: Update-Rezept der App ausführen (siehe <see cref="UpdateRecipeCatalog"/>).</summary>
     public const string Recipe = "recipe";
+
+    /// <summary>docker.manage: Mini-Docker-Manager (siehe <see cref="ContainerOps"/>).</summary>
+    public const string Manage = "manage";
 }
 
 /// <summary>docker.packages: Paketliste dieser Images lesen (je Image ein Container; docker cp, nur lesen).</summary>
@@ -181,6 +184,9 @@ public sealed record AgentPolicyReport(
     bool? AllowMonitoringChanges = null,
     bool? AllowServerUpdate = null,
     bool? AllowUpdateRecipes = null,
+    bool? AllowContainerManagement = null,
+    bool? AllowComposeEdit = null,
+    string? ComposeRoot = null,
     IReadOnlyList<string>? DisabledModules = null);
 
 /// <param name="BrokenSources">Paketquellen, die beim letzten apt-get update nicht ladbar waren (null = Agent prüft das nicht).</param>
@@ -200,7 +206,8 @@ public sealed record AppUpdateRequest(IReadOnlyList<string> Packages);
 
 public sealed record SoftwareList(IReadOnlyList<InstalledSoftware> Software);
 
-public sealed record ContainerList(IReadOnlyList<ContainerReport> Containers);
+/// <param name="Disk">"docker system df" (Images, Container, Volumes, Build-Cache), für "Platz freigeben"; null = älterer Agent.</param>
+public sealed record ContainerList(IReadOnlyList<ContainerReport> Containers, IReadOnlyList<DockerDiskUsage>? Disk = null);
 
 /// <summary>
 /// services.list: was gerade läuft und nach einem Neustart wieder laufen sollte. Der Server vergleicht den Stand vor dem
@@ -259,6 +266,9 @@ public sealed record RenewAnswer(string CertificateSigningRequestPem);
 [JsonSerializable(typeof(InstallRequest))]
 [JsonSerializable(typeof(AppUpdateRequest))]
 [JsonSerializable(typeof(RecipeUpdateRequest))]
+[JsonSerializable(typeof(ContainerManageRequest))]
+[JsonSerializable(typeof(ComposeFileResult))]
+[JsonSerializable(typeof(List<DockerDiskUsage>))]
 [JsonSerializable(typeof(ChangelogRequest))]
 [JsonSerializable(typeof(ChangelogResult))]
 [JsonSerializable(typeof(SoftwareList))]

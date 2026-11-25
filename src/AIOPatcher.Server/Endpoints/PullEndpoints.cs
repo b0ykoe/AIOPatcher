@@ -236,6 +236,10 @@ public static class PullEndpoints
                 var names = (job.Packages ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
                 return (AgentModules.Docker, names.Length > 1 ? ModuleActions.AppUpdateMany : ModuleActions.AppUpdate,
                     PullJsonContext.ToElement(new AppUpdateRequest(names.Length == 0 ? [""] : names), PullJsonContext.Default.AppUpdateRequest));
+            case JobType.ContainerManage:
+                // Inhalt einer Compose-Datei nur bis zur Übergabe im Job behalten (kann Passwörter enthalten)
+                return (AgentModules.Docker, ModuleActions.Manage,
+                    PullJsonContext.ToElement(ContainerManagementEndpoints.TakeRequest(job) ?? new ContainerManageRequest("invalid"), PullJsonContext.Default.ContainerManageRequest));
             case JobType.ServerUpdate:
                 return (AgentModules.ServerUpdate, ModuleActions.Update, null);
             case JobType.AppUpdate:
