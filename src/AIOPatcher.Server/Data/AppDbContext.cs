@@ -30,6 +30,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<CveInfo> CveInfos => Set<CveInfo>();
     public DbSet<VulnLookup> VulnLookups => Set<VulnLookup>();
     public DbSet<ContainerInfo> Containers => Set<ContainerInfo>();
+    public DbSet<ComposeCacheEntry> ComposeCache => Set<ComposeCacheEntry>();
     public DbSet<ImageCheck> ImageChecks => Set<ImageCheck>();
     public DbSet<ApiToken> ApiTokens => Set<ApiToken>();
     public DbSet<InstalledApp> InstalledApps => Set<InstalledApp>();
@@ -252,6 +253,17 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
         {
             e.HasKey(x => x.Key);
             e.Property(x => x.Key).HasMaxLength(600);
+        });
+
+        b.Entity<ComposeCacheEntry>(e =>
+        {
+            e.HasOne(x => x.Host).WithMany().HasForeignKey(x => x.HostId).OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(x => new { x.HostId, x.Project }).IsUnique();
+            e.Property(x => x.Project).HasMaxLength(200);
+            e.Property(x => x.Path).HasMaxLength(1000);
+            e.Property(x => x.ReportedSha256).HasMaxLength(64);
+            e.Property(x => x.Sha256).HasMaxLength(64);
+            e.Property(x => x.ProtectedContent).HasMaxLength(200000);
         });
 
         b.Entity<ContainerInfo>(e =>

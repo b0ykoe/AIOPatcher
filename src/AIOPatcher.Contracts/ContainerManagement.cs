@@ -187,3 +187,14 @@ public sealed record UnusedImage(string Id, IReadOnlyList<string> References, lo
 /// <summary>Volume, das kein Container nutzt (auch kein gestoppter).</summary>
 /// <param name="Project">Compose-Projekt laut Label com.docker.compose.project, damit man Daten gestoppter Stacks erkennt.</param>
 public sealed record UnusedVolume(string Name, long? Size, string? Project, string? Driver);
+
+/// <summary>Inventur: bearbeitbare Compose-Datei eines Stacks mit SHA-256 (Inhalt kommt nur auf Anfrage).</summary>
+public sealed record ComposeFileHash(string Project, string Path, string Sha256, long Size);
+
+/// <summary>docker.composecache: Inhalt dieser Stacks schicken (höchstens <see cref="MaxFiles"/>).</summary>
+public sealed record ComposeCacheRequest(IReadOnlyList<string> Projects)
+{
+    public const int MaxFiles = 20;
+}
+
+public sealed record ComposeFileBatch(IReadOnlyList<ComposeFileResult> Files);

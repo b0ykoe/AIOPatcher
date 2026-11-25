@@ -41,6 +41,11 @@ public static class FeatureEndpoints
                 statusCode: StatusCodes.Status409Conflict);
         }
 
+        if (f == Feature.ContainerManagement && !request.Enabled)
+        {
+            await ComposeCache.ForgetAsync(db, null, ct); // gespeicherte Compose-Dateien aller Hosts weg
+        }
+
         audit.Add("feature.changed", $"{f}: {(request.Enabled ? "on" : "off")}");
         await db.SaveChangesAsync(ct);
         return Results.Ok(List(features));

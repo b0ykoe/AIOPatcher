@@ -32,6 +32,9 @@ public sealed class ModuleContext(
     /// <summary>Changelogs anstehender Updates (null in Tests ohne diesen Teil).</summary>
     public UpdateChangelogs? Changelogs => changelogs;
 
+    /// <summary>Zum Verschlüsseln (Compose-Vorrat); null in Tests und Pfaden ohne diesen Teil.</summary>
+    public Microsoft.AspNetCore.DataProtection.IDataProtectionProvider? Protection { get; init; }
+
     /// <summary>Policy-Fingerabdruck aus der Abfrage (Header); null bei älteren Agents.</summary>
     public string? PolledPolicy { get; init; }
 
@@ -144,6 +147,7 @@ public sealed class SystemServerModule : ServerModule
         host.Architecture = d.Architecture is "x64" or "arm64" ? d.Architecture : null;
         host.ReportedModules = JsonSerializer.Serialize(d.Modules.Take(32).ToList(), ModuleJson.Default.ListModuleInfo);
         host.ReportedPolicy = d.Policy is { } policy ? PolicyReport.Serialize(policy) : null;
+        await ComposeCache.ForgetIfNotAllowedAsync(context.Db, host, ct); // Host erlaubt Compose nicht mehr: Vorrat weg
         await AgentEndpoints.ReplaceAddressesAsync(context.Db, host, d.Addresses ?? [], context.Now, ct);
         if (d.UpdateReport is { } report)
         {
@@ -279,9 +283,26 @@ public sealed class DockerServerModule : ServerModule
             return new PlannedTask(ModuleActions.Inventory);
         }
 
+        // Compose-Editor: Inhalte mit neuem Hash holen, damit der Editor sofort öffnet
+        if (context.Features.IsOn(Feature.ContainerManagement) && ComposeCache.TakeRequest(host) is { } compose)
+        {
+            return new PlannedTask(ModuleActions.ComposeCache, PullJsonContext.ToElement(compose, PullJsonContext.Default.ComposeCacheRequest));
+        }
+
         return ModuleJson.Supports(host, Id, ModuleActions.Packages) && PendingPackages.TryRemove(host.Id, out var images) && images.Count > 0
             ? new PlannedTask(ModuleActions.Packages, PullJsonContext.ToElement(new ImagePackagesRequest(images), PullJsonContext.Default.ImagePackagesRequest))
             : null;
+    }
+
+    /// <summary>Compose-Inhalte speichern, nur mit Schalter, Freigabe des Hosts und Verschlüsselung.</summary>
+    private static async Task StoreComposeAsync(ModuleContext context, ManagedHost host, IEnumerable<ComposeFileResult> files, CancellationToken ct)
+    {
+        var policy = PolicyReport.Parse(host.ReportedPolicy);
+        if (context.Protection is { } protection && context.Features.IsOn(Feature.ContainerManagement)
+            && policy?.AllowContainerManagement == true && policy.AllowComposeEdit == true)
+        {
+            await ComposeCache.StoreAsync(context.Db, host, files, ComposeCache.Protector(protection), context.Now, ct);
+        }
     }
 
     public override async Task<JsonElement?> HandleAsync(ModuleContext context, ManagedHost host, AgentTaskRecord task, TaskResultRequest result, CancellationToken ct)
@@ -296,15 +317,37 @@ public sealed class DockerServerModule : ServerModule
             return null;
         }
 
+        if (task.Action == ModuleActions.ComposeCache)
+        {
+            if (PullJsonContext.FromElement(result.Payload, PullJsonContext.Default.ComposeFileBatch) is { } batch)
+            {
+                await StoreComposeAsync(context, host, batch.Files, ct);
+            }
+
+            return null;
+        }
+
         // Mini-Docker-Manager: gelesene Compose-Datei bzw. Scan für "Platz freigeben" an den Job hängen, das Dashboard holt sie ab
         if (task.Action == ModuleActions.Manage)
         {
             if (result.Payload is { ValueKind: JsonValueKind.Object } payload && task.JobId is { } jobId
                 && await context.Db.Jobs.FirstOrDefaultAsync(j => j.Id == jobId && j.HostId == host.Id, ct) is { } job)
             {
-                string? json = payload.TryGetProperty("images", out _)
-                    ? PullJsonContext.FromElement(payload, PullJsonContext.Default.PruneScan) is { } scan ? JsonSerializer.Serialize(scan, PullJsonContext.Default.PruneScan) : null
-                    : PullJsonContext.FromElement(payload, PullJsonContext.Default.ComposeFileResult) is { } file ? JsonSerializer.Serialize(file, PullJsonContext.Default.ComposeFileResult) : null;
+                string? json;
+                if (payload.TryGetProperty("images", out _))
+                {
+                    json = PullJsonContext.FromElement(payload, PullJsonContext.Default.PruneScan) is { } scan ? JsonSerializer.Serialize(scan, PullJsonContext.Default.PruneScan) : null;
+                }
+                else
+                {
+                    var file = PullJsonContext.FromElement(payload, PullJsonContext.Default.ComposeFileResult);
+                    json = file is null ? null : JsonSerializer.Serialize(file, PullJsonContext.Default.ComposeFileResult);
+                    if (file is not null)
+                    {
+                        await StoreComposeAsync(context, host, [file], ct); // frisch gelesen: Vorrat gleich mit aktualisieren
+                    }
+                }
+
                 job.Result = json is { Length: <= 64000 } ? json : null;
             }
 
@@ -320,6 +363,8 @@ public sealed class DockerServerModule : ServerModule
             }
 
             await ContainerUpdateService.ReplaceContainersAsync(context.Db, host, list.Containers, context.Now, ct, context.Notifier);
+            // Compose-Hashes: fehlt der Inhalt oder ist er veraltet, holt ihn der nächste Abruf (ohne Freigabe: Vorrat löschen)
+            await ComposeCache.SyncAsync(context.Db, host, list.ComposeFiles, context.Features.IsOn(Feature.ContainerManagement), context.Now, ct);
             await context.Db.SaveChangesAsync(ct);
             if (context.Features.IsOn(Feature.CveLookup) && ModuleJson.Supports(host, Id, ModuleActions.Packages))
             {

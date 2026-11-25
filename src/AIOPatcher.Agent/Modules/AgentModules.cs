@@ -123,7 +123,7 @@ public sealed class DockerModule : IAgentModule
     public string Id => AgentModules.Docker;
     public bool Available => OperatingSystem.IsLinux() && (File.Exists("/usr/bin/docker") || File.Exists("/usr/local/bin/docker"));
     public IReadOnlyList<string> Actions { get; } =
-        [ModuleActions.Inventory, ModuleActions.AppUpdate, ModuleActions.AppUpdateMany, ModuleActions.Packages, ModuleActions.Recipe, ModuleActions.Manage];
+        [ModuleActions.Inventory, ModuleActions.AppUpdate, ModuleActions.AppUpdateMany, ModuleActions.Packages, ModuleActions.Recipe, ModuleActions.Manage, ModuleActions.ComposeCache];
 
     /// <summary>Container aktualisieren gilt wie Programm-Updates: allowAppUpdates und allowPatch All.</summary>
     public static string? PolicyRejects(AgentPolicy policy) =>
@@ -153,6 +153,13 @@ public sealed class DockerModule : IAgentModule
         }
 
         // Mini-Docker-Manager: Policy (allowContainerManagement, allowComposeEdit) prüft DockerManager selbst
+        if (task.Action == ModuleActions.ComposeCache)
+        {
+            return PullJsonContext.FromElement(task.Payload, PullJsonContext.Default.ComposeCacheRequest) is { } cache
+                ? await DockerManager.CacheAsync(cache, context.Policy, ct)
+                : TaskOutcome.Rejected("Compose cache task without parameters.");
+        }
+
         if (task.Action == ModuleActions.Manage)
         {
             return PullJsonContext.FromElement(task.Payload, PullJsonContext.Default.ContainerManageRequest) is { } manage
@@ -189,7 +196,8 @@ public sealed class DockerModule : IAgentModule
         return containers is null
             ? new TaskOutcome(JobOutcome.Failed, "Docker daemon not reachable.")
             : Json.Ok($"{containers.Count} containers",
-                new ContainerList(DockerRecipes.WithRecipes(containers, DockerRecipes.PolicyRejects(context.Policy) is null, File.Exists), await DockerManager.DiskUsageAsync(ct)),
+                new ContainerList(DockerRecipes.WithRecipes(containers, DockerRecipes.PolicyRejects(context.Policy) is null, File.Exists), await DockerManager.DiskUsageAsync(ct),
+                    await DockerManager.ComposeHashesAsync(containers, context.Policy, ct)),
                 PullJsonContext.Default.ContainerList);
     }
 }

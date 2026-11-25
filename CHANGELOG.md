@@ -14,9 +14,16 @@ Written for users, not as a list of commits.
   volume (name, size, and the compose stack it came from). Tick single entries or a whole group; volumes are never
   ticked by default and come with a clear warning that their data is gone for good. Only what you ticked is deleted:
   right before deleting, the agent checks again and skips anything that is in use by then.
+- **The compose editor opens right away:** the agent now reports a fingerprint of each editable compose file with its
+  container report, and AIOPatcher fetches the content only when the file has changed, so the editor no longer waits
+  up to 30 seconds. It shows how current the version is and has "Reload from host". The stored copies are encrypted
+  (compose files often contain passwords), only admins get them, and they are deleted as soon as the host no longer
+  allows compose editing, container management is turned off, or the host is removed.
+- **Saving never overwrites someone else's change:** if the file was changed on the host after the editor opened it,
+  saving is blocked with a note to reload, and the agent refuses to write it as well.
 
 ### Upgrade notes
-- The new "Reclaim space" needs the new agent (it updates itself).
+- The new "Reclaim space" and the instant compose editor need the new agent (it updates itself).
 
 ## [0.17.1] - 2026-11-25
 

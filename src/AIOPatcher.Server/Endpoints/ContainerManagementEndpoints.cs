@@ -23,12 +23,17 @@ public static class ContainerManagementEndpoints
     /// <param name="Status">Status des Lese- bzw. Scan-Jobs; File/Scan nur einmal, danach auf dem Server gelöscht.</param>
     public sealed record ComposeReadDto(JobStatus Status, string? Summary, ComposeFileResult? File, PruneScan? Scan = null);
 
+    /// <summary>Gespeicherter Stand einer Compose-Datei für den Editor.</summary>
+    /// <param name="Current">Hash gleich dem zuletzt gemeldeten (Stand der letzten Container-Meldung).</param>
+    public sealed record CachedComposeDto(ComposeFileResult File, DateTime? CachedAt, bool Current, DateTime ReportedAt);
+
     public static void MapContainerManagementEndpoints(this IEndpointRouteBuilder app)
     {
         var admin = app.MapGroup("/api/hosts/{id:guid}/containers").RequireAuthorization(UserAccounts.AdminPolicy);
         admin.MapPost("/manage", ManageAsync);
         admin.MapGet("/compose/{jobId:guid}", ComposeAsync);
         admin.MapGet("/result/{jobId:guid}", ComposeAsync);
+        admin.MapGet("/compose-cache/{project}", CachedComposeAsync);
     }
 
     public static ManagementDto Management(ManagedHost host)
@@ -162,6 +167,32 @@ public static class ContainerManagementEndpoints
         audit.Add("container.manage", $"{host.Name}: {clean.Op} {job.Packages}{(clean.Volumes ? " volumes" : "")}{(clean.Up ? " up" : "")}", siteId: host.SiteId, hostId: host.Id);
         await db.SaveChangesAsync(ct);
         return Results.Ok(new { job.Id });
+    }
+
+    /// <summary>
+    /// Gespeicherter Stand einer Compose-Datei (sofort, ohne auf den Agent zu warten). Nur mit Schalter und solange der Host
+    /// Compose erlaubt; sonst 404 und der Vorrat des Hosts wird gelöscht.
+    /// </summary>
+    private static async Task<IResult> CachedComposeAsync(Guid id, string project, AppDbContext db, FeatureFlags features,
+        Microsoft.AspNetCore.DataProtection.IDataProtectionProvider protection, CancellationToken ct)
+    {
+        var host = await db.Hosts.FindAsync([id], ct);
+        if (host is null || !ContainerOps.IsValidProjectName(project))
+        {
+            return Results.NotFound();
+        }
+
+        var policy = PolicyReport.Parse(host.ReportedPolicy);
+        if (!features.IsOn(Feature.ContainerManagement) || policy?.AllowContainerManagement != true || policy.AllowComposeEdit != true)
+        {
+            await ComposeCache.ForgetAsync(db, host.Id, ct);
+            await db.SaveChangesAsync(ct);
+            return Results.NotFound();
+        }
+
+        return await ComposeCache.ReadAsync(db, id, project, ComposeCache.Protector(protection), ct) is { } cached
+            ? Results.Ok(new CachedComposeDto(cached.File, cached.Entry.CachedAt, cached.Entry.Sha256 == cached.Entry.ReportedSha256, cached.Entry.ReportedAt))
+            : Results.NotFound();
     }
 
     /// <summary>Ergebnis eines Lese-Jobs; den Inhalt gibt es genau einmal (danach gelöscht, er kann Passwörter enthalten).</summary>

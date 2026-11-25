@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router";
 import { ActionIcon, Alert, Anchor, Box, Button, Checkbox, Code, Group, Loader, Menu, Modal, Stack, Text, Textarea, TextInput } from "@mantine/core";
 import {
-  IconAlertTriangle, IconDots, IconEraser, IconFileDiff, IconPencil, IconPlayerPlay, IconPlayerStop, IconPlus, IconRotateClockwise, IconTrash,
+  IconAlertTriangle, IconDots, IconEraser, IconFileDiff, IconPencil, IconPlayerPlay, IconPlayerStop, IconPlus, IconRefresh, IconRotateClockwise, IconTrash,
 } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
-import { api, isActiveJob, type ComposeFile, type ComposeRead, type ContainerItem, type ContainerManageRequest, type ContainerManagement } from "../api";
+import { api, formatRelative, isActiveJob, type CachedCompose, type ComposeFile, type ComposeRead, type ContainerItem, type ContainerManageRequest, type ContainerManagement } from "../api";
 import { useCan } from "../App";
 import { useFeatures } from "../features";
 import type { ContainerStack } from "./ContainerTable";
@@ -256,41 +256,84 @@ function ComposeEditor({ hostId, mode, project, root, onClose, onSubmit, busy }:
   const [name, setName] = useState("");
   const [review, setReview] = useState(false);
   const [up, setUp] = useState(mode === "create");
+  /** Stand aus dem Vorrat des Servers (Zeitpunkt), null = frisch vom Host */
+  const [cachedAt, setCachedAt] = useState<string | null>(null);
+  const [fresh, setFresh] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  /** Host hat eine andere Fassung, während hier schon geändert wurde */
+  const [conflict, setConflict] = useState<ComposeFile | null>(null);
+  const base = useRef<ComposeFile | null>(null);
+  const text = useRef(content);
+  text.current = content;
+  const stopped = useRef(false);
 
-  // Datei per Lese-Job holen und warten, bis der Agent geantwortet hat
+  const take = (f: ComposeFile) => {
+    base.current = f;
+    setFile(f);
+    setContent(f.content);
+    setConflict(null);
+  };
+
+  /** Frisch vom Host lesen (Job, bis zum nächsten Abruf des Agents) und mit dem geöffneten Stand abgleichen. */
+  const reload = async () => {
+    setFresh(true);
+    setNotice(null);
+    try {
+      const job = await api.post<{ id: string }>(`/api/hosts/${hostId}/containers/manage`, { op: "read", project });
+      for (;;) {
+        if (stopped.current) return;
+        const read = await api.get<ComposeRead>(`/api/hosts/${hostId}/containers/compose/${job.id}`);
+        if (read.file) {
+          const current = base.current;
+          if (!current || text.current === current.content) {
+            take(read.file); // noch nichts geändert: einfach übernehmen
+            setNotice(current && current.sha256 !== read.file.sha256 ? t("manager.reloadedChanged") : t("manager.reloadedSame"));
+          } else if (current.sha256 !== read.file.sha256) {
+            setConflict(read.file); // eigene Änderungen nicht überschreiben
+          } else {
+            setNotice(t("manager.reloadedSame"));
+          }
+          setCachedAt(null);
+          return;
+        }
+        if (!isActiveJob(read.status)) {
+          if (!base.current) setError(read.summary ?? t("manager.readFailed"));
+          else setNotice(read.summary ?? t("manager.readFailed"));
+          return;
+        }
+        await new Promise((r) => setTimeout(r, 2000));
+      }
+    } catch (e) {
+      if (!base.current) setError(errorText(e));
+      else setNotice(errorText(e));
+    } finally {
+      setFresh(false);
+    }
+  };
+
+  // Sofort aus dem Vorrat öffnen; nur wenn keiner da ist oder der Host inzwischen einen anderen Hash meldet, vom Host lesen
   useEffect(() => {
     if (mode !== "edit" || !project) return;
-    let stop = false;
-    let timer: ReturnType<typeof setTimeout> | undefined;
+    stopped.current = false;
     (async () => {
+      let cached: CachedCompose | null = null;
       try {
-        const job = await api.post<{ id: string }>(`/api/hosts/${hostId}/containers/manage`, { op: "read", project });
-        const poll = async () => {
-          if (stop) return;
-          try {
-            const read = await api.get<ComposeRead>(`/api/hosts/${hostId}/containers/compose/${job.id}`);
-            if (read.file) {
-              setFile(read.file);
-              setContent(read.file.content);
-            } else if (isActiveJob(read.status)) {
-              timer = setTimeout(() => void poll(), 2000);
-            } else {
-              setError(read.summary ?? t("manager.readFailed"));
-            }
-          } catch (e) {
-            setError(errorText(e));
-          }
-        };
-        await poll();
-      } catch (e) {
-        setError(errorText(e));
+        cached = await api.get<CachedCompose>(`/api/hosts/${hostId}/containers/compose-cache/${encodeURIComponent(project)}`);
+      } catch {
+        cached = null; // 404: kein Vorrat
       }
+      if (stopped.current) return;
+      if (cached) {
+        take(cached.file);
+        setCachedAt(cached.cachedAt);
+      }
+      if (!cached || !cached.current) await reload();
     })();
     return () => {
-      stop = true;
-      if (timer) clearTimeout(timer);
+      stopped.current = true;
     };
-  }, [hostId, mode, project, t]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hostId, mode, project]);
 
   const diff = useMemo(() => (review && file ? lineDiff(file.content, content) : []), [review, file, content]);
   const changed = mode === "create" || (file !== null && content !== file.content);
@@ -312,7 +355,27 @@ function ComposeEditor({ hostId, mode, project, root, onClose, onSubmit, busy }:
           <Group gap="xs"><Loader size="sm" /><Text size="sm" c="dimmed">{t("manager.reading")}</Text></Group>
         )}
         {error && <Alert color="red">{error}</Alert>}
-        {file && <Text size="xs" c="dimmed" ff="monospace">{file.path}</Text>}
+        {file && (
+          <Group justify="space-between" gap="xs" wrap="wrap">
+            <Text size="xs" c="dimmed">
+              <Text span inherit ff="monospace">{file.path}</Text>
+              {" · "}
+              {fresh ? t("manager.reloading") : cachedAt ? t("manager.cachedAt", { when: formatRelative(cachedAt) }) : t("manager.fromHost")}
+            </Text>
+            <Button size="compact-xs" variant="subtle" leftSection={<IconRefresh size={12} />} loading={fresh} onClick={() => void reload()}>
+              {t("manager.reload")}
+            </Button>
+          </Group>
+        )}
+        {notice && <Text size="xs" c="dimmed">{notice}</Text>}
+        {conflict && (
+          <Alert color="orange" p="xs" icon={<IconAlertTriangle size={16} />}>
+            <Group justify="space-between" gap="xs" wrap="wrap">
+              <Text size="xs" style={{ flex: "1 1 260px" }}>{t("manager.conflict")}</Text>
+              <Button size="compact-xs" variant="light" color="orange" onClick={() => take(conflict)}>{t("manager.loadHostVersion")}</Button>
+            </Group>
+          </Alert>
+        )}
         {(mode === "create" || file) && (review ? (
           <Box style={{ maxHeight: "55vh", overflow: "auto", border: "1px solid var(--mantine-color-default-border)", borderRadius: "var(--mantine-radius-sm)" }}>
             {diff.map((line, i) => (
@@ -338,7 +401,7 @@ function ComposeEditor({ hostId, mode, project, root, onClose, onSubmit, busy }:
             {mode === "edit" && !review ? (
               <Button variant="light" leftSection={<IconFileDiff size={14} />} disabled={!changed} onClick={() => setReview(true)}>{t("manager.review")}</Button>
             ) : (
-              <Button variant="gradient" className="gradient-button" loading={busy} disabled={!changed || (mode === "create" && !nameOk)} onClick={() => void save()}>
+              <Button variant="gradient" className="gradient-button" loading={busy} disabled={!changed || conflict !== null || (mode === "create" && !nameOk)} onClick={() => void save()}>
                 {mode === "edit" ? t("manager.save") : t("manager.create")}
               </Button>
             )}

@@ -316,6 +316,52 @@ namespace AIOPatcher.Server.Data.Migrations
                     b.ToTable("ComplianceBaselineHosts");
                 });
 
+            modelBuilder.Entity("AIOPatcher.Server.Data.ComposeCacheEntry", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime?>("CachedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("HostId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Path")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Project")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ProtectedContent")
+                        .HasMaxLength(200000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("ReportedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ReportedSha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Sha256")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("HostId", "Project")
+                        .IsUnique();
+
+                    b.ToTable("ComposeCache");
+                });
+
             modelBuilder.Entity("AIOPatcher.Server.Data.ContainerInfo", b =>
                 {
                     b.Property<long>("Id")
@@ -2873,6 +2919,17 @@ namespace AIOPatcher.Server.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("Baseline");
+
+                    b.Navigation("Host");
+                });
+
+            modelBuilder.Entity("AIOPatcher.Server.Data.ComposeCacheEntry", b =>
+                {
+                    b.HasOne("AIOPatcher.Server.Data.ManagedHost", "Host")
+                        .WithMany()
+                        .HasForeignKey("HostId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.Navigation("Host");
                 });

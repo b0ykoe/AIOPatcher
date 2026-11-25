@@ -291,11 +291,12 @@ public static class PullEndpoints
         CertificateAuthority ca,
         ILoggerFactory loggerFactory,
         UpdateChangelogs changelogs,
+        Microsoft.AspNetCore.DataProtection.IDataProtectionProvider protection,
         CancellationToken ct)
     {
         var host = (ManagedHost)http.Items[AgentEndpoints.HostItemKey]!;
         var (status, answer) = await ApplyResultAsync(db, audit, notifier, features, downloads, ca, host, taskId, request,
-            loggerFactory.CreateLogger("AIOPatcher.Pull"), ct, changelogs);
+            loggerFactory.CreateLogger("AIOPatcher.Pull"), ct, changelogs, protection);
         return status switch
         {
             StatusCodes.Status404NotFound => Results.NotFound(),
@@ -307,7 +308,7 @@ public static class PullEndpoints
     /// <summary>Antwort auf einen Auftrag übernehmen. Rückgabe: HTTP-Status und Daten für den Agent.</summary>
     public static async Task<(int Status, JsonElement? Answer)> ApplyResultAsync(AppDbContext db, AuditLog audit, Notifier notifier, FeatureFlags features,
         AgentDownloads downloads, CertificateAuthority? ca, ManagedHost host, Guid taskId, TaskResultRequest request, ILogger logger, CancellationToken ct,
-        UpdateChangelogs? changelogs = null)
+        UpdateChangelogs? changelogs = null, Microsoft.AspNetCore.DataProtection.IDataProtectionProvider? protection = null)
     {
         var task = await db.AgentTasks.SingleOrDefaultAsync(t => t.Id == taskId && t.HostId == host.Id, ct);
         if (task is null)
@@ -342,7 +343,10 @@ public static class PullEndpoints
         {
             try
             {
-                var context = new ModuleContext(db, notifier, features, downloads, ca, now, new Dictionary<(string, string), DateTime>(), changelogs: changelogs);
+                var context = new ModuleContext(db, notifier, features, downloads, ca, now, new Dictionary<(string, string), DateTime>(), changelogs: changelogs)
+                {
+                    Protection = protection,
+                };
                 answer = await module.HandleAsync(context, host, task, request, ct);
             }
             catch (Exception ex) when (ex is JsonException or System.Security.Cryptography.CryptographicException or InvalidOperationException)

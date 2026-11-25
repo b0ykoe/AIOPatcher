@@ -337,17 +337,16 @@ public static partial class DockerManager
             return (null, null, $"No compose file found on the host for stack {project}.");
         }
 
-        var file = compose.ConfigFiles[0];
-        var real = RealPath(file);
-        if (!IsInside(root, file) || !IsInside(root, real))
-        {
-            return (compose, null, $"{file} is outside the folder this host allows for editing ({root}). To change it on the host: sudo aiopatcher-agent policy set composeRoot <folder>");
-        }
-
-        return (compose, real, null);
+        return EditablePath(compose, root) is { } real
+            ? (compose, real, null)
+            : (compose, null, $"{compose.ConfigFiles[0]} is outside the folder this host allows for editing ({root}). To change it on the host: sudo aiopatcher-agent policy set composeRoot <folder>");
     }
 
     public static string Sha256(string content) => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(content)));
+
+    /// <summary>Datei auf der Platte weicht vom Stand ab, auf dem im Editor gearbeitet wurde (Hash beim Öffnen)? Ohne Hash: keine Prüfung möglich, also ja.</summary>
+    public static bool ChangedSinceOpened(string current, string? expectedSha256) =>
+        expectedSha256 is null || !string.Equals(Sha256(current), expectedSha256, StringComparison.OrdinalIgnoreCase);
 
     private static async Task<TaskOutcome> ReadComposeAsync(string project, string root, Action<string> log, CancellationToken ct)
     {
@@ -390,9 +389,10 @@ public static partial class DockerManager
         }
 
         var current = await File.ReadAllTextAsync(file, ct);
-        if (request.ExpectedSha256 is { } expected && !string.Equals(Sha256(current), expected, StringComparison.OrdinalIgnoreCase))
+        if (ChangedSinceOpened(current, request.ExpectedSha256))
         {
-            return new TaskOutcome(JobOutcome.Failed, $"{file} was changed on the host after it was opened in the editor. Nothing was written; open it again.");
+            return new TaskOutcome(JobOutcome.Failed,
+                $"{file} was changed on the host after the editor opened it (someone else edited it). Nothing was written; use \"Reload from host\" and apply your change again.");
         }
 
         if (await DockerUpdater.FindComposeAsync(ct) is not { } command)

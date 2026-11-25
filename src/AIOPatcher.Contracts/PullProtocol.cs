@@ -116,6 +116,9 @@ public static class ModuleActions
 
     /// <summary>docker.manage: Mini-Docker-Manager (siehe <see cref="ContainerOps"/>).</summary>
     public const string Manage = "manage";
+
+    /// <summary>docker.composecache: Inhalt dieser Compose-Dateien schicken (neuer Hash in der Inventur), für den sofort offenen Editor.</summary>
+    public const string ComposeCache = "composecache";
 }
 
 /// <summary>docker.packages: Paketliste dieser Images lesen (je Image ein Container; docker cp, nur lesen).</summary>
@@ -218,7 +221,12 @@ public sealed record AppUpdateRequest(IReadOnlyList<string> Packages);
 public sealed record SoftwareList(IReadOnlyList<InstalledSoftware> Software);
 
 /// <param name="Disk">"docker system df" (Images, Container, Volumes, Build-Cache), für "Platz freigeben"; null = älterer Agent.</param>
-public sealed record ContainerList(IReadOnlyList<ContainerReport> Containers, IReadOnlyList<DockerDiskUsage>? Disk = null);
+/// <param name="ComposeFiles">
+/// Mini-Docker-Manager: Hash je bearbeitbarer Compose-Datei, nur wenn der Host allowContainerManagement und allowComposeEdit
+/// erlaubt (sonst null). Der Server holt den Inhalt nur bei neuem Hash (docker.composecache) und hält ihn verschlüsselt vor.
+/// </param>
+public sealed record ContainerList(IReadOnlyList<ContainerReport> Containers, IReadOnlyList<DockerDiskUsage>? Disk = null,
+    IReadOnlyList<ComposeFileHash>? ComposeFiles = null);
 
 /// <summary>
 /// services.list: was gerade läuft und nach einem Neustart wieder laufen sollte. Der Server vergleicht den Stand vor dem
@@ -280,6 +288,8 @@ public sealed record RenewAnswer(string CertificateSigningRequestPem);
 [JsonSerializable(typeof(ContainerManageRequest))]
 [JsonSerializable(typeof(ComposeFileResult))]
 [JsonSerializable(typeof(PruneScan))]
+[JsonSerializable(typeof(ComposeCacheRequest))]
+[JsonSerializable(typeof(ComposeFileBatch))]
 [JsonSerializable(typeof(List<DockerDiskUsage>))]
 [JsonSerializable(typeof(ChangelogRequest))]
 [JsonSerializable(typeof(ChangelogResult))]

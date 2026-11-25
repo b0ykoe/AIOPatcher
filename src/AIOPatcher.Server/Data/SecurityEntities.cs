@@ -245,3 +245,26 @@ public sealed class ImageVulnerability
 
     public DateTime FoundAt { get; set; }
 }
+
+/// <summary>
+/// Vorrat für den Compose-Editor (Mini-Docker-Manager): Inhalt einer Compose-Datei, verschlüsselt per Data Protection (kann
+/// Passwörter enthalten). Der Agent meldet je Datei einen Hash; den Inhalt holt der Server nur bei neuem Hash. Gelöscht, wenn
+/// der Host es nicht mehr erlaubt, der Funktionsschalter aus ist oder der Host entfernt wird.
+/// </summary>
+public sealed class ComposeCacheEntry
+{
+    public long Id { get; set; }
+    public Guid HostId { get; set; }
+    public ManagedHost? Host { get; set; }
+    public required string Project { get; set; }
+    public required string Path { get; set; }
+
+    /// <summary>Hash, den der Agent zuletzt gemeldet hat (Stand auf dem Host).</summary>
+    public required string ReportedSha256 { get; set; }
+    public DateTime ReportedAt { get; set; }
+
+    /// <summary>Hash des gespeicherten Inhalts; null = noch nicht geholt.</summary>
+    public string? Sha256 { get; set; }
+    public string? ProtectedContent { get; set; }
+    public DateTime? CachedAt { get; set; }
+}

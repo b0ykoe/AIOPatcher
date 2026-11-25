@@ -321,6 +321,15 @@ export interface ComposeRead {
   scan?: PruneScan | null;
 }
 
+/** Gespeicherter Stand einer Compose-Datei (öffnet den Editor sofort). */
+export interface CachedCompose {
+  file: ComposeFile;
+  cachedAt: string | null;
+  /** gleich dem Hash der letzten Container-Meldung */
+  current: boolean;
+  reportedAt: string;
+}
+
 /** Relevante Lücken im Image eines Containers (KEV oder EPSS ab 5 %). */
 export interface ContainerVulns {
   state: "ok" | "pending" | "unsupported" | "agent" | "off";
