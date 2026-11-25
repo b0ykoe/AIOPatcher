@@ -8,6 +8,8 @@ Written for users, not as a list of commits.
 
 ## [Unreleased]
 
+## [0.16.4] - 2026-11-25
+
 ### Added
 - **"Update all" for containers:** the Containers tab of a host now has "Update all (n)", which updates every
   container with a new image in one job. The agent bundles them per compose project (one pull, one recreate).
